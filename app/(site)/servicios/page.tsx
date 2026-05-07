@@ -19,10 +19,11 @@ export const revalidate = 0;
 
 const serviceIcons = { MapPinned, Radar, DraftingCompass, Ruler, Boxes, Wrench, Zap, ScanLine };
 const fallbackIcons = [MapPinned, Radar, DraftingCompass, Ruler, Boxes, Wrench, Zap, ScanLine];
+const SERVICES_PER_PAGE = 8;
 type ServiceWithCategory = Service & { categoryRef: ServiceCategory | null; subcategoryRef: ServiceCategory | null };
 
 type ServicesPageProps = {
-  searchParams?: Promise<{ categoria?: string; estado?: string }>;
+  searchParams?: Promise<{ categoria?: string; estado?: string; pagina?: string }>;
 };
 
 export default async function ServicesPage({ searchParams }: ServicesPageProps) {
@@ -41,8 +42,15 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
     const category = displayCategory(service);
     return (selectedCategory === "todos" || category === selectedCategory) && (selectedStatus === "todos" || service.status === selectedStatus);
   });
-  const featuredService = filteredServices.find((service) => service.isFeatured) || filteredServices[0];
-  const regularServices = featuredService ? filteredServices.filter((service) => service.id !== featuredService.id) : filteredServices;
+  const requestedPage = Number(resolvedSearchParams?.pagina || "1");
+  const totalPages = Math.max(1, Math.ceil(filteredServices.length / SERVICES_PER_PAGE));
+  const currentPage = Number.isFinite(requestedPage) ? Math.min(Math.max(1, Math.trunc(requestedPage)), totalPages) : 1;
+  const startIndex = (currentPage - 1) * SERVICES_PER_PAGE;
+  const paginatedServices = filteredServices.slice(startIndex, startIndex + SERVICES_PER_PAGE);
+  const featuredService = currentPage === 1 ? paginatedServices.find((service) => service.isFeatured) || paginatedServices[0] : null;
+  const regularServices = featuredService ? paginatedServices.filter((service) => service.id !== featuredService.id) : paginatedServices;
+  const resultStart = filteredServices.length ? startIndex + 1 : 0;
+  const resultEnd = Math.min(startIndex + paginatedServices.length, filteredServices.length);
 
   return (
     <>
@@ -76,7 +84,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.08] pt-4">
                   <p className="text-xs text-white/56">
-                    <span className="font-semibold text-white">{filteredServices.length}</span> servicios publicados, organizados en <span className="font-semibold text-white">{categories.length || 1}</span> categorias.
+                    Mostrando <span className="font-semibold text-white">{resultStart}-{resultEnd}</span> de <span className="font-semibold text-white">{filteredServices.length}</span> servicios publicados.
                   </p>
                   {selectedCategory !== "todos" || selectedStatus !== "todos" ? (
                     <Link href="/servicios" className="text-xs font-semibold uppercase tracking-[0.14em] text-[#7DE4FF] transition hover:text-white">Limpiar filtros</Link>
@@ -98,6 +106,10 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
 
           {!filteredServices.length ? (
             <div className="mt-10 rounded-sm border border-white/[0.08] bg-[#061827] p-8 text-white/60">No hay servicios publicados con esos filtros. Ajusta categoria o estado para ver mas opciones.</div>
+          ) : null}
+
+          {totalPages > 1 ? (
+            <Pagination currentPage={currentPage} totalPages={totalPages} params={{ categoria: selectedCategory, estado: selectedStatus }} />
           ) : null}
         </div>
       </section>
@@ -230,7 +242,7 @@ function FilterGroup({ title, items, selected, param, params, formatter = (value
       <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/42">{title}</p>
       <div className="mt-3 flex flex-wrap gap-2">
         {items.map((item) => (
-          <Link key={item} href={servicesHref({ ...params, [param]: item })} className={item === selected ? "rounded-sm border border-[#24C8EE]/55 bg-[#24C8EE]/18 px-3 py-1 text-xs font-semibold text-[#7DE4FF]" : "rounded-sm border border-white/[0.1] bg-white/[0.05] px-3 py-1 text-xs text-white/64 transition hover:border-[#24C8EE]/35 hover:text-white"}>
+          <Link key={item} href={servicesHref({ ...params, [param]: item, pagina: 1 })} className={item === selected ? "rounded-sm border border-[#24C8EE]/55 bg-[#24C8EE]/18 px-3 py-1 text-xs font-semibold text-[#7DE4FF]" : "rounded-sm border border-white/[0.1] bg-white/[0.05] px-3 py-1 text-xs text-white/64 transition hover:border-[#24C8EE]/35 hover:text-white"}>
             {formatter(item)}
           </Link>
         ))}
@@ -239,10 +251,34 @@ function FilterGroup({ title, items, selected, param, params, formatter = (value
   );
 }
 
-function servicesHref(params: { categoria?: string; estado?: string }) {
+function Pagination({ currentPage, totalPages, params }: { currentPage: number; totalPages: number; params: { categoria?: string; estado?: string } }) {
+  const pages = Array.from({ length: totalPages }, (_, index) => index + 1);
+  return (
+    <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
+      {currentPage > 1 ? (
+        <Link href={servicesHref({ ...params, pagina: currentPage - 1 })} className="rounded-sm border border-white/[0.12] bg-white/[0.05] px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-white/70 transition hover:border-[#24C8EE]/35 hover:text-white">
+          Anterior
+        </Link>
+      ) : null}
+      {pages.map((page) => (
+        <Link key={page} href={servicesHref({ ...params, pagina: page })} className={page === currentPage ? "rounded-sm border border-[#24C8EE]/55 bg-[#24C8EE]/18 px-4 py-2 text-sm font-semibold text-[#7DE4FF]" : "rounded-sm border border-white/[0.12] bg-white/[0.05] px-4 py-2 text-sm text-white/64 transition hover:border-[#24C8EE]/35 hover:text-white"}>
+          {page}
+        </Link>
+      ))}
+      {currentPage < totalPages ? (
+        <Link href={servicesHref({ ...params, pagina: currentPage + 1 })} className="rounded-sm border border-white/[0.12] bg-white/[0.05] px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-white/70 transition hover:border-[#24C8EE]/35 hover:text-white">
+          Siguiente
+        </Link>
+      ) : null}
+    </div>
+  );
+}
+
+function servicesHref(params: { categoria?: string; estado?: string; pagina?: number | string }) {
   const search = new URLSearchParams();
   if (params.categoria && params.categoria !== "todos") search.set("categoria", params.categoria);
   if (params.estado && params.estado !== "todos") search.set("estado", params.estado);
+  if (params.pagina && String(params.pagina) !== "1") search.set("pagina", String(params.pagina));
   const query = search.toString();
   return query ? `/servicios?${query}` : "/servicios";
 }

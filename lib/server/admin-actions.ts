@@ -954,6 +954,8 @@ const baseServiceCatalog = [
 ];
 
 export async function seedServiceCatalogAction() {
+  const seededServiceSlugs: string[] = [];
+
   for (const [categoryIndex, category] of baseServiceCatalog.entries()) {
     const parent = await prisma.serviceCategory.upsert({
       where: { slug: category.slug },
@@ -1006,8 +1008,10 @@ export async function seedServiceCatalogAction() {
       }
 
       for (const [title, summary] of group.services) {
+        const serviceSlug = slugify(title);
+        seededServiceSlugs.push(serviceSlug);
         await prisma.service.upsert({
-          where: { slug: slugify(title) },
+          where: { slug: serviceSlug },
           update: {
             title,
             category: categoryName,
@@ -1021,7 +1025,7 @@ export async function seedServiceCatalogAction() {
           },
           create: {
             title,
-            slug: slugify(title),
+            slug: serviceSlug,
             category: categoryName,
             categoryId: parent.id,
             subcategoryId,
@@ -1043,6 +1047,12 @@ export async function seedServiceCatalogAction() {
       }
     }
   }
+
+  await prisma.service.deleteMany({
+    where: {
+      slug: { notIn: seededServiceSlugs }
+    }
+  });
 
   revalidatePath("/admin/contenidos");
   revalidatePath("/servicios");
