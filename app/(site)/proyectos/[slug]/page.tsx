@@ -52,8 +52,8 @@ export default async function ProjectDetailPage({ params }: ProjectPageProps) {
         )}
         <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(3,17,29,0.98)_0%,rgba(3,17,29,0.88)_42%,rgba(3,17,29,0.34)_100%)]" />
         <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-[#24C8EE]/70 to-transparent" />
-        <section className="container relative grid min-h-[680px] items-center gap-12 py-16 xl:grid-cols-[minmax(0,1fr)_520px]">
-          <div className="max-w-4xl">
+        <section className="container relative grid min-h-[680px] items-center gap-8 py-16 xl:grid-cols-[0.82fr_1.18fr] 2xl:grid-cols-[0.74fr_1.26fr]">
+          <div className="max-w-2xl xl:-ml-6 2xl:-ml-10">
             <div className="flex flex-wrap gap-3">
               <Badge className="bg-white text-[#063D63] hover:bg-white">{project.category || "Proyecto tecnico"}</Badge>
               <span className={`rounded-md border px-3 py-1 text-xs font-semibold ${projectStatusStyles[project.status] || "border-white/25 bg-white text-[#063D63]"}`}>
@@ -61,33 +61,35 @@ export default async function ProjectDetailPage({ params }: ProjectPageProps) {
               </span>
             </div>
             <p className="mt-7 text-sm font-semibold uppercase tracking-[0.18em] text-[#7DE4FF]">Caso tecnico ICC</p>
-            <h1 className="mt-4 font-display text-5xl font-bold leading-[0.95] md:text-7xl">{project.title}</h1>
-            <p className="mt-6 max-w-3xl text-xl leading-9 text-white/78">{project.summary}</p>
-            <div className="mt-10 grid gap-3 sm:grid-cols-3">
+            <h1 className="mt-4 font-display text-5xl font-bold leading-[0.95] md:text-6xl">{project.title}</h1>
+            <p className="mt-6 max-w-2xl text-lg leading-8 text-white/78">{project.summary}</p>
+            <div className="mt-10 grid gap-3 sm:grid-cols-3 xl:grid-cols-1 2xl:grid-cols-3">
               <HeroFact icon={MapPin} label="Ubicacion" value={project.location || "Por confirmar"} />
               <HeroFact icon={Pickaxe} label="Estado" value={statusLabel} />
               <HeroFact icon={Layers3} label="Rubro" value={project.category || "Tecnico"} />
             </div>
           </div>
-          <Card className="max-h-[calc(100svh-9rem)] overflow-auto border-white/16 bg-white/[0.08] text-white shadow-2xl backdrop-blur-xl">
+          <Card className="border-white/16 bg-white/[0.08] text-white shadow-2xl backdrop-blur-xl">
             <CardHeader>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7DE4FF]">Resultado operativo</p>
               <CardTitle className="mt-2 text-2xl leading-tight">Logros tecnicos del servicio</CardTitle>
             </CardHeader>
             <CardContent className="space-y-5 text-sm leading-7 text-white/74">
-              <div className="grid gap-2">
+              <div className="grid gap-2 lg:grid-cols-2">
                 {resultItems.map((item) => (
-                  <div key={item} className="flex gap-3 rounded-md border border-white/10 bg-white/[0.045] p-3">
+                  <div key={item} className="flex min-h-14 gap-3 rounded-md border border-white/10 bg-white/[0.045] p-3">
                     <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#24C8EE]" />
-                    <p className="text-sm font-semibold leading-6 text-white/92">{item}</p>
+                    <p className="text-[13px] font-semibold leading-5 text-white/92">{item}</p>
                   </div>
                 ))}
               </div>
-              <p>{projectStatusDescriptions[project.status] || "Seguimiento topografico y entregables organizados por ICC."}</p>
-              <div className="grid gap-3 border-y border-white/14 py-5">
+              <div className="grid gap-5 border-y border-white/14 py-5 lg:grid-cols-[1.15fr_0.85fr]">
+                <p className="text-sm leading-7">{projectStatusDescriptions[project.status] || "Seguimiento topografico y entregables organizados por ICC."}</p>
+                <div className="grid gap-3">
                 <MiniMetric icon={Ruler} label="Control" value="Mediciones trazables" />
                 <MiniMetric icon={ShieldCheck} label="QA/QC" value="Entregables revisables" />
                 <MiniMetric icon={Clock3} label="Avance" value={statusLabel} />
+                </div>
               </div>
               <div className="rounded-md border border-white/12 bg-white/[0.055] p-4">
                 <p className="text-xs font-semibold uppercase text-white/45">Valor para el cliente</p>
