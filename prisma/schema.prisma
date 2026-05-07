@@ -556,6 +556,20 @@ model Testimonial {
   createdAt DateTime @default(now())
 }
 
+model ClientLogo {
+  id        String   @id @default(cuid())
+  name      String
+  logoUrl   String
+  website   String?
+  sector    String?
+  position  Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, position])
+}
+
 model Faq {
   id         String   @id @default(cuid())
   question   String

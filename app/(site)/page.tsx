@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowRight, CheckCircle2, MessageCircle, Radar, Ruler, ShieldCheck, SlidersHorizontal, Wrench } from "lucide-react";
 import { HomeHero3D } from "@/components/home-hero-3d";
 import { HomeServicesShowcase } from "@/components/home-services-showcase";
@@ -32,10 +33,11 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function HomePage() {
-  const [services, faqs, testimonials, categories, products] = await Promise.all([
+  const [services, faqs, testimonials, clientLogos, categories, products] = await Promise.all([
     prisma.service.findMany({ where: { isPublished: true }, orderBy: { updatedAt: "desc" }, take: 8 }),
     prisma.faq.findMany({ where: { active: true }, orderBy: [{ position: "asc" }, { createdAt: "desc" }], take: 6 }),
     prisma.testimonial.findMany({ where: { active: true }, orderBy: { createdAt: "desc" }, take: 2 }),
+    prisma.clientLogo.findMany({ where: { active: true }, orderBy: [{ position: "asc" }, { createdAt: "desc" }], take: 18 }),
     prisma.category.findMany({ where: { products: { some: { isActive: true } } }, orderBy: { name: "asc" }, take: 12 }),
     prisma.product.findMany({ where: { isActive: true }, include: { category: true, variants: true }, orderBy: { updatedAt: "desc" }, take: 4 })
   ]);
@@ -92,6 +94,37 @@ export default async function HomePage() {
       </section>
 
       <HomeServicesShowcase services={services} />
+
+      {clientLogos.length ? (
+        <section className="border-y bg-white py-16">
+          <div className="container">
+            <ScrollReveal>
+              <SectionHeading eyebrow="Clientes topograficos" title="Marcas que confiaron sus trabajos de campo a ICC" description="Logos de clientes vinculados a servicios y proyectos de topografia, geodesia e ingenieria." />
+            </ScrollReveal>
+            <div className="mt-8 grid grid-cols-2 gap-px overflow-hidden rounded-md border bg-border sm:grid-cols-3 lg:grid-cols-6">
+              {clientLogos.map((clientLogo, index) => {
+                const logo = (
+                  <div className="group flex h-28 items-center justify-center bg-background p-5 transition hover:bg-[#F7FBFD]">
+                    <div className="relative h-full w-full">
+                      <Image src={clientLogo.logoUrl} alt={`Logo de ${clientLogo.name}`} fill sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 16vw" className="object-contain opacity-78 grayscale transition duration-300 group-hover:opacity-100 group-hover:grayscale-0" unoptimized />
+                    </div>
+                  </div>
+                );
+
+                return (
+                  <ScrollReveal key={clientLogo.id} delay={index * 35}>
+                    {clientLogo.website ? (
+                      <a href={clientLogo.website} target="_blank" rel="noreferrer" aria-label={clientLogo.name} className="block">
+                        {logo}
+                      </a>
+                    ) : logo}
+                  </ScrollReveal>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <section className="relative overflow-hidden border-y bg-[#061827] py-20 text-white">
         <div className="absolute inset-0 opacity-25 [background-image:linear-gradient(rgba(36,200,238,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(36,200,238,0.08)_1px,transparent_1px)] [background-size:36px_36px]" />

@@ -806,6 +806,51 @@ export async function deleteTestimonialAction(id: string) {
   revalidatePath("/");
 }
 
+export async function createClientLogoAction(formData: FormData) {
+  const name = value(formData, "name") || "";
+  const logoUrl = value(formData, "logoUrl");
+  if (!name || !logoUrl) return;
+
+  await prisma.clientLogo.create({
+    data: {
+      name,
+      logoUrl,
+      website: value(formData, "website"),
+      sector: value(formData, "sector"),
+      position: numberValue(formData, "position"),
+      active: checked(formData, "active")
+    }
+  });
+  revalidatePath("/admin/contenidos");
+  revalidatePath("/");
+}
+
+export async function updateClientLogoAction(id: string, formData: FormData) {
+  const name = value(formData, "name") || "";
+  const logoUrl = value(formData, "logoUrl");
+  if (!name || !logoUrl) return;
+
+  await prisma.clientLogo.update({
+    where: { id },
+    data: {
+      name,
+      logoUrl,
+      website: value(formData, "website"),
+      sector: value(formData, "sector"),
+      position: numberValue(formData, "position"),
+      active: checked(formData, "active")
+    }
+  });
+  revalidatePath("/admin/contenidos");
+  revalidatePath("/");
+}
+
+export async function deleteClientLogoAction(id: string) {
+  await prisma.clientLogo.delete({ where: { id } });
+  revalidatePath("/admin/contenidos");
+  revalidatePath("/");
+}
+
 export async function createBannerAction(formData: FormData) {
   await prisma.banner.create({
     data: {

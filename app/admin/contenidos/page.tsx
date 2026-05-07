@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
+import Image from "next/image";
 import { CheckCircle2 } from "lucide-react";
+import { ClientLogoUploader } from "@/components/admin/client-logo-uploader";
 import { FormSubmitButton } from "@/components/admin/form-submit-button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8,18 +10,21 @@ import { prisma } from "@/lib/prisma";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
 import {
   createBannerAction,
+  createClientLogoAction,
   createCmsPageAction,
   createFaqAction,
   createPostAction,
   createServiceAction,
   createTestimonialAction,
   deleteBannerAction,
+  deleteClientLogoAction,
   deleteCmsPageAction,
   deleteFaqAction,
   deletePostAction,
   deleteServiceAction,
   deleteTestimonialAction,
   updateBannerAction,
+  updateClientLogoAction,
   updateCmsPageAction,
   updateFaqAction,
   updatePostAction,
@@ -45,11 +50,12 @@ export default async function AdminContentPage({ searchParams }: AdminContentPag
   const resolvedSearchParams = await searchParams;
   const blogStatus = resolvedSearchParams?.blogStatus;
   const blogStatusMessage = blogStatus ? blogStatusMessages[blogStatus] : null;
-  const [services, posts, faqs, testimonials, banners, pages] = await Promise.all([
+  const [services, posts, faqs, testimonials, clientLogos, banners, pages] = await Promise.all([
     prisma.service.findMany({ orderBy: { updatedAt: "desc" } }),
     prisma.blogPost.findMany({ orderBy: { updatedAt: "desc" } }),
     prisma.faq.findMany({ orderBy: [{ position: "asc" }, { createdAt: "desc" }] }),
     prisma.testimonial.findMany({ orderBy: { createdAt: "desc" } }),
+    prisma.clientLogo.findMany({ orderBy: [{ position: "asc" }, { createdAt: "desc" }] }),
     prisma.banner.findMany({ orderBy: { createdAt: "desc" } }),
     prisma.cmsPage.findMany({ orderBy: { updatedAt: "desc" } })
   ]);
@@ -58,7 +64,7 @@ export default async function AdminContentPage({ searchParams }: AdminContentPag
     <section className="space-y-8">
       <div>
         <h1 className="font-display text-3xl font-bold">Contenidos CMS</h1>
-        <p className="mt-2 text-muted-foreground">Gestiona lo que publica el front: servicios, blog, FAQ, testimonios, banners y paginas.</p>
+        <p className="mt-2 text-muted-foreground">Gestiona lo que publica el front: servicios, blog, FAQ, logos de clientes, testimonios, banners y paginas.</p>
       </div>
 
       {blogStatusMessage ? (
@@ -120,6 +126,41 @@ export default async function AdminContentPage({ searchParams }: AdminContentPag
           </EditableRow>
         ))}
       </CmsBlock>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Logos de clientes</CardTitle>
+          <CardDescription>Empresas para las que se realizaron trabajos de topografia. No pertenecen a la tienda.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <form action={createClientLogoAction} className="grid gap-3 rounded-md border bg-muted/40 p-4 md:grid-cols-2">
+            <Input name="name" placeholder="Nombre del cliente" />
+            <Input name="sector" placeholder="Sector o tipo de proyecto" />
+            <Input name="website" placeholder="Web opcional" />
+            <Input name="position" type="number" placeholder="Orden" defaultValue={0} />
+            <ClientLogoUploader />
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="active" defaultChecked /> Activo</label>
+            <FormSubmitButton idleLabel="Crear logo" pendingLabel="Creando..." />
+          </form>
+          <div className="space-y-4">
+            {clientLogos.map((clientLogo) => (
+              <EditableRow key={clientLogo.id} title={clientLogo.name} subtitle={clientLogo.sector || "Cliente topografico"} updateAction={updateClientLogoAction.bind(null, clientLogo.id)} deleteAction={deleteClientLogoAction.bind(null, clientLogo.id)}>
+                <div className="rounded-md border bg-white p-4">
+                  <div className="relative h-16 w-full">
+                    <Image src={clientLogo.logoUrl} alt={`Logo de ${clientLogo.name}`} fill sizes="(max-width: 768px) 100vw, 50vw" className="object-contain object-left" unoptimized />
+                  </div>
+                </div>
+                <Input name="name" defaultValue={clientLogo.name} />
+                <Input name="sector" defaultValue={clientLogo.sector || ""} />
+                <Input name="website" defaultValue={clientLogo.website || ""} />
+                <Input name="position" type="number" defaultValue={clientLogo.position} />
+                <ClientLogoUploader initialLogoUrl={clientLogo.logoUrl} />
+                <label className="flex gap-2 text-sm"><input type="checkbox" name="active" defaultChecked={clientLogo.active} /> Activo</label>
+              </EditableRow>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       <CmsBlock title="Banners" description="Banners promocionales preparados para home/campanas." createAction={createBannerAction} fields={["title", "subtitle", "ctaLabel", "ctaHref", "image", "placement"]}>
         {banners.map((banner) => (
