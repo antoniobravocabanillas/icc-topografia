@@ -70,14 +70,14 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
     <>
       <ProjectsHero projectCount={allProjectItems.length} rubroCount={rubros.length} activeCount={allProjectItems.filter((project) => project.status === "IN_PROGRESS").length} />
 
-      <section className="relative overflow-hidden bg-[#0B0F14] py-20 text-[#F0EDE8]">
-        <div className="absolute inset-0 pointer-events-none opacity-[0.08] [background-image:linear-gradient(rgba(232,201,126,0.18)_1px,transparent_1px),linear-gradient(90deg,rgba(232,201,126,0.12)_1px,transparent_1px)] [background-size:38px_38px]" />
+      <section className="relative overflow-hidden bg-[#03111D] py-20 text-white">
+        <div className="absolute inset-0 pointer-events-none opacity-[0.14] [background-image:linear-gradient(rgba(36,200,238,0.18)_1px,transparent_1px),linear-gradient(90deg,rgba(11,131,196,0.14)_1px,transparent_1px)] [background-size:38px_38px]" />
         <div className="container relative">
           <div className="grid gap-8 border-b border-white/[0.08] pb-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-end">
           <ScrollReveal>
-            <p className="flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.32em] text-[#C9A84C] before:h-px before:w-10 before:bg-gradient-to-r before:from-[#C9A84C] before:to-transparent">ICC Topografia - Portafolio</p>
+            <p className="flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.32em] text-[#7DE4FF] before:h-px before:w-10 before:bg-gradient-to-r before:from-[#24C8EE] before:to-transparent">ICC Topografia - Portafolio</p>
             <h2 className="mt-5 max-w-3xl font-display text-4xl font-bold leading-tight md:text-5xl">Proyectos de alta precision tecnica y resultado visible</h2>
-            <p className="mt-5 max-w-2xl text-sm leading-7 text-[#F0EDE8]/58 md:text-base">Obras en ejecucion, casos culminados y frentes tecnicos separados por rubro para ubicar referencias comparables con rapidez y criterio profesional.</p>
+            <p className="mt-5 max-w-2xl text-sm leading-7 text-white/64 md:text-base">Obras en ejecucion, casos culminados y frentes tecnicos separados por rubro para ubicar referencias comparables con rapidez y criterio profesional.</p>
           </ScrollReveal>
           <ScrollReveal delay={80}>
             <div className="grid gap-5 rounded-sm border border-white/[0.08] bg-[#161C25]/80 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur sm:grid-cols-2">
@@ -95,55 +95,55 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
             return (
               <ScrollReveal key={project.title} delay={index * 70} className={isFeaturedCard ? "h-full xl:col-span-2" : "h-full"}>
                 <Link href={project.slug ? `/proyectos/${project.slug}` : "/contacto"} className="group block h-full">
-                <article className={isFeaturedCard ? "grid h-full overflow-hidden bg-[#1A2130] transition duration-500 hover:z-10 hover:-translate-y-1 hover:shadow-[0_32px_80px_rgba(0,0,0,0.55)] motion-reduce:transform-none lg:grid-cols-[52%_48%]" : "flex h-full flex-col overflow-hidden bg-[#1A2130] transition duration-500 hover:z-10 hover:-translate-y-1 hover:shadow-[0_32px_80px_rgba(0,0,0,0.55)] motion-reduce:transform-none"}>
+                <article className={isFeaturedCard ? "grid h-full overflow-hidden bg-[#061827] transition duration-500 hover:z-10 hover:-translate-y-1 hover:shadow-[0_32px_80px_rgba(0,34,54,0.62)] motion-reduce:transform-none lg:grid-cols-[52%_48%]" : "flex h-full flex-col overflow-hidden bg-[#061827] transition duration-500 hover:z-10 hover:-translate-y-1 hover:shadow-[0_32px_80px_rgba(0,34,54,0.62)] motion-reduce:transform-none"}>
                   <div className={isFeaturedCard ? "relative min-h-[280px] overflow-hidden bg-[#061827] lg:min-h-full" : "relative h-[240px] overflow-hidden bg-[#061827]"}>
                     {project.image ? (
                       <Image src={project.image} alt={project.title} fill sizes={isFeaturedCard ? "(max-width: 1024px) 100vw, 42vw" : "(max-width: 768px) 100vw, 33vw"} className="object-cover brightness-[0.82] saturate-[0.85] transition duration-700 group-hover:scale-[1.06]" unoptimized />
                     ) : (
-                      <div className="absolute inset-0 opacity-50 [background-image:linear-gradient(rgba(201,168,76,0.18)_1px,transparent_1px),linear-gradient(90deg,rgba(201,168,76,0.12)_1px,transparent_1px)] [background-size:28px_28px]" />
+                      <div className="absolute inset-0 opacity-50 [background-image:linear-gradient(rgba(36,200,238,0.16)_1px,transparent_1px),linear-gradient(90deg,rgba(11,131,196,0.12)_1px,transparent_1px)] [background-size:28px_28px]" />
                     )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#1A2130] via-[#1A2130]/42 to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#061827] via-[#061827]/42 to-transparent" />
                     <div className="absolute left-4 right-4 top-4 z-10 flex items-start justify-between gap-3">
                       <span className={statusBadgeClass(project.status)}>
                         {projectStatusLabel(project.status)}
                       </span>
-                      {project.isFeatured ? <span className="rounded-sm border border-[#C9A84C]/45 bg-[#C9A84C]/18 px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-[#E8C97E] backdrop-blur">Destacado</span> : null}
+                      {project.isFeatured ? <span className="rounded-sm border border-[#24C8EE]/45 bg-[#24C8EE]/16 px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-[#7DE4FF] backdrop-blur">Destacado</span> : null}
                     </div>
                     <div className="absolute bottom-4 left-4 right-4 z-10">
-                      <p className="text-[9px] font-medium uppercase tracking-[0.18em] text-[#F0EDE8]/50">{project.sector}</p>
+                      <p className="text-[9px] font-medium uppercase tracking-[0.18em] text-white/55">{project.sector}</p>
                     </div>
                   </div>
                   <div className="flex min-w-0 flex-1 flex-col">
-                    <div className="h-px w-0 bg-gradient-to-r from-[#C9A84C] to-[#E8C97E] transition-all duration-500 group-hover:w-full" />
+                    <div className="h-px w-0 bg-gradient-to-r from-[#0B83C4] to-[#24C8EE] transition-all duration-500 group-hover:w-full" />
                     <div className={isFeaturedCard ? "flex-1 p-7 md:p-9" : "flex-1 p-7"}>
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.25em] text-[#C9A84C]/60">PRJ - {String(index + 1).padStart(3, "0")}</div>
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.25em] text-[#7DE4FF]/70">PRJ - {String(index + 1).padStart(3, "0")}</div>
                       <div className="mt-3 flex items-start gap-4">
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-sm border border-white/[0.08] bg-white/[0.04] text-[#E8C97E]">
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-sm border border-[#24C8EE]/20 bg-[#24C8EE]/8 text-[#24C8EE]">
                           <Icon className="h-5 w-5" />
                         </span>
                         <div className="min-w-0">
-                          <h3 className={isFeaturedCard ? "font-display text-3xl font-bold leading-tight text-[#F0EDE8] md:text-4xl" : "font-display text-2xl font-bold leading-tight text-[#F0EDE8]"}>{project.title}</h3>
+                          <h3 className={isFeaturedCard ? "font-display text-3xl font-bold leading-tight text-white md:text-4xl" : "font-display text-2xl font-bold leading-tight text-white"}>{project.title}</h3>
                           <p className="mt-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8FA3B8]/80">
-                            <MapPinned className="h-3 w-3 text-[#C9A84C]" />
+                            <MapPinned className="h-3 w-3 text-[#24C8EE]" />
                             {project.location || "Ubicacion por confirmar"}
                           </p>
                         </div>
                       </div>
-                      <p className="mt-5 text-sm leading-7 text-[#F0EDE8]/58">{project.summary}</p>
+                      <p className="mt-5 text-sm leading-7 text-white/66">{project.summary}</p>
                     </div>
                     <div className={isFeaturedCard ? "border-t border-white/[0.08] px-7 py-6 md:px-9" : "border-t border-white/[0.08] px-7 py-6"}>
-                      <p className="text-[9px] font-semibold uppercase tracking-[0.28em] text-[#C9A84C]/60">Avance / resultado</p>
+                      <p className="text-[9px] font-semibold uppercase tracking-[0.28em] text-[#7DE4FF]/70">Avance / resultado</p>
                       <div className={isFeaturedCard ? "mt-4 grid gap-3 sm:grid-cols-2" : "mt-4 grid gap-3"}>
                         {resultItems.map((item) => (
                           <div key={item} className="flex items-start gap-3">
-                            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#E8C97E]" />
-                            <span className="text-sm font-medium leading-6 text-[#F0EDE8]/78">{item}</span>
+                            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#24C8EE]" />
+                            <span className="text-sm font-medium leading-6 text-white/82">{item}</span>
                           </div>
                         ))}
                       </div>
                     </div>
                     <div className={isFeaturedCard ? "mt-auto px-7 pb-7 md:px-9 md:pb-9" : "mt-auto px-7 pb-7"}>
-                      <span className="inline-flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#C9A84C] opacity-70 transition duration-300 group-hover:translate-x-1 group-hover:opacity-100">
+                      <span className="inline-flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7DE4FF] opacity-75 transition duration-300 group-hover:translate-x-1 group-hover:opacity-100">
                         Ver proyecto completo <ArrowRight className="h-4 w-4" />
                       </span>
                     </div>
@@ -155,10 +155,10 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
           })}
         </div>
         {!projectItems.length ? (
-          <div className="mt-10 rounded-sm border border-white/[0.08] bg-[#161C25] p-8 text-[#F0EDE8]/58">No hay proyectos publicados con esos filtros.</div>
+          <div className="mt-10 rounded-sm border border-white/[0.08] bg-[#061827] p-8 text-white/60">No hay proyectos publicados con esos filtros.</div>
         ) : null}
 
-        <div className="grid border-x border-b border-white/[0.08] bg-[#161C25] md:grid-cols-4">
+        <div className="grid border-x border-b border-white/[0.08] bg-[#061827] md:grid-cols-4">
           <PortfolioStat value={`${allProjectItems.length || 1}+`} label="referencias tecnicas" />
           <PortfolioStat value={`${allProjectItems.filter((project) => project.status === "IN_PROGRESS").length}`} label="frentes en ejecucion" />
           <PortfolioStat value={`${rubros.length || 1}`} label="rubros organizados" />
@@ -207,14 +207,14 @@ function statusBadgeClass(status: string) {
   if (["FINISHED", "PUBLISHED", "ARCHIVED"].includes(status)) {
     return "rounded-sm border border-emerald-400/35 bg-emerald-400/14 px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-emerald-200 backdrop-blur";
   }
-  return "rounded-sm border border-[#C9A84C]/40 bg-[#C9A84C]/14 px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-[#E8C97E] backdrop-blur";
+  return "rounded-sm border border-[#24C8EE]/40 bg-[#24C8EE]/14 px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-[#7DE4FF] backdrop-blur";
 }
 
 function PortfolioStat({ value, label }: { value: string; label: string }) {
   return (
     <div className="border-b border-white/[0.08] px-6 py-8 text-center md:border-b-0 md:border-r md:last:border-r-0">
-      <span className="font-display text-4xl font-bold text-[#E8C97E]">{value}</span>
-      <span className="mt-2 block text-[9px] font-semibold uppercase tracking-[0.22em] text-[#F0EDE8]/45">{label}</span>
+      <span className="font-display text-4xl font-bold text-[#24C8EE]">{value}</span>
+      <span className="mt-2 block text-[9px] font-semibold uppercase tracking-[0.22em] text-white/45">{label}</span>
     </div>
   );
 }
@@ -296,7 +296,7 @@ function FilterGroup({
 }) {
   return (
     <div>
-      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#F0EDE8]/42">{title}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/45">{title}</p>
       <div className="mt-2 flex flex-wrap gap-2">
         {items.map((item) => {
           const href = item === "todos" && otherValue === "todos"
@@ -306,7 +306,7 @@ function FilterGroup({
                 [otherParam]: otherValue
               }).toString()}`;
           return (
-            <Link key={item} href={href} className={item === selected ? "rounded-sm border border-[#C9A84C]/55 bg-[#C9A84C]/14 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#E8C97E]" : "rounded-sm border border-white/[0.08] bg-transparent px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#F0EDE8]/55 transition hover:border-[#C9A84C]/45 hover:text-[#E8C97E]"}>
+            <Link key={item} href={href} className={item === selected ? "rounded-sm border border-[#24C8EE]/55 bg-[#24C8EE]/16 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#7DE4FF]" : "rounded-sm border border-white/[0.08] bg-transparent px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/58 transition hover:border-[#24C8EE]/45 hover:text-[#7DE4FF]"}>
               {formatter ? formatter(item) : item === "todos" ? "Todos" : item}
             </Link>
           );
