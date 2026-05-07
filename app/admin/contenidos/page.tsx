@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Image from "next/image";
 import { CheckCircle2 } from "lucide-react";
+import type { Service } from "@prisma/client";
 import { ClientLogoUploader } from "@/components/admin/client-logo-uploader";
 import { FormSubmitButton } from "@/components/admin/form-submit-button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,6 +46,14 @@ const blogStatusMessages: Record<string, string> = {
   deleted: "Post eliminado correctamente."
 };
 
+const serviceStatusOptions = [
+  ["ACTIVE", "Activo / disponible"],
+  ["FEATURED", "Servicio destacado"],
+  ["IN_DEVELOPMENT", "En desarrollo"],
+  ["PAUSED", "Pausado"],
+  ["ARCHIVED", "Archivado"]
+] as const;
+
 export default async function AdminContentPage({ searchParams }: AdminContentPageProps) {
   await requireAdminPage(["EDITOR", "ADMIN"]);
   const resolvedSearchParams = await searchParams;
@@ -77,17 +86,7 @@ export default async function AdminContentPage({ searchParams }: AdminContentPag
         </div>
       ) : null}
 
-      <CmsBlock title="Servicios" description="Aparecen en /servicios, fichas individuales y home." createAction={createServiceAction} fields={["title", "slug", "summary", "content"]}>
-        {services.map((service) => (
-          <EditableRow key={service.id} title={service.title} subtitle={service.slug} updateAction={updateServiceAction.bind(null, service.id)} deleteAction={deleteServiceAction.bind(null, service.id)}>
-            <Input name="title" defaultValue={service.title} />
-            <Input name="slug" defaultValue={service.slug} />
-            <Textarea name="summary" defaultValue={service.summary} />
-            <Textarea name="content" defaultValue={JSON.stringify(service.content, null, 2)} />
-            <label className="flex gap-2 text-sm"><input type="checkbox" name="isPublished" defaultChecked={service.isPublished} /> Publicado</label>
-          </EditableRow>
-        ))}
-      </CmsBlock>
+      <ServiceAdminSection services={services} />
 
       <CmsBlock title="Blog" description="Posts publicados en /blog." createAction={createPostAction} fields={["title", "slug", "excerpt", "content", "category", "author"]}>
         {posts.map((post) => (
@@ -211,6 +210,101 @@ function CmsBlock({ title, description, createAction, fields, children }: { titl
       </CardContent>
     </Card>
   );
+}
+
+function ServiceAdminSection({ services }: { services: Service[] }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Servicios</CardTitle>
+        <CardDescription>Contenido consumido por /servicios, fichas individuales y futuras relaciones con proyectos.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <form action={createServiceAction} className="space-y-5 rounded-md border bg-muted/40 p-4">
+          <ServiceFormFields />
+          <FormSubmitButton idleLabel="Crear servicio" pendingLabel="Creando..." />
+        </form>
+        <div className="space-y-5">
+          {services.map((service) => (
+            <EditableRow key={service.id} title={service.title} subtitle={`${service.category || "Sin categoria"} - ${service.slug}`} updateAction={updateServiceAction.bind(null, service.id)} deleteAction={deleteServiceAction.bind(null, service.id)}>
+              <ServiceFormFields service={service} />
+            </EditableRow>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ServiceFormFields({ service }: { service?: Service }) {
+  const serviceContent = service?.content;
+  const contentValue = serviceContent && typeof serviceContent === "object" && !Array.isArray(serviceContent) && Object.keys(serviceContent as Record<string, unknown>).length
+    ? JSON.stringify(service.content, null, 2)
+    : "";
+
+  return (
+    <div className="space-y-5 md:col-span-2">
+      <AdminFieldGroup title="Informacion">
+        <Input name="title" placeholder="Titulo del servicio" defaultValue={service?.title || ""} />
+        <Input name="slug" placeholder="slug-del-servicio" defaultValue={service?.slug || ""} />
+        <Input name="category" placeholder="Categoria: Campo, Gabinete, Soporte..." defaultValue={service?.category || ""} />
+        <select name="status" defaultValue={service?.status || "ACTIVE"} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
+          {serviceStatusOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="isFeatured" defaultChecked={service?.isFeatured || false} /> Destacado</label>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="isPublished" defaultChecked={service?.isPublished ?? true} /> Publicado</label>
+      </AdminFieldGroup>
+
+      <AdminFieldGroup title="Visual">
+        <Input name="icon" placeholder="Icono interno: MapPinned, Ruler, Drone..." defaultValue={service?.icon || ""} />
+        <Input name="cover" placeholder="URL de imagen principal" defaultValue={service?.cover || ""} />
+        <Textarea name="gallery" placeholder="URLs de galeria, una por linea" defaultValue={joinLines(service?.gallery)} />
+        <Input name="video" placeholder="URL de video opcional" defaultValue={service?.video || ""} />
+      </AdminFieldGroup>
+
+      <AdminFieldGroup title="Comercial">
+        <Input name="headline" placeholder="Promesa o enfoque comercial del servicio" defaultValue={service?.headline || ""} />
+        <Textarea name="summary" placeholder="Resumen visible en cards y hero" defaultValue={service?.summary || ""} />
+        <Textarea name="benefits" placeholder="Beneficios, uno por linea" defaultValue={joinLines(service?.benefits)} />
+        <Textarea name="applications" placeholder="Aplicaciones o usos, uno por linea" defaultValue={joinLines(service?.applications)} />
+        <Textarea name="deliverables" placeholder="Entregables, uno por linea" defaultValue={joinLines(service?.deliverables)} />
+      </AdminFieldGroup>
+
+      <AdminFieldGroup title="Tecnico">
+        <Textarea name="technologies" placeholder="Tecnologias/equipos, uno por linea" defaultValue={joinLines(service?.technologies)} />
+        <Input name="precision" placeholder="Precision o tolerancia aplicable" defaultValue={service?.precision || ""} />
+        <Textarea name="formats" placeholder="Formatos de entrega, uno por linea" defaultValue={joinLines(service?.formats)} />
+        <Textarea name="compatibility" placeholder="Compatibilidad CAD/GIS/BIM/sistemas, uno por linea" defaultValue={joinLines(service?.compatibility)} />
+      </AdminFieldGroup>
+
+      <AdminFieldGroup title="SEO y relaciones">
+        <Input name="seoTitle" placeholder="SEO title" defaultValue={service?.seoTitle || ""} />
+        <Textarea name="metaDescription" placeholder="Meta description" defaultValue={service?.metaDescription || ""} />
+        <Input name="ogImage" placeholder="OG image" defaultValue={service?.ogImage || ""} />
+        <Textarea name="relatedProjects" placeholder="Slugs de proyectos relacionados, uno por linea" defaultValue={joinLines(service?.relatedProjects)} />
+        <Textarea name="successCases" placeholder="Casos de exito relacionados, uno por linea" defaultValue={joinLines(service?.successCases)} />
+        <Textarea name="relatedServices" placeholder="Slugs de servicios relacionados, uno por linea" defaultValue={joinLines(service?.relatedServices)} />
+      </AdminFieldGroup>
+
+      <div>
+        <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Contenido legacy / notas</p>
+        <Textarea name="content" placeholder='{"problem":"...","process":["..."]}' defaultValue={contentValue} />
+      </div>
+    </div>
+  );
+}
+
+function AdminFieldGroup({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <fieldset className="grid gap-3 rounded-md border bg-background/70 p-4 md:grid-cols-2">
+      <legend className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</legend>
+      {children}
+    </fieldset>
+  );
+}
+
+function joinLines(items?: string[] | null) {
+  return (items || []).join("\n");
 }
 
 function EditableRow({ title, subtitle, updateAction, deleteAction, children }: { title: string; subtitle: string; updateAction: (formData: FormData) => Promise<void>; deleteAction: () => Promise<void>; children: ReactNode }) {

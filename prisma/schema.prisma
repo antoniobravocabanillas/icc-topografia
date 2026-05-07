@@ -510,16 +510,39 @@ model Favorite {
 }
 
 model Service {
-  id          String   @id @default(cuid())
-  title       String
-  slug        String   @unique
-  summary     String
-  content     Json
-  isPublished Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String   @id @default(cuid())
+  title           String
+  slug            String   @unique
+  category        String?
+  isFeatured      Boolean  @default(false)
+  status          String   @default("ACTIVE")
+  icon            String?
+  cover           String?
+  gallery         String[] @default([])
+  video           String?
+  headline        String?
+  summary         String
+  benefits        String[] @default([])
+  applications    String[] @default([])
+  deliverables    String[] @default([])
+  technologies    String[] @default([])
+  precision       String?
+  formats         String[] @default([])
+  compatibility   String[] @default([])
+  seoTitle        String?
+  metaDescription String?
+  ogImage         String?
+  relatedProjects String[] @default([])
+  successCases    String[] @default([])
+  relatedServices String[] @default([])
+  content         Json
+  isPublished     Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  @@index([isPublished])
+  @@index([isPublished, isFeatured])
+  @@index([category])
+  @@index([status])
 }
 
 model CmsPage {

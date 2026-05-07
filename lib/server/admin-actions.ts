@@ -34,6 +34,37 @@ function listFromTextarea(formData: FormData, key: string) {
     .filter(Boolean);
 }
 
+function serviceFieldsFromForm(formData: FormData, title: string) {
+  return {
+    title,
+    slug: value(formData, "slug") || slugify(title),
+    category: value(formData, "category"),
+    isFeatured: checked(formData, "isFeatured"),
+    status: value(formData, "status") || "ACTIVE",
+    icon: value(formData, "icon"),
+    cover: value(formData, "cover"),
+    gallery: listFromTextarea(formData, "gallery"),
+    video: value(formData, "video"),
+    headline: value(formData, "headline"),
+    summary: value(formData, "summary") || "",
+    benefits: listFromTextarea(formData, "benefits"),
+    applications: listFromTextarea(formData, "applications"),
+    deliverables: listFromTextarea(formData, "deliverables"),
+    technologies: listFromTextarea(formData, "technologies"),
+    precision: value(formData, "precision"),
+    formats: listFromTextarea(formData, "formats"),
+    compatibility: listFromTextarea(formData, "compatibility"),
+    seoTitle: value(formData, "seoTitle"),
+    metaDescription: value(formData, "metaDescription"),
+    ogImage: value(formData, "ogImage"),
+    relatedProjects: listFromTextarea(formData, "relatedProjects"),
+    successCases: listFromTextarea(formData, "successCases"),
+    relatedServices: listFromTextarea(formData, "relatedServices"),
+    content: contentFromText(formData) as Prisma.InputJsonValue,
+    isPublished: checked(formData, "isPublished")
+  };
+}
+
 function adminErrorRedirect(message: string) {
   redirect(`/admin/proyectos?projectStatus=error&item=${encodeURIComponent(message)}`);
 }
@@ -751,33 +782,32 @@ export async function deletePostAction(id: string) {
 
 export async function createServiceAction(formData: FormData) {
   const title = value(formData, "title") || "";
+  const slug = value(formData, "slug") || slugify(title);
   await prisma.service.create({
-    data: {
-      title,
-      slug: value(formData, "slug") || slugify(title),
-      summary: value(formData, "summary") || "",
-      content: contentFromText(formData) as Prisma.InputJsonValue,
-      isPublished: checked(formData, "isPublished")
-    }
+    data: serviceFieldsFromForm(formData, title)
   });
   revalidatePath("/admin/contenidos");
   revalidatePath("/servicios");
+  revalidatePath(`/servicios/${slug}`);
 }
 
 export async function updateServiceAction(id: string, formData: FormData) {
   const title = value(formData, "title") || "";
+  const previousService = await prisma.service.findUnique({
+    where: { id },
+    select: { slug: true }
+  });
+  const slug = value(formData, "slug") || slugify(title);
   await prisma.service.update({
     where: { id },
-    data: {
-      title,
-      slug: value(formData, "slug") || slugify(title),
-      summary: value(formData, "summary") || "",
-      content: contentFromText(formData) as Prisma.InputJsonValue,
-      isPublished: checked(formData, "isPublished")
-    }
+    data: serviceFieldsFromForm(formData, title)
   });
   revalidatePath("/admin/contenidos");
   revalidatePath("/servicios");
+  revalidatePath(`/servicios/${slug}`);
+  if (previousService?.slug && previousService.slug !== slug) {
+    revalidatePath(`/servicios/${previousService.slug}`);
+  }
 }
 
 export async function deleteServiceAction(id: string) {
