@@ -33,14 +33,12 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function HomePage() {
-  const [services, faqs, testimonials, clientLogos, categories, products] = await Promise.all([
-    prisma.service.findMany({ where: { isPublished: true }, orderBy: { updatedAt: "desc" }, take: 8 }),
-    prisma.faq.findMany({ where: { active: true }, orderBy: [{ position: "asc" }, { createdAt: "desc" }], take: 6 }),
-    prisma.testimonial.findMany({ where: { active: true }, orderBy: { createdAt: "desc" }, take: 2 }),
-    prisma.clientLogo.findMany({ where: { active: true }, orderBy: [{ position: "asc" }, { createdAt: "desc" }], take: 18 }),
-    prisma.category.findMany({ where: { products: { some: { isActive: true } } }, orderBy: { name: "asc" }, take: 12 }),
-    prisma.product.findMany({ where: { isActive: true }, include: { category: true, variants: true }, orderBy: { updatedAt: "desc" }, take: 4 })
-  ]);
+  const services = await prisma.service.findMany({ where: { isPublished: true }, orderBy: { updatedAt: "desc" }, take: 8 });
+  const faqs = await prisma.faq.findMany({ where: { active: true }, orderBy: [{ position: "asc" }, { createdAt: "desc" }], take: 6 });
+  const testimonials = await prisma.testimonial.findMany({ where: { active: true }, orderBy: { createdAt: "desc" }, take: 2 });
+  const clientLogos = await prisma.clientLogo.findMany({ where: { active: true }, orderBy: [{ position: "asc" }, { createdAt: "desc" }], take: 18 });
+  const categories = await prisma.category.findMany({ where: { products: { some: { isActive: true } } }, orderBy: { name: "asc" }, take: 12 });
+  const products = await prisma.product.findMany({ where: { isActive: true }, include: { category: true, variants: true }, orderBy: { updatedAt: "desc" }, take: 4 });
   const featuredProducts = products.map(serializeProduct);
 
   return (

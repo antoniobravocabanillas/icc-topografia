@@ -62,6 +62,7 @@ function serviceFieldsFromForm(formData: FormData, title: string) {
     relatedProjects: listFromTextarea(formData, "relatedProjects"),
     successCases: listFromTextarea(formData, "successCases"),
     relatedServices: listFromTextarea(formData, "relatedServices"),
+    sectorSlugs: listFromTextarea(formData, "sectorSlugs"),
     content: contentFromText(formData) as Prisma.InputJsonValue,
     isPublished: checked(formData, "isPublished")
   };
@@ -79,6 +80,21 @@ function serviceCategoryFieldsFromForm(formData: FormData) {
     position: numberValue(formData, "position"),
     active: checked(formData, "active"),
     parentId: value(formData, "parentId")
+  };
+}
+
+function sectorFieldsFromForm(formData: FormData) {
+  const name = value(formData, "name") || "";
+  return {
+    name,
+    slug: value(formData, "slug") || slugify(name),
+    description: value(formData, "description") || "",
+    icon: value(formData, "icon"),
+    image: value(formData, "image"),
+    position: numberValue(formData, "position"),
+    active: checked(formData, "active"),
+    seoTitle: value(formData, "seoTitle") || name,
+    metaDescription: value(formData, "metaDescription") || value(formData, "description")
   };
 }
 
@@ -854,6 +870,24 @@ export async function deleteServiceCategoryAction(id: string) {
   await prisma.serviceCategory.delete({ where: { id } });
   revalidatePath("/admin/contenidos");
   revalidatePath("/servicios");
+}
+
+export async function createSectorAction(formData: FormData) {
+  await prisma.sector.create({ data: sectorFieldsFromForm(formData) });
+  revalidatePath("/admin/contenidos");
+  revalidatePath("/sectores");
+}
+
+export async function updateSectorAction(id: string, formData: FormData) {
+  await prisma.sector.update({ where: { id }, data: sectorFieldsFromForm(formData) });
+  revalidatePath("/admin/contenidos");
+  revalidatePath("/sectores");
+}
+
+export async function deleteSectorAction(id: string) {
+  await prisma.sector.delete({ where: { id } });
+  revalidatePath("/admin/contenidos");
+  revalidatePath("/sectores");
 }
 
 const baseServiceCatalog = [

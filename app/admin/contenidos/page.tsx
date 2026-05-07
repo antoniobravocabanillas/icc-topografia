@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import Image from "next/image";
 import { CheckCircle2 } from "lucide-react";
-import type { Service, ServiceCategory } from "@prisma/client";
+import type { Sector, Service, ServiceCategory } from "@prisma/client";
 import { ClientLogoUploader } from "@/components/admin/client-logo-uploader";
 import { FormSubmitButton } from "@/components/admin/form-submit-button";
 import { ServiceAutoFields } from "@/components/admin/service-auto-fields";
@@ -18,6 +18,7 @@ import {
   createCmsPageAction,
   createFaqAction,
   createPostAction,
+  createSectorAction,
   createServiceAction,
   createServiceCategoryAction,
   createTestimonialAction,
@@ -26,6 +27,7 @@ import {
   deleteCmsPageAction,
   deleteFaqAction,
   deletePostAction,
+  deleteSectorAction,
   deleteServiceAction,
   deleteServiceCategoryAction,
   deleteTestimonialAction,
@@ -35,6 +37,7 @@ import {
   updateCmsPageAction,
   updateFaqAction,
   updatePostAction,
+  updateSectorAction,
   updateServiceAction,
   updateServiceCategoryAction,
   updateTestimonialAction
@@ -66,16 +69,15 @@ export default async function AdminContentPage({ searchParams }: AdminContentPag
   const resolvedSearchParams = await searchParams;
   const blogStatus = resolvedSearchParams?.blogStatus;
   const blogStatusMessage = blogStatus ? blogStatusMessages[blogStatus] : null;
-  const [services, serviceCategories, posts, faqs, testimonials, clientLogos, banners, pages] = await Promise.all([
-    prisma.service.findMany({ orderBy: { updatedAt: "desc" } }),
-    prisma.serviceCategory.findMany({ orderBy: [{ parentId: "asc" }, { position: "asc" }, { name: "asc" }] }),
-    prisma.blogPost.findMany({ orderBy: { updatedAt: "desc" } }),
-    prisma.faq.findMany({ orderBy: [{ position: "asc" }, { createdAt: "desc" }] }),
-    prisma.testimonial.findMany({ orderBy: { createdAt: "desc" } }),
-    prisma.clientLogo.findMany({ orderBy: [{ position: "asc" }, { createdAt: "desc" }] }),
-    prisma.banner.findMany({ orderBy: { createdAt: "desc" } }),
-    prisma.cmsPage.findMany({ orderBy: { updatedAt: "desc" } })
-  ]);
+  const services = await prisma.service.findMany({ orderBy: { updatedAt: "desc" } });
+  const serviceCategories = await prisma.serviceCategory.findMany({ orderBy: [{ parentId: "asc" }, { position: "asc" }, { name: "asc" }] });
+  const sectors = await prisma.sector.findMany({ orderBy: [{ position: "asc" }, { name: "asc" }] });
+  const posts = await prisma.blogPost.findMany({ orderBy: { updatedAt: "desc" } });
+  const faqs = await prisma.faq.findMany({ orderBy: [{ position: "asc" }, { createdAt: "desc" }] });
+  const testimonials = await prisma.testimonial.findMany({ orderBy: { createdAt: "desc" } });
+  const clientLogos = await prisma.clientLogo.findMany({ orderBy: [{ position: "asc" }, { createdAt: "desc" }] });
+  const banners = await prisma.banner.findMany({ orderBy: { createdAt: "desc" } });
+  const pages = await prisma.cmsPage.findMany({ orderBy: { updatedAt: "desc" } });
 
   return (
     <section className="space-y-8">
@@ -94,7 +96,9 @@ export default async function AdminContentPage({ searchParams }: AdminContentPag
         </div>
       ) : null}
 
-      <ServiceAdminSection services={services} categories={serviceCategories} />
+      <ServiceAdminSection services={services} categories={serviceCategories} sectors={sectors} />
+
+      <SectorAdminSection sectors={sectors} />
 
       <CmsBlock title="Blog" description="Posts publicados en /blog." createAction={createPostAction} fields={["title", "slug", "excerpt", "content", "category", "author"]}>
         {posts.map((post) => (
@@ -220,7 +224,7 @@ function CmsBlock({ title, description, createAction, fields, children }: { titl
   );
 }
 
-function ServiceAdminSection({ services, categories }: { services: Service[]; categories: ServiceCategory[] }) {
+function ServiceAdminSection({ services, categories, sectors }: { services: Service[]; categories: ServiceCategory[]; sectors: Sector[] }) {
   const parentCategories = categories.filter((category) => !category.parentId);
   const childCategories = categories.filter((category) => category.parentId);
 
@@ -259,18 +263,58 @@ function ServiceAdminSection({ services, categories }: { services: Service[]; ca
         </div>
 
         <form action={createServiceAction} className="space-y-5 rounded-md border bg-muted/40 p-4">
-          <ServiceFormFields categories={parentCategories} subcategories={childCategories} />
+          <ServiceFormFields categories={parentCategories} subcategories={childCategories} sectors={sectors} />
           <FormSubmitButton idleLabel="Crear servicio" pendingLabel="Creando..." />
         </form>
         <div className="space-y-5">
           {services.map((service) => (
             <EditableRow key={service.id} title={service.title} subtitle={`${service.category || "Sin categoria"} - ${service.slug}`} updateAction={updateServiceAction.bind(null, service.id)} deleteAction={deleteServiceAction.bind(null, service.id)}>
-              <ServiceFormFields service={service} categories={parentCategories} subcategories={childCategories} />
+              <ServiceFormFields service={service} categories={parentCategories} subcategories={childCategories} sectors={sectors} />
             </EditableRow>
           ))}
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function SectorAdminSection({ sectors }: { sectors: Sector[] }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Sectores</CardTitle>
+        <CardDescription>Aplicaciones visibles en /sectores y en las fichas premium de servicios.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <form action={createSectorAction} className="grid gap-3 rounded-md border bg-muted/40 p-4 md:grid-cols-2">
+          <SectorFields />
+          <FormSubmitButton idleLabel="Crear sector" pendingLabel="Creando..." />
+        </form>
+        <div className="space-y-4">
+          {sectors.map((sector) => (
+            <EditableRow key={sector.id} title={sector.name} subtitle={sector.slug} updateAction={updateSectorAction.bind(null, sector.id)} deleteAction={deleteSectorAction.bind(null, sector.id)}>
+              <SectorFields sector={sector} />
+            </EditableRow>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SectorFields({ sector }: { sector?: Sector }) {
+  return (
+    <>
+      <Input name="name" placeholder="Nombre del sector" defaultValue={sector?.name || ""} />
+      <Input name="slug" placeholder="slug-sector" defaultValue={sector?.slug || ""} />
+      <Input name="icon" placeholder="Icono lucide opcional" defaultValue={sector?.icon || ""} />
+      <Input name="position" type="number" placeholder="Orden" defaultValue={sector?.position ?? 0} />
+      <Input name="image" placeholder="URL de imagen sectorial" defaultValue={sector?.image || ""} />
+      <Input name="seoTitle" placeholder="SEO title" defaultValue={sector?.seoTitle || ""} />
+      <Textarea name="description" placeholder="Descripcion" defaultValue={sector?.description || ""} />
+      <Textarea name="metaDescription" placeholder="Meta description" defaultValue={sector?.metaDescription || ""} />
+      <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="active" defaultChecked={sector?.active ?? true} /> Activo</label>
+    </>
   );
 }
 
@@ -293,7 +337,7 @@ function ServiceCategoryFields({ category, categories }: { category?: ServiceCat
   );
 }
 
-function ServiceFormFields({ service, categories, subcategories }: { service?: Service; categories: ServiceCategory[]; subcategories: ServiceCategory[] }) {
+function ServiceFormFields({ service, categories, subcategories, sectors }: { service?: Service; categories: ServiceCategory[]; subcategories: ServiceCategory[]; sectors: Sector[] }) {
   const serviceContent = service?.content;
   const contentValue = serviceContent && typeof serviceContent === "object" && !Array.isArray(serviceContent) && Object.keys(serviceContent as Record<string, unknown>).length
     ? JSON.stringify(service.content, null, 2)
@@ -341,10 +385,16 @@ function ServiceFormFields({ service, categories, subcategories }: { service?: S
 
       <AdminFieldGroup title="SEO y relaciones">
         <Input name="ogImage" placeholder="OG image" defaultValue={service?.ogImage || ""} />
+        <Textarea name="sectorSlugs" placeholder="Slugs de sectores/aplicaciones, uno por linea" defaultValue={joinLines(service?.sectorSlugs)} />
         <Textarea name="relatedProjects" placeholder="Slugs de proyectos relacionados, uno por linea" defaultValue={joinLines(service?.relatedProjects)} />
         <Textarea name="successCases" placeholder="Casos de exito relacionados, uno por linea" defaultValue={joinLines(service?.successCases)} />
         <Textarea name="relatedServices" placeholder="Slugs de servicios relacionados, uno por linea" defaultValue={joinLines(service?.relatedServices)} />
       </AdminFieldGroup>
+      {sectors.length ? (
+        <div className="rounded-md border bg-muted/35 p-4 text-xs text-muted-foreground">
+          Sectores disponibles: {sectors.map((sector) => sector.slug).join(", ")}
+        </div>
+      ) : null}
 
       <div>
         <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Contenido legacy / notas</p>

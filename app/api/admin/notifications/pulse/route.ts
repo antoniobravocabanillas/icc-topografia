@@ -13,28 +13,26 @@ export async function GET() {
   }
 
   try {
-    const [unreadNotifications, latestNotification, latestCustomerMessage, latestInternalMessage] = await Promise.all([
-      prisma.notification.count({
-        where: {
-          readAt: null,
-          OR: [{ userId: session.user.id }, { userId: null }]
-        }
-      }),
-      prisma.notification.findFirst({
-        where: { OR: [{ userId: session.user.id }, { userId: null }] },
-        orderBy: { createdAt: "desc" }
-      }),
-      prisma.chatMessage.findFirst({
-        where: { sender: "customer" },
-        include: { conversation: true },
-        orderBy: { createdAt: "desc" }
-      }),
-      prisma.internalChatMessage.findFirst({
-        where: { userId: { not: session.user.id } },
-        include: { channel: true, user: true },
-        orderBy: { createdAt: "desc" }
-      })
-    ]);
+    const unreadNotifications = await prisma.notification.count({
+      where: {
+        readAt: null,
+        OR: [{ userId: session.user.id }, { userId: null }]
+      }
+    });
+    const latestNotification = await prisma.notification.findFirst({
+      where: { OR: [{ userId: session.user.id }, { userId: null }] },
+      orderBy: { createdAt: "desc" }
+    });
+    const latestCustomerMessage = await prisma.chatMessage.findFirst({
+      where: { sender: "customer" },
+      include: { conversation: true },
+      orderBy: { createdAt: "desc" }
+    });
+    const latestInternalMessage = await prisma.internalChatMessage.findFirst({
+      where: { userId: { not: session.user.id } },
+      include: { channel: true, user: true },
+      orderBy: { createdAt: "desc" }
+    });
 
     const events = [
       latestNotification

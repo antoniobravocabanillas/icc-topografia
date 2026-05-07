@@ -5,6 +5,7 @@ import { TechnicalPageHero } from "@/components/technical-page-hero";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { sectors } from "@/lib/content/site";
+import { prisma } from "@/lib/prisma";
 import { createMetadata } from "@/lib/seo";
 
 export const metadata = createMetadata({
@@ -25,7 +26,18 @@ const sectorDescriptions = [
   "Base cartografica, control de activos y apoyo tecnico para consultorias especializadas."
 ];
 
-export default function SectorsPage() {
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+export default async function SectorsPage() {
+  const dbSectors = await prisma.sector.findMany({
+    where: { active: true },
+    orderBy: [{ position: "asc" }, { name: "asc" }]
+  });
+  const sectorItems = dbSectors.length
+    ? dbSectors.map((sector) => ({ name: sector.name, description: sector.description }))
+    : sectors.map((sector, index) => ({ name: sector, description: sectorDescriptions[index] }));
+
   return (
     <>
       <TechnicalPageHero
@@ -47,15 +59,15 @@ export default function SectorsPage() {
           <h2 className="mt-4 max-w-3xl font-display text-3xl font-bold md:text-4xl">Soluciones tecnicas que cambian segun el riesgo, el terreno y el entregable</h2>
         </ScrollReveal>
         <div className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-          {sectors.map((sector, index) => {
+          {sectorItems.map((sector, index) => {
             const Icon = sectorIcons[index % sectorIcons.length];
             return (
-              <ScrollReveal key={sector} delay={index * 55}>
+              <ScrollReveal key={sector.name} delay={index * 55}>
                 <Card className="h-full transition duration-300 hover:-translate-y-1 hover:border-primary/60 motion-reduce:transform-none">
                   <CardHeader>
                     <Icon className="h-6 w-6 text-primary" />
-                    <CardTitle className="text-xl">{sector}</CardTitle>
-                    <CardDescription>{sectorDescriptions[index]}</CardDescription>
+                    <CardTitle className="text-xl">{sector.name}</CardTitle>
+                    <CardDescription>{sector.description}</CardDescription>
                     <Link href="/contacto" className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-primary">
                       Consultar alcance <ArrowRight className="h-4 w-4" />
                     </Link>

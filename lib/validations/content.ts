@@ -27,6 +27,7 @@ export const serviceInputSchema = z.object({
   relatedProjects: z.array(z.string().trim()).default([]),
   successCases: z.array(z.string().trim()).default([]),
   relatedServices: z.array(z.string().trim()).default([]),
+  sectorSlugs: z.array(z.string().trim()).default([]),
   content: z.record(z.unknown()).default({}),
   isPublished: z.coerce.boolean().default(true)
 });
