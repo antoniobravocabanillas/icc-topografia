@@ -21,6 +21,14 @@ export async function POST(request: Request) {
       const message = await prisma.chatMessage.create({
         data: { conversationId, sender: "customer", body }
       });
+      await prisma.notification.create({
+        data: {
+          type: "CHAT",
+          title: "Nuevo mensaje de cliente",
+          body,
+          href: "/admin/chat"
+        }
+      });
       return NextResponse.json({ conversationId, message }, { status: 201 });
     }
 

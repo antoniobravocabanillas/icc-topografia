@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { ExternalLink } from "lucide-react";
+import { CheckCircle2, ExternalLink } from "lucide-react";
+import { FormSubmitButton } from "@/components/admin/form-submit-button";
+import { ProjectImageUploader } from "@/components/admin/project-image-uploader";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,8 +16,24 @@ const projectStatuses = ["PLANNING", "IN_PROGRESS", "FINISHED", "PUBLISHED", "AR
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export default async function AdminProjectsPage() {
+const projectStatusMessages: Record<string, string> = {
+  created: "Proyecto creado correctamente.",
+  updated: "Cambios del proyecto guardados correctamente.",
+  deleted: "Proyecto eliminado correctamente."
+};
+
+type AdminProjectsPageProps = {
+  searchParams?: Promise<{
+    projectStatus?: string;
+    item?: string;
+  }>;
+};
+
+export default async function AdminProjectsPage({ searchParams }: AdminProjectsPageProps) {
   await requireAdminPage(["EDITOR", "ADMIN", "SUPER_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT"]);
+  const resolvedSearchParams = await searchParams;
+  const projectStatus = resolvedSearchParams?.projectStatus;
+  const projectStatusMessage = projectStatus ? projectStatusMessages[projectStatus] : null;
   const projects = await prisma.project.findMany({
     include: {
       images: { orderBy: { position: "asc" } },
@@ -32,6 +50,16 @@ export default async function AdminProjectsPage() {
         <h1 className="font-display text-3xl font-bold">Proyectos y casos</h1>
         <p className="mt-2 text-muted-foreground">Administra proyectos publicos, evidencia tecnica, galerias y resultados.</p>
       </div>
+
+      {projectStatusMessage ? (
+        <div className="flex items-start gap-3 rounded-md border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-950">
+          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+          <div>
+            <p className="font-semibold">{projectStatusMessage}</p>
+            {resolvedSearchParams?.item ? <p className="mt-1 text-emerald-800">{resolvedSearchParams.item}</p> : null}
+          </div>
+        </div>
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -155,7 +183,7 @@ function ProjectForm({
       <Textarea name="challenge" placeholder="Reto del proyecto" defaultValue={defaults?.challenge} />
       <Textarea name="solution" placeholder="Solucion aplicada" defaultValue={defaults?.solution} />
       <Textarea name="results" placeholder="Resultados / entregables" defaultValue={defaults?.results} />
-      <Textarea name="images" placeholder="URLs de imagenes, una por linea" defaultValue={defaults?.images} />
+      <ProjectImageUploader initialImages={defaults?.images ? defaults.images.split(/\r?\n/).filter(Boolean) : []} />
       <div className="grid content-start gap-3">
         <label className="flex items-center gap-2 rounded-md border bg-background px-3 py-3 text-sm">
           <input type="checkbox" name="isPublic" defaultChecked={defaults?.isPublic ?? true} />
@@ -166,7 +194,7 @@ function ProjectForm({
           Destacado
         </label>
       </div>
-      <Button type="submit" className="md:col-span-2">{submitLabel}</Button>
+      <FormSubmitButton idleLabel={submitLabel} pendingLabel="Guardando..." className="md:col-span-2" />
     </form>
   );
 }

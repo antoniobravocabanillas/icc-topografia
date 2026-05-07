@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
+import { AdminNotificationMonitor } from "@/components/admin/admin-notification-monitor";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { brand } from "@/lib/brand";
 
@@ -59,6 +60,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <main className="lg:pl-64">
         <div className="container py-10">{children}</div>
       </main>
+      <AdminNotificationMonitor />
     </div>
   );
 }

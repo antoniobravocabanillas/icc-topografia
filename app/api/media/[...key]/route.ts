@@ -1,5 +1,5 @@
 import { fail, handleApiError } from "@/lib/server/api";
-import { CLIENT_LOGO_PREFIX, CUSTOMER_FILE_PREFIX, getClientLogoStore, getCustomerFileStore, getProductMediaStore, PRODUCT_IMAGE_PREFIX } from "@/lib/server/media";
+import { CLIENT_LOGO_PREFIX, CUSTOMER_FILE_PREFIX, getClientLogoStore, getCustomerFileStore, getProductMediaStore, getProjectMediaStore, PRODUCT_IMAGE_PREFIX, PROJECT_IMAGE_PREFIX } from "@/lib/server/media";
 
 type MediaRouteProps = {
   params: Promise<{ key: string[] }>;
@@ -13,7 +13,7 @@ export async function GET(_request: Request, { params }: MediaRouteProps) {
     const { key: keyParts } = await params;
     const key = keyParts.join("/");
 
-    if (!key.startsWith(`${PRODUCT_IMAGE_PREFIX}/`) && !key.startsWith(`${CUSTOMER_FILE_PREFIX}/`) && !key.startsWith(`${CLIENT_LOGO_PREFIX}/`)) {
+    if (!key.startsWith(`${PRODUCT_IMAGE_PREFIX}/`) && !key.startsWith(`${CUSTOMER_FILE_PREFIX}/`) && !key.startsWith(`${CLIENT_LOGO_PREFIX}/`) && !key.startsWith(`${PROJECT_IMAGE_PREFIX}/`)) {
       return fail("Archivo no permitido", 403);
     }
 
@@ -21,7 +21,9 @@ export async function GET(_request: Request, { params }: MediaRouteProps) {
       ? getCustomerFileStore()
       : key.startsWith(`${CLIENT_LOGO_PREFIX}/`)
         ? getClientLogoStore()
-        : getProductMediaStore();
+        : key.startsWith(`${PROJECT_IMAGE_PREFIX}/`)
+          ? getProjectMediaStore()
+          : getProductMediaStore();
     const entry = await store.getWithMetadata(key, { type: "arrayBuffer" });
     if (!entry) return fail("Archivo no encontrado", 404);
 

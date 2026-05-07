@@ -6,11 +6,15 @@ export const CUSTOMER_FILE_STORE = "icc-customer-files";
 export const CUSTOMER_FILE_PREFIX = "customer-files";
 export const CLIENT_LOGO_STORE = "icc-client-logos";
 export const CLIENT_LOGO_PREFIX = "client-logos";
+export const PROJECT_IMAGE_STORE = "icc-project-media";
+export const PROJECT_IMAGE_PREFIX = "project-images";
 export const MAX_PRODUCT_IMAGE_SIZE = 5 * 1024 * 1024;
 export const MAX_CUSTOMER_FILE_SIZE = 10 * 1024 * 1024;
 export const MAX_CLIENT_LOGO_SIZE = 3 * 1024 * 1024;
+export const MAX_PROJECT_IMAGE_SIZE = 8 * 1024 * 1024;
 export const ALLOWED_PRODUCT_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
 export const ALLOWED_CLIENT_LOGO_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif", "image/svg+xml"]);
+export const ALLOWED_PROJECT_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
 export const ALLOWED_CUSTOMER_FILE_TYPES = new Set([
   "image/jpeg",
   "image/png",
@@ -29,6 +33,10 @@ export function getCustomerFileStore() {
 
 export function getClientLogoStore() {
   return getStore(CLIENT_LOGO_STORE);
+}
+
+export function getProjectMediaStore() {
+  return getStore(PROJECT_IMAGE_STORE);
 }
 
 export function sanitizeFileName(fileName: string) {
@@ -60,4 +68,11 @@ export function createClientLogoKey(fileName: string) {
   const extension = safeName.includes(".") ? safeName.split(".").pop() : "png";
   const baseName = safeName.replace(/\.[^.]+$/, "");
   return `${CLIENT_LOGO_PREFIX}/${crypto.randomUUID()}-${baseName}.${extension}`;
+}
+
+export function createProjectImageKey(fileName: string) {
+  const safeName = sanitizeFileName(fileName) || "proyecto";
+  const extension = safeName.includes(".") ? safeName.split(".").pop() : "jpg";
+  const baseName = safeName.replace(/\.[^.]+$/, "");
+  return `${PROJECT_IMAGE_PREFIX}/${crypto.randomUUID()}-${baseName}.${extension}`;
 }

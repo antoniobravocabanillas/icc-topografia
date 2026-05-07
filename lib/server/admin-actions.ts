@@ -1096,6 +1096,7 @@ export async function createProjectAction(formData: FormData) {
   });
   revalidatePath("/admin/proyectos");
   revalidatePath("/proyectos");
+  redirect(`/admin/proyectos?projectStatus=created&item=${encodeURIComponent(title)}`);
 }
 
 export async function createProjectFromSaleAction(id: string, formData: FormData) {
@@ -1155,6 +1156,7 @@ export async function createProjectFromSaleAction(id: string, formData: FormData
 export async function updateProjectAction(id: string, formData: FormData) {
   await requireActionRole(["EDITOR", "ADMIN", "SUPER_ADMIN"]);
   const title = value(formData, "title") || "";
+  const images = listFromTextarea(formData, "images");
   await prisma.project.update({
     where: { id },
     data: {
@@ -1171,18 +1173,24 @@ export async function updateProjectAction(id: string, formData: FormData) {
       results: value(formData, "results"),
       status: (value(formData, "status") as "PLANNING" | "IN_PROGRESS" | "FINISHED" | "PUBLISHED" | "ARCHIVED") || "PLANNING",
       isPublic: checked(formData, "isPublic"),
-      isFeatured: checked(formData, "isFeatured")
+      isFeatured: checked(formData, "isFeatured"),
+      images: {
+        deleteMany: {},
+        create: images.map((url, position) => ({ url, position, alt: title }))
+      }
     }
   });
   revalidatePath("/admin/proyectos");
   revalidatePath("/proyectos");
+  redirect(`/admin/proyectos?projectStatus=updated&item=${encodeURIComponent(title)}`);
 }
 
 export async function deleteProjectAction(id: string) {
   await requireActionRole(["EDITOR", "ADMIN", "SUPER_ADMIN"]);
-  await prisma.project.delete({ where: { id } });
+  const project = await prisma.project.delete({ where: { id } });
   revalidatePath("/admin/proyectos");
   revalidatePath("/proyectos");
+  redirect(`/admin/proyectos?projectStatus=deleted&item=${encodeURIComponent(project.title)}`);
 }
 
 export async function createProjectProgressAction(projectId: string, formData: FormData) {
