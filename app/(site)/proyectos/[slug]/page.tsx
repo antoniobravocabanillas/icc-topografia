@@ -7,33 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
+import { projectStatusDescriptions, projectStatusLabel, projectStatusStyles } from "@/lib/project-status";
 import { createMetadata } from "@/lib/seo";
 
 type ProjectPageProps = { params: Promise<{ slug: string }> };
-
-const statusLabels: Record<string, string> = {
-  PLANNING: "En planificacion",
-  IN_PROGRESS: "En ejecucion",
-  FINISHED: "Finalizado",
-  PUBLISHED: "Publicado",
-  ARCHIVED: "Archivado"
-};
-
-const statusDescriptions: Record<string, string> = {
-  PLANNING: "Alcance tecnico, equipo y cronograma en definicion.",
-  IN_PROGRESS: "Trabajo activo con control de campo, seguimiento y entregables en curso.",
-  FINISHED: "Intervencion culminada con documentacion tecnica disponible.",
-  PUBLISHED: "Caso publicado como referencia tecnica de ICC.",
-  ARCHIVED: "Proyecto archivado para consulta historica."
-};
-
-const statusStyles: Record<string, string> = {
-  PLANNING: "border-amber-300 bg-amber-50 text-amber-900",
-  IN_PROGRESS: "border-sky-300 bg-sky-50 text-sky-900",
-  FINISHED: "border-emerald-300 bg-emerald-50 text-emerald-900",
-  PUBLISHED: "border-emerald-300 bg-emerald-50 text-emerald-900",
-  ARCHIVED: "border-slate-300 bg-slate-50 text-slate-700"
-};
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -62,7 +39,7 @@ export default async function ProjectDetailPage({ params }: ProjectPageProps) {
   if (!project || !project.isPublic) notFound();
   const heroImage = project.images[0];
   const galleryImages = project.images.slice(1);
-  const statusLabel = statusLabels[project.status] || project.status;
+  const statusLabel = projectStatusLabel(project.status);
 
   return (
     <>
@@ -78,7 +55,7 @@ export default async function ProjectDetailPage({ params }: ProjectPageProps) {
           <div className="max-w-4xl">
             <div className="flex flex-wrap gap-3">
               <Badge className="bg-white text-[#063D63] hover:bg-white">{project.category || "Proyecto tecnico"}</Badge>
-              <span className={`rounded-md border px-3 py-1 text-xs font-semibold ${statusStyles[project.status] || "border-white/25 bg-white text-[#063D63]"}`}>
+              <span className={`rounded-md border px-3 py-1 text-xs font-semibold ${projectStatusStyles[project.status] || "border-white/25 bg-white text-[#063D63]"}`}>
                 {statusLabel}
               </span>
             </div>
@@ -97,7 +74,7 @@ export default async function ProjectDetailPage({ params }: ProjectPageProps) {
               <CardTitle className="mt-2 text-3xl leading-tight">{project.results || "Evidencia tecnica para decisiones de obra"}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-5 text-sm leading-7 text-white/74">
-              <p>{statusDescriptions[project.status] || "Seguimiento tecnico y entregables organizados por ICC."}</p>
+              <p>{projectStatusDescriptions[project.status] || "Seguimiento topografico y entregables organizados por ICC."}</p>
               <div className="grid gap-3 border-y border-white/14 py-5">
                 <MiniMetric icon={Ruler} label="Control" value="Mediciones trazables" />
                 <MiniMetric icon={ShieldCheck} label="QA/QC" value="Entregables revisables" />

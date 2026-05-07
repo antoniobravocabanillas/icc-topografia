@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { projects } from "@/lib/content/site";
 import { prisma } from "@/lib/prisma";
+import { projectStatusLabel, projectStatusLabels, projectStatusStyles } from "@/lib/project-status";
 import { createMetadata } from "@/lib/seo";
 
 export const metadata = createMetadata({
@@ -16,22 +17,6 @@ export const metadata = createMetadata({
 });
 
 const projectIcons = [MapPinned, Crosshair, BarChart3, FileCheck2];
-const statusLabels: Record<string, string> = {
-  PLANNING: "En planificacion",
-  IN_PROGRESS: "En ejecucion",
-  FINISHED: "Finalizado",
-  PUBLISHED: "Publicado",
-  ARCHIVED: "Archivado"
-};
-
-const statusStyles: Record<string, string> = {
-  PLANNING: "border-amber-300 bg-amber-50 text-amber-900",
-  IN_PROGRESS: "border-sky-300 bg-sky-50 text-sky-900",
-  FINISHED: "border-emerald-300 bg-emerald-50 text-emerald-900",
-  PUBLISHED: "border-emerald-300 bg-emerald-50 text-emerald-900",
-  ARCHIVED: "border-slate-300 bg-slate-50 text-slate-700"
-};
-
 type ProjectsPageProps = {
   searchParams?: Promise<{
     rubro?: string;
@@ -106,7 +91,7 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
           <ScrollReveal delay={80}>
             <div className="grid gap-3 rounded-lg border bg-background p-4 shadow-technical sm:grid-cols-2">
               <FilterGroup title="Rubro" items={["todos", ...rubros]} selected={selectedRubro} param="rubro" otherParam="estado" otherValue={selectedEstado} />
-              <FilterGroup title="Estado" items={["todos", ...estados]} selected={selectedEstado} param="estado" otherParam="rubro" otherValue={selectedRubro} formatter={(value) => value === "todos" ? "Todos" : statusLabels[value] || value} />
+            <FilterGroup title="Estado" items={["todos", ...estados]} selected={selectedEstado} param="estado" otherParam="rubro" otherValue={selectedRubro} formatter={(value) => value === "todos" ? "Todos" : projectStatusLabels[value] || value} />
             </div>
           </ScrollReveal>
         </div>
@@ -126,8 +111,8 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-[#03111D]/88 via-[#03111D]/18 to-transparent" />
                     <div className="absolute left-4 right-4 top-4 flex items-start justify-between gap-3">
-                      <span className={`rounded-md border px-3 py-1 text-xs font-semibold ${statusStyles[project.status] || "border-white/25 bg-white text-[#063D63]"}`}>
-                        {statusLabels[project.status] || project.status}
+                      <span className={`rounded-md border px-3 py-1 text-xs font-semibold ${projectStatusStyles[project.status] || "border-white/25 bg-white text-[#063D63]"}`}>
+                        {projectStatusLabel(project.status)}
                       </span>
                       {project.isFeatured ? <span className="rounded-md bg-[#24C8EE] px-3 py-1 text-xs font-semibold text-[#03111D]">Destacado</span> : null}
                     </div>

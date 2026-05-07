@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { projectStatusLabel } from "@/lib/project-status";
 
 const statusMap: Record<string, { label: string; variant: "default" | "secondary" | "outline" | "accent" }> = {
   NEW: { label: "Nuevo", variant: "secondary" },
@@ -27,11 +28,11 @@ const statusMap: Record<string, { label: string; variant: "default" | "secondary
   CONVERTED: { label: "Convertida", variant: "accent" },
   APPROVED: { label: "Aprobada", variant: "default" },
   PAID: { label: "Pagado", variant: "accent" },
-  PLANNING: { label: "Planificacion", variant: "outline" },
-  IN_PROGRESS: { label: "En ejecucion", variant: "default" },
-  FINISHED: { label: "Terminado", variant: "accent" },
-  PUBLISHED: { label: "Publicado", variant: "accent" },
-  ARCHIVED: { label: "Archivado", variant: "outline" },
+  PLANNING: { label: projectStatusLabel("PLANNING"), variant: "outline" },
+  IN_PROGRESS: { label: projectStatusLabel("IN_PROGRESS"), variant: "default" },
+  FINISHED: { label: projectStatusLabel("FINISHED"), variant: "secondary" },
+  PUBLISHED: { label: projectStatusLabel("PUBLISHED"), variant: "accent" },
+  ARCHIVED: { label: projectStatusLabel("ARCHIVED"), variant: "outline" },
   AVAILABLE: { label: "Disponible", variant: "accent" },
   FIELD: { label: "En campo", variant: "default" },
   BUSY: { label: "Ocupado", variant: "secondary" },

@@ -8,10 +8,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { prisma } from "@/lib/prisma";
+import { projectStatusOptions } from "@/lib/project-status";
 import { createProjectAction, createProjectProgressAction, deleteProjectAction, updateProjectAction } from "@/lib/server/admin-actions";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
-
-const projectStatuses = ["PLANNING", "IN_PROGRESS", "FINISHED", "PUBLISHED", "ARCHIVED"];
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -48,7 +47,7 @@ export default async function AdminProjectsPage({ searchParams }: AdminProjectsP
       <div>
         <p className="text-sm font-semibold uppercase text-primary">Operacion tecnica</p>
         <h1 className="font-display text-3xl font-bold">Proyectos y casos</h1>
-        <p className="mt-2 text-muted-foreground">Administra proyectos publicos, evidencia tecnica, galerias y resultados.</p>
+        <p className="mt-2 text-muted-foreground">Administra trabajos topograficos, evidencia de campo, planos, reportes y estado de entrega.</p>
       </div>
 
       {projectStatusMessage ? (
@@ -64,7 +63,7 @@ export default async function AdminProjectsPage({ searchParams }: AdminProjectsP
       <Card>
         <CardHeader>
           <CardTitle>Nuevo proyecto</CardTitle>
-          <CardDescription>Publica casos con alcance, solucion, resultado y CTA a cotizacion.</CardDescription>
+          <CardDescription>Registra el alcance topografico, rubro, estado de campo/gabinete y evidencia para clientes.</CardDescription>
         </CardHeader>
         <CardContent>
           <ProjectForm action={createProjectAction} submitLabel="Crear proyecto" />
@@ -173,16 +172,16 @@ function ProjectForm({
       <Input name="slug" placeholder="slug-url" defaultValue={defaults?.slug} />
       <Input name="clientName" placeholder="Cliente" defaultValue={defaults?.clientName} />
       <Input name="location" placeholder="Ubicacion" defaultValue={defaults?.location} />
-      <Input name="category" placeholder="Categoria / sector" defaultValue={defaults?.category} />
+      <Input name="category" placeholder="Rubro: habilitacion urbana, edificacion, vial, saneamiento..." defaultValue={defaults?.category} />
       <select name="status" defaultValue={defaults?.status || "PLANNING"} className="h-11 rounded-md border bg-background px-3 text-sm">
-        {projectStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
+        {projectStatusOptions.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
       </select>
-      <Textarea name="servicesApplied" placeholder="Servicios aplicados, uno por linea" defaultValue={defaults?.servicesApplied} />
+      <Textarea name="servicesApplied" placeholder="Servicios: levantamiento topografico, replanteo, nivelacion, georreferenciacion..." defaultValue={defaults?.servicesApplied} />
       <Textarea name="summary" placeholder="Descripcion corta" defaultValue={defaults?.summary} required />
       <Textarea name="description" placeholder="Descripcion completa" defaultValue={defaults?.description} required />
-      <Textarea name="challenge" placeholder="Reto del proyecto" defaultValue={defaults?.challenge} />
-      <Textarea name="solution" placeholder="Solucion aplicada" defaultValue={defaults?.solution} />
-      <Textarea name="results" placeholder="Resultados / entregables" defaultValue={defaults?.results} />
+      <Textarea name="challenge" placeholder="Condicion de campo / reto tecnico" defaultValue={defaults?.challenge} />
+      <Textarea name="solution" placeholder="Metodologia aplicada: control, levantamiento, replanteo, gabinete..." defaultValue={defaults?.solution} />
+      <Textarea name="results" placeholder="Entregables: plano topografico, reporte QA/QC, puntos de control, metrados..." defaultValue={defaults?.results} />
       <ProjectImageUploader initialImages={defaults?.images ? defaults.images.split(/\r?\n/).filter(Boolean) : []} />
       <div className="grid content-start gap-3">
         <label className="flex items-center gap-2 rounded-md border bg-background px-3 py-3 text-sm">
