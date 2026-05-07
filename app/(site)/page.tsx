@@ -99,7 +99,7 @@ export default async function HomePage() {
         <section className="border-y bg-white py-16">
           <div className="container">
             <ScrollReveal>
-              <SectionHeading eyebrow="Clientes topograficos" title="Marcas que confiaron sus trabajos de campo a ICC" description="Logos de clientes vinculados a servicios y proyectos de topografia, geodesia e ingenieria." />
+              <SectionHeading eyebrow="Confianza en campo" title="Acompanamos decisiones que empiezan con mediciones precisas" description="Organizaciones que eligieron a ICC para convertir levantamientos, control y datos tecnicos en avances reales de obra." />
             </ScrollReveal>
             <div className="mt-8 grid grid-cols-2 gap-px overflow-hidden rounded-md border bg-border sm:grid-cols-3 lg:grid-cols-6">
               {clientLogos.map((clientLogo, index) => {
