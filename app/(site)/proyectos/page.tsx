@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, BarChart3, CheckCircle2, Crosshair, FileCheck2, MapPinned, Search } from "lucide-react";
+import { ArrowRight, BarChart3, CheckCircle2, Crosshair, FileCheck2, MapPinned } from "lucide-react";
+import { ProjectSearchPreview } from "@/components/projects/project-search-preview";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,7 @@ export const metadata = createMetadata({
 });
 
 const projectIcons = [MapPinned, Crosshair, BarChart3, FileCheck2];
-const PROJECTS_PER_PAGE = 9;
+const PROJECTS_PER_PAGE = 8;
 
 type ProjectsPageProps = {
   searchParams?: Promise<{
@@ -81,6 +82,17 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
   const resultEnd = Math.min(startIndex + paginatedProjectItems.length, projectItems.length);
   const deliveredCount = allProjectItems.filter((project) => ["FINISHED", "PUBLISHED", "ARCHIVED"].includes(project.status)).length;
   const hasActiveFilters = selectedRubro !== "todos" || selectedEstado !== "todos" || Boolean(query);
+  const searchPreviewItems = allProjectItems
+    .filter((project) => project.slug)
+    .map((project) => ({
+      title: project.title,
+      slug: project.slug,
+      sector: project.sector,
+      location: project.location || "",
+      summary: project.summary,
+      metric: project.metric,
+      statusLabel: projectStatusLabel(project.status)
+    }));
 
   return (
     <>
@@ -97,23 +109,7 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
           </ScrollReveal>
           <ScrollReveal delay={80}>
             <div className="grid gap-5 rounded-sm border border-white/[0.08] bg-[#161C25]/80 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur">
-              <form action="/proyectos" className="grid gap-3 md:grid-cols-[1fr_auto]">
-                {selectedRubro !== "todos" ? <input type="hidden" name="rubro" value={selectedRubro} /> : null}
-                {selectedEstado !== "todos" ? <input type="hidden" name="estado" value={selectedEstado} /> : null}
-                <label className="relative block">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7DE4FF]" />
-                  <input
-                    type="search"
-                    name="q"
-                    defaultValue={query}
-                    placeholder="Buscar por proyecto, distrito, rubro o entregable"
-                    className="h-11 w-full rounded-sm border border-white/[0.1] bg-[#03111D]/70 pl-10 pr-4 text-sm text-white outline-none transition placeholder:text-white/36 focus:border-[#24C8EE]/70"
-                  />
-                </label>
-                <button type="submit" className="h-11 rounded-sm bg-[#0B83C4] px-5 text-xs font-bold uppercase tracking-[0.12em] text-white transition hover:bg-[#24C8EE] hover:text-[#03111D]">
-                  Buscar
-                </button>
-              </form>
+              <ProjectSearchPreview items={searchPreviewItems} query={query} selectedRubro={selectedRubro} selectedEstado={selectedEstado} />
               <div className="grid gap-5 sm:grid-cols-2">
                 <FilterGroup title="Rubro" items={["todos", ...rubros]} selected={selectedRubro} param="rubro" params={{ rubro: selectedRubro, estado: selectedEstado, q: query }} />
                 <FilterGroup title="Estado" items={["todos", ...estados]} selected={selectedEstado} param="estado" params={{ rubro: selectedRubro, estado: selectedEstado, q: query }} formatter={(value) => value === "todos" ? "Todos" : projectStatusLabels[value] || value} />
