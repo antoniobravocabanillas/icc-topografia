@@ -39,6 +39,8 @@ function serviceFieldsFromForm(formData: FormData, title: string) {
     title,
     slug: value(formData, "slug") || slugify(title),
     category: value(formData, "category"),
+    categoryId: value(formData, "categoryId"),
+    subcategoryId: value(formData, "subcategoryId"),
     isFeatured: checked(formData, "isFeatured"),
     status: value(formData, "status") || "ACTIVE",
     icon: value(formData, "icon"),
@@ -62,6 +64,21 @@ function serviceFieldsFromForm(formData: FormData, title: string) {
     relatedServices: listFromTextarea(formData, "relatedServices"),
     content: contentFromText(formData) as Prisma.InputJsonValue,
     isPublished: checked(formData, "isPublished")
+  };
+}
+
+function serviceCategoryFieldsFromForm(formData: FormData) {
+  const name = value(formData, "name") || "";
+  return {
+    name,
+    slug: value(formData, "slug") || slugify(name),
+    description: value(formData, "description"),
+    icon: value(formData, "icon"),
+    seoTitle: value(formData, "seoTitle") || name,
+    metaDescription: value(formData, "metaDescription") || value(formData, "description"),
+    position: numberValue(formData, "position"),
+    active: checked(formData, "active"),
+    parentId: value(formData, "parentId")
   };
 }
 
@@ -812,6 +829,221 @@ export async function updateServiceAction(id: string, formData: FormData) {
 
 export async function deleteServiceAction(id: string) {
   await prisma.service.delete({ where: { id } });
+  revalidatePath("/admin/contenidos");
+  revalidatePath("/servicios");
+}
+
+export async function createServiceCategoryAction(formData: FormData) {
+  await prisma.serviceCategory.create({
+    data: serviceCategoryFieldsFromForm(formData)
+  });
+  revalidatePath("/admin/contenidos");
+  revalidatePath("/servicios");
+}
+
+export async function updateServiceCategoryAction(id: string, formData: FormData) {
+  await prisma.serviceCategory.update({
+    where: { id },
+    data: serviceCategoryFieldsFromForm(formData)
+  });
+  revalidatePath("/admin/contenidos");
+  revalidatePath("/servicios");
+}
+
+export async function deleteServiceCategoryAction(id: string) {
+  await prisma.serviceCategory.delete({ where: { id } });
+  revalidatePath("/admin/contenidos");
+  revalidatePath("/servicios");
+}
+
+const baseServiceCatalog = [
+  {
+    name: "Geomática y Levantamientos de Precisión",
+    slug: "geomatica-levantamientos-precision",
+    description: "El nucleo tecnico de ICC: medicion de alta precision para obras, catastro, mineria e infraestructura.",
+    services: [
+      ["Topografía Convencional y Automatizada", "Levantamientos para obras civiles, mineria y catastro con estacion total robotizada."],
+      ["Geodesia Satelital (GNSS/RTK)", "Puntos de control, redes geodesicas de alta precision y posicionamiento NTRIP."],
+      ["Escaneo Láser 3D (LiDAR Terrestre)", "Captura de realidad de alta densidad para gemelos digitales, plantas industriales y patrimonio historico."],
+      ["Batimetría", "Levantamientos de rios, reservorios y lagunas para proyectos hidraulicos y mineros."],
+      ["Control Geométrico de Obras", "Replanteo estructural, control de ejes, niveles y alineamientos durante la ejecucion."]
+    ]
+  },
+  {
+    name: "Soluciones Aéreas y Digitales",
+    slug: "soluciones-aereas-digitales",
+    description: "Captura aerea, modelos digitales, GIS y entregables en nube para decisiones modernas.",
+    services: [
+      ["Fotogrametría con Drones (UAV)", "Ortomosaicos, nubes de puntos densas, MDE y cubicacion volumetrica de stockpiles."],
+      ["Modelado 3D y Metodología BIM", "Transformacion de datos de campo en modelos digitales para arquitectura, ingenieria y operacion."],
+      ["Gestión Geoespacial (SIG/GIS)", "Analisis espacial, mapas tematicos e integracion con sistemas municipales y de inversion publica."],
+      ["Entrega y Productos Digitales", "Planos digitales certificados, informes descargables, modelos en la nube y monitoreo remoto."]
+    ]
+  },
+  {
+    name: "Ingeniería de Terrenos",
+    slug: "ingenieria-de-terrenos",
+    description: "Lectura tecnica de superficie y subsuelo para proyectos que no pueden fallar.",
+    services: [
+      ["Mecánica de Suelos y Geotecnia", "Ensayos DPL, SPT, granulometria, capacidad portante y estudios de campo."],
+      ["Cubicación y Movimiento de Tierras", "Calculo de volumenes de corte y relleno, balance de tierras con drone y software."],
+      ["Monitoreo de Taludes y Subsidencias", "Seguimiento de deformaciones en cortes, terraplenes y edificaciones vecinas."],
+      ["Hidrología Básica Aplicada", "Pendientes, cuencas y drenaje para habilitaciones urbanas y proyectos viales."]
+    ]
+  },
+  {
+    name: "Catastro y Saneamiento Legal",
+    slug: "catastro-saneamiento-legal",
+    description: "Predios, linderos, expedientes y soporte tecnico para formalizacion fisico-legal.",
+    services: [
+      ["Levantamiento Catastral Urbano y Rural", "Predios, manzanas, comunidades campesinas y nativas."],
+      ["Saneamiento Físico-Legal de Predios", "Planos para SUNARP, georreferenciacion WGS84/PSAD56 y tramites COFOPRI."],
+      ["Independización y Acumulación de Predios", "Subdivision, lotizacion y habilitacion urbana."],
+      ["Catastro Municipal", "Actualizacion de bases graficas, numeracion predial y planos de zonificacion."],
+      ["Peritaje Topográfico Legal", "Informes para procesos judiciales, arbitrajes y resolucion de linderos."]
+    ]
+  },
+  {
+    name: "Infraestructura y Sectores Especializados",
+    slug: "infraestructura-sectores-especializados",
+    description: "Servicios por vertical para vialidad, mineria, ambiente y sector agrario.",
+    children: [
+      {
+        name: "Vialidad e Infraestructura Civil",
+        slug: "vialidad-infraestructura-civil",
+        services: [
+          ["Levantamientos para carreteras, puentes y túneles", "Topografia para proyectos MTC, gobiernos regionales e infraestructura civil."],
+          ["Perfiles longitudinales y secciones transversales", "Informacion de campo para diseno geometrico y control vial."],
+          ["Topografía para redes de agua, desagüe y energía", "Levantamientos y replanteos para infraestructura sanitaria y electrica."]
+        ]
+      },
+      {
+        name: "Minería",
+        slug: "mineria",
+        services: [
+          ["Levantamiento y marcación de concesiones mineras", "Delimitacion y control georreferenciado de concesiones."],
+          ["Cubicación de tajos abiertos y labores subterráneas", "Volumenes, control de avance y soporte topografico minero."],
+          ["Control de voladuras y movimiento de material", "Marcacion, seguimiento y evidencia para operacion minera."],
+          ["Monitoreo geodésico de presas de relaves", "Control de deformaciones y puntos de monitoreo de alta precision."]
+        ]
+      },
+      {
+        name: "Medio Ambiente y Sector Agrario",
+        slug: "medio-ambiente-sector-agrario",
+        services: [
+          ["Topografía para proyectos de irrigación y canales", "Pendientes, trazos y control para infraestructura hidraulica."],
+          ["Delimitación de áreas de conservación y reservas", "Georreferenciacion de poligonos ambientales y areas protegidas."],
+          ["Levantamientos para REDD+ y certificación forestal", "Soporte topografico para inventarios, certificacion y conservacion."],
+          ["Topografía para infraestructura agroindustrial", "Levantamientos para plantas, fundos, caminos internos y drenaje."]
+        ]
+      }
+    ]
+  },
+  {
+    name: "Consultoría, Peritaje y Capacitación",
+    slug: "consultoria-peritaje-capacitacion",
+    description: "Auditoria, validacion, peritaje y gestion geomatica de mayor valor consultivo.",
+    services: [
+      ["Consultoría en Precisión Geométrica", "Auditorias de control de calidad topografica para constructoras y desarrolladores."],
+      ["Peritaje Topográfico", "Informes tecnicos para procesos judiciales, arbitrajes y organismos del Estado."],
+      ["Revisión y Validación de Estudios", "Segunda opinion tecnica sobre levantamientos, catastros y planos de terceros."],
+      ["Capacitación Técnica", "Formacion para constructoras y municipalidades en instrumentos, software y normativa."],
+      ["Gestión de Proyectos Geomáticos", "Coordinacion integral de estudios topograficos en proyectos EPC y PPP."]
+    ]
+  }
+];
+
+export async function seedServiceCatalogAction() {
+  for (const [categoryIndex, category] of baseServiceCatalog.entries()) {
+    const parent = await prisma.serviceCategory.upsert({
+      where: { slug: category.slug },
+      update: {
+        name: category.name,
+        description: category.description,
+        seoTitle: category.name,
+        metaDescription: category.description,
+        position: categoryIndex + 1,
+        active: true
+      },
+      create: {
+        name: category.name,
+        slug: category.slug,
+        description: category.description,
+        seoTitle: category.name,
+        metaDescription: category.description,
+        position: categoryIndex + 1,
+        active: true
+      }
+    });
+
+    const serviceGroups = [
+      { categoryId: parent.id, subcategoryId: undefined, categoryName: category.name, services: category.services || [] },
+      ...((category.children || []).map((child, childIndex) => ({ categoryId: parent.id, child, childIndex, services: child.services })))
+    ];
+
+    for (const group of serviceGroups) {
+      let subcategoryId: string | undefined;
+      let categoryName = "categoryName" in group ? group.categoryName : category.name;
+      if ("child" in group && group.child) {
+        const child = await prisma.serviceCategory.upsert({
+          where: { slug: group.child.slug },
+          update: {
+            name: group.child.name,
+            parentId: parent.id,
+            position: (group.childIndex || 0) + 1,
+            active: true
+          },
+          create: {
+            name: group.child.name,
+            slug: group.child.slug,
+            parentId: parent.id,
+            position: (group.childIndex || 0) + 1,
+            active: true
+          }
+        });
+        subcategoryId = child.id;
+        categoryName = child.name;
+      }
+
+      for (const [title, summary] of group.services) {
+        await prisma.service.upsert({
+          where: { slug: slugify(title) },
+          update: {
+            title,
+            category: categoryName,
+            categoryId: parent.id,
+            subcategoryId,
+            headline: summary,
+            summary,
+            seoTitle: `${title} en Peru`,
+            metaDescription: summary,
+            isPublished: true
+          },
+          create: {
+            title,
+            slug: slugify(title),
+            category: categoryName,
+            categoryId: parent.id,
+            subcategoryId,
+            status: "ACTIVE",
+            headline: summary,
+            summary,
+            benefits: ["Precision tecnica trazable", "Entregables listos para decision", "Soporte especializado ICC"],
+            applications: [categoryName],
+            deliverables: ["Informe tecnico", "Archivos digitales", "Evidencia de campo"],
+            technologies: ["GNSS", "Estacion total", "CAD/GIS"],
+            formats: ["PDF", "DWG", "KMZ", "XLSX"],
+            compatibility: ["Civil 3D", "AutoCAD", "GIS", "BIM segun alcance"],
+            seoTitle: `${title} en Peru`,
+            metaDescription: summary,
+            content: { problem: summary },
+            isPublished: true
+          }
+        });
+      }
+    }
+  }
+
   revalidatePath("/admin/contenidos");
   revalidatePath("/servicios");
 }

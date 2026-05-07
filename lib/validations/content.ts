@@ -4,6 +4,8 @@ export const serviceInputSchema = z.object({
   title: z.string().trim().min(2),
   slug: z.string().trim().min(2).optional(),
   category: z.string().trim().optional().nullable(),
+  categoryId: z.string().trim().optional().nullable(),
+  subcategoryId: z.string().trim().optional().nullable(),
   isFeatured: z.coerce.boolean().default(false),
   status: z.string().trim().default("ACTIVE"),
   icon: z.string().trim().optional().nullable(),

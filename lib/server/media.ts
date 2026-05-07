@@ -8,6 +8,7 @@ export const CLIENT_LOGO_STORE = "icc-client-logos";
 export const CLIENT_LOGO_PREFIX = "client-logos";
 export const PROJECT_IMAGE_STORE = "icc-project-media";
 export const PROJECT_IMAGE_PREFIX = "project-images";
+export const SERVICE_ICON_PREFIX = "service-icons";
 export const MAX_PRODUCT_IMAGE_SIZE = 5 * 1024 * 1024;
 export const MAX_CUSTOMER_FILE_SIZE = 10 * 1024 * 1024;
 export const MAX_CLIENT_LOGO_SIZE = 3 * 1024 * 1024;
@@ -75,4 +76,11 @@ export function createProjectImageKey(fileName: string) {
   const extension = safeName.includes(".") ? safeName.split(".").pop() : "jpg";
   const baseName = safeName.replace(/\.[^.]+$/, "");
   return `${PROJECT_IMAGE_PREFIX}/${crypto.randomUUID()}-${baseName}.${extension}`;
+}
+
+export function createServiceIconKey(fileName: string) {
+  const safeName = sanitizeFileName(fileName) || "servicio";
+  const extension = safeName.includes(".") ? safeName.split(".").pop() : "svg";
+  const baseName = safeName.replace(/\.[^.]+$/, "");
+  return `${SERVICE_ICON_PREFIX}/${crypto.randomUUID()}-${baseName}.${extension}`;
 }

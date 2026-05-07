@@ -514,6 +514,10 @@ model Service {
   title           String
   slug            String   @unique
   category        String?
+  categoryId      String?
+  subcategoryId   String?
+  categoryRef     ServiceCategory? @relation("ServiceCategoryPrimary", fields: [categoryId], references: [id], onDelete: SetNull)
+  subcategoryRef  ServiceCategory? @relation("ServiceCategorySecondary", fields: [subcategoryId], references: [id], onDelete: SetNull)
   isFeatured      Boolean  @default(false)
   status          String   @default("ACTIVE")
   icon            String?
@@ -542,7 +546,32 @@ model Service {
 
   @@index([isPublished, isFeatured])
   @@index([category])
+  @@index([categoryId])
+  @@index([subcategoryId])
   @@index([status])
+}
+
+model ServiceCategory {
+  id                  String            @id @default(cuid())
+  name                String
+  slug                String            @unique
+  description         String?
+  icon                String?
+  seoTitle            String?
+  metaDescription     String?
+  position            Int               @default(0)
+  active              Boolean           @default(true)
+  parentId            String?
+  parent              ServiceCategory?  @relation("ServiceCategoryTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children            ServiceCategory[] @relation("ServiceCategoryTree")
+  services            Service[]         @relation("ServiceCategoryPrimary")
+  subcategoryServices Service[]         @relation("ServiceCategorySecondary")
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@index([parentId])
+  @@index([active])
+  @@index([position])
 }
 
 model CmsPage {

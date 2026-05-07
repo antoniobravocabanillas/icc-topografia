@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
 import Image from "next/image";
 import { CheckCircle2 } from "lucide-react";
-import type { Service } from "@prisma/client";
+import type { Service, ServiceCategory } from "@prisma/client";
 import { ClientLogoUploader } from "@/components/admin/client-logo-uploader";
 import { FormSubmitButton } from "@/components/admin/form-submit-button";
+import { ServiceAutoFields } from "@/components/admin/service-auto-fields";
+import { ServiceIconUploader } from "@/components/admin/service-icon-uploader";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,6 +18,7 @@ import {
   createFaqAction,
   createPostAction,
   createServiceAction,
+  createServiceCategoryAction,
   createTestimonialAction,
   deleteBannerAction,
   deleteClientLogoAction,
@@ -23,13 +26,16 @@ import {
   deleteFaqAction,
   deletePostAction,
   deleteServiceAction,
+  deleteServiceCategoryAction,
   deleteTestimonialAction,
+  seedServiceCatalogAction,
   updateBannerAction,
   updateClientLogoAction,
   updateCmsPageAction,
   updateFaqAction,
   updatePostAction,
   updateServiceAction,
+  updateServiceCategoryAction,
   updateTestimonialAction
 } from "@/lib/server/admin-actions";
 
@@ -59,8 +65,9 @@ export default async function AdminContentPage({ searchParams }: AdminContentPag
   const resolvedSearchParams = await searchParams;
   const blogStatus = resolvedSearchParams?.blogStatus;
   const blogStatusMessage = blogStatus ? blogStatusMessages[blogStatus] : null;
-  const [services, posts, faqs, testimonials, clientLogos, banners, pages] = await Promise.all([
+  const [services, serviceCategories, posts, faqs, testimonials, clientLogos, banners, pages] = await Promise.all([
     prisma.service.findMany({ orderBy: { updatedAt: "desc" } }),
+    prisma.serviceCategory.findMany({ orderBy: [{ parentId: "asc" }, { position: "asc" }, { name: "asc" }] }),
     prisma.blogPost.findMany({ orderBy: { updatedAt: "desc" } }),
     prisma.faq.findMany({ orderBy: [{ position: "asc" }, { createdAt: "desc" }] }),
     prisma.testimonial.findMany({ orderBy: { createdAt: "desc" } }),
@@ -86,7 +93,7 @@ export default async function AdminContentPage({ searchParams }: AdminContentPag
         </div>
       ) : null}
 
-      <ServiceAdminSection services={services} />
+      <ServiceAdminSection services={services} categories={serviceCategories} />
 
       <CmsBlock title="Blog" description="Posts publicados en /blog." createAction={createPostAction} fields={["title", "slug", "excerpt", "content", "category", "author"]}>
         {posts.map((post) => (
@@ -212,7 +219,10 @@ function CmsBlock({ title, description, createAction, fields, children }: { titl
   );
 }
 
-function ServiceAdminSection({ services }: { services: Service[] }) {
+function ServiceAdminSection({ services, categories }: { services: Service[]; categories: ServiceCategory[] }) {
+  const parentCategories = categories.filter((category) => !category.parentId);
+  const childCategories = categories.filter((category) => category.parentId);
+
   return (
     <Card>
       <CardHeader>
@@ -220,14 +230,41 @@ function ServiceAdminSection({ services }: { services: Service[] }) {
         <CardDescription>Contenido consumido por /servicios, fichas individuales y futuras relaciones con proyectos.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        <div className="rounded-md border bg-muted/30 p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="font-semibold">Catalogo base ICC</p>
+              <p className="mt-1 text-sm text-muted-foreground">Crea o actualiza las categorias y servicios recomendados para topografia, geomatica, catastro, mineria y consultoria.</p>
+            </div>
+            <form action={seedServiceCatalogAction}>
+              <FormSubmitButton idleLabel="Cargar catalogo base" pendingLabel="Cargando..." />
+            </form>
+          </div>
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+          <form action={createServiceCategoryAction} className="space-y-3 rounded-md border bg-muted/40 p-4">
+            <p className="font-semibold">Nueva categoria / subcategoria</p>
+            <ServiceCategoryFields categories={parentCategories} />
+            <FormSubmitButton idleLabel="Crear categoria" pendingLabel="Creando..." />
+          </form>
+          <div className="space-y-3">
+            {categories.map((category) => (
+              <EditableRow key={category.id} title={category.name} subtitle={category.parentId ? "Subcategoria" : "Categoria principal"} updateAction={updateServiceCategoryAction.bind(null, category.id)} deleteAction={deleteServiceCategoryAction.bind(null, category.id)}>
+                <ServiceCategoryFields category={category} categories={parentCategories.filter((item) => item.id !== category.id)} />
+              </EditableRow>
+            ))}
+          </div>
+        </div>
+
         <form action={createServiceAction} className="space-y-5 rounded-md border bg-muted/40 p-4">
-          <ServiceFormFields />
+          <ServiceFormFields categories={parentCategories} subcategories={childCategories} />
           <FormSubmitButton idleLabel="Crear servicio" pendingLabel="Creando..." />
         </form>
         <div className="space-y-5">
           {services.map((service) => (
             <EditableRow key={service.id} title={service.title} subtitle={`${service.category || "Sin categoria"} - ${service.slug}`} updateAction={updateServiceAction.bind(null, service.id)} deleteAction={deleteServiceAction.bind(null, service.id)}>
-              <ServiceFormFields service={service} />
+              <ServiceFormFields service={service} categories={parentCategories} subcategories={childCategories} />
             </EditableRow>
           ))}
         </div>
@@ -236,7 +273,26 @@ function ServiceAdminSection({ services }: { services: Service[] }) {
   );
 }
 
-function ServiceFormFields({ service }: { service?: Service }) {
+function ServiceCategoryFields({ category, categories }: { category?: ServiceCategory; categories: ServiceCategory[] }) {
+  return (
+    <div className="grid gap-3 md:grid-cols-2">
+      <Input name="name" placeholder="Nombre de categoria" defaultValue={category?.name || ""} />
+      <Input name="slug" placeholder="slug-categoria" defaultValue={category?.slug || ""} />
+      <Textarea name="description" placeholder="Descripcion" defaultValue={category?.description || ""} />
+      <Input name="seoTitle" placeholder="SEO title" defaultValue={category?.seoTitle || ""} />
+      <Textarea name="metaDescription" placeholder="Meta description" defaultValue={category?.metaDescription || ""} />
+      <Input name="position" type="number" placeholder="Orden" defaultValue={category?.position ?? 0} />
+      <select name="parentId" defaultValue={category?.parentId || ""} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
+        <option value="">Categoria principal</option>
+        {categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+      </select>
+      <ServiceIconUploader initialIcon={category?.icon || ""} />
+      <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="active" defaultChecked={category?.active ?? true} /> Activa</label>
+    </div>
+  );
+}
+
+function ServiceFormFields({ service, categories, subcategories }: { service?: Service; categories: ServiceCategory[]; subcategories: ServiceCategory[] }) {
   const serviceContent = service?.content;
   const contentValue = serviceContent && typeof serviceContent === "object" && !Array.isArray(serviceContent) && Object.keys(serviceContent as Record<string, unknown>).length
     ? JSON.stringify(service.content, null, 2)
@@ -245,9 +301,16 @@ function ServiceFormFields({ service }: { service?: Service }) {
   return (
     <div className="space-y-5 md:col-span-2">
       <AdminFieldGroup title="Informacion">
-        <Input name="title" placeholder="Titulo del servicio" defaultValue={service?.title || ""} />
-        <Input name="slug" placeholder="slug-del-servicio" defaultValue={service?.slug || ""} />
+        <ServiceAutoFields title={service?.title || ""} slug={service?.slug || ""} headline={service?.headline || ""} summary={service?.summary || ""} seoTitle={service?.seoTitle || ""} metaDescription={service?.metaDescription || ""} />
         <Input name="category" placeholder="Categoria: Campo, Gabinete, Soporte..." defaultValue={service?.category || ""} />
+        <select name="categoryId" defaultValue={service?.categoryId || ""} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
+          <option value="">Categoria principal</option>
+          {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+        </select>
+        <select name="subcategoryId" defaultValue={service?.subcategoryId || ""} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
+          <option value="">Subcategoria opcional</option>
+          {subcategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+        </select>
         <select name="status" defaultValue={service?.status || "ACTIVE"} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
           {serviceStatusOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select>
@@ -256,15 +319,13 @@ function ServiceFormFields({ service }: { service?: Service }) {
       </AdminFieldGroup>
 
       <AdminFieldGroup title="Visual">
-        <Input name="icon" placeholder="Icono interno: MapPinned, Ruler, Drone..." defaultValue={service?.icon || ""} />
+        <ServiceIconUploader initialIcon={service?.icon || ""} />
         <Input name="cover" placeholder="URL de imagen principal" defaultValue={service?.cover || ""} />
         <Textarea name="gallery" placeholder="URLs de galeria, una por linea" defaultValue={joinLines(service?.gallery)} />
         <Input name="video" placeholder="URL de video opcional" defaultValue={service?.video || ""} />
       </AdminFieldGroup>
 
       <AdminFieldGroup title="Comercial">
-        <Input name="headline" placeholder="Promesa o enfoque comercial del servicio" defaultValue={service?.headline || ""} />
-        <Textarea name="summary" placeholder="Resumen visible en cards y hero" defaultValue={service?.summary || ""} />
         <Textarea name="benefits" placeholder="Beneficios, uno por linea" defaultValue={joinLines(service?.benefits)} />
         <Textarea name="applications" placeholder="Aplicaciones o usos, uno por linea" defaultValue={joinLines(service?.applications)} />
         <Textarea name="deliverables" placeholder="Entregables, uno por linea" defaultValue={joinLines(service?.deliverables)} />
@@ -278,8 +339,6 @@ function ServiceFormFields({ service }: { service?: Service }) {
       </AdminFieldGroup>
 
       <AdminFieldGroup title="SEO y relaciones">
-        <Input name="seoTitle" placeholder="SEO title" defaultValue={service?.seoTitle || ""} />
-        <Textarea name="metaDescription" placeholder="Meta description" defaultValue={service?.metaDescription || ""} />
         <Input name="ogImage" placeholder="OG image" defaultValue={service?.ogImage || ""} />
         <Textarea name="relatedProjects" placeholder="Slugs de proyectos relacionados, uno por linea" defaultValue={joinLines(service?.relatedProjects)} />
         <Textarea name="successCases" placeholder="Casos de exito relacionados, uno por linea" defaultValue={joinLines(service?.successCases)} />

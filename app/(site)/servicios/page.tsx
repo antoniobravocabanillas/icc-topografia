@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Boxes, CheckCircle2, DraftingCompass, MapPinned, Radar, Ruler, ScanLine, Wrench, Zap } from "lucide-react";
-import type { Service } from "@prisma/client";
+import type { Service, ServiceCategory } from "@prisma/client";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { TechnicalPageHero } from "@/components/technical-page-hero";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +19,7 @@ export const revalidate = 0;
 
 const serviceIcons = { MapPinned, Radar, DraftingCompass, Ruler, Boxes, Wrench, Zap, ScanLine };
 const fallbackIcons = [MapPinned, Radar, DraftingCompass, Ruler, Boxes, Wrench, Zap, ScanLine];
+type ServiceWithCategory = Service & { categoryRef: ServiceCategory | null; subcategoryRef: ServiceCategory | null };
 
 type ServicesPageProps = {
   searchParams?: Promise<{ categoria?: string; estado?: string }>;
@@ -28,15 +29,16 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
   const resolvedSearchParams = await searchParams;
   const services = await prisma.service.findMany({
     where: { isPublished: true },
+    include: { categoryRef: true, subcategoryRef: true },
     orderBy: [{ isFeatured: "desc" }, { updatedAt: "desc" }]
   });
 
-  const categories = Array.from(new Set(services.map((service) => service.category || "Servicios tecnicos"))).sort();
+  const categories = Array.from(new Set(services.map((service) => displayCategory(service)))).sort();
   const statuses = Array.from(new Set(services.map((service) => service.status))).sort();
   const selectedCategory = resolvedSearchParams?.categoria || "todos";
   const selectedStatus = resolvedSearchParams?.estado || "todos";
   const filteredServices = services.filter((service) => {
-    const category = service.category || "Servicios tecnicos";
+    const category = displayCategory(service);
     return (selectedCategory === "todos" || category === selectedCategory) && (selectedStatus === "todos" || service.status === selectedStatus);
   });
   const featuredService = filteredServices.find((service) => service.isFeatured) || filteredServices[0];
@@ -120,7 +122,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
   );
 }
 
-function FeaturedServiceCard({ service }: { service: Service }) {
+function FeaturedServiceCard({ service }: { service: ServiceWithCategory }) {
   const highlights = service.benefits.length ? service.benefits : service.deliverables.length ? service.deliverables : ["Alcance tecnico definido", "Entregables claros", "Seguimiento operativo", "Soporte especializado"];
   const Icon = iconForService(service, 0);
 
@@ -136,7 +138,7 @@ function FeaturedServiceCard({ service }: { service: Service }) {
             )}
             <div className="absolute inset-0 bg-gradient-to-t from-[#061827] via-[#061827]/52 to-transparent" />
             <div className="absolute bottom-6 left-6 right-6">
-              <p className="text-[10px] font-medium uppercase tracking-[0.22em] text-white/55">{service.category || "Servicio tecnico ICC"}</p>
+              <p className="text-[10px] font-medium uppercase tracking-[0.22em] text-white/55">{displayCategory(service)}</p>
               <h3 className="mt-3 font-display text-4xl font-bold leading-tight text-white">{service.title}</h3>
             </div>
           </div>
@@ -177,7 +179,7 @@ function FeaturedServiceCard({ service }: { service: Service }) {
   );
 }
 
-function ServiceCard({ service, index }: { service: Service; index: number }) {
+function ServiceCard({ service, index }: { service: ServiceWithCategory; index: number }) {
   const Icon = iconForService(service, index);
   const items = service.deliverables.length ? service.deliverables : service.benefits;
   return (
@@ -191,7 +193,7 @@ function ServiceCard({ service, index }: { service: Service; index: number }) {
             </span>
             <span className={serviceStatusBadgeClass(service.status)}>{serviceStatusLabel(service.status)}</span>
           </div>
-          <p className="mt-6 text-[10px] font-semibold uppercase tracking-[0.25em] text-[#7DE4FF]/70">{service.category || "Servicio tecnico"}</p>
+          <p className="mt-6 text-[10px] font-semibold uppercase tracking-[0.25em] text-[#7DE4FF]/70">{displayCategory(service)}</p>
           <h3 className="mt-3 font-display text-2xl font-bold leading-tight text-white">{service.title}</h3>
           <p className="mt-4 text-sm leading-7 text-white/66">{service.summary}</p>
           <div className="mt-5 grid gap-2">
@@ -248,6 +250,10 @@ function servicesHref(params: { categoria?: string; estado?: string }) {
 function iconForService(service: Service, index: number) {
   if (service.icon && service.icon in serviceIcons) return serviceIcons[service.icon as keyof typeof serviceIcons];
   return fallbackIcons[index % fallbackIcons.length];
+}
+
+function displayCategory(service: ServiceWithCategory) {
+  return service.subcategoryRef?.name || service.categoryRef?.name || service.category || "Servicios tecnicos";
 }
 
 function serviceStatusLabel(status: string) {

@@ -21,7 +21,7 @@ export const revalidate = 0;
 
 export async function generateMetadata({ params }: ServicePageProps) {
   const { slug } = await params;
-  const service = await prisma.service.findUnique({ where: { slug } });
+  const service = await prisma.service.findUnique({ where: { slug }, include: { categoryRef: true, subcategoryRef: true } });
   if (!service || !service.isPublished) return {};
   return createMetadata({
     title: service.seoTitle || service.title,
@@ -68,14 +68,14 @@ export default async function ServicePage({ params }: ServicePageProps) {
         <section className="container relative grid min-h-[680px] items-center gap-14 py-16 xl:grid-cols-[0.86fr_1.14fr] 2xl:grid-cols-[0.78fr_1.22fr]">
           <div className="max-w-2xl xl:-ml-6 2xl:-ml-10">
             <div className="flex flex-wrap gap-3">
-              <span className="rounded-sm bg-white px-3 py-1 text-xs font-semibold text-[#063D63]">{service.category || "Servicio tecnico ICC"}</span>
+              <span className="rounded-sm bg-white px-3 py-1 text-xs font-semibold text-[#063D63]">{displayCategory(service)}</span>
               <span className={serviceStatusBadgeClass(service.status)}>{serviceStatusLabel(service.status)}</span>
             </div>
             <p className="mt-7 text-sm font-semibold uppercase tracking-[0.18em] text-[#7DE4FF]">Servicio especializado ICC</p>
             <h1 className="mt-4 font-display text-5xl font-bold leading-[0.95] md:text-6xl">{service.title}</h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-white/78">{service.headline || service.summary}</p>
             <div className="mt-10 grid gap-4 sm:grid-cols-3 xl:grid-cols-1 2xl:grid-cols-3">
-              <HeroFact icon={Layers3} label="Categoria" value={service.category || "Tecnico"} />
+              <HeroFact icon={Layers3} label="Categoria" value={displayCategory(service)} />
               <HeroFact icon={Ruler} label="Precision" value={service.precision || "Segun alcance"} />
               <HeroFact icon={FileCheck2} label="Entrega" value={service.formats[0] || "Informe tecnico"} />
             </div>
@@ -199,7 +199,7 @@ export default async function ServicePage({ params }: ServicePageProps) {
                 <h2 className="mt-2 font-display text-2xl font-bold">{serviceStatusLabel(service.status)}</h2>
               </div>
               <div className="space-y-4 p-5">
-                <FactRow label="Categoria" value={service.category || "Servicio tecnico"} />
+                <FactRow label="Categoria" value={displayCategory(service)} />
                 <FactRow label="Precision" value={service.precision || "Segun alcance"} />
                 <FactRow label="Formatos" value={(service.formats.length ? service.formats : ["PDF", "CAD", "Informe"]).join(", ")} />
                 <FactRow label="Video" value={service.video ? "Disponible" : "No publicado"} />
@@ -224,6 +224,10 @@ function firstItems(...groups: string[][]) {
     if (group.length) return group;
   }
   return [];
+}
+
+function displayCategory(service: { category?: string | null; categoryRef?: { name: string } | null; subcategoryRef?: { name: string } | null }) {
+  return service.subcategoryRef?.name || service.categoryRef?.name || service.category || "Servicio tecnico ICC";
 }
 
 function HeroFact({ icon: Icon, label, value }: { icon: typeof Layers3; label: string; value: string }) {
