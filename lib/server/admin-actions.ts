@@ -81,6 +81,15 @@ async function requireActionRole(allowedRoles: Role[]) {
   return { session, role };
 }
 
+async function existingUserId(userId?: string | null) {
+  if (!userId) return null;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true }
+  });
+  return user?.id || null;
+}
+
 function roleFromForm(formData: FormData) {
   const role = value(formData, "role") as Role | undefined;
   return role && ["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"].includes(role) ? role : "SALES";
@@ -934,14 +943,15 @@ export async function deleteCmsPageAction(id: string) {
 
 export async function takeChatConversationAction(id: string) {
   const { session } = await requireActionRole(["EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
-  const profile = session?.user?.id
-    ? await prisma.staffProfile.findUnique({ where: { userId: session.user.id } })
-    : null;
+  const [profile, userId] = await Promise.all([
+    session?.user?.id ? prisma.staffProfile.findUnique({ where: { userId: session.user.id } }) : null,
+    existingUserId(session.user.id)
+  ]);
 
   await prisma.chatConversation.update({
     where: { id },
     data: {
-      assignedToId: session?.user?.id || undefined,
+      assignedToId: userId,
       assignedProfileId: profile?.id || undefined
     }
   });
@@ -991,7 +1001,10 @@ export async function sendAdminChatMessageAction(id: string, formData: FormData)
   const body = value(formData, "body");
   if (!body) return;
   const { session, role } = await requireActionRole(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SUPPORT"]);
-  const profile = await prisma.staffProfile.findUnique({ where: { userId: session.user.id } });
+  const [profile, userId] = await Promise.all([
+    prisma.staffProfile.findUnique({ where: { userId: session.user.id } }),
+    existingUserId(session.user.id)
+  ]);
   const conversation = await prisma.chatConversation.findUnique({
     where: { id },
     select: { assignedProfileId: true, assignedToId: true }
@@ -1008,7 +1021,7 @@ export async function sendAdminChatMessageAction(id: string, formData: FormData)
     where: { id },
     data: {
       status: "ACTIVE",
-      assignedToId: session?.user?.id || undefined,
+      assignedToId: userId || conversation?.assignedToId || null,
       assignedProfileId: conversation?.assignedProfileId || profile?.id || undefined,
       messages: {
         create: {
