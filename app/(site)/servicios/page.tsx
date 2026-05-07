@@ -19,7 +19,7 @@ export const revalidate = 0;
 
 const serviceIcons = { MapPinned, Radar, DraftingCompass, Ruler, Boxes, Wrench, Zap, ScanLine };
 const fallbackIcons = [MapPinned, Radar, DraftingCompass, Ruler, Boxes, Wrench, Zap, ScanLine];
-const SERVICES_PER_PAGE = 8;
+const SERVICES_PER_PAGE = 7;
 type ServiceWithCategory = Service & { categoryRef: ServiceCategory | null; subcategoryRef: ServiceCategory | null };
 
 type ServicesPageProps = {
@@ -47,7 +47,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
   const currentPage = Number.isFinite(requestedPage) ? Math.min(Math.max(1, Math.trunc(requestedPage)), totalPages) : 1;
   const startIndex = (currentPage - 1) * SERVICES_PER_PAGE;
   const paginatedServices = filteredServices.slice(startIndex, startIndex + SERVICES_PER_PAGE);
-  const featuredService = currentPage === 1 ? paginatedServices.find((service) => service.isFeatured) || paginatedServices[0] : null;
+  const featuredService = paginatedServices.find((service) => service.isFeatured) || paginatedServices[0] || null;
   const regularServices = featuredService ? paginatedServices.filter((service) => service.id !== featuredService.id) : paginatedServices;
   const resultStart = filteredServices.length ? startIndex + 1 : 0;
   const resultEnd = Math.min(startIndex + paginatedServices.length, filteredServices.length);
