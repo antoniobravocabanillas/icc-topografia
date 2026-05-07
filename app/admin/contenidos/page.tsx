@@ -5,6 +5,7 @@ import type { Service, ServiceCategory } from "@prisma/client";
 import { ClientLogoUploader } from "@/components/admin/client-logo-uploader";
 import { FormSubmitButton } from "@/components/admin/form-submit-button";
 import { ServiceAutoFields } from "@/components/admin/service-auto-fields";
+import { ServiceCoverUploader } from "@/components/admin/service-cover-uploader";
 import { ServiceIconUploader } from "@/components/admin/service-icon-uploader";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -320,7 +321,7 @@ function ServiceFormFields({ service, categories, subcategories }: { service?: S
 
       <AdminFieldGroup title="Visual">
         <ServiceIconUploader initialIcon={service?.icon || ""} />
-        <Input name="cover" placeholder="URL de imagen principal" defaultValue={service?.cover || ""} />
+        <ServiceCoverUploader initialCover={service?.cover || ""} />
         <Textarea name="gallery" placeholder="URLs de galeria, una por linea" defaultValue={joinLines(service?.gallery)} />
         <Input name="video" placeholder="URL de video opcional" defaultValue={service?.video || ""} />
       </AdminFieldGroup>

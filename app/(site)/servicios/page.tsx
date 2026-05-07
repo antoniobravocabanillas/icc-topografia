@@ -197,6 +197,17 @@ function ServiceCard({ service, index }: { service: ServiceWithCategory; index: 
   return (
     <Link href={`/servicios/${service.slug}`} className="group block h-full">
       <article className="flex h-full flex-col bg-[#061827] transition duration-500 hover:z-10 hover:-translate-y-1 hover:shadow-[0_32px_80px_rgba(0,34,54,0.62)] motion-reduce:transform-none">
+        <div className="relative h-52 overflow-hidden bg-[#061827]">
+          {service.cover ? (
+            <Image src={service.cover} alt={service.title} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover brightness-[0.78] saturate-[0.9] transition duration-700 group-hover:scale-[1.05]" unoptimized />
+          ) : (
+            <div className="absolute inset-0 opacity-50 [background-image:linear-gradient(rgba(36,200,238,0.16)_1px,transparent_1px),linear-gradient(90deg,rgba(11,131,196,0.12)_1px,transparent_1px)] [background-size:28px_28px]" />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-[#061827] via-[#061827]/35 to-transparent" />
+          <div className="absolute bottom-4 left-4 right-4">
+            <p className="text-[9px] font-medium uppercase tracking-[0.18em] text-white/58">{displayCategory(service)}</p>
+          </div>
+        </div>
         <div className="h-px w-0 bg-gradient-to-r from-[#0B83C4] to-[#24C8EE] transition-all duration-500 group-hover:w-full" />
         <div className="flex-1 p-7">
           <div className="flex items-start justify-between gap-4">
