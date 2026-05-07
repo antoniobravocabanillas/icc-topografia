@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, BarChart3, CheckCircle2, Crosshair, FileCheck2, MapPinned } from "lucide-react";
+import { ArrowRight, BarChart3, CheckCircle2, Crosshair, FileCheck2, MapPinned, Search } from "lucide-react";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,10 +16,14 @@ export const metadata = createMetadata({
 });
 
 const projectIcons = [MapPinned, Crosshair, BarChart3, FileCheck2];
+const PROJECTS_PER_PAGE = 9;
+
 type ProjectsPageProps = {
   searchParams?: Promise<{
     rubro?: string;
     estado?: string;
+    q?: string;
+    pagina?: string;
   }>;
 };
 
@@ -59,12 +63,24 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
   const estados = Array.from(new Set(allProjectItems.map((project) => project.status))).sort();
   const selectedRubro = resolvedSearchParams?.rubro || "todos";
   const selectedEstado = resolvedSearchParams?.estado || "todos";
+  const query = (resolvedSearchParams?.q || "").trim();
+  const normalizedQuery = normalizeSearchText(query);
   const projectItems = allProjectItems.filter((project) => {
     const rubroMatch = selectedRubro === "todos" || project.sector === selectedRubro;
     const estadoMatch = selectedEstado === "todos" || project.status === selectedEstado;
-    return rubroMatch && estadoMatch;
+    const searchable = normalizeSearchText([project.title, project.summary, project.sector, project.metric, project.location].join(" "));
+    const queryMatch = !normalizedQuery || searchable.includes(normalizedQuery);
+    return rubroMatch && estadoMatch && queryMatch;
   });
+  const requestedPage = Number(resolvedSearchParams?.pagina || "1");
+  const totalPages = Math.max(1, Math.ceil(projectItems.length / PROJECTS_PER_PAGE));
+  const currentPage = Number.isFinite(requestedPage) ? Math.min(Math.max(1, Math.trunc(requestedPage)), totalPages) : 1;
+  const startIndex = (currentPage - 1) * PROJECTS_PER_PAGE;
+  const paginatedProjectItems = projectItems.slice(startIndex, startIndex + PROJECTS_PER_PAGE);
+  const resultStart = projectItems.length ? startIndex + 1 : 0;
+  const resultEnd = Math.min(startIndex + paginatedProjectItems.length, projectItems.length);
   const deliveredCount = allProjectItems.filter((project) => ["FINISHED", "PUBLISHED", "ARCHIVED"].includes(project.status)).length;
+  const hasActiveFilters = selectedRubro !== "todos" || selectedEstado !== "todos" || Boolean(query);
 
   return (
     <>
@@ -80,18 +96,48 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
             <p className="mt-5 max-w-2xl text-sm leading-7 text-white/64 md:text-base">Obras en ejecucion, casos culminados y frentes tecnicos separados por rubro para ubicar referencias comparables con rapidez y criterio profesional.</p>
           </ScrollReveal>
           <ScrollReveal delay={80}>
-            <div className="grid gap-5 rounded-sm border border-white/[0.08] bg-[#161C25]/80 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur sm:grid-cols-2">
-              <FilterGroup title="Rubro" items={["todos", ...rubros]} selected={selectedRubro} param="rubro" otherParam="estado" otherValue={selectedEstado} />
-              <FilterGroup title="Estado" items={["todos", ...estados]} selected={selectedEstado} param="estado" otherParam="rubro" otherValue={selectedRubro} formatter={(value) => value === "todos" ? "Todos" : projectStatusLabels[value] || value} />
+            <div className="grid gap-5 rounded-sm border border-white/[0.08] bg-[#161C25]/80 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur">
+              <form action="/proyectos" className="grid gap-3 md:grid-cols-[1fr_auto]">
+                {selectedRubro !== "todos" ? <input type="hidden" name="rubro" value={selectedRubro} /> : null}
+                {selectedEstado !== "todos" ? <input type="hidden" name="estado" value={selectedEstado} /> : null}
+                <label className="relative block">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7DE4FF]" />
+                  <input
+                    type="search"
+                    name="q"
+                    defaultValue={query}
+                    placeholder="Buscar por proyecto, distrito, rubro o entregable"
+                    className="h-11 w-full rounded-sm border border-white/[0.1] bg-[#03111D]/70 pl-10 pr-4 text-sm text-white outline-none transition placeholder:text-white/36 focus:border-[#24C8EE]/70"
+                  />
+                </label>
+                <button type="submit" className="h-11 rounded-sm bg-[#0B83C4] px-5 text-xs font-bold uppercase tracking-[0.12em] text-white transition hover:bg-[#24C8EE] hover:text-[#03111D]">
+                  Buscar
+                </button>
+              </form>
+              <div className="grid gap-5 sm:grid-cols-2">
+                <FilterGroup title="Rubro" items={["todos", ...rubros]} selected={selectedRubro} param="rubro" params={{ rubro: selectedRubro, estado: selectedEstado, q: query }} />
+                <FilterGroup title="Estado" items={["todos", ...estados]} selected={selectedEstado} param="estado" params={{ rubro: selectedRubro, estado: selectedEstado, q: query }} formatter={(value) => value === "todos" ? "Todos" : projectStatusLabels[value] || value} />
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.08] pt-4">
+                <p className="text-xs text-white/56">
+                  Mostrando <span className="font-semibold text-white">{resultStart}-{resultEnd}</span> de <span className="font-semibold text-white">{projectItems.length}</span> proyectos publicados.
+                </p>
+                {hasActiveFilters ? (
+                  <Link href="/proyectos" className="text-xs font-semibold uppercase tracking-[0.14em] text-[#7DE4FF] transition hover:text-white">
+                    Limpiar filtros
+                  </Link>
+                ) : null}
+              </div>
             </div>
           </ScrollReveal>
           </div>
 
         <div className="mt-10 grid overflow-hidden border border-white/[0.08] bg-white/[0.07] md:grid-cols-2 xl:grid-cols-3">
-          {projectItems.map((project, index) => {
-            const Icon = projectIcons[index % projectIcons.length];
+          {paginatedProjectItems.map((project, index) => {
+            const projectNumber = startIndex + index + 1;
+            const Icon = projectIcons[projectNumber % projectIcons.length];
             const resultItems = parseProjectResults(project.metric);
-            const isFeaturedCard = index === 0 && projectItems.length > 1;
+            const isFeaturedCard = currentPage === 1 && index === 0 && paginatedProjectItems.length > 1;
             return (
               <ScrollReveal key={project.title} delay={index * 70} className={isFeaturedCard ? "h-full xl:col-span-2" : "h-full"}>
                 <Link href={project.slug ? `/proyectos/${project.slug}` : "/contacto"} className="group block h-full">
@@ -116,7 +162,7 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
                   <div className="flex min-w-0 flex-1 flex-col">
                     <div className="h-px w-0 bg-gradient-to-r from-[#0B83C4] to-[#24C8EE] transition-all duration-500 group-hover:w-full" />
                     <div className={isFeaturedCard ? "flex-1 p-7 md:p-9" : "flex-1 p-7"}>
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.25em] text-[#7DE4FF]/70">PRJ - {String(index + 1).padStart(3, "0")}</div>
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.25em] text-[#7DE4FF]/70">PRJ - {String(projectNumber).padStart(3, "0")}</div>
                       <div className="mt-3 flex items-start gap-4">
                         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-sm border border-[#24C8EE]/20 bg-[#24C8EE]/8 text-[#24C8EE]">
                           <Icon className="h-5 w-5" />
@@ -155,7 +201,11 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
           })}
         </div>
         {!projectItems.length ? (
-          <div className="mt-10 rounded-sm border border-white/[0.08] bg-[#061827] p-8 text-white/60">No hay proyectos publicados con esos filtros.</div>
+          <div className="mt-10 rounded-sm border border-white/[0.08] bg-[#061827] p-8 text-white/60">No hay proyectos publicados con esos filtros. Ajusta el rubro, estado o busqueda para ver mas referencias.</div>
+        ) : null}
+
+        {totalPages > 1 ? (
+          <Pagination currentPage={currentPage} totalPages={totalPages} params={{ rubro: selectedRubro, estado: selectedEstado, q: query }} />
         ) : null}
 
         <div className="grid border-x border-b border-white/[0.08] bg-[#061827] md:grid-cols-4">
@@ -198,6 +248,23 @@ function parseProjectResults(metric: string) {
   return (parts.length ? parts : ["Evidencia tecnica disponible"])
     .map((item) => item.replace(/[.,;]+$/, ""))
     .slice(0, 4);
+}
+
+function normalizeSearchText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function projectsHref(params: { rubro?: string; estado?: string; q?: string; pagina?: number | string }) {
+  const search = new URLSearchParams();
+  if (params.rubro && params.rubro !== "todos") search.set("rubro", params.rubro);
+  if (params.estado && params.estado !== "todos") search.set("estado", params.estado);
+  if (params.q) search.set("q", params.q);
+  if (params.pagina && Number(params.pagina) > 1) search.set("pagina", String(params.pagina));
+  const queryString = search.toString();
+  return queryString ? `/proyectos?${queryString}` : "/proyectos";
 }
 
 function statusBadgeClass(status: string) {
@@ -282,16 +349,14 @@ function FilterGroup({
   items,
   selected,
   param,
-  otherParam,
-  otherValue,
+  params,
   formatter
 }: {
   title: string;
   items: string[];
   selected: string;
-  param: string;
-  otherParam: string;
-  otherValue: string;
+  param: "rubro" | "estado";
+  params: { rubro: string; estado: string; q: string };
   formatter?: (value: string) => string;
 }) {
   return (
@@ -299,12 +364,7 @@ function FilterGroup({
       <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/45">{title}</p>
       <div className="mt-2 flex flex-wrap gap-2">
         {items.map((item) => {
-          const href = item === "todos" && otherValue === "todos"
-            ? "/proyectos"
-            : `/proyectos?${new URLSearchParams({
-                [param]: item,
-                [otherParam]: otherValue
-              }).toString()}`;
+          const href = projectsHref({ ...params, [param]: item, pagina: 1 });
           return (
             <Link key={item} href={href} className={item === selected ? "rounded-sm border border-[#24C8EE]/55 bg-[#24C8EE]/16 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#7DE4FF]" : "rounded-sm border border-white/[0.08] bg-transparent px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/58 transition hover:border-[#24C8EE]/45 hover:text-[#7DE4FF]"}>
               {formatter ? formatter(item) : item === "todos" ? "Todos" : item}
@@ -313,5 +373,51 @@ function FilterGroup({
         })}
       </div>
     </div>
+  );
+}
+
+function Pagination({
+  currentPage,
+  totalPages,
+  params
+}: {
+  currentPage: number;
+  totalPages: number;
+  params: { rubro: string; estado: string; q: string };
+}) {
+  const start = Math.max(1, currentPage - 2);
+  const end = Math.min(totalPages, start + 4);
+  const pages = Array.from({ length: end - start + 1 }, (_, index) => start + index);
+
+  return (
+    <nav className="mt-8 flex flex-wrap items-center justify-between gap-4 border border-white/[0.08] bg-[#061827]/80 p-4" aria-label="Paginacion de proyectos">
+      <Link
+        href={projectsHref({ ...params, pagina: Math.max(1, currentPage - 1) })}
+        aria-disabled={currentPage === 1}
+        className={currentPage === 1 ? "pointer-events-none rounded-sm border border-white/[0.08] px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white/25" : "rounded-sm border border-white/[0.08] px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white/70 transition hover:border-[#24C8EE]/45 hover:text-[#7DE4FF]"}
+      >
+        Anterior
+      </Link>
+      <div className="flex flex-wrap items-center gap-2">
+        {start > 1 ? <span className="px-2 text-white/35">...</span> : null}
+        {pages.map((page) => (
+          <Link
+            key={page}
+            href={projectsHref({ ...params, pagina: page })}
+            className={page === currentPage ? "flex h-9 min-w-9 items-center justify-center rounded-sm border border-[#24C8EE]/55 bg-[#24C8EE]/16 px-3 text-sm font-bold text-[#7DE4FF]" : "flex h-9 min-w-9 items-center justify-center rounded-sm border border-white/[0.08] px-3 text-sm font-semibold text-white/62 transition hover:border-[#24C8EE]/45 hover:text-[#7DE4FF]"}
+          >
+            {page}
+          </Link>
+        ))}
+        {end < totalPages ? <span className="px-2 text-white/35">...</span> : null}
+      </div>
+      <Link
+        href={projectsHref({ ...params, pagina: Math.min(totalPages, currentPage + 1) })}
+        aria-disabled={currentPage === totalPages}
+        className={currentPage === totalPages ? "pointer-events-none rounded-sm border border-white/[0.08] px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white/25" : "rounded-sm border border-white/[0.08] px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white/70 transition hover:border-[#24C8EE]/45 hover:text-[#7DE4FF]"}
+      >
+        Siguiente
+      </Link>
+    </nav>
   );
 }
