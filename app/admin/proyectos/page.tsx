@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { CheckCircle2, ExternalLink } from "lucide-react";
 import { FormSubmitButton } from "@/components/admin/form-submit-button";
 import { ProjectImageUploader } from "@/components/admin/project-image-uploader";
@@ -18,7 +19,8 @@ export const revalidate = 0;
 const projectStatusMessages: Record<string, string> = {
   created: "Proyecto creado correctamente.",
   updated: "Cambios del proyecto guardados correctamente.",
-  deleted: "Proyecto eliminado correctamente."
+  deleted: "Proyecto eliminado correctamente.",
+  error: "No se pudo completar la accion."
 };
 
 type AdminProjectsPageProps = {
@@ -28,19 +30,51 @@ type AdminProjectsPageProps = {
   }>;
 };
 
+type ProjectWithAdminDetails = Prisma.ProjectGetPayload<{
+  include: {
+    images: true;
+    progress: {
+      include: {
+        staffProfile: true;
+      };
+    };
+  };
+}>;
+
 export default async function AdminProjectsPage({ searchParams }: AdminProjectsPageProps) {
   await requireAdminPage(["EDITOR", "ADMIN", "SUPER_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT"]);
   const resolvedSearchParams = await searchParams;
   const projectStatus = resolvedSearchParams?.projectStatus;
   const projectStatusMessage = projectStatus ? projectStatusMessages[projectStatus] : null;
-  const projects = await prisma.project.findMany({
-    include: {
-      images: { orderBy: { position: "asc" } },
-      progress: { include: { staffProfile: true }, orderBy: { createdAt: "desc" }, take: 5 }
-    },
-    orderBy: { updatedAt: "desc" },
-    take: 100
-  });
+  let projects: ProjectWithAdminDetails[];
+  try {
+    projects = await prisma.project.findMany({
+      include: {
+        images: { orderBy: { position: "asc" } },
+        progress: { include: { staffProfile: true }, orderBy: { createdAt: "desc" }, take: 5 }
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 100
+    });
+  } catch (error) {
+    console.error("Admin projects load failed", error);
+    return (
+      <section className="space-y-6">
+        <div>
+          <p className="text-sm font-semibold uppercase text-primary">Operacion tecnica</p>
+          <h1 className="font-display text-3xl font-bold">Proyectos y casos</h1>
+        </div>
+        <Card>
+          <CardContent className="p-8">
+            <p className="font-semibold">No se pudieron cargar los proyectos administrativos.</p>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              La pagina ya no se cae completa. Verifica que Netlify apunte a la base ICC con `schema=icc` y que la estructura Prisma este aplicada.
+            </p>
+          </CardContent>
+        </Card>
+      </section>
+    );
+  }
 
   return (
     <section className="space-y-8">
@@ -51,11 +85,11 @@ export default async function AdminProjectsPage({ searchParams }: AdminProjectsP
       </div>
 
       {projectStatusMessage ? (
-        <div className="flex items-start gap-3 rounded-md border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-950">
-          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+        <div className={projectStatus === "error" ? "flex items-start gap-3 rounded-md border border-red-300 bg-red-50 p-4 text-sm text-red-950" : "flex items-start gap-3 rounded-md border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-950"}>
+          <CheckCircle2 className={projectStatus === "error" ? "mt-0.5 h-5 w-5 shrink-0 text-red-600" : "mt-0.5 h-5 w-5 shrink-0 text-emerald-600"} />
           <div>
             <p className="font-semibold">{projectStatusMessage}</p>
-            {resolvedSearchParams?.item ? <p className="mt-1 text-emerald-800">{resolvedSearchParams.item}</p> : null}
+            {resolvedSearchParams?.item ? <p className={projectStatus === "error" ? "mt-1 text-red-800" : "mt-1 text-emerald-800"}>{resolvedSearchParams.item}</p> : null}
           </div>
         </div>
       ) : null}

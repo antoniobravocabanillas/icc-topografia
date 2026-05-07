@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Role } from "@prisma/client";
+import { Prisma, Role } from "@prisma/client";
 import { MessageCircle, Trash2, UserRoundCheck } from "lucide-react";
 import { AdminChatReplyForm } from "@/components/admin/chat/admin-chat-reply-form";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +27,16 @@ type StaffTools = {
   nextSteps?: string[];
 };
 
+type ChatConversationWithDetails = Prisma.ChatConversationGetPayload<{
+  include: {
+    assignedTo: true;
+    assignedProfile: true;
+    messages: true;
+  };
+}>;
+
+type StaffProfileItem = Prisma.StaffProfileGetPayload<Record<string, never>>;
+
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -43,24 +53,47 @@ export default async function AdminChatPage() {
       ? { OR: [{ assignedProfileId: currentProfile.id }, { assignedToId: session.user.id }] }
       : { id: "__no_profile__" };
 
-  const [conversations, profiles] = await Promise.all([
-    prisma.chatConversation.findMany({
-      where: conversationWhere,
-      include: {
-        assignedTo: true,
-        assignedProfile: true,
-        messages: { orderBy: { createdAt: "asc" } }
-      },
-      orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
-      take: 80
-    }),
-    canManage
-      ? prisma.staffProfile.findMany({
-          where: { active: true },
-          orderBy: [{ department: "asc" }, { displayName: "asc" }]
-        })
-      : Promise.resolve([])
-  ]);
+  let conversations: ChatConversationWithDetails[];
+  let profiles: StaffProfileItem[];
+
+  try {
+    [conversations, profiles] = await Promise.all([
+      prisma.chatConversation.findMany({
+        where: conversationWhere,
+        include: {
+          assignedTo: true,
+          assignedProfile: true,
+          messages: { orderBy: { createdAt: "asc" } }
+        },
+        orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
+        take: 80
+      }),
+      canManage
+        ? prisma.staffProfile.findMany({
+            where: { active: true },
+            orderBy: [{ department: "asc" }, { displayName: "asc" }]
+          })
+        : Promise.resolve([])
+    ]);
+  } catch (error) {
+    console.error("Admin chat load failed", error);
+    return (
+      <section className="space-y-6">
+        <div>
+          <p className="text-sm font-semibold uppercase text-primary">Atencion comercial</p>
+          <h1 className="font-display text-3xl font-bold">Chat en linea</h1>
+        </div>
+        <Card>
+          <CardContent className="p-8">
+            <p className="font-semibold">No se pudo cargar el chat administrativo.</p>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              La pagina ya no se cae completa. Revisa que Netlify use la base de ICC con `schema=icc` y que la ultima migracion este aplicada.
+            </p>
+          </CardContent>
+        </Card>
+      </section>
+    );
+  }
 
   return (
     <section className="space-y-8">
@@ -190,13 +223,14 @@ export default async function AdminChatPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               {profiles.map((profile) => {
-                const tools = profile.tools as StaffTools;
+                const tools = (profile.tools || {}) as StaffTools;
+                const specialties = Array.isArray(profile.specialties) ? profile.specialties : [];
                 return (
                   <div key={profile.id} className="rounded-lg border bg-background p-3">
                     <p className="font-semibold">{profile.displayName}</p>
                     <p className="text-xs text-muted-foreground">{profile.roleTitle}</p>
                     <div className="mt-2 flex flex-wrap gap-1">
-                      {profile.specialties.slice(0, 3).map((specialty) => <Badge key={specialty} variant="outline">{specialty}</Badge>)}
+                      {specialties.slice(0, 3).map((specialty) => <Badge key={specialty} variant="outline">{specialty}</Badge>)}
                     </div>
                     {tools.nextSteps?.length ? (
                       <p className="mt-3 text-xs leading-5 text-muted-foreground">Siguiente accion: {tools.nextSteps[0]}</p>

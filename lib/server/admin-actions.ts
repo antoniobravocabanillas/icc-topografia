@@ -34,6 +34,12 @@ function listFromTextarea(formData: FormData, key: string) {
     .filter(Boolean);
 }
 
+function adminErrorRedirect(message: string) {
+  redirect(`/admin/proyectos?projectStatus=error&item=${encodeURIComponent(message)}`);
+}
+
+const projectAdminRoles: Role[] = ["EDITOR", "ADMIN", "SUPER_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT"];
+
 function staffToolsFromForm(formData: FormData) {
   return {
     whatsappTemplate: value(formData, "whatsappTemplate") || "",
@@ -1065,35 +1071,42 @@ export async function updateSellerCommercialAction(id: string, formData: FormDat
 }
 
 export async function createProjectAction(formData: FormData) {
-  await requireActionRole(["EDITOR", "ADMIN", "SUPER_ADMIN"]);
+  await requireActionRole(projectAdminRoles);
   const title = value(formData, "title") || "";
   const clientId = nullableValue(formData, "clientId");
   const client = clientId ? await prisma.client.findUnique({ where: { id: clientId } }) : null;
-  await prisma.project.create({
-    data: {
-      title,
-      slug: value(formData, "slug") || slugify(title),
-      clientId,
-      companyId: nullableValue(formData, "companyId") || client?.companyId,
-      opportunityId: nullableValue(formData, "opportunityId"),
-      saleId: nullableValue(formData, "saleId"),
-      clientName: value(formData, "clientName"),
-      location: value(formData, "location"),
-      category: value(formData, "category"),
-      servicesApplied: listFromTextarea(formData, "servicesApplied"),
-      summary: value(formData, "summary") || "",
-      description: value(formData, "description") || "",
-      challenge: value(formData, "challenge"),
-      solution: value(formData, "solution"),
-      results: value(formData, "results"),
-      status: (value(formData, "status") as "PLANNING" | "IN_PROGRESS" | "FINISHED" | "PUBLISHED" | "ARCHIVED") || "PLANNING",
-      isPublic: checked(formData, "isPublic"),
-      isFeatured: checked(formData, "isFeatured"),
-      images: {
-        create: listFromTextarea(formData, "images").map((url, position) => ({ url, position, alt: title }))
+  try {
+    await prisma.project.create({
+      data: {
+        title,
+        slug: value(formData, "slug") || slugify(title),
+        clientId,
+        companyId: nullableValue(formData, "companyId") || client?.companyId,
+        opportunityId: nullableValue(formData, "opportunityId"),
+        saleId: nullableValue(formData, "saleId"),
+        clientName: value(formData, "clientName"),
+        location: value(formData, "location"),
+        category: value(formData, "category"),
+        servicesApplied: listFromTextarea(formData, "servicesApplied"),
+        summary: value(formData, "summary") || "",
+        description: value(formData, "description") || "",
+        challenge: value(formData, "challenge"),
+        solution: value(formData, "solution"),
+        results: value(formData, "results"),
+        status: (value(formData, "status") as "PLANNING" | "IN_PROGRESS" | "FINISHED" | "PUBLISHED" | "ARCHIVED") || "PLANNING",
+        isPublic: checked(formData, "isPublic"),
+        isFeatured: checked(formData, "isFeatured"),
+        images: {
+          create: listFromTextarea(formData, "images").map((url, position) => ({ url, position, alt: title }))
+        }
       }
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      adminErrorRedirect("Ya existe un proyecto con ese slug. Cambia el slug o deja que se genere uno nuevo.");
     }
-  });
+    adminErrorRedirect("No se pudo crear el proyecto. Revisa los datos e intenta nuevamente.");
+  }
   revalidatePath("/admin/proyectos");
   revalidatePath("/proyectos");
   redirect(`/admin/proyectos?projectStatus=created&item=${encodeURIComponent(title)}`);
@@ -1154,39 +1167,46 @@ export async function createProjectFromSaleAction(id: string, formData: FormData
 }
 
 export async function updateProjectAction(id: string, formData: FormData) {
-  await requireActionRole(["EDITOR", "ADMIN", "SUPER_ADMIN"]);
+  await requireActionRole(projectAdminRoles);
   const title = value(formData, "title") || "";
   const images = listFromTextarea(formData, "images");
-  await prisma.project.update({
-    where: { id },
-    data: {
-      title,
-      slug: value(formData, "slug") || slugify(title),
-      clientName: value(formData, "clientName"),
-      location: value(formData, "location"),
-      category: value(formData, "category"),
-      servicesApplied: listFromTextarea(formData, "servicesApplied"),
-      summary: value(formData, "summary") || "",
-      description: value(formData, "description") || "",
-      challenge: value(formData, "challenge"),
-      solution: value(formData, "solution"),
-      results: value(formData, "results"),
-      status: (value(formData, "status") as "PLANNING" | "IN_PROGRESS" | "FINISHED" | "PUBLISHED" | "ARCHIVED") || "PLANNING",
-      isPublic: checked(formData, "isPublic"),
-      isFeatured: checked(formData, "isFeatured"),
-      images: {
-        deleteMany: {},
-        create: images.map((url, position) => ({ url, position, alt: title }))
+  try {
+    await prisma.project.update({
+      where: { id },
+      data: {
+        title,
+        slug: value(formData, "slug") || slugify(title),
+        clientName: value(formData, "clientName"),
+        location: value(formData, "location"),
+        category: value(formData, "category"),
+        servicesApplied: listFromTextarea(formData, "servicesApplied"),
+        summary: value(formData, "summary") || "",
+        description: value(formData, "description") || "",
+        challenge: value(formData, "challenge"),
+        solution: value(formData, "solution"),
+        results: value(formData, "results"),
+        status: (value(formData, "status") as "PLANNING" | "IN_PROGRESS" | "FINISHED" | "PUBLISHED" | "ARCHIVED") || "PLANNING",
+        isPublic: checked(formData, "isPublic"),
+        isFeatured: checked(formData, "isFeatured"),
+        images: {
+          deleteMany: {},
+          create: images.map((url, position) => ({ url, position, alt: title }))
+        }
       }
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      adminErrorRedirect("Ya existe otro proyecto con ese slug. Usa un slug unico antes de guardar.");
     }
-  });
+    adminErrorRedirect("No se pudo actualizar el proyecto. Revisa los datos e intenta nuevamente.");
+  }
   revalidatePath("/admin/proyectos");
   revalidatePath("/proyectos");
   redirect(`/admin/proyectos?projectStatus=updated&item=${encodeURIComponent(title)}`);
 }
 
 export async function deleteProjectAction(id: string) {
-  await requireActionRole(["EDITOR", "ADMIN", "SUPER_ADMIN"]);
+  await requireActionRole(projectAdminRoles);
   const project = await prisma.project.delete({ where: { id } });
   revalidatePath("/admin/proyectos");
   revalidatePath("/proyectos");

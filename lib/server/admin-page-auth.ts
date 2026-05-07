@@ -7,7 +7,7 @@ export async function requireAdminPage(allowedRoles: Role[]) {
   const role = session?.user?.role as Role | undefined;
 
   if (!session?.user) redirect("/cuenta?callbackUrl=/admin");
-  if (!role || !allowedRoles.includes(role)) redirect("/admin/chat");
+  if (!role || !allowedRoles.includes(role)) redirect("/admin");
 
   return session;
 }
