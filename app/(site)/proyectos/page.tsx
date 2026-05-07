@@ -2,8 +2,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight, BarChart3, Crosshair, FileCheck2, MapPinned } from "lucide-react";
 import { ScrollReveal } from "@/components/scroll-reveal";
-import { TechnicalPageHero } from "@/components/technical-page-hero";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { projects } from "@/lib/content/site";
 import { prisma } from "@/lib/prisma";
@@ -68,18 +68,7 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
 
   return (
     <>
-      <TechnicalPageHero
-        eyebrow="Proyectos"
-        title="Casos con evidencia tecnica, metricas y valor operativo"
-        description="Trabajos donde la precision topografica ayuda a controlar avance, reducir retrabajo, documentar decisiones y sostener expedientes tecnicos."
-        metrics={[
-          { value: "42km", label: "control vial documentado" },
-          { value: "128ha", label: "georreferenciacion catastral" },
-          { value: "0.8mm", label: "control dimensional" }
-        ]}
-        primaryCta={{ label: "Cotizar proyecto", href: "/cotizacion" }}
-        secondaryCta={{ label: "Ver servicios", href: "/servicios" }}
-      />
+      <ProjectsHero projectCount={allProjectItems.length} rubroCount={rubros.length} activeCount={allProjectItems.filter((project) => project.status === "IN_PROGRESS").length} />
 
       <section className="container py-20">
         <div className="grid gap-8 lg:grid-cols-[0.88fr_1.12fr] lg:items-end">
@@ -159,6 +148,64 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
         </div>
       </section>
     </>
+  );
+}
+
+function ProjectsHero({ projectCount, rubroCount, activeCount }: { projectCount: number; rubroCount: number; activeCount: number }) {
+  return (
+    <section className="relative isolate overflow-hidden border-b bg-[#03111D] text-white">
+      <div className="absolute inset-0 opacity-35 [background-image:linear-gradient(rgba(36,200,238,0.15)_1px,transparent_1px),linear-gradient(90deg,rgba(36,200,238,0.11)_1px,transparent_1px)] [background-size:44px_44px]" />
+      <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-[#24C8EE]/70 to-transparent" />
+      <div className="container relative grid min-h-[560px] items-center gap-12 py-16 lg:grid-cols-[minmax(0,1fr)_520px]">
+        <ScrollReveal>
+          <div className="max-w-4xl">
+            <Badge className="bg-white text-[#063D63] hover:bg-white">Portafolio ICC</Badge>
+            <p className="mt-7 text-sm font-semibold uppercase tracking-[0.18em] text-[#7DE4FF]">Topografia para decisiones de obra</p>
+            <h1 className="mt-4 font-display text-5xl font-bold leading-[0.96] text-white md:text-7xl">
+              Casos tecnicos con evidencia, control y trazabilidad
+            </h1>
+            <p className="mt-6 max-w-3xl text-lg leading-8 text-white/72">
+              Una seleccion de trabajos donde el levantamiento, replanteo, nivelacion y control topografico ayudan a reducir incertidumbre, sostener expedientes y acelerar coordinaciones en campo.
+            </p>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <Button asChild size="lg">
+                <Link href="/cotizacion">Cotizar proyecto <ArrowRight className="h-4 w-4" /></Link>
+              </Button>
+              <Button asChild size="lg" variant="outline" className="border-white/35 bg-white/10 text-white hover:bg-white/18">
+                <Link href="/servicios">Ver servicios</Link>
+              </Button>
+            </div>
+          </div>
+        </ScrollReveal>
+
+        <ScrollReveal delay={120}>
+          <div className="relative overflow-hidden rounded-lg border border-white/14 bg-white/[0.07] p-6 shadow-2xl backdrop-blur-xl">
+            <div className="absolute inset-0 opacity-35 [background-image:linear-gradient(rgba(36,200,238,0.16)_1px,transparent_1px),linear-gradient(90deg,rgba(36,200,238,0.12)_1px,transparent_1px)] [background-size:24px_24px]" />
+            <div className="relative">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7DE4FF]">Lectura ejecutiva</p>
+              <div className="mt-6 grid gap-3">
+                <HeroStat value={`${projectCount || 1}+`} label="casos y referencias publicadas" />
+                <HeroStat value={`${rubroCount || 1}`} label="rubros tecnicos organizados" />
+                <HeroStat value={`${activeCount}`} label="trabajos de campo en ejecucion" />
+              </div>
+              <div className="mt-6 rounded-md border border-white/12 bg-white/[0.055] p-4">
+                <p className="text-xs font-semibold uppercase text-white/45">Como leer el portafolio</p>
+                <p className="mt-2 text-sm leading-6 text-white/78">Filtra por rubro y estado para ubicar referencias comparables a tu proyecto antes de solicitar una evaluacion tecnica.</p>
+              </div>
+            </div>
+          </div>
+        </ScrollReveal>
+      </div>
+    </section>
+  );
+}
+
+function HeroStat({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="grid grid-cols-[96px_1fr] items-center gap-4 border-b border-white/14 pb-4 last:border-b-0 last:pb-0">
+      <span className="font-display text-3xl font-bold text-[#24C8EE]">{value}</span>
+      <span className="text-sm leading-5 text-white/72">{label}</span>
+    </div>
   );
 }
 

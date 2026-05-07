@@ -52,7 +52,7 @@ export default async function ProjectDetailPage({ params }: ProjectPageProps) {
         )}
         <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(3,17,29,0.98)_0%,rgba(3,17,29,0.88)_42%,rgba(3,17,29,0.34)_100%)]" />
         <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-[#24C8EE]/70 to-transparent" />
-        <section className="container relative grid min-h-[680px] items-center gap-8 py-16 xl:grid-cols-[0.82fr_1.18fr] 2xl:grid-cols-[0.74fr_1.26fr]">
+        <section className="container relative grid min-h-[680px] items-center gap-14 py-16 xl:grid-cols-[0.82fr_1.18fr] 2xl:grid-cols-[0.74fr_1.26fr]">
           <div className="max-w-2xl xl:-ml-6 2xl:-ml-10">
             <div className="flex flex-wrap gap-3">
               <Badge className="bg-white text-[#063D63] hover:bg-white">{project.category || "Proyecto tecnico"}</Badge>
@@ -63,7 +63,7 @@ export default async function ProjectDetailPage({ params }: ProjectPageProps) {
             <p className="mt-7 text-sm font-semibold uppercase tracking-[0.18em] text-[#7DE4FF]">Caso tecnico ICC</p>
             <h1 className="mt-4 font-display text-5xl font-bold leading-[0.95] md:text-6xl">{project.title}</h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-white/78">{project.summary}</p>
-            <div className="mt-10 grid gap-3 sm:grid-cols-3 xl:grid-cols-1 2xl:grid-cols-3">
+            <div className="mt-10 grid gap-4 sm:grid-cols-3 xl:grid-cols-1 2xl:grid-cols-3">
               <HeroFact icon={MapPin} label="Ubicacion" value={project.location || "Por confirmar"} />
               <HeroFact icon={Pickaxe} label="Estado" value={statusLabel} />
               <HeroFact icon={Layers3} label="Rubro" value={project.category || "Tecnico"} />
