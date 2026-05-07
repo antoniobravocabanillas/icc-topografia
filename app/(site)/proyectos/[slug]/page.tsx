@@ -40,6 +40,7 @@ export default async function ProjectDetailPage({ params }: ProjectPageProps) {
   const heroImage = project.images[0];
   const galleryImages = project.images.slice(1);
   const statusLabel = projectStatusLabel(project.status);
+  const resultItems = parseResultItems(project.results);
 
   return (
     <>
@@ -51,7 +52,7 @@ export default async function ProjectDetailPage({ params }: ProjectPageProps) {
         )}
         <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(3,17,29,0.98)_0%,rgba(3,17,29,0.88)_42%,rgba(3,17,29,0.34)_100%)]" />
         <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-[#24C8EE]/70 to-transparent" />
-        <section className="container relative grid min-h-[680px] items-center gap-12 py-16 lg:grid-cols-[minmax(0,1fr)_440px]">
+        <section className="container relative grid min-h-[680px] items-center gap-12 py-16 xl:grid-cols-[minmax(0,1fr)_520px]">
           <div className="max-w-4xl">
             <div className="flex flex-wrap gap-3">
               <Badge className="bg-white text-[#063D63] hover:bg-white">{project.category || "Proyecto tecnico"}</Badge>
@@ -68,12 +69,20 @@ export default async function ProjectDetailPage({ params }: ProjectPageProps) {
               <HeroFact icon={Layers3} label="Rubro" value={project.category || "Tecnico"} />
             </div>
           </div>
-          <Card className="overflow-hidden border-white/16 bg-white/[0.08] text-white shadow-2xl backdrop-blur-xl">
+          <Card className="max-h-[calc(100svh-9rem)] overflow-auto border-white/16 bg-white/[0.08] text-white shadow-2xl backdrop-blur-xl">
             <CardHeader>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7DE4FF]">Resultado operativo</p>
-              <CardTitle className="mt-2 text-3xl leading-tight">{project.results || "Evidencia tecnica para decisiones de obra"}</CardTitle>
+              <CardTitle className="mt-2 text-2xl leading-tight">Logros tecnicos del servicio</CardTitle>
             </CardHeader>
             <CardContent className="space-y-5 text-sm leading-7 text-white/74">
+              <div className="grid gap-2">
+                {resultItems.map((item) => (
+                  <div key={item} className="flex gap-3 rounded-md border border-white/10 bg-white/[0.045] p-3">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#24C8EE]" />
+                    <p className="text-sm font-semibold leading-6 text-white/92">{item}</p>
+                  </div>
+                ))}
+              </div>
               <p>{projectStatusDescriptions[project.status] || "Seguimiento topografico y entregables organizados por ICC."}</p>
               <div className="grid gap-3 border-y border-white/14 py-5">
                 <MiniMetric icon={Ruler} label="Control" value="Mediciones trazables" />
@@ -252,6 +261,21 @@ function FactRow({ label, value }: { label: string; value: string }) {
       <p className="mt-1 font-semibold">{value}</p>
     </div>
   );
+}
+
+function parseResultItems(results?: string | null) {
+  if (!results) return ["Evidencia tecnica para decisiones de obra"];
+  const explicitItems = results
+    .split(/\r?\n|;|\u2022/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (explicitItems.length > 1) return explicitItems.slice(0, 8);
+
+  const pattern = /([A-ZÁÉÍÓÚÑ][^A-ZÁÉÍÓÚÑ]{18,}?)(?=\s+[A-ZÁÉÍÓÚÑ]|$)/g;
+  const inferredItems = Array.from(results.matchAll(pattern), (match) => match[1].trim())
+    .filter((item) => item.length > 12);
+
+  return (inferredItems.length ? inferredItems : [results]).slice(0, 8);
 }
 
 function Section({ title, body }: { title: string; body?: string | null }) {
