@@ -10,7 +10,7 @@ type UploadedImage = {
   fileName: string;
 };
 
-export function ServiceCoverUploader({ initialCover = "" }: { initialCover?: string | null }) {
+export function ServiceCoverUploader({ initialCover = "", inputName = "cover", label = "Imagen principal del servicio", description = "Se usa como preview de la card y fondo del hero del servicio." }: { initialCover?: string | null; inputName?: string; label?: string; description?: string }) {
   const [cover, setCover] = useState(initialCover || "");
   const [status, setStatus] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -50,8 +50,8 @@ export function ServiceCoverUploader({ initialCover = "" }: { initialCover?: str
     <div className="grid gap-3 text-sm font-semibold md:col-span-2">
       <div className="flex flex-col justify-between gap-3 rounded-md border bg-background p-4 md:flex-row md:items-center">
         <div>
-          <span>Imagen principal del servicio</span>
-          <p className="mt-1 text-xs font-normal text-muted-foreground">Se usa como preview de la card y fondo del hero del servicio.</p>
+          <span>{label}</span>
+          <p className="mt-1 text-xs font-normal text-muted-foreground">{description}</p>
         </div>
         <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/avif" className="hidden" onChange={(event: ChangeEvent<HTMLInputElement>) => uploadFile(event.target.files)} />
         <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
@@ -74,7 +74,7 @@ export function ServiceCoverUploader({ initialCover = "" }: { initialCover?: str
         </div>
       )}
 
-      <input type="hidden" name="cover" value={cover} />
+      <input type="hidden" name={inputName} value={cover} />
       {status ? <p className="rounded-md bg-emerald-50 p-3 text-xs font-normal text-emerald-900">{status}</p> : null}
     </div>
   );

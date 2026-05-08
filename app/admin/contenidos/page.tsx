@@ -46,6 +46,7 @@ import {
 type AdminContentPageProps = {
   searchParams?: Promise<{
     blogStatus?: string;
+    contentStatus?: string;
     item?: string;
   }>;
 };
@@ -54,6 +55,12 @@ const blogStatusMessages: Record<string, string> = {
   created: "Post creado y publicado correctamente.",
   updated: "Cambios del blog guardados correctamente.",
   deleted: "Post eliminado correctamente."
+};
+
+const contentStatusMessages: Record<string, string> = {
+  created: "Contenido creado correctamente.",
+  updated: "Cambios guardados correctamente.",
+  deleted: "Contenido eliminado correctamente."
 };
 
 const serviceStatusOptions = [
@@ -69,6 +76,8 @@ export default async function AdminContentPage({ searchParams }: AdminContentPag
   const resolvedSearchParams = await searchParams;
   const blogStatus = resolvedSearchParams?.blogStatus;
   const blogStatusMessage = blogStatus ? blogStatusMessages[blogStatus] : null;
+  const contentStatus = resolvedSearchParams?.contentStatus;
+  const contentStatusMessage = contentStatus ? contentStatusMessages[contentStatus] : null;
   const services = await prisma.service.findMany({ orderBy: { updatedAt: "desc" } });
   const serviceCategories = await prisma.serviceCategory.findMany({ orderBy: [{ parentId: "asc" }, { position: "asc" }, { name: "asc" }] });
   const sectors = await prisma.sector.findMany({ orderBy: [{ position: "asc" }, { name: "asc" }] });
@@ -86,11 +95,11 @@ export default async function AdminContentPage({ searchParams }: AdminContentPag
         <p className="mt-2 text-muted-foreground">Gestiona lo que publica el front: servicios, blog, FAQ, logos de clientes, testimonios, banners y paginas.</p>
       </div>
 
-      {blogStatusMessage ? (
+      {blogStatusMessage || contentStatusMessage ? (
         <div className="flex items-start gap-3 rounded-md border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-950">
           <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
           <div>
-            <p className="font-semibold">{blogStatusMessage}</p>
+            <p className="font-semibold">{blogStatusMessage || contentStatusMessage}</p>
             {resolvedSearchParams?.item ? <p className="mt-1 text-emerald-800">{resolvedSearchParams.item}</p> : null}
           </div>
         </div>
@@ -309,10 +318,10 @@ function SectorFields({ sector }: { sector?: Sector }) {
       <Input name="slug" placeholder="slug-sector" defaultValue={sector?.slug || ""} />
       <Input name="icon" placeholder="Icono lucide opcional" defaultValue={sector?.icon || ""} />
       <Input name="position" type="number" placeholder="Orden" defaultValue={sector?.position ?? 0} />
-      <Input name="image" placeholder="URL de imagen sectorial" defaultValue={sector?.image || ""} />
       <Input name="seoTitle" placeholder="SEO title" defaultValue={sector?.seoTitle || ""} />
       <Textarea name="description" placeholder="Descripcion" defaultValue={sector?.description || ""} />
       <Textarea name="metaDescription" placeholder="Meta description" defaultValue={sector?.metaDescription || ""} />
+      <ServiceCoverUploader initialCover={sector?.image || ""} inputName="image" label="Imagen sectorial" description="Se usa como aplicacion visual en la ficha premium de servicios." />
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="active" defaultChecked={sector?.active ?? true} /> Activo</label>
     </>
   );

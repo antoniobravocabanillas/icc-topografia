@@ -873,21 +873,24 @@ export async function deleteServiceCategoryAction(id: string) {
 }
 
 export async function createSectorAction(formData: FormData) {
-  await prisma.sector.create({ data: sectorFieldsFromForm(formData) });
+  const sector = await prisma.sector.create({ data: sectorFieldsFromForm(formData) });
   revalidatePath("/admin/contenidos");
   revalidatePath("/sectores");
+  redirect(`/admin/contenidos?contentStatus=created&item=${encodeURIComponent(`Sector creado: ${sector.name}`)}`);
 }
 
 export async function updateSectorAction(id: string, formData: FormData) {
-  await prisma.sector.update({ where: { id }, data: sectorFieldsFromForm(formData) });
+  const sector = await prisma.sector.update({ where: { id }, data: sectorFieldsFromForm(formData) });
   revalidatePath("/admin/contenidos");
   revalidatePath("/sectores");
+  redirect(`/admin/contenidos?contentStatus=updated&item=${encodeURIComponent(`Sector actualizado: ${sector.name}`)}`);
 }
 
 export async function deleteSectorAction(id: string) {
-  await prisma.sector.delete({ where: { id } });
+  const sector = await prisma.sector.delete({ where: { id } });
   revalidatePath("/admin/contenidos");
   revalidatePath("/sectores");
+  redirect(`/admin/contenidos?contentStatus=deleted&item=${encodeURIComponent(`Sector eliminado: ${sector.name}`)}`);
 }
 
 const baseServiceCatalog = [
