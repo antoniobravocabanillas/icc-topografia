@@ -147,7 +147,7 @@ export default async function ServicePage({ params }: ServicePageProps) {
 
         <div className="rounded-sm border border-[#24C8EE]/20 bg-[#061827]/88 p-5">
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#24C8EE]">Ruta de trabajo</p>
-          <div className="mt-5 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {process.slice(0, 6).map((item, index) => (
               <div key={item} className="rounded-sm border border-[#24C8EE]/18 bg-white/[0.035] p-4">
                 <p className="text-sm font-black text-[#24C8EE]">{String(index + 1).padStart(2, "0")}</p>
