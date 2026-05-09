@@ -55,14 +55,15 @@ const config: Config = {
       fontFamily: {
         sans: [
           "var(--font-sans)",
+          "Satoshi",
           "Aptos",
           "Segoe UI Variable Text",
-          "Inter",
           "system-ui",
           "sans-serif"
         ],
         display: [
           "var(--font-display)",
+          "Satoshi",
           "Aptos Display",
           "Segoe UI Variable Display",
           "Segoe UI",

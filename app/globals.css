@@ -2,9 +2,41 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: "Satoshi";
+  src: url("/fonts/satoshi/satoshi-regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Satoshi";
+  src: url("/fonts/satoshi/satoshi-medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Satoshi";
+  src: url("/fonts/satoshi/satoshi-bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Satoshi";
+  src: url("/fonts/satoshi/satoshi-black.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
-  --font-sans: "Aptos", "Segoe UI Variable Text", "Inter", "Helvetica Neue", Arial, sans-serif;
-  --font-display: "Aptos Display", "Segoe UI Variable Display", "Aptos", "Helvetica Neue", Arial, sans-serif;
+  --font-sans: "Satoshi", "Aptos", "Segoe UI Variable Text", "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Satoshi", "Aptos Display", "Segoe UI Variable Display", "Helvetica Neue", Arial, sans-serif;
   --background: 204 45% 98%;
   --foreground: 201 73% 12%;
   --card: 0 0% 100%;
