@@ -67,17 +67,17 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
         secondaryCta={{ label: "Hablar con asesor", href: "/contacto" }}
       />
 
-      <section className="relative overflow-hidden bg-[#03111D] py-20 text-white">
+      <section className="icc-depth-bg relative overflow-hidden bg-[#03111D] py-20 text-white">
         <div className="absolute inset-0 pointer-events-none opacity-[0.13] [background-image:linear-gradient(rgba(36,200,238,0.18)_1px,transparent_1px),linear-gradient(90deg,rgba(11,131,196,0.14)_1px,transparent_1px)] [background-size:38px_38px]" />
         <div className="container relative">
           <div className="grid gap-8 border-b border-white/[0.08] pb-10 lg:grid-cols-[0.95fr_1.05fr] lg:items-end">
             <ScrollReveal>
               <Badge className="bg-white text-[#063D63] hover:bg-white">Servicios destacados</Badge>
-              <h2 className="mt-5 max-w-3xl font-display text-4xl font-bold leading-tight md:text-5xl">Soluciones organizadas por alcance, proceso y entregable</h2>
+              <h2 className="icc-ambient-glow mt-5 max-w-3xl font-display text-4xl font-bold leading-tight md:text-5xl">Soluciones organizadas por alcance, proceso y entregable</h2>
               <p className="mt-5 max-w-2xl text-sm leading-7 text-white/64 md:text-base">Cada ficha conecta necesidad tecnica, recursos de campo, gabinete, QA/QC y evidencia final para clientes que necesitan claridad antes de ejecutar.</p>
             </ScrollReveal>
             <ScrollReveal delay={80}>
-              <div className="grid gap-5 rounded-sm border border-white/[0.08] bg-[#161C25]/80 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur">
+              <div className="icc-glass grid gap-5 rounded-sm border p-5">
                 <div className="grid gap-5 sm:grid-cols-2">
                   <FilterGroup title="Categoria" items={["todos", ...categories]} selected={selectedCategory} param="categoria" params={{ categoria: selectedCategory, estado: selectedStatus }} />
                   <FilterGroup title="Estado" items={["todos", ...statuses]} selected={selectedStatus} param="estado" params={{ categoria: selectedCategory, estado: selectedStatus }} formatter={(value) => value === "todos" ? "Todos" : serviceStatusLabel(value)} />
@@ -122,7 +122,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
             ["Cierre", "documentacion, recomendaciones y soporte posterior"]
           ].map(([title, text], index) => (
             <ScrollReveal key={title} delay={index * 80}>
-              <div className="rounded-sm border border-white/14 bg-white/[0.06] p-6">
+              <div className="icc-glass rounded-sm border p-6">
                 <p className="font-display text-2xl font-bold text-[#24C8EE]">{title}</p>
                 <p className="mt-3 text-sm leading-6 text-white/70">{text}</p>
               </div>
@@ -141,8 +141,8 @@ function FeaturedServiceCard({ service }: { service: ServiceWithCategory }) {
   return (
     <ScrollReveal className="mt-10">
       <Link href={`/servicios/${service.slug}`} className="group block">
-        <article className="grid overflow-hidden border border-white/[0.08] bg-[#061827] shadow-[0_32px_90px_rgba(0,34,54,0.52)] lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="relative min-h-[360px] overflow-hidden bg-[#061827]">
+        <article className="icc-panel-depth grid overflow-hidden border border-white/[0.08] bg-[#061827] shadow-[0_32px_90px_rgba(0,34,54,0.52)] lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="icc-image-depth relative min-h-[360px] overflow-hidden bg-[#061827]">
             {service.cover ? (
               <Image src={service.cover} alt={service.title} fill sizes="(max-width: 1024px) 100vw, 45vw" className="object-cover brightness-[0.78] saturate-[0.9] transition duration-700 group-hover:scale-[1.04]" unoptimized />
             ) : (
@@ -196,8 +196,8 @@ function ServiceCard({ service, index }: { service: ServiceWithCategory; index: 
   const items = service.deliverables.length ? service.deliverables : service.benefits;
   return (
     <Link href={`/servicios/${service.slug}`} className="group block h-full">
-      <article className="flex h-full flex-col bg-[#061827] transition duration-500 hover:z-10 hover:-translate-y-1 hover:shadow-[0_32px_80px_rgba(0,34,54,0.62)] motion-reduce:transform-none">
-        <div className="relative h-52 overflow-hidden bg-[#061827]">
+      <article className="icc-panel-depth flex h-full flex-col bg-[#061827] transition duration-500 hover:z-10 hover:-translate-y-1 hover:shadow-[0_32px_80px_rgba(0,34,54,0.62)] motion-reduce:transform-none">
+        <div className="icc-image-depth relative h-52 overflow-hidden bg-[#061827]">
           {service.cover ? (
             <Image src={service.cover} alt={service.title} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover brightness-[0.78] saturate-[0.9] transition duration-700 group-hover:scale-[1.05]" unoptimized />
           ) : (

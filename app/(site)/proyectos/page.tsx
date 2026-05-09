@@ -98,17 +98,17 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
     <>
       <ProjectsHero projectCount={allProjectItems.length} rubroCount={rubros.length} activeCount={allProjectItems.filter((project) => project.status === "IN_PROGRESS").length} />
 
-      <section className="relative overflow-hidden bg-[#03111D] py-20 text-white">
+      <section className="icc-depth-bg relative overflow-hidden bg-[#03111D] py-20 text-white">
         <div className="absolute inset-0 pointer-events-none opacity-[0.14] [background-image:linear-gradient(rgba(36,200,238,0.18)_1px,transparent_1px),linear-gradient(90deg,rgba(11,131,196,0.14)_1px,transparent_1px)] [background-size:38px_38px]" />
         <div className="container relative">
           <div className="grid gap-8 border-b border-white/[0.08] pb-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-end">
           <ScrollReveal>
             <p className="flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.32em] text-[#7DE4FF] before:h-px before:w-10 before:bg-gradient-to-r before:from-[#24C8EE] before:to-transparent">ICC Topografia - Portafolio</p>
-            <h2 className="mt-5 max-w-3xl font-display text-4xl font-bold leading-tight md:text-5xl">Proyectos de alta precision tecnica y resultado visible</h2>
+            <h2 className="icc-ambient-glow mt-5 max-w-3xl font-display text-4xl font-bold leading-tight md:text-5xl">Proyectos de alta precision tecnica y resultado visible</h2>
             <p className="mt-5 max-w-2xl text-sm leading-7 text-white/64 md:text-base">Obras en ejecucion, casos culminados y frentes tecnicos separados por rubro para ubicar referencias comparables con rapidez y criterio profesional.</p>
           </ScrollReveal>
           <ScrollReveal delay={80}>
-            <div className="grid gap-5 rounded-sm border border-white/[0.08] bg-[#161C25]/80 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur">
+            <div className="icc-glass grid gap-5 rounded-sm border p-5">
               <ProjectSearchPreview items={searchPreviewItems} query={query} selectedRubro={selectedRubro} selectedEstado={selectedEstado} />
               <div className="grid gap-5 sm:grid-cols-2">
                 <FilterGroup title="Rubro" items={["todos", ...rubros]} selected={selectedRubro} param="rubro" params={{ rubro: selectedRubro, estado: selectedEstado, q: query }} />
@@ -137,7 +137,7 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
             return (
               <ScrollReveal key={project.title} delay={index * 70} className={isFeaturedCard ? "h-full xl:col-span-2" : "h-full"}>
                 <Link href={project.slug ? `/proyectos/${project.slug}` : "/contacto"} className="group block h-full">
-                <article className={isFeaturedCard ? "grid h-full overflow-hidden bg-[#061827] transition duration-500 hover:z-10 hover:-translate-y-1 hover:shadow-[0_32px_80px_rgba(0,34,54,0.62)] motion-reduce:transform-none lg:grid-cols-[52%_48%]" : "flex h-full flex-col overflow-hidden bg-[#061827] transition duration-500 hover:z-10 hover:-translate-y-1 hover:shadow-[0_32px_80px_rgba(0,34,54,0.62)] motion-reduce:transform-none"}>
+                <article className={isFeaturedCard ? "icc-panel-depth grid h-full overflow-hidden bg-[#061827] transition duration-500 hover:z-10 hover:-translate-y-1 hover:shadow-[0_32px_80px_rgba(0,34,54,0.62)] motion-reduce:transform-none lg:grid-cols-[52%_48%]" : "icc-panel-depth flex h-full flex-col overflow-hidden bg-[#061827] transition duration-500 hover:z-10 hover:-translate-y-1 hover:shadow-[0_32px_80px_rgba(0,34,54,0.62)] motion-reduce:transform-none"}>
                   <div className={isFeaturedCard ? "relative min-h-[280px] overflow-hidden bg-[#061827] lg:min-h-full" : "relative h-[240px] overflow-hidden bg-[#061827]"}>
                     {project.image ? (
                       <Image src={project.image} alt={project.title} fill sizes={isFeaturedCard ? "(max-width: 1024px) 100vw, 42vw" : "(max-width: 768px) 100vw, 33vw"} className="object-cover brightness-[0.82] saturate-[0.85] transition duration-700 group-hover:scale-[1.06]" unoptimized />
@@ -284,7 +284,7 @@ function PortfolioStat({ value, label }: { value: string; label: string }) {
 
 function ProjectsHero({ projectCount, rubroCount, activeCount }: { projectCount: number; rubroCount: number; activeCount: number }) {
   return (
-    <section className="relative isolate overflow-hidden border-b bg-[#03111D] text-white">
+    <section className="icc-depth-bg relative isolate overflow-hidden border-b bg-[#03111D] text-white">
       <div className="absolute inset-0 opacity-35 [background-image:linear-gradient(rgba(36,200,238,0.15)_1px,transparent_1px),linear-gradient(90deg,rgba(36,200,238,0.11)_1px,transparent_1px)] [background-size:44px_44px]" />
       <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-[#24C8EE]/70 to-transparent" />
       <div className="container relative grid min-h-[560px] items-center gap-12 py-16 lg:grid-cols-[minmax(0,1fr)_520px]">
@@ -292,7 +292,7 @@ function ProjectsHero({ projectCount, rubroCount, activeCount }: { projectCount:
           <div className="max-w-4xl">
             <Badge className="bg-white text-[#063D63] hover:bg-white">Portafolio ICC</Badge>
             <p className="mt-7 text-sm font-semibold uppercase tracking-[0.18em] text-[#7DE4FF]">Topografia para decisiones de obra</p>
-            <h1 className="mt-4 font-display text-5xl font-bold leading-[0.96] text-white md:text-7xl">
+            <h1 className="icc-ambient-glow mt-4 font-display text-5xl font-bold leading-[0.96] text-white md:text-7xl">
               Casos tecnicos con evidencia, control y trazabilidad
             </h1>
             <p className="mt-6 max-w-3xl text-lg leading-8 text-white/72">
@@ -310,7 +310,7 @@ function ProjectsHero({ projectCount, rubroCount, activeCount }: { projectCount:
         </ScrollReveal>
 
         <ScrollReveal delay={120}>
-          <div className="relative overflow-hidden rounded-lg border border-white/14 bg-white/[0.07] p-6 shadow-2xl backdrop-blur-xl">
+          <div className="icc-glass relative overflow-hidden rounded-lg border p-6">
             <div className="absolute inset-0 opacity-35 [background-image:linear-gradient(rgba(36,200,238,0.16)_1px,transparent_1px),linear-gradient(90deg,rgba(36,200,238,0.12)_1px,transparent_1px)] [background-size:24px_24px]" />
             <div className="relative">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7DE4FF]">Lectura ejecutiva</p>

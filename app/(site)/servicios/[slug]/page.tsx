@@ -61,7 +61,7 @@ export default async function ServicePage({ params }: ServicePageProps) {
 
   return (
     <article className="bg-[#03111D] text-white">
-      <section className="relative isolate overflow-hidden border-b border-white/[0.08]">
+      <section className="icc-depth-bg relative isolate overflow-hidden border-b border-white/[0.08]">
         {heroImage ? (
           <Image src={heroImage} alt={service.title} fill priority sizes="100vw" className="object-cover opacity-50" unoptimized />
         ) : (
@@ -78,7 +78,7 @@ export default async function ServicePage({ params }: ServicePageProps) {
             <div className="inline-flex rounded-full border border-[#24C8EE]/45 bg-[#061827]/70 px-4 py-2 text-xs font-black uppercase tracking-[0.08em] text-white backdrop-blur">
               {displayCategory(service)}
             </div>
-            <h1 className="mt-6 max-w-4xl font-display text-5xl font-black leading-[0.94] tracking-tight md:text-7xl">
+            <h1 className="icc-ambient-glow mt-6 max-w-4xl font-display text-5xl font-black leading-[0.94] tracking-tight md:text-7xl">
               {splitTitle(service.title).main}<span className="block text-[#24C8EE]">{splitTitle(service.title).accent}</span>
             </h1>
             <p className="mt-6 max-w-3xl text-lg leading-8 text-white/78">{service.headline || service.summary}</p>
@@ -103,7 +103,7 @@ export default async function ServicePage({ params }: ServicePageProps) {
       </section>
 
       <section className="mx-auto w-[min(1880px,calc(100%-44px))] py-5">
-        <div className="grid overflow-hidden rounded-sm border border-[#24C8EE]/25 bg-[#061827]/90 md:grid-cols-3 xl:grid-cols-6">
+        <div className="icc-glass grid overflow-hidden rounded-sm border md:grid-cols-3 xl:grid-cols-6">
           <Metric icon={BriefcaseBusiness} value="+250" label="Proyectos ejecutados" />
           <Metric icon={MapPinned} value="Cobertura nacional" label="Costa, Sierra y Selva" />
           <Metric icon={Target} value={service.precision || "Precision milimetrica"} label="Tecnologia GNSS RTK" />
@@ -114,7 +114,7 @@ export default async function ServicePage({ params }: ServicePageProps) {
       </section>
 
       <section className="mx-auto grid w-[min(1880px,calc(100%-44px))] gap-4 pb-5 xl:grid-cols-[1fr_0.75fr_1.32fr]">
-        <div className="grid gap-4 rounded-sm border border-[#24C8EE]/20 bg-[#061827]/88 p-5 md:grid-cols-[0.95fr_1.05fr]">
+        <div className="icc-glass grid gap-4 rounded-sm border p-5 md:grid-cols-[0.95fr_1.05fr]">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#24C8EE]">Que incluye este servicio?</p>
             <p className="mt-5 text-sm leading-7 text-white/72">{content.problem || content.body || service.summary}</p>
@@ -124,7 +124,7 @@ export default async function ServicePage({ params }: ServicePageProps) {
           </div>
           <div className="grid gap-2">
             {inclusions.slice(0, 6).map((item) => (
-              <div key={item} className="flex items-start gap-3 rounded-sm border border-white/[0.08] bg-white/[0.045] px-3 py-2 text-sm text-white/78">
+              <div key={item} className="icc-glass flex items-start gap-3 rounded-sm border px-3 py-2 text-sm text-white/78">
                 <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#7DE4FF]" />
                 <span>{item}</span>
               </div>
@@ -132,11 +132,11 @@ export default async function ServicePage({ params }: ServicePageProps) {
           </div>
         </div>
 
-        <div className="rounded-sm border border-[#24C8EE]/20 bg-[#061827]/88 p-5">
+        <div className="icc-glass rounded-sm border p-5">
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#24C8EE]">Aplicaciones</p>
           <div className="mt-4 grid grid-cols-2 gap-2">
             {sectors.map((sector) => (
-              <div key={sector.id} className="relative min-h-24 overflow-hidden rounded-sm border border-white/[0.08] bg-white/[0.05] p-3">
+              <div key={sector.id} className="icc-image-depth relative min-h-24 overflow-hidden rounded-sm border border-white/[0.08] bg-white/[0.05] p-3">
                 {sector.image ? <Image src={sector.image} alt={sector.name} fill sizes="180px" className="object-cover opacity-45" unoptimized /> : null}
                 <div className="absolute inset-0 bg-gradient-to-t from-[#03111D] to-transparent" />
                 <p className="relative mt-10 text-sm font-bold text-white">{sector.name}</p>
@@ -145,11 +145,11 @@ export default async function ServicePage({ params }: ServicePageProps) {
           </div>
         </div>
 
-        <div className="rounded-sm border border-[#24C8EE]/20 bg-[#061827]/88 p-5">
+        <div className="icc-glass rounded-sm border p-5">
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#24C8EE]">Ruta de trabajo</p>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {process.slice(0, 6).map((item, index) => (
-              <div key={item} className="rounded-sm border border-[#24C8EE]/18 bg-white/[0.035] p-4">
+              <div key={item} className="icc-glass rounded-sm border p-4">
                 <p className="text-sm font-black text-[#24C8EE]">{String(index + 1).padStart(2, "0")}</p>
                 <FileCheck2 className="mt-4 h-7 w-7 text-[#7DE4FF]" />
                 <p className="mt-4 text-sm font-bold text-white">{item}</p>
@@ -160,13 +160,13 @@ export default async function ServicePage({ params }: ServicePageProps) {
       </section>
 
       <section className="mx-auto grid w-[min(1880px,calc(100%-44px))] gap-4 pb-8 lg:grid-cols-[1.2fr_0.8fr]">
-        <div className="rounded-sm border border-[#24C8EE]/16 bg-[#061827]/72 p-5">
+        <div className="icc-glass rounded-sm border p-5">
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#24C8EE]">Tecnologias y software</p>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             {technologies.map((item) => <span key={item} className="rounded-sm border border-white/[0.1] bg-white/[0.05] px-4 py-2 text-sm font-semibold text-white/82">{item}</span>)}
           </div>
         </div>
-        <div className="rounded-sm border border-[#24C8EE]/16 bg-[#061827]/72 p-5">
+        <div className="icc-glass rounded-sm border p-5">
           <MiniMetric icon={Headphones} label="Soporte" value="Transformamos datos del mundo real en informacion confiable para decisiones que construyen futuro." />
         </div>
       </section>

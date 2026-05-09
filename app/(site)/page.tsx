@@ -43,14 +43,14 @@ export default async function HomePage() {
 
   return (
     <>
-      <section className="relative isolate overflow-hidden border-b bg-[#03111D] text-white">
+      <section className="icc-depth-bg relative isolate overflow-hidden border-b bg-[#03111D] text-white">
         <HomeHero3D />
         <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(3,17,29,0.96)_0%,rgba(3,17,29,0.78)_42%,rgba(3,17,29,0.18)_100%)]" />
         <div className="absolute inset-0 opacity-35 [background-image:linear-gradient(rgba(36,200,238,0.15)_1px,transparent_1px),linear-gradient(90deg,rgba(36,200,238,0.11)_1px,transparent_1px)] [background-size:44px_44px]" />
         <div className="container relative grid min-h-[calc(100svh-8rem)] items-center gap-10 py-12 lg:grid-cols-[0.98fr_1.02fr]">
           <div className="max-w-3xl">
             <Badge className="bg-white text-[#063D63] hover:bg-white">{brand.descriptor}</Badge>
-            <h1 className="mt-5 font-display text-5xl font-bold leading-[0.96] text-white md:text-7xl">
+            <h1 className="icc-ambient-glow mt-5 font-display text-5xl font-bold leading-[0.96] text-white md:text-7xl">
               ICC Topografia Group S.A.C.
             </h1>
             <p className="mt-5 max-w-2xl text-2xl font-semibold leading-tight text-[#7DE4FF] md:text-3xl">
@@ -75,7 +75,7 @@ export default async function HomePage() {
             </div>
           </div>
           <div className="hidden justify-self-end lg:block">
-            <div className="w-[390px] border-y border-white/18 py-5 text-white">
+            <div className="icc-glass w-[390px] border p-6 text-white">
               <p className="text-xs font-semibold uppercase text-white/58">{brand.tagline}</p>
               <div className="mt-5 grid gap-5">
                 {heroMetrics.map(({ icon: Icon, value, label }) => (
@@ -124,7 +124,7 @@ export default async function HomePage() {
         </section>
       ) : null}
 
-      <section className="relative overflow-hidden border-y bg-[#061827] py-20 text-white">
+      <section className="icc-depth-bg relative overflow-hidden border-y bg-[#061827] py-20 text-white">
         <div className="absolute inset-0 opacity-25 [background-image:linear-gradient(rgba(36,200,238,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(36,200,238,0.08)_1px,transparent_1px)] [background-size:36px_36px]" />
         <div className="container relative">
           <ScrollReveal>
@@ -133,7 +133,7 @@ export default async function HomePage() {
           <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {categories.map((category, index) => (
               <ScrollReveal key={category.id} delay={index * 35}>
-                <Link href={`/tienda?categoria=${encodeURIComponent(category.slug)}`} className="block rounded-md border border-white/12 bg-white/[0.055] p-4 font-semibold text-white transition hover:border-[#24C8EE]/70 hover:bg-white/[0.085]">
+                <Link href={`/tienda?categoria=${encodeURIComponent(category.slug)}`} className="icc-glass block rounded-md border p-4 font-semibold text-white transition hover:border-[#24C8EE]/70 hover:bg-white/[0.085]">
                   {category.name}
                 </Link>
               </ScrollReveal>
@@ -168,7 +168,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="border-y bg-[#063D63] py-20 text-white">
+      <section className="icc-depth-bg border-y bg-[#063D63] py-20 text-white">
         <div className="container grid gap-10 lg:grid-cols-[0.9fr_1.1fr]">
           <ScrollReveal>
             <Badge className="bg-[#12B5DC] text-white">{operatingStandard.kicker}</Badge>
@@ -176,7 +176,7 @@ export default async function HomePage() {
             <p className="mt-5 text-base leading-7 text-white/76">{operatingStandard.description}</p>
             <div className="mt-8 grid gap-3 sm:grid-cols-2">
               {operatingStandard.metrics.map(([value, label]) => (
-                <div key={label} className="rounded-md border border-white/15 bg-white/8 p-4">
+                <div key={label} className="icc-glass rounded-md border p-4">
                   <p className="text-3xl font-bold text-[#12B5DC]">{value}</p>
                   <p className="mt-1 text-sm text-white/72">{label}</p>
                 </div>
@@ -186,7 +186,7 @@ export default async function HomePage() {
           <div className="grid gap-3">
             {operatingStandard.credentials.map((credential, index) => (
               <ScrollReveal key={credential} delay={index * 70}>
-              <div className="rounded-md border border-white/15 bg-white/8 p-4 text-sm leading-6 text-white/82 backdrop-blur transition hover:border-[#24C8EE]/50">
+              <div className="icc-glass rounded-md border p-4 text-sm leading-6 text-white/82 transition hover:border-[#24C8EE]/50">
                 {credential}
               </div>
               </ScrollReveal>

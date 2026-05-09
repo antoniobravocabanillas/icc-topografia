@@ -106,7 +106,7 @@ export default async function SectorsPage() {
   return (
     <>
       <main className="overflow-hidden bg-[#03111D] text-white">
-        <section className="relative border-b border-white/[0.08]">
+        <section className="icc-depth-bg relative border-b border-white/[0.08]">
           <div className="absolute inset-0 opacity-[0.16] [background-image:linear-gradient(rgba(36,200,238,0.18)_1px,transparent_1px),linear-gradient(90deg,rgba(11,131,196,0.14)_1px,transparent_1px)] [background-size:48px_48px]" />
           <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-[#24C8EE]/70 to-transparent" />
           <div className="relative mx-auto grid min-h-[600px] w-[min(1720px,calc(100%-72px))] gap-14 py-14 lg:grid-cols-[minmax(0,0.96fr)_460px] lg:items-center">
@@ -114,7 +114,7 @@ export default async function SectorsPage() {
               <div className="inline-flex rounded-full border border-[#24C8EE]/45 bg-[#061827]/70 px-4 py-2 text-xs font-black uppercase tracking-[0.12em] text-[#7DE4FF]">
                 Sectores atendidos
               </div>
-              <h1 className="mt-7 max-w-4xl font-display text-5xl font-black leading-[1.02] tracking-tight md:text-6xl xl:text-[72px]">
+              <h1 className="icc-ambient-glow mt-7 max-w-4xl font-display text-5xl font-black leading-[1.02] tracking-tight md:text-6xl xl:text-[72px]">
                 Precision topografica para industrias donde el error cuesta caro.
               </h1>
               <p className="mt-7 max-w-3xl text-base leading-8 text-white/70 md:text-lg">
@@ -131,7 +131,7 @@ export default async function SectorsPage() {
             </ScrollReveal>
 
             <ScrollReveal delay={100}>
-              <div className="rounded-sm border border-[#24C8EE]/25 bg-[#061827]/82 p-7 shadow-[0_24px_90px_rgba(0,0,0,0.42)] backdrop-blur">
+              <div className="icc-glass rounded-sm border p-7">
                 <p className="text-xs font-black uppercase tracking-[0.22em] text-[#7DE4FF]">Sistema operativo ICC</p>
                 <div className="mt-7 space-y-6">
                   <HeroMetric value={String(sectorCount)} label="sectores estrategicos atendidos" />
@@ -143,10 +143,10 @@ export default async function SectorsPage() {
           </div>
         </section>
 
-        <section className="mx-auto w-[min(1720px,calc(100%-72px))] py-20">
+        <section className="icc-depth-bg mx-auto w-[min(1720px,calc(100%-72px))] py-20">
           <ScrollReveal>
             <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#24C8EE]">Cobertura sectorial</p>
-            <h2 className="mt-4 max-w-5xl font-display text-3xl font-black leading-tight md:text-4xl xl:text-5xl">
+            <h2 className="icc-ambient-glow mt-4 max-w-5xl font-display text-3xl font-black leading-tight md:text-4xl xl:text-5xl">
               Cada industria exige otra forma de medir, documentar y sostener decisiones.
             </h2>
             <p className="mt-4 max-w-3xl text-base leading-7 text-white/62">
@@ -161,11 +161,11 @@ export default async function SectorsPage() {
           </div>
         </section>
 
-        <section className="border-y border-white/[0.08] bg-[#061827] py-20">
+        <section className="icc-depth-bg border-y border-white/[0.08] bg-[#061827] py-20">
           <div className="mx-auto grid w-[min(1720px,calc(100%-72px))] gap-8 lg:grid-cols-[0.8fr_1.2fr]">
             <ScrollReveal>
               <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#24C8EE]">Especialidades conectadas</p>
-              <h2 className="mt-4 max-w-2xl font-display text-3xl font-black leading-tight md:text-4xl">
+              <h2 className="icc-ambient-glow mt-4 max-w-2xl font-display text-3xl font-black leading-tight md:text-4xl">
                 Servicios que se ajustan al sector, no al reves.
               </h2>
               <p className="mt-4 max-w-xl text-sm leading-7 text-white/62">
@@ -176,7 +176,7 @@ export default async function SectorsPage() {
             <div className="grid gap-3 md:grid-cols-2">
               {services.slice(0, 8).map((service, index) => (
                 <ScrollReveal key={service.slug} delay={index * 50}>
-                  <Link href={`/servicios/${service.slug}`} className="group flex h-full items-start gap-4 rounded-sm border border-white/[0.08] bg-white/[0.045] p-5 transition hover:border-[#24C8EE]/35 hover:bg-white/[0.07]">
+                  <Link href={`/servicios/${service.slug}`} className="icc-glass group flex h-full items-start gap-4 rounded-sm border p-5 transition hover:border-[#24C8EE]/35 hover:bg-white/[0.07]">
                     <CheckCircle2 className="mt-1 h-5 w-5 shrink-0 text-[#24C8EE]" />
                     <span>
                       <span className="block text-xs font-semibold uppercase tracking-[0.16em] text-[#7DE4FF]/70">{service.category || "Servicio ICC"}</span>
@@ -195,7 +195,7 @@ export default async function SectorsPage() {
               const Icon = [Target, Waypoints, ShieldCheck][index];
               return (
                 <ScrollReveal key={title} delay={index * 70}>
-                  <div className="h-full rounded-sm border border-[#24C8EE]/16 bg-[#061827] p-7">
+                  <div className="icc-glass h-full rounded-sm border p-7">
                     <Icon className="h-8 w-8 text-[#24C8EE]" />
                     <p className="mt-8 font-display text-3xl font-black text-white">{title}</p>
                     <p className="mt-4 text-sm leading-7 text-white/62">{text}</p>
@@ -219,11 +219,11 @@ function SectorCard({ sector, services, index }: { sector: SectorView; services:
 
   return (
     <ScrollReveal delay={index * 55}>
-      <article className={`group overflow-hidden rounded-sm border border-[#24C8EE]/20 bg-[#061827] shadow-[0_28px_90px_rgba(0,24,40,0.35)] transition duration-300 hover:-translate-y-1 hover:border-[#7DE4FF]/50 motion-reduce:transform-none ${isFeatured ? "xl:col-span-2" : ""}`}>
+      <article className={`icc-panel-depth group overflow-hidden rounded-sm border border-[#24C8EE]/20 bg-[#061827] shadow-[0_28px_90px_rgba(0,24,40,0.35)] transition duration-300 hover:-translate-y-1 hover:border-[#7DE4FF]/50 motion-reduce:transform-none ${isFeatured ? "xl:col-span-2" : ""}`}>
         <div className={isFeatured ? "grid h-full md:grid-cols-[0.95fr_1.05fr]" : "flex h-full flex-col"}>
-          <div className={`relative overflow-hidden ${isFeatured ? "min-h-[360px]" : "h-48"}`}>
+          <div className={`icc-image-depth relative overflow-hidden ${isFeatured ? "min-h-[360px]" : "h-48"}`}>
             {sector.image ? (
-              <Image src={sector.image} alt={sector.name} fill sizes={isFeatured ? "(min-width: 1280px) 25vw, 100vw" : "(min-width: 1280px) 20vw, (min-width: 768px) 50vw, 100vw"} className="object-cover opacity-78 transition duration-700 group-hover:scale-[1.04]" />
+                  <Image src={sector.image} alt={sector.name} fill sizes={isFeatured ? "(min-width: 1280px) 25vw, 100vw" : "(min-width: 1280px) 20vw, (min-width: 768px) 50vw, 100vw"} className="object-cover opacity-78 transition duration-700 group-hover:scale-[1.04]" />
             ) : (
               <div className="absolute inset-0 bg-[#061827] opacity-100 [background-image:linear-gradient(rgba(36,200,238,0.16)_1px,transparent_1px),linear-gradient(90deg,rgba(11,131,196,0.13)_1px,transparent_1px)] [background-size:34px_34px]" />
             )}

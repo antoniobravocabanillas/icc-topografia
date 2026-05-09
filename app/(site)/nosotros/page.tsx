@@ -74,7 +74,7 @@ export default async function AboutPage() {
   return (
     <>
       <main className="overflow-hidden bg-[#03111D] text-white">
-        <section className="relative border-b border-white/[0.08]">
+        <section className="icc-depth-bg relative border-b border-white/[0.08]">
           <div className="absolute inset-0 opacity-[0.16] [background-image:linear-gradient(rgba(36,200,238,0.18)_1px,transparent_1px),linear-gradient(90deg,rgba(11,131,196,0.14)_1px,transparent_1px)] [background-size:48px_48px]" />
           <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-[#24C8EE]/70 to-transparent" />
           <div className="relative mx-auto grid min-h-[640px] w-[min(1720px,calc(100%-72px))] gap-14 py-14 lg:grid-cols-[minmax(0,0.96fr)_460px] lg:items-center">
@@ -85,7 +85,7 @@ export default async function AboutPage() {
               <div className="mt-8 inline-flex rounded-full border border-[#24C8EE]/45 bg-[#061827]/70 px-4 py-2 text-xs font-black uppercase tracking-[0.12em] text-[#7DE4FF]">
                 Empresa de inteligencia geoespacial - Lima, Peru
               </div>
-              <h1 className="mt-7 max-w-4xl font-display text-5xl font-black leading-[1.02] tracking-tight md:text-6xl xl:text-[72px]">
+              <h1 className="icc-ambient-glow mt-7 max-w-4xl font-display text-5xl font-black leading-[1.02] tracking-tight md:text-6xl xl:text-[72px]">
                 No solo medimos terreno.
                 <span className="block text-[#24C8EE]">Generamos inteligencia tecnica sobre el.</span>
               </h1>
@@ -103,7 +103,7 @@ export default async function AboutPage() {
             </ScrollReveal>
 
             <ScrollReveal delay={100}>
-              <div className="grid overflow-hidden rounded-sm border border-[#24C8EE]/22 bg-[#061827]/80 shadow-[0_24px_90px_rgba(0,0,0,0.42)] backdrop-blur">
+              <div className="icc-glass grid overflow-hidden rounded-sm border">
                 <Metric value="12+" label="anos de trayectoria tecnica" />
                 <Metric value={String(serviceCount)} label="servicios tecnicos especializados" />
                 <Metric value={String(sectors.length)} label="sectores estrategicos atendidos" />
@@ -113,12 +113,12 @@ export default async function AboutPage() {
           </div>
         </section>
 
-        <section className="mx-auto w-[min(1720px,calc(100%-72px))] py-20">
+        <section className="icc-depth-bg mx-auto w-[min(1720px,calc(100%-72px))] py-20">
           <SectionIntro label="Sistema operativo ICC" title="Campo, gabinete y entregables bajo un mismo criterio tecnico" text="La propuesta ICC no se queda en el levantamiento. Integra captura, procesamiento, control de calidad y soporte para sostener decisiones de obra con evidencia." />
           <div className="grid gap-4 lg:grid-cols-3">
             {pillars.map((pillar, index) => (
               <ScrollReveal key={pillar.id} delay={index * 80}>
-                <div className="h-full rounded-sm border border-white/[0.08] bg-[#061827] p-6 shadow-[0_24px_70px_rgba(0,34,54,0.28)]">
+                <div className="icc-glass h-full rounded-sm border p-6">
                   <div className="flex items-center justify-between">
                     <pillar.icon className="h-8 w-8 text-[#24C8EE]" />
                     <span className="text-xs font-black uppercase tracking-[0.2em] text-white/34">{pillar.id}</span>
@@ -134,7 +134,7 @@ export default async function AboutPage() {
           </div>
         </section>
 
-        <section className="border-y border-white/[0.08] bg-[#061827] py-20">
+        <section className="icc-depth-bg border-y border-white/[0.08] bg-[#061827] py-20">
           <div className="mx-auto grid w-[min(1720px,calc(100%-72px))] gap-10 lg:grid-cols-[0.85fr_1.15fr]">
             <ScrollReveal>
               <SectionIntro label={operatingStandard.kicker} title={operatingStandard.title} text={operatingStandard.description} compact />
@@ -145,7 +145,7 @@ export default async function AboutPage() {
             <div className="grid gap-3 md:grid-cols-2">
               {operatingStandard.credentials.map((item, index) => (
                 <ScrollReveal key={item} delay={index * 60}>
-                  <div className="flex min-h-24 gap-4 rounded-sm border border-white/[0.08] bg-white/[0.045] p-5">
+                  <div className="icc-glass flex min-h-24 gap-4 rounded-sm border p-5">
                     <CheckCircle2 className="mt-1 h-5 w-5 shrink-0 text-[#24C8EE]" />
                     <p className="text-sm leading-7 text-white/68">{item}</p>
                   </div>
@@ -156,7 +156,7 @@ export default async function AboutPage() {
         </section>
 
         <section className="mx-auto grid w-[min(1720px,calc(100%-72px))] gap-4 py-20 xl:grid-cols-[1.1fr_0.9fr]">
-          <div className="rounded-sm border border-[#24C8EE]/16 bg-[#061827] p-6">
+          <div className="icc-glass rounded-sm border p-6">
             <SectionIntro label="Servicios conectados" title="Una arquitectura tecnica que nace en campo y termina en entregables" text="Los servicios visibles en el sitio alimentan la narrativa corporativa: precision, geodesia, control, catastro, mineria, infraestructura y consultoria." compact />
             <div className="mt-7 grid gap-3 md:grid-cols-2">
               {services.slice(0, 6).map((service) => (
@@ -167,7 +167,7 @@ export default async function AboutPage() {
               ))}
             </div>
           </div>
-          <div className="rounded-sm border border-[#24C8EE]/16 bg-[#061827] p-6">
+          <div className="icc-glass rounded-sm border p-6">
             <SectionIntro label="Sectores atendidos" title="Experiencia aplicada a industrias con riesgo tecnico real" text="Construccion, mineria, catastro, energia, infraestructura y consultoria requieren metodologias distintas, no un mismo entregable repetido." compact />
             <div className="mt-7 grid grid-cols-2 gap-3">
               {sectors.slice(0, 8).map((sector) => (

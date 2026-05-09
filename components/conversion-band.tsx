@@ -5,7 +5,7 @@ import { brand } from "@/lib/brand";
 
 export function ConversionBand() {
   return (
-    <section className="bg-[#0B83C4] py-14 text-primary-foreground">
+    <section className="icc-depth-bg icc-volume-gradient py-14 text-primary-foreground">
       <div className="container flex flex-col justify-between gap-6 md:flex-row md:items-center">
         <div>
           <p className="text-sm font-semibold uppercase tracking-wider text-white/70">{brand.name}</p>
