@@ -109,15 +109,15 @@ export default async function SectorsPage() {
         <section className="relative border-b border-white/[0.08]">
           <div className="absolute inset-0 opacity-[0.16] [background-image:linear-gradient(rgba(36,200,238,0.18)_1px,transparent_1px),linear-gradient(90deg,rgba(11,131,196,0.14)_1px,transparent_1px)] [background-size:48px_48px]" />
           <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-[#24C8EE]/70 to-transparent" />
-          <div className="relative mx-auto grid min-h-[620px] w-[min(1880px,calc(100%-44px))] gap-12 py-16 lg:grid-cols-[1fr_520px] lg:items-center">
+          <div className="relative mx-auto grid min-h-[600px] w-[min(1720px,calc(100%-72px))] gap-14 py-14 lg:grid-cols-[minmax(0,0.96fr)_460px] lg:items-center">
             <ScrollReveal>
               <div className="inline-flex rounded-full border border-[#24C8EE]/45 bg-[#061827]/70 px-4 py-2 text-xs font-black uppercase tracking-[0.12em] text-[#7DE4FF]">
                 Sectores atendidos
               </div>
-              <h1 className="mt-7 max-w-5xl font-display text-5xl font-black leading-[0.95] tracking-tight md:text-7xl">
+              <h1 className="mt-7 max-w-4xl font-display text-5xl font-black leading-[1.02] tracking-tight md:text-6xl xl:text-[72px]">
                 Precision topografica para industrias donde el error cuesta caro.
               </h1>
-              <p className="mt-7 max-w-3xl text-lg leading-8 text-white/70">
+              <p className="mt-7 max-w-3xl text-base leading-8 text-white/70 md:text-lg">
                 Adaptamos metodologia, cuadrilla, tecnologia y entregables al contexto operativo de cada sector: obra, mineria, catastro, infraestructura, industria, ambiente y consultoria tecnica.
               </p>
               <div className="mt-9 flex flex-col gap-3 sm:flex-row">
@@ -134,8 +134,8 @@ export default async function SectorsPage() {
               <div className="rounded-sm border border-[#24C8EE]/25 bg-[#061827]/82 p-7 shadow-[0_24px_90px_rgba(0,0,0,0.42)] backdrop-blur">
                 <p className="text-xs font-black uppercase tracking-[0.22em] text-[#7DE4FF]">Sistema operativo ICC</p>
                 <div className="mt-7 space-y-6">
-                  <HeroMetric value={String(sectorCount)} label="sectores administrables desde el panel" />
-                  <HeroMetric value={String(linkedServiceCount)} label="servicios organizados por especialidad" />
+                  <HeroMetric value={String(sectorCount)} label="sectores estrategicos atendidos" />
+                  <HeroMetric value={String(linkedServiceCount)} label="servicios tecnicos especializados" />
                   <HeroMetric value="QA/QC" label="control tecnico por alcance y entregable" />
                 </div>
               </div>
@@ -143,14 +143,14 @@ export default async function SectorsPage() {
           </div>
         </section>
 
-        <section className="mx-auto w-[min(1880px,calc(100%-44px))] py-16">
+        <section className="mx-auto w-[min(1720px,calc(100%-72px))] py-20">
           <ScrollReveal>
             <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#24C8EE]">Cobertura sectorial</p>
-            <h2 className="mt-4 max-w-5xl font-display text-4xl font-black leading-tight md:text-5xl">
+            <h2 className="mt-4 max-w-5xl font-display text-3xl font-black leading-tight md:text-4xl xl:text-5xl">
               Cada industria exige otra forma de medir, documentar y sostener decisiones.
             </h2>
             <p className="mt-4 max-w-3xl text-base leading-7 text-white/62">
-              La pagina toma sectores desde el panel y los conecta con servicios publicados para que el contenido crezca sin perder orden visual.
+              Organizamos cada alcance por riesgo operativo, tecnologia requerida y tipo de entregable para que el cliente encuentre rapido la solucion correcta.
             </p>
           </ScrollReveal>
 
@@ -161,11 +161,11 @@ export default async function SectorsPage() {
           </div>
         </section>
 
-        <section className="border-y border-white/[0.08] bg-[#061827] py-16">
-          <div className="mx-auto grid w-[min(1880px,calc(100%-44px))] gap-6 lg:grid-cols-[0.8fr_1.2fr]">
+        <section className="border-y border-white/[0.08] bg-[#061827] py-20">
+          <div className="mx-auto grid w-[min(1720px,calc(100%-72px))] gap-8 lg:grid-cols-[0.8fr_1.2fr]">
             <ScrollReveal>
               <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#24C8EE]">Especialidades conectadas</p>
-              <h2 className="mt-4 max-w-2xl font-display text-4xl font-black leading-tight">
+              <h2 className="mt-4 max-w-2xl font-display text-3xl font-black leading-tight md:text-4xl">
                 Servicios que se ajustan al sector, no al reves.
               </h2>
               <p className="mt-4 max-w-xl text-sm leading-7 text-white/62">
@@ -189,7 +189,7 @@ export default async function SectorsPage() {
           </div>
         </section>
 
-        <section className="mx-auto w-[min(1880px,calc(100%-44px))] py-16">
+        <section className="mx-auto w-[min(1720px,calc(100%-72px))] py-20">
           <div className="grid gap-4 md:grid-cols-3">
             {operatingBands.map(([title, text], index) => {
               const Icon = [Target, Waypoints, ShieldCheck][index];
@@ -254,7 +254,7 @@ function SectorCard({ sector, services, index }: { sector: SectorView; services:
 function HeroMetric({ value, label }: { value: string; label: string }) {
   return (
     <div className="border-b border-white/[0.14] pb-5 last:border-b-0 last:pb-0">
-      <p className="font-display text-4xl font-black text-[#24C8EE]">{value}</p>
+      <p className="font-display text-3xl font-black text-[#24C8EE] md:text-4xl">{value}</p>
       <p className="mt-1 text-sm font-semibold text-white/70">{label}</p>
     </div>
   );

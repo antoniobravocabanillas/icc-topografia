@@ -53,7 +53,7 @@ const timeline = [
   ["2018", "Drones y fotogrametria", "Incorporacion de tecnologia UAV para control de avance, ortomosaicos y soporte en infraestructura."],
   ["2021", "BIM, GIS y LiDAR", "Evolucion hacia modelado, analisis geoespacial y captura de alta densidad para proyectos exigentes."],
   ["2024", "ICC Topografia", "Consolidacion corporativa para servicios, instrumentacion, alquiler, calibracion y consultoria tecnica."],
-  ["2026", "Operacion premium", "Estandarizacion de procesos, portfolio digital, sectores administrables y enfoque de alto valor B2B."]
+  ["2026", "Operacion premium", "Estandarizacion de procesos, portfolio digital, cobertura sectorial y enfoque de alto valor B2B."]
 ];
 
 export default async function AboutPage() {
@@ -77,7 +77,7 @@ export default async function AboutPage() {
         <section className="relative border-b border-white/[0.08]">
           <div className="absolute inset-0 opacity-[0.16] [background-image:linear-gradient(rgba(36,200,238,0.18)_1px,transparent_1px),linear-gradient(90deg,rgba(11,131,196,0.14)_1px,transparent_1px)] [background-size:48px_48px]" />
           <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-[#24C8EE]/70 to-transparent" />
-          <div className="relative mx-auto grid min-h-[720px] w-[min(1880px,calc(100%-44px))] gap-12 py-16 lg:grid-cols-[1fr_520px] lg:items-center">
+          <div className="relative mx-auto grid min-h-[640px] w-[min(1720px,calc(100%-72px))] gap-14 py-14 lg:grid-cols-[minmax(0,0.96fr)_460px] lg:items-center">
             <ScrollReveal>
               <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/48">
                 <span>ICC</span><span className="text-[#24C8EE]">/</span><span>Nosotros</span>
@@ -85,11 +85,11 @@ export default async function AboutPage() {
               <div className="mt-8 inline-flex rounded-full border border-[#24C8EE]/45 bg-[#061827]/70 px-4 py-2 text-xs font-black uppercase tracking-[0.12em] text-[#7DE4FF]">
                 Empresa de inteligencia geoespacial - Lima, Peru
               </div>
-              <h1 className="mt-7 max-w-5xl font-display text-5xl font-black leading-[0.95] tracking-tight md:text-7xl">
+              <h1 className="mt-7 max-w-4xl font-display text-5xl font-black leading-[1.02] tracking-tight md:text-6xl xl:text-[72px]">
                 No solo medimos terreno.
                 <span className="block text-[#24C8EE]">Generamos inteligencia tecnica sobre el.</span>
               </h1>
-              <p className="mt-7 max-w-3xl text-lg leading-8 text-white/70">
+              <p className="mt-7 max-w-3xl text-base leading-8 text-white/70 md:text-lg">
                 {brand.name} consolida la experiencia de A&B Topografia Peru en una operacion preparada para proyectos que requieren precision, trazabilidad, equipos correctos y soporte tecnico real.
               </p>
               <div className="mt-9 flex flex-col gap-3 sm:flex-row">
@@ -105,16 +105,16 @@ export default async function AboutPage() {
             <ScrollReveal delay={100}>
               <div className="grid overflow-hidden rounded-sm border border-[#24C8EE]/22 bg-[#061827]/80 shadow-[0_24px_90px_rgba(0,0,0,0.42)] backdrop-blur">
                 <Metric value="12+" label="anos de trayectoria tecnica" />
-                <Metric value={String(serviceCount)} label="servicios estructurados desde el back" />
-                <Metric value={String(sectors.length)} label="sectores atendidos" />
+                <Metric value={String(serviceCount)} label="servicios tecnicos especializados" />
+                <Metric value={String(sectors.length)} label="sectores estrategicos atendidos" />
                 <Metric value={`${projectCount}+`} label="referencias y casos publicados" />
               </div>
             </ScrollReveal>
           </div>
         </section>
 
-        <section className="mx-auto w-[min(1880px,calc(100%-44px))] py-16">
-          <SectionIntro label="Sistema operativo ICC" title="Capturamos, procesamos y convertimos datos en decisiones" text="La propuesta ICC no se queda en el levantamiento. Integra campo, gabinete, control de calidad, entregables y soporte comercial para sostener proyectos de alto ticket." />
+        <section className="mx-auto w-[min(1720px,calc(100%-72px))] py-20">
+          <SectionIntro label="Sistema operativo ICC" title="Campo, gabinete y entregables bajo un mismo criterio tecnico" text="La propuesta ICC no se queda en el levantamiento. Integra captura, procesamiento, control de calidad y soporte para sostener decisiones de obra con evidencia." />
           <div className="grid gap-4 lg:grid-cols-3">
             {pillars.map((pillar, index) => (
               <ScrollReveal key={pillar.id} delay={index * 80}>
@@ -134,8 +134,8 @@ export default async function AboutPage() {
           </div>
         </section>
 
-        <section className="border-y border-white/[0.08] bg-[#061827] py-16">
-          <div className="mx-auto grid w-[min(1880px,calc(100%-44px))] gap-10 lg:grid-cols-[0.85fr_1.15fr]">
+        <section className="border-y border-white/[0.08] bg-[#061827] py-20">
+          <div className="mx-auto grid w-[min(1720px,calc(100%-72px))] gap-10 lg:grid-cols-[0.85fr_1.15fr]">
             <ScrollReveal>
               <SectionIntro label={operatingStandard.kicker} title={operatingStandard.title} text={operatingStandard.description} compact />
               <Button asChild className="mt-7">
@@ -155,7 +155,7 @@ export default async function AboutPage() {
           </div>
         </section>
 
-        <section className="mx-auto grid w-[min(1880px,calc(100%-44px))] gap-4 py-16 xl:grid-cols-[1.1fr_0.9fr]">
+        <section className="mx-auto grid w-[min(1720px,calc(100%-72px))] gap-4 py-20 xl:grid-cols-[1.1fr_0.9fr]">
           <div className="rounded-sm border border-[#24C8EE]/16 bg-[#061827] p-6">
             <SectionIntro label="Servicios conectados" title="Una arquitectura tecnica que nace en campo y termina en entregables" text="Los servicios visibles en el sitio alimentan la narrativa corporativa: precision, geodesia, control, catastro, mineria, infraestructura y consultoria." compact />
             <div className="mt-7 grid gap-3 md:grid-cols-2">
@@ -180,8 +180,8 @@ export default async function AboutPage() {
           </div>
         </section>
 
-        <section className="border-y border-white/[0.08] bg-[#020D17] py-16">
-          <div className="mx-auto w-[min(1880px,calc(100%-44px))]">
+        <section className="border-y border-white/[0.08] bg-[#020D17] py-20">
+          <div className="mx-auto w-[min(1720px,calc(100%-72px))]">
             <SectionIntro label="Evolucion" title="De operacion topografica a plataforma tecnica de decision" text="Nuestra historia mantiene la precision de campo como base, pero suma procesamiento, tecnologia y consultoria para proyectos modernos." />
             <div className="grid gap-3 lg:grid-cols-5">
               {timeline.map(([year, title, text], index) => (
@@ -197,7 +197,7 @@ export default async function AboutPage() {
           </div>
         </section>
 
-        <section className="mx-auto grid w-[min(1880px,calc(100%-44px))] gap-4 py-16 md:grid-cols-4">
+        <section className="mx-auto grid w-[min(1720px,calc(100%-72px))] gap-4 py-20 md:grid-cols-4">
           {values.map(([title, text], index) => (
             <ScrollReveal key={title} delay={index * 70}>
               <div className="h-full rounded-sm border border-white/[0.08] bg-[#061827] p-6">
@@ -210,7 +210,7 @@ export default async function AboutPage() {
         </section>
 
         <section className="border-t border-white/[0.08] bg-[#061827] py-10">
-          <div className="mx-auto flex w-[min(1880px,calc(100%-44px))] flex-wrap items-center gap-8">
+          <div className="mx-auto flex w-[min(1720px,calc(100%-72px))] flex-wrap items-center gap-8">
             <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#7DE4FF]">Tecnologia y soporte</p>
             {partners.map((partner) => <span key={partner} className="text-lg font-bold text-white/58">{partner}</span>)}
           </div>
@@ -225,7 +225,7 @@ export default async function AboutPage() {
 function Metric({ value, label }: { value: string; label: string }) {
   return (
     <div className="border-b border-white/[0.08] p-7 last:border-b-0">
-      <p className="font-display text-4xl font-black text-[#24C8EE]">{value}</p>
+      <p className="font-display text-3xl font-black text-[#24C8EE] md:text-4xl">{value}</p>
       <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-white/48">{label}</p>
     </div>
   );
@@ -235,7 +235,7 @@ function SectionIntro({ label, title, text, compact = false }: { label: string; 
   return (
     <div>
       <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#24C8EE]">{label}</p>
-      <h2 className={`${compact ? "max-w-xl text-3xl" : "max-w-4xl text-4xl md:text-5xl"} mt-4 font-display font-black leading-tight`}>{title}</h2>
+      <h2 className={`${compact ? "max-w-xl text-3xl" : "max-w-4xl text-3xl md:text-4xl xl:text-5xl"} mt-4 font-display font-black leading-tight`}>{title}</h2>
       <p className={`${compact ? "max-w-xl" : "max-w-3xl"} mt-4 text-sm leading-7 text-white/62 md:text-base`}>{text}</p>
     </div>
   );
