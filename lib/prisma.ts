@@ -23,11 +23,15 @@ function databaseUrlWithConnectionLimit() {
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
-    datasources: {
-      db: {
-        url: databaseUrlWithConnectionLimit()
-      }
-    },
+    ...(process.env.DATABASE_URL
+      ? {
+          datasources: {
+            db: {
+              url: databaseUrlWithConnectionLimit()
+            }
+          }
+        }
+      : {}),
     log: process.env.NODE_ENV === "development" ? ["query", "error", "warn"] : ["error"]
   });
 
