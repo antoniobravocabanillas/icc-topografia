@@ -14,6 +14,7 @@ import {
   takeChatConversationAction
 } from "@/lib/server/admin-actions";
 import { canManageAdmin, requireAdminPage } from "@/lib/server/admin-page-auth";
+import { safeDb } from "@/lib/server/safe-db";
 
 const statusLabels = {
   WAITING: "Esperando respuesta",
@@ -44,9 +45,9 @@ export default async function AdminChatPage() {
   const session = await requireAdminPage(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SUPPORT"]);
   const role = session.user.role as Role;
   const canManage = canManageAdmin(role);
-  const currentProfile = await prisma.staffProfile.findUnique({
+  const currentProfile = await safeDb("admin chat current profile", prisma.staffProfile.findUnique({
     where: { userId: session.user.id }
-  });
+  }), null);
   const conversationWhere = canManage
     ? {}
     : currentProfile

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { brand } from "@/lib/brand";
 import { operatingStandard, partners } from "@/lib/content/site";
 import { prisma } from "@/lib/prisma";
+import { safeDb } from "@/lib/server/safe-db";
 import { createMetadata } from "@/lib/seo";
 
 export const metadata = createMetadata({
@@ -57,19 +58,29 @@ const timeline = [
 ];
 
 export default async function AboutPage() {
-  const services = await prisma.service.findMany({
-    where: { isPublished: true },
-    select: { title: true, slug: true, category: true },
-    orderBy: [{ isFeatured: "desc" }, { updatedAt: "desc" }],
-    take: 8
-  });
-  const serviceCount = await prisma.service.count({ where: { isPublished: true } });
-  const sectors = await prisma.sector.findMany({
-    where: { active: true },
-    orderBy: [{ position: "asc" }, { name: "asc" }],
-    take: 8
-  });
-  const projectCount = await prisma.project.count({ where: { isPublic: true } });
+  const [services, serviceCount, sectors, projectCount] = await Promise.all([
+    safeDb(
+      "about services",
+      prisma.service.findMany({
+        where: { isPublished: true },
+        select: { title: true, slug: true, category: true },
+        orderBy: [{ isFeatured: "desc" }, { updatedAt: "desc" }],
+        take: 8
+      }),
+      []
+    ),
+    safeDb("about service count", prisma.service.count({ where: { isPublished: true } }), 0),
+    safeDb(
+      "about sectors",
+      prisma.sector.findMany({
+        where: { active: true },
+        orderBy: [{ position: "asc" }, { name: "asc" }],
+        take: 8
+      }),
+      []
+    ),
+    safeDb("about project count", prisma.project.count({ where: { isPublic: true } }), 0)
+  ]);
 
   return (
     <>

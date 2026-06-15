@@ -20,6 +20,7 @@ import { ScrollReveal } from "@/components/scroll-reveal";
 import { Button } from "@/components/ui/button";
 import { sectors as fallbackSectorNames } from "@/lib/content/site";
 import { prisma } from "@/lib/prisma";
+import { safeDb } from "@/lib/server/safe-db";
 import { createMetadata } from "@/lib/seo";
 
 export const metadata = createMetadata({
@@ -68,16 +69,25 @@ type ServiceView = {
 };
 
 export default async function SectorsPage() {
-  const dbSectors = await prisma.sector.findMany({
-    where: { active: true },
-    orderBy: [{ position: "asc" }, { name: "asc" }]
-  });
-
-  const services = await prisma.service.findMany({
-    where: { isPublished: true },
-    select: { title: true, slug: true, category: true, sectorSlugs: true },
-    orderBy: [{ isFeatured: "desc" }, { updatedAt: "desc" }]
-  });
+  const [dbSectors, services] = await Promise.all([
+    safeDb(
+      "sectors page sectors",
+      prisma.sector.findMany({
+        where: { active: true },
+        orderBy: [{ position: "asc" }, { name: "asc" }]
+      }),
+      []
+    ),
+    safeDb(
+      "sectors page services",
+      prisma.service.findMany({
+        where: { isPublished: true },
+        select: { title: true, slug: true, category: true, sectorSlugs: true },
+        orderBy: [{ isFeatured: "desc" }, { updatedAt: "desc" }]
+      }),
+      [] as ServiceView[]
+    )
+  ]);
 
   const sectors: SectorView[] = dbSectors.length
     ? dbSectors.map((sector) => ({

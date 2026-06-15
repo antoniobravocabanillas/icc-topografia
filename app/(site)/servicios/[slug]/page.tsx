@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowRight, BriefcaseBusiness, CheckCircle2, Clock3, Database, FileCheck2, Headphones, Layers3, MapPinned, Radar, ShieldCheck, Target, UsersRound } from "lucide-react";
 import { ServiceEvaluationForm } from "@/components/forms/service-evaluation-form";
 import { prisma } from "@/lib/prisma";
+import { safeDb } from "@/lib/server/safe-db";
 import { createMetadata } from "@/lib/seo";
 
 type ServicePageProps = { params: Promise<{ slug: string }> };
@@ -20,7 +21,7 @@ export const revalidate = 0;
 
 export async function generateMetadata({ params }: ServicePageProps) {
   const { slug } = await params;
-  const service = await prisma.service.findUnique({ where: { slug } });
+  const service = await safeDb("service metadata", prisma.service.findUnique({ where: { slug } }), null);
   if (!service || !service.isPublished) return {};
   return createMetadata({
     title: service.seoTitle || service.title,
@@ -31,27 +32,41 @@ export async function generateMetadata({ params }: ServicePageProps) {
 
 export default async function ServicePage({ params }: ServicePageProps) {
   const { slug } = await params;
-  const service = await prisma.service.findUnique({
-    where: { slug },
-    include: { categoryRef: true, subcategoryRef: true }
-  });
+  const service = await safeDb(
+    "service detail",
+    prisma.service.findUnique({
+      where: { slug },
+      include: { categoryRef: true, subcategoryRef: true }
+    }),
+    null
+  );
   if (!service || !service.isPublished) notFound();
 
-  const sectors = await prisma.sector.findMany({
-    where: service.sectorSlugs.length ? { active: true, slug: { in: service.sectorSlugs } } : { active: true },
-    orderBy: [{ position: "asc" }, { name: "asc" }],
-    take: 6
-  });
-  const relatedProjects = service.relatedProjects.length
-    ? await prisma.project.findMany({
-        where: { slug: { in: service.relatedProjects }, isPublic: true },
-        include: { images: { orderBy: { position: "asc" }, take: 1 } },
-        take: 3
-      })
-    : [];
-  const relatedServices = service.relatedServices.length
-    ? await prisma.service.findMany({ where: { slug: { in: service.relatedServices }, isPublished: true }, take: 3 })
-    : [];
+  const [sectors, relatedProjects, relatedServices] = await Promise.all([
+    safeDb(
+      "service detail sectors",
+      prisma.sector.findMany({
+        where: service.sectorSlugs.length ? { active: true, slug: { in: service.sectorSlugs } } : { active: true },
+        orderBy: [{ position: "asc" }, { name: "asc" }],
+        take: 6
+      }),
+      []
+    ),
+    service.relatedProjects.length
+      ? safeDb(
+          "service detail projects",
+          prisma.project.findMany({
+            where: { slug: { in: service.relatedProjects }, isPublic: true },
+            include: { images: { orderBy: { position: "asc" }, take: 1 } },
+            take: 3
+          }),
+          []
+        )
+      : [],
+    service.relatedServices.length
+      ? safeDb("service detail related services", prisma.service.findMany({ where: { slug: { in: service.relatedServices }, isPublished: true }, take: 3 }), [])
+      : []
+  ]);
 
   const content = service.content as ServiceContent;
   const process = content.process || ["Diagnostico", "Planificacion", "Ejecucion", "Procesamiento", "Entrega", "Soporte"];

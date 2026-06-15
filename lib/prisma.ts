@@ -8,9 +8,6 @@ function databaseUrlWithConnectionLimit() {
 
   try {
     const url = new URL(databaseUrl);
-    if (url.hostname === "db.prisma.io") {
-      url.hostname = "pooled.db.prisma.io";
-    }
     if (!url.searchParams.has("connection_limit")) {
       url.searchParams.set("connection_limit", "1");
     }

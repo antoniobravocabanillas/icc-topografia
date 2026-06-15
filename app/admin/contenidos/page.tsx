@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { prisma } from "@/lib/prisma";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
+import { safeDb } from "@/lib/server/safe-db";
 import {
   createBannerAction,
   createClientLogoAction,
@@ -78,15 +79,17 @@ export default async function AdminContentPage({ searchParams }: AdminContentPag
   const blogStatusMessage = blogStatus ? blogStatusMessages[blogStatus] : null;
   const contentStatus = resolvedSearchParams?.contentStatus;
   const contentStatusMessage = contentStatus ? contentStatusMessages[contentStatus] : null;
-  const services = await prisma.service.findMany({ orderBy: { updatedAt: "desc" } });
-  const serviceCategories = await prisma.serviceCategory.findMany({ orderBy: [{ parentId: "asc" }, { position: "asc" }, { name: "asc" }] });
-  const sectors = await prisma.sector.findMany({ orderBy: [{ position: "asc" }, { name: "asc" }] });
-  const posts = await prisma.blogPost.findMany({ orderBy: { updatedAt: "desc" } });
-  const faqs = await prisma.faq.findMany({ orderBy: [{ position: "asc" }, { createdAt: "desc" }] });
-  const testimonials = await prisma.testimonial.findMany({ orderBy: { createdAt: "desc" } });
-  const clientLogos = await prisma.clientLogo.findMany({ orderBy: [{ position: "asc" }, { createdAt: "desc" }] });
-  const banners = await prisma.banner.findMany({ orderBy: { createdAt: "desc" } });
-  const pages = await prisma.cmsPage.findMany({ orderBy: { updatedAt: "desc" } });
+  const [services, serviceCategories, sectors, posts, faqs, testimonials, clientLogos, banners, pages] = await Promise.all([
+    safeDb("admin content services", prisma.service.findMany({ orderBy: { updatedAt: "desc" } }), [] as Service[]),
+    safeDb("admin content service categories", prisma.serviceCategory.findMany({ orderBy: [{ parentId: "asc" }, { position: "asc" }, { name: "asc" }] }), [] as ServiceCategory[]),
+    safeDb("admin content sectors", prisma.sector.findMany({ orderBy: [{ position: "asc" }, { name: "asc" }] }), [] as Sector[]),
+    safeDb("admin content posts", prisma.blogPost.findMany({ orderBy: { updatedAt: "desc" } }), []),
+    safeDb("admin content faqs", prisma.faq.findMany({ orderBy: [{ position: "asc" }, { createdAt: "desc" }] }), []),
+    safeDb("admin content testimonials", prisma.testimonial.findMany({ orderBy: { createdAt: "desc" } }), []),
+    safeDb("admin content client logos", prisma.clientLogo.findMany({ orderBy: [{ position: "asc" }, { createdAt: "desc" }] }), []),
+    safeDb("admin content banners", prisma.banner.findMany({ orderBy: { createdAt: "desc" } }), []),
+    safeDb("admin content pages", prisma.cmsPage.findMany({ orderBy: { updatedAt: "desc" } }), [])
+  ]);
 
   return (
     <section className="space-y-8">

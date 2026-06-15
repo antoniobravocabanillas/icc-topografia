@@ -6,6 +6,7 @@ import { ScrollReveal } from "@/components/scroll-reveal";
 import { TechnicalPageHero } from "@/components/technical-page-hero";
 import { Badge } from "@/components/ui/badge";
 import { prisma } from "@/lib/prisma";
+import { safeDb } from "@/lib/server/safe-db";
 import { createMetadata } from "@/lib/seo";
 
 export const metadata = createMetadata({
@@ -28,11 +29,15 @@ type ServicesPageProps = {
 
 export default async function ServicesPage({ searchParams }: ServicesPageProps) {
   const resolvedSearchParams = await searchParams;
-  const services = await prisma.service.findMany({
-    where: { isPublished: true },
-    include: { categoryRef: true, subcategoryRef: true },
-    orderBy: [{ isFeatured: "desc" }, { updatedAt: "desc" }]
-  });
+  const services = await safeDb(
+    "services page",
+    prisma.service.findMany({
+      where: { isPublished: true },
+      include: { categoryRef: true, subcategoryRef: true },
+      orderBy: [{ isFeatured: "desc" }, { updatedAt: "desc" }]
+    }),
+    [] as ServiceWithCategory[]
+  );
 
   const categories = Array.from(new Set(services.map((service) => displayCategory(service)))).sort();
   const statuses = Array.from(new Set(services.map((service) => service.status))).sort();

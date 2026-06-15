@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { projects } from "@/lib/content/site";
 import { prisma } from "@/lib/prisma";
 import { projectStatusLabel, projectStatusLabels } from "@/lib/project-status";
+import { safeDb } from "@/lib/server/safe-db";
 import { createMetadata } from "@/lib/seo";
 
 export const metadata = createMetadata({
@@ -33,11 +34,15 @@ export const revalidate = 0;
 
 export default async function ProjectsPage({ searchParams }: ProjectsPageProps) {
   const resolvedSearchParams = await searchParams;
-  const dbProjects = await prisma.project.findMany({
-    where: { isPublic: true },
-    include: { images: { orderBy: { position: "asc" }, take: 1 } },
-    orderBy: [{ isFeatured: "desc" }, { updatedAt: "desc" }]
-  });
+  const dbProjects = await safeDb(
+    "projects page",
+    prisma.project.findMany({
+      where: { isPublic: true },
+      include: { images: { orderBy: { position: "asc" }, take: 1 } },
+      orderBy: [{ isFeatured: "desc" }, { updatedAt: "desc" }]
+    }),
+    []
+  );
   const allProjectItems = dbProjects.length
     ? dbProjects.map((project) => ({
         id: project.id,
