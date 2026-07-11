@@ -17,6 +17,7 @@
     "prisma:push": "prisma db push",
     "prisma:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed:terraqo": "tsx prisma/seed-terraqo.ts",
     "db:seed:staff": "tsx prisma/seed-staff.ts"
   },
   "dependencies": {
