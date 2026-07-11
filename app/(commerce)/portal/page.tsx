@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import type { Prisma } from "@prisma/client";
 import type { ElementType } from "react";
-import { FileText, FolderKanban, LifeBuoy, UserRound } from "lucide-react";
+import { BadgeCheck, BriefcaseBusiness, FileText, FolderKanban, LifeBuoy, MapPin, UserRound } from "lucide-react";
 import { auth } from "@/auth";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { SubmitButton } from "@/components/forms/submit-button";
@@ -69,8 +70,23 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
       }
     }
   });
+  const professionalProfile = await prisma.terraqoProfessionalProfile.findUnique({
+    where: { userId: session.user.id },
+    include: {
+      experiences: { orderBy: { createdAt: "desc" }, take: 6 },
+      applications: {
+        include: { jobPost: { select: { title: true, workspace: { select: { name: true } } } } },
+        orderBy: { createdAt: "desc" },
+        take: 6
+      }
+    }
+  });
 
   if (!account || !["active", "approved"].includes(account.status) || !account.client) {
+    if (professionalProfile) {
+      return <ProfessionalPortal profile={professionalProfile} />;
+    }
+
     return (
       <section className="bg-[#f6fbff] py-16">
         <div className="container max-w-3xl">
@@ -284,6 +300,103 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
                 </Link>
               ))}
               {!client.documents.length ? <p className="text-sm text-muted-foreground">No hay documentos compartidos.</p> : null}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+type ProfessionalPortalProfile = Prisma.TerraqoProfessionalProfileGetPayload<{
+  include: {
+    experiences: true;
+    applications: {
+      include: { jobPost: { select: { title: true; workspace: { select: { name: true } } } } };
+    };
+  };
+}>;
+
+function ProfessionalPortal({ profile }: { profile: ProfessionalPortalProfile }) {
+  return (
+    <section className="bg-[#f6fbff] py-12">
+      <div className="container space-y-8">
+        <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
+          <div className="rounded-lg border bg-[#03111D] p-7 text-white shadow-xl">
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#24C8EE]">Portal Terraqo</p>
+            <h1 className="mt-4 font-display text-4xl font-bold">Perfil profesional y CV vivo</h1>
+            <p className="mt-4 max-w-2xl text-white/72">
+              Administra tu disponibilidad, experiencia tecnica y postulaciones. Tu CV vivo se alimentara de proyectos reales validados dentro de Terraqo.
+            </p>
+            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+              <Metric icon={BriefcaseBusiness} label="Experiencias" value={profile.experiences.length} />
+              <Metric icon={FileText} label="Postulaciones" value={profile.applications.length} />
+              <Metric icon={BadgeCheck} label="Validaciones" value={profile.experiences.filter((item) => item.verifiedByTerraqo).length} />
+            </div>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Estado profesional</CardTitle>
+              <CardDescription>Informacion visible segun permisos y suscripcion.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-md border bg-muted/40 p-4">
+                <p className="text-xs font-bold uppercase text-muted-foreground">Disponibilidad</p>
+                <p className="mt-1 font-display text-2xl font-bold">{profile.status.replaceAll("_", " ")}</p>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <MapPin className="h-4 w-4 text-primary" />
+                {profile.city || "Ciudad por completar"} | {profile.yearsExperience ?? 0} anios de experiencia
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Especialidades</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {profile.specialties.length ? profile.specialties.map((item) => (
+                    <span key={item} className="rounded-md border bg-muted px-2.5 py-1 text-xs font-semibold">{item}</span>
+                  )) : <span className="text-sm text-muted-foreground">Pendiente de completar</span>}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Experiencia para CV vivo</CardTitle>
+              <CardDescription>Los proyectos validados por Terraqo daran mas peso a tu perfil profesional.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {profile.experiences.map((experience) => (
+                <div key={experience.id} className="rounded-md border p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-display text-lg font-bold">{experience.title}</p>
+                      <p className="text-sm text-muted-foreground">{experience.companyName || "Empresa por confirmar"} | {experience.role || "Rol tecnico"}</p>
+                    </div>
+                    {experience.verifiedByTerraqo ? <span className="rounded-md bg-primary/10 px-2 py-1 text-xs font-bold text-primary">Validado</span> : null}
+                  </div>
+                </div>
+              ))}
+              {!profile.experiences.length ? <p className="text-sm text-muted-foreground">Aun no hay experiencias registradas.</p> : null}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Postulaciones y oportunidades</CardTitle>
+              <CardDescription>Seguimiento privado de convocatorias vinculadas a workspaces Terraqo.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {profile.applications.map((application) => (
+                <div key={application.id} className="rounded-md border p-4">
+                  <p className="font-display text-lg font-bold">{application.jobPost.title}</p>
+                  <p className="text-sm text-muted-foreground">{application.jobPost.workspace.name}</p>
+                  <p className="mt-2 text-xs font-bold uppercase tracking-[0.16em] text-primary">{application.status}</p>
+                </div>
+              ))}
+              {!profile.applications.length ? <p className="text-sm text-muted-foreground">Aun no tienes postulaciones.</p> : null}
             </CardContent>
           </Card>
         </div>

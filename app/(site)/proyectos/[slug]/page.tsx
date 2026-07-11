@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { prisma } from "@/lib/prisma";
 import { projectStatusDescriptions, projectStatusLabel } from "@/lib/project-status";
 import { safeDb } from "@/lib/server/safe-db";
+import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 import { createMetadata } from "@/lib/seo";
 
 type ProjectPageProps = { params: Promise<{ slug: string }> };
@@ -17,7 +18,8 @@ export const revalidate = 0;
 
 export async function generateMetadata({ params }: ProjectPageProps) {
   const { slug } = await params;
-  const project = await safeDb("project metadata", prisma.project.findUnique({ where: { slug } }), null);
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const project = await safeDb("project metadata", prisma.project.findFirst({ where: { slug, terraqoWorkspaceId } }), null);
   if (!project || !project.isPublic) return {};
   return createMetadata({
     title: project.title,
@@ -28,10 +30,11 @@ export async function generateMetadata({ params }: ProjectPageProps) {
 
 export default async function ProjectDetailPage({ params }: ProjectPageProps) {
   const { slug } = await params;
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
   const project = await safeDb(
     "project detail",
-    prisma.project.findUnique({
-      where: { slug },
+    prisma.project.findFirst({
+      where: { slug, terraqoWorkspaceId },
       include: {
         images: { orderBy: { position: "asc" } },
         members: { include: { staffProfile: true } },

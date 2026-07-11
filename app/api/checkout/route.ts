@@ -2,13 +2,15 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { fail, handleApiError } from "@/lib/server/api";
+import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 import { checkoutSchema } from "@/lib/validations/commerce";
 
 export async function POST(request: Request) {
   try {
     const payload = checkoutSchema.parse(await request.json());
+    const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
     const productIds = payload.items.map((item) => item.productId);
-    const products = await prisma.product.findMany({ where: { id: { in: productIds }, isActive: true } });
+    const products = await prisma.product.findMany({ where: { id: { in: productIds }, isActive: true, terraqoWorkspaceId } });
 
     if (products.length !== productIds.length) {
       return fail("Uno o mas productos no existen", 404);
@@ -46,6 +48,7 @@ export async function POST(request: Request) {
         customerName: payload.name,
         customerPhone: payload.phone,
         notes: payload.notes,
+        terraqoWorkspace: terraqoWorkspaceId ? { connect: { id: terraqoWorkspaceId } } : undefined,
         status: "PENDING",
         total,
         address: payload.address ? { create: payload.address } : undefined,

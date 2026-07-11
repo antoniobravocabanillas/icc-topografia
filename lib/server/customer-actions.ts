@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { QuoteStatus, TicketCategory, TicketPriority } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 
 function value(formData: FormData, key: string) {
   const input = formData.get(key);
@@ -21,10 +22,12 @@ function listFromTextarea(formData: FormData, key: string) {
 async function requireClient() {
   const session = await auth();
   if (!session?.user?.email) redirect("/cuenta?callbackUrl=/portal");
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
 
   const account = await prisma.clientAccount.findFirst({
     where: {
       OR: [{ userId: session.user.id }, { user: { email: session.user.email } }],
+      terraqoWorkspaceId,
       deletedAt: null
     },
     include: { client: true, company: true, contact: true }
@@ -36,10 +39,11 @@ async function requireClient() {
 
   const client = account.client || await prisma.client.upsert({
     where: { email: session.user.email },
-    update: { userId: session.user.id, companyId: account.companyId },
+    update: { userId: session.user.id, companyId: account.companyId, terraqoWorkspaceId },
     create: {
       userId: session.user.id,
       companyId: account.companyId,
+      terraqoWorkspaceId,
       name: account.contact?.name || session.user.name || session.user.email,
       company: account.company.tradeName || account.company.legalName,
       email: session.user.email,
@@ -48,7 +52,7 @@ async function requireClient() {
     }
   });
 
-  return { session, client, account };
+  return { session, client, account, terraqoWorkspaceId };
 }
 
 function ticketCode() {
@@ -104,7 +108,7 @@ export async function updateClientProfileAction(formData: FormData) {
 }
 
 export async function createCustomerTicketAction(formData: FormData) {
-  const { client } = await requireClient();
+  const { client, terraqoWorkspaceId } = await requireClient();
   const subject = value(formData, "subject");
   const description = value(formData, "description");
   if (!subject || !description) return;
@@ -113,6 +117,7 @@ export async function createCustomerTicketAction(formData: FormData) {
     data: {
       code: ticketCode(),
       clientId: client.id,
+      terraqoWorkspaceId,
       customerName: client.name,
       customerEmail: client.email,
       company: client.company,

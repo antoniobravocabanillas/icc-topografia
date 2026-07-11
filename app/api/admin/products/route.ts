@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { created, getPagination, handleApiError, paginated, parseJson, slugify } from "@/lib/server/api";
 import { requireRole } from "@/lib/server/authz";
 import { serializeProduct } from "@/lib/server/serializers";
+import { getDefaultTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 import { productInputSchema } from "@/lib/validations/product";
 
 export async function GET(request: Request) {
@@ -9,12 +10,15 @@ export async function GET(request: Request) {
   if (response) return response;
 
   try {
+    const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+    await requireWorkspaceModule("TECHNICAL_STORE", terraqoWorkspaceId);
     const { searchParams } = new URL(request.url);
     const { page, pageSize, skip, take } = getPagination(searchParams);
     const q = searchParams.get("q")?.trim();
     const where = {
       AND: [
         { isActive: true },
+        terraqoWorkspaceId ? { terraqoWorkspaceId } : {},
         q
           ? {
               OR: [
@@ -43,10 +47,13 @@ export async function POST(request: Request) {
   if (response) return response;
 
   try {
+    const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+    await requireWorkspaceModule("TECHNICAL_STORE", terraqoWorkspaceId);
     const payload = await parseJson(request, productInputSchema);
     const product = await prisma.product.create({
       data: {
         ...payload,
+        terraqoWorkspaceId,
         slug: payload.slug ?? slugify(payload.name),
         requiresQuote: payload.requiresQuote || !payload.price,
         specifications: payload.specifications

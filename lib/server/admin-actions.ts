@@ -7,6 +7,7 @@ import { ActivityAction, BotQuestionStatus, CommissionType, Prisma, Role, StaffD
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/server/api";
+import { getDefaultTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 
 function value(formData: FormData, key: string) {
   const input = formData.get(key);
@@ -202,6 +203,7 @@ async function createActivityLog(data: {
   saleId?: string | null;
   projectId?: string | null;
   ticketId?: string | null;
+  terraqoWorkspaceId?: string | null;
   metadata?: Prisma.InputJsonValue;
 }) {
   const session = await auth();
@@ -214,6 +216,7 @@ async function createActivityLog(data: {
 }
 
 async function upsertCompanyAndContactFromForm(formData: FormData) {
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
   const companyName = value(formData, "company") || value(formData, "companyName");
   const contactEmail = value(formData, "customerEmail") || value(formData, "email");
   const contactName = value(formData, "customerName") || value(formData, "name");
@@ -245,7 +248,8 @@ async function upsertCompanyAndContactFromForm(formData: FormData) {
           tradeName: companyName || existing.tradeName,
           document: document || existing.document,
           email: contactEmail || existing.email,
-          phone: value(formData, "phone") || existing.phone
+          phone: value(formData, "phone") || existing.phone,
+          terraqoWorkspaceId: existing.terraqoWorkspaceId || terraqoWorkspaceId
         }
       })
     : await prisma.company.create({
@@ -254,7 +258,8 @@ async function upsertCompanyAndContactFromForm(formData: FormData) {
           tradeName: companyName,
           document,
           email: contactEmail,
-          phone: value(formData, "phone")
+          phone: value(formData, "phone"),
+          terraqoWorkspaceId
         }
       });
 
@@ -267,6 +272,7 @@ async function upsertCompanyAndContactFromForm(formData: FormData) {
         },
         create: {
           companyId: company.id,
+          terraqoWorkspaceId,
           name: contactName || contactEmail || "Contacto",
           email: contactEmail,
           phone: value(formData, "phone"),
@@ -276,6 +282,7 @@ async function upsertCompanyAndContactFromForm(formData: FormData) {
       }).catch(async () => prisma.contact.create({
         data: {
           companyId: company.id,
+          terraqoWorkspaceId,
           name: contactName || contactEmail || "Contacto",
           email: contactEmail,
           phone: value(formData, "phone"),
@@ -291,6 +298,7 @@ async function upsertCompanyAndContactFromForm(formData: FormData) {
 async function upsertCompanyAndContactFromLead(leadId: string) {
   const lead = await prisma.lead.findUnique({ where: { id: leadId } });
   if (!lead) throw new Error("Lead no encontrado.");
+  const terraqoWorkspaceId = lead.terraqoWorkspaceId || await getDefaultTerraqoWorkspaceId();
   if (lead.companyId) {
     const company = await prisma.company.findUnique({ where: { id: lead.companyId } });
     const contact = lead.contactId ? await prisma.contact.findUnique({ where: { id: lead.contactId } }) : null;
@@ -302,12 +310,14 @@ async function upsertCompanyAndContactFromLead(leadId: string) {
       tradeName: lead.company,
       email: lead.email,
       phone: lead.phone,
-      status: "prospecto"
+      status: "prospecto",
+      terraqoWorkspaceId
     }
   });
   const contact = await prisma.contact.create({
     data: {
       companyId: company.id,
+      terraqoWorkspaceId,
       name: lead.name,
       email: lead.email,
       phone: lead.phone,
@@ -323,6 +333,7 @@ async function upsertCompanyAndContactFromLead(leadId: string) {
 }
 
 async function upsertClientFromContact(formData: FormData) {
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
   const email = value(formData, "customerEmail") || value(formData, "email");
   const name = value(formData, "customerName") || value(formData, "name") || "Cliente sin nombre";
   if (!email) return null;
@@ -334,7 +345,8 @@ async function upsertClientFromContact(formData: FormData) {
       name,
       company: value(formData, "company"),
       phone: value(formData, "phone"),
-      companyId: company?.id
+      companyId: company?.id,
+      terraqoWorkspaceId
     },
     create: {
       name,
@@ -342,7 +354,8 @@ async function upsertClientFromContact(formData: FormData) {
       company: value(formData, "company"),
       phone: value(formData, "phone"),
       contactName: name,
-      companyId: company?.id
+      companyId: company?.id,
+      terraqoWorkspaceId
     }
   });
 
@@ -351,13 +364,15 @@ async function upsertClientFromContact(formData: FormData) {
       where: { clientId: client.id },
       update: {
         companyId: company.id,
-        contactId: contact?.id
+        contactId: contact?.id,
+        terraqoWorkspaceId
       },
       create: {
         clientId: client.id,
         userId: client.userId,
         companyId: company.id,
         contactId: contact?.id,
+        terraqoWorkspaceId,
         status: client.userId ? "active" : "invited",
         invitedAt: client.userId ? null : new Date()
       }
@@ -421,6 +436,7 @@ export async function createLeadNoteAction(id: string, formData: FormData) {
 
 export async function convertLeadToOpportunityAction(id: string) {
   await requireActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  await requireWorkspaceModule("CRM");
   const { lead, company, contact } = await upsertCompanyAndContactFromLead(id);
   if (!company) throw new Error("No se pudo crear empresa para la oportunidad.");
   const existing = await prisma.opportunity.findUnique({ where: { leadId: id } });
@@ -436,6 +452,7 @@ export async function convertLeadToOpportunityAction(id: string) {
       companyId: company.id,
       contactId: contact?.id,
       leadId: lead.id,
+      terraqoWorkspaceId: lead.terraqoWorkspaceId || await getDefaultTerraqoWorkspaceId(),
       sellerProfileId: lead.assignedProfileId,
       source: lead.source,
       interest: lead.interest,
@@ -454,6 +471,7 @@ export async function convertLeadToOpportunityAction(id: string) {
     opportunityId: opportunity.id,
     companyId: company.id,
     contactId: contact?.id
+    ,terraqoWorkspaceId: lead.terraqoWorkspaceId
   });
   await prisma.notification.create({
     data: {
@@ -471,6 +489,7 @@ export async function convertLeadToOpportunityAction(id: string) {
 
 export async function convertOpportunityToQuoteAction(id: string, formData: FormData) {
   await requireActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  await requireWorkspaceModule("CRM");
   const opportunity = await prisma.opportunity.findUnique({
     where: { id },
     include: { company: true, contact: true, lead: true, quotes: true }
@@ -489,6 +508,7 @@ export async function convertOpportunityToQuoteAction(id: string, formData: Form
           company: opportunity.company.tradeName || opportunity.company.legalName,
           phone: opportunity.contact.phone,
           companyId: opportunity.companyId
+          ,terraqoWorkspaceId: opportunity.terraqoWorkspaceId
         },
         create: {
           name: opportunity.contact.name,
@@ -496,7 +516,8 @@ export async function convertOpportunityToQuoteAction(id: string, formData: Form
           company: opportunity.company.tradeName || opportunity.company.legalName,
           phone: opportunity.contact.phone,
           contactName: opportunity.contact.name,
-          companyId: opportunity.companyId
+          companyId: opportunity.companyId,
+          terraqoWorkspaceId: opportunity.terraqoWorkspaceId
         }
       })
     : null;
@@ -509,6 +530,7 @@ export async function convertOpportunityToQuoteAction(id: string, formData: Form
       contactId: opportunity.contactId,
       opportunityId: opportunity.id,
       leadId: opportunity.leadId,
+      terraqoWorkspaceId: opportunity.terraqoWorkspaceId,
       sellerProfileId: opportunity.sellerProfileId,
       customerName: opportunity.contact?.name || opportunity.company.tradeName || opportunity.company.legalName,
       customerEmail: opportunity.contact?.email,
@@ -538,6 +560,7 @@ export async function convertOpportunityToQuoteAction(id: string, formData: Form
     quoteId: quote.id,
     companyId: opportunity.companyId,
     contactId: opportunity.contactId
+    ,terraqoWorkspaceId: opportunity.terraqoWorkspaceId
   });
   revalidatePath("/admin/oportunidades");
   revalidatePath("/admin/cotizaciones");
@@ -559,6 +582,8 @@ export async function deleteOrderAction(id: string) {
 
 export async function createQuoteAction(formData: FormData) {
   await requireActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  await requireWorkspaceModule("CRM");
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
   const client = await upsertClientFromContact(formData);
   const { company, contact } = await upsertCompanyAndContactFromForm(formData);
   const quantity = Math.max(numberValue(formData, "quantity", 1), 1);
@@ -578,6 +603,7 @@ export async function createQuoteAction(formData: FormData) {
       contactId: contact?.id,
       opportunityId: nullableValue(formData, "opportunityId"),
       leadId: nullableValue(formData, "leadId"),
+      terraqoWorkspaceId,
       sellerProfileId: nullableValue(formData, "sellerProfileId"),
       customerName: value(formData, "customerName") || client?.name || "",
       customerEmail: value(formData, "customerEmail") || client?.email,
@@ -615,6 +641,7 @@ export async function createQuoteAction(formData: FormData) {
     contactId: contact?.id,
     leadId: nullableValue(formData, "leadId"),
     opportunityId: nullableValue(formData, "opportunityId")
+    ,terraqoWorkspaceId
   });
   revalidatePath("/admin/cotizaciones");
   revalidatePath("/admin/oportunidades");
@@ -660,6 +687,7 @@ export async function updateQuoteStatusAction(id: string, formData: FormData) {
         companyId: quote.companyId || quote.client?.companyId,
         contactId: quote.contactId,
         sellerProfileId: quote.sellerProfileId,
+        terraqoWorkspaceId: quote.terraqoWorkspaceId,
         status: "CONFIRMED",
         currency: quote.currency,
         amount: quote.total,
@@ -676,6 +704,7 @@ export async function updateQuoteStatusAction(id: string, formData: FormData) {
       companyId: sale.companyId,
       contactId: sale.contactId,
       opportunityId: sale.opportunityId
+      ,terraqoWorkspaceId: quote.terraqoWorkspaceId
     });
   }
 
@@ -688,6 +717,7 @@ export async function updateQuoteStatusAction(id: string, formData: FormData) {
     companyId: quote.companyId,
     contactId: quote.contactId,
     opportunityId: quote.opportunityId
+    ,terraqoWorkspaceId: quote.terraqoWorkspaceId
   });
 
   revalidatePath("/admin/cotizaciones");
@@ -814,10 +844,12 @@ export async function deletePostAction(id: string) {
 }
 
 export async function createServiceAction(formData: FormData) {
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  await requireWorkspaceModule("PUBLIC_WEBSITE", terraqoWorkspaceId);
   const title = value(formData, "title") || "";
   const slug = value(formData, "slug") || slugify(title);
   await prisma.service.create({
-    data: serviceFieldsFromForm(formData, title)
+    data: { ...serviceFieldsFromForm(formData, title), terraqoWorkspaceId }
   });
   revalidatePath("/admin/contenidos");
   revalidatePath("/servicios");
@@ -850,8 +882,10 @@ export async function deleteServiceAction(id: string) {
 }
 
 export async function createServiceCategoryAction(formData: FormData) {
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  await requireWorkspaceModule("PUBLIC_WEBSITE", terraqoWorkspaceId);
   await prisma.serviceCategory.create({
-    data: serviceCategoryFieldsFromForm(formData)
+    data: { ...serviceCategoryFieldsFromForm(formData), terraqoWorkspaceId }
   });
   revalidatePath("/admin/contenidos");
   revalidatePath("/servicios");
@@ -991,6 +1025,8 @@ const baseServiceCatalog = [
 ];
 
 export async function seedServiceCatalogAction() {
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  await requireWorkspaceModule("PUBLIC_WEBSITE", terraqoWorkspaceId);
   const seededServiceSlugs: string[] = [];
 
   for (const [categoryIndex, category] of baseServiceCatalog.entries()) {
@@ -1002,6 +1038,7 @@ export async function seedServiceCatalogAction() {
         seoTitle: category.name,
         metaDescription: category.description,
         position: categoryIndex + 1,
+        terraqoWorkspaceId,
         active: true
       },
       create: {
@@ -1011,6 +1048,7 @@ export async function seedServiceCatalogAction() {
         seoTitle: category.name,
         metaDescription: category.description,
         position: categoryIndex + 1,
+        terraqoWorkspaceId,
         active: true
       }
     });
@@ -1030,6 +1068,7 @@ export async function seedServiceCatalogAction() {
             name: group.child.name,
             parentId: parent.id,
             position: (group.childIndex || 0) + 1,
+            terraqoWorkspaceId,
             active: true
           },
           create: {
@@ -1037,6 +1076,7 @@ export async function seedServiceCatalogAction() {
             slug: group.child.slug,
             parentId: parent.id,
             position: (group.childIndex || 0) + 1,
+            terraqoWorkspaceId,
             active: true
           }
         });
@@ -1058,6 +1098,7 @@ export async function seedServiceCatalogAction() {
             summary,
             seoTitle: `${title} en Peru`,
             metaDescription: summary,
+            terraqoWorkspaceId,
             isPublished: true
           },
           create: {
@@ -1077,6 +1118,7 @@ export async function seedServiceCatalogAction() {
             compatibility: ["Civil 3D", "AutoCAD", "GIS", "BIM segun alcance"],
             seoTitle: `${title} en Peru`,
             metaDescription: summary,
+            terraqoWorkspaceId,
             content: { problem: summary },
             isPublished: true
           }
@@ -1088,6 +1130,7 @@ export async function seedServiceCatalogAction() {
   await prisma.service.deleteMany({
     where: {
       slug: { notIn: seededServiceSlugs }
+      ,terraqoWorkspaceId
     }
   });
 
@@ -1131,6 +1174,8 @@ export async function deleteTestimonialAction(id: string) {
 }
 
 export async function createClientLogoAction(formData: FormData) {
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  await requireWorkspaceModule("PUBLIC_WEBSITE", terraqoWorkspaceId);
   const name = value(formData, "name") || "";
   const logoUrl = value(formData, "logoUrl");
   if (!name || !logoUrl) return;
@@ -1142,6 +1187,7 @@ export async function createClientLogoAction(formData: FormData) {
       website: value(formData, "website"),
       sector: value(formData, "sector"),
       position: numberValue(formData, "position"),
+      terraqoWorkspaceId,
       active: checked(formData, "active")
     }
   });
@@ -1394,6 +1440,8 @@ export async function updateSellerCommercialAction(id: string, formData: FormDat
 
 export async function createProjectAction(formData: FormData) {
   await requireActionRole(projectAdminRoles);
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  await requireWorkspaceModule("PROJECTS", terraqoWorkspaceId);
   const title = value(formData, "title") || "";
   const clientId = nullableValue(formData, "clientId");
   const client = clientId ? await prisma.client.findUnique({ where: { id: clientId } }) : null;
@@ -1406,6 +1454,7 @@ export async function createProjectAction(formData: FormData) {
         companyId: nullableValue(formData, "companyId") || client?.companyId,
         opportunityId: nullableValue(formData, "opportunityId"),
         saleId: nullableValue(formData, "saleId"),
+        terraqoWorkspaceId,
         clientName: value(formData, "clientName"),
         location: value(formData, "location"),
         category: value(formData, "category"),
@@ -1436,6 +1485,8 @@ export async function createProjectAction(formData: FormData) {
 
 export async function createProjectFromSaleAction(id: string, formData: FormData) {
   await requireActionRole(["ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "ENGINEER"]);
+  const fallbackWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  await requireWorkspaceModule("PROJECTS", fallbackWorkspaceId);
   const sale = await prisma.sale.findUnique({
     where: { id },
     include: { quote: { include: { items: true } }, company: true, client: true }
@@ -1455,6 +1506,7 @@ export async function createProjectFromSaleAction(id: string, formData: FormData
       opportunityId: sale.opportunityId,
       clientId: sale.clientId,
       companyId: sale.companyId,
+      terraqoWorkspaceId: sale.terraqoWorkspaceId || fallbackWorkspaceId,
       clientName: sale.company?.tradeName || sale.company?.legalName || sale.client?.company || sale.client?.name,
       location: value(formData, "location"),
       category: value(formData, "category") || "Proyecto tecnico",
@@ -1482,6 +1534,7 @@ export async function createProjectFromSaleAction(id: string, formData: FormData
     opportunityId: sale.opportunityId,
     companyId: sale.companyId,
     contactId: sale.contactId
+    ,terraqoWorkspaceId: sale.terraqoWorkspaceId || fallbackWorkspaceId
   });
   revalidatePath("/admin/ventas");
   revalidatePath("/admin/proyectos");

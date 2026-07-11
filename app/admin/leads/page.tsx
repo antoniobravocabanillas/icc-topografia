@@ -4,15 +4,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { prisma } from "@/lib/prisma";
 import { convertLeadToOpportunityAction, createLeadNoteAction, deleteLeadAction, updateLeadPipelineAction } from "@/lib/server/admin-actions";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
+import { getDefaultTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 
 const leadStatuses = ["NEW", "CONTACTED", "QUALIFIED", "EVALUATION", "QUOTED", "NEGOTIATION", "WON", "LOST", "REQUIRES_TECH_SUPPORT"] as const;
 const leadPriorities = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
 
 export default async function AdminLeadsPage() {
   await requireAdminPage(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  await requireWorkspaceModule("CRM", terraqoWorkspaceId);
   const [leads, sellers] = await Promise.all([
     prisma.lead.findMany({
-      where: { deletedAt: null },
+      where: { deletedAt: null, terraqoWorkspaceId },
       include: {
         assignedProfile: true,
         notes: { orderBy: { createdAt: "desc" }, take: 3 },

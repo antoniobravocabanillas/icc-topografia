@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { projectStatusOptions } from "@/lib/project-status";
 import { createProjectAction, createProjectProgressAction, deleteProjectAction, updateProjectAction } from "@/lib/server/admin-actions";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
+import { getDefaultTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -43,12 +44,15 @@ type ProjectWithAdminDetails = Prisma.ProjectGetPayload<{
 
 export default async function AdminProjectsPage({ searchParams }: AdminProjectsPageProps) {
   await requireAdminPage(["EDITOR", "ADMIN", "SUPER_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT"]);
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  await requireWorkspaceModule("PROJECTS", terraqoWorkspaceId);
   const resolvedSearchParams = await searchParams;
   const projectStatus = resolvedSearchParams?.projectStatus;
   const projectStatusMessage = projectStatus ? projectStatusMessages[projectStatus] : null;
   let projects: ProjectWithAdminDetails[];
   try {
     projects = await prisma.project.findMany({
+      where: { terraqoWorkspaceId },
       include: {
         images: { orderBy: { position: "asc" } },
         progress: { include: { staffProfile: true }, orderBy: { createdAt: "desc" }, take: 5 }

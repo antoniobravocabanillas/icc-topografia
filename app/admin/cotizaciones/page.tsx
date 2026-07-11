@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { prisma } from "@/lib/prisma";
 import { createQuoteAction, updateQuoteStatusAction } from "@/lib/server/admin-actions";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
+import { getDefaultTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 
 const quoteStatuses = ["DRAFT", "SENT", "VIEWED", "ACCEPTED", "REJECTED", "EXPIRED", "CONVERTED"];
 
@@ -15,18 +16,20 @@ export const revalidate = 0;
 
 export default async function AdminQuotesPage() {
   await requireAdminPage(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  await requireWorkspaceModule("CRM", terraqoWorkspaceId);
   const [quotes, sellers, products, leads, opportunities] = await Promise.all([
     prisma.quote.findMany({
-      where: { deletedAt: null },
+      where: { deletedAt: null, terraqoWorkspaceId },
       include: { sellerProfile: true, items: true, lead: true, companyRef: true, contact: true, opportunity: true, sale: true },
       orderBy: { createdAt: "desc" },
       take: 100
     }),
     prisma.staffProfile.findMany({ where: { department: "SALES", active: true }, orderBy: { displayName: "asc" } }),
-    prisma.product.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, take: 120 }),
-    prisma.lead.findMany({ where: { deletedAt: null }, orderBy: { createdAt: "desc" }, take: 80 }),
+    prisma.product.findMany({ where: { isActive: true, terraqoWorkspaceId }, orderBy: { name: "asc" }, take: 120 }),
+    prisma.lead.findMany({ where: { deletedAt: null, terraqoWorkspaceId }, orderBy: { createdAt: "desc" }, take: 80 }),
     prisma.opportunity.findMany({
-      where: { deletedAt: null, status: { in: ["OPEN", "DISCOVERY", "PROPOSAL", "NEGOTIATION"] } },
+      where: { deletedAt: null, terraqoWorkspaceId, status: { in: ["OPEN", "DISCOVERY", "PROPOSAL", "NEGOTIATION"] } },
       include: { company: true },
       orderBy: { createdAt: "desc" },
       take: 80

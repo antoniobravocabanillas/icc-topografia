@@ -1,12 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import { handleApiError, ok } from "@/lib/server/api";
 import { requireRole } from "@/lib/server/authz";
+import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 
 export async function GET() {
   const { response } = await requireRole("SALES");
   if (response) return response;
 
   try {
+    const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
     const [
       productCount,
       pendingOrders,
@@ -15,12 +17,12 @@ export async function GET() {
       recentLeads,
       recentOrders
     ] = await prisma.$transaction([
-      prisma.product.count(),
-      prisma.order.count({ where: { status: "PENDING" } }),
-      prisma.lead.count({ where: { status: "NEW" } }),
-      prisma.contactMessage.count(),
-      prisma.lead.findMany({ orderBy: { createdAt: "desc" }, take: 5 }),
-      prisma.order.findMany({ orderBy: { createdAt: "desc" }, take: 5 })
+      prisma.product.count({ where: { terraqoWorkspaceId } }),
+      prisma.order.count({ where: { status: "PENDING", terraqoWorkspaceId } }),
+      prisma.lead.count({ where: { status: "NEW", terraqoWorkspaceId } }),
+      prisma.contactMessage.count({ where: { terraqoWorkspaceId } }),
+      prisma.lead.findMany({ where: { terraqoWorkspaceId }, orderBy: { createdAt: "desc" }, take: 5 }),
+      prisma.order.findMany({ where: { terraqoWorkspaceId }, orderBy: { createdAt: "desc" }, take: 5 })
     ]);
 
     return ok({

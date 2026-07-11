@@ -9,6 +9,7 @@ import { projects } from "@/lib/content/site";
 import { prisma } from "@/lib/prisma";
 import { projectStatusLabel, projectStatusLabels } from "@/lib/project-status";
 import { safeDb } from "@/lib/server/safe-db";
+import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 import { createMetadata } from "@/lib/seo";
 
 export const metadata = createMetadata({
@@ -34,10 +35,11 @@ export const revalidate = 0;
 
 export default async function ProjectsPage({ searchParams }: ProjectsPageProps) {
   const resolvedSearchParams = await searchParams;
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
   const dbProjects = await safeDb(
     "projects page",
     prisma.project.findMany({
-      where: { isPublic: true },
+      where: { isPublic: true, terraqoWorkspaceId },
       include: { images: { orderBy: { position: "asc" }, take: 1 } },
       orderBy: [{ isFeatured: "desc" }, { updatedAt: "desc" }]
     }),

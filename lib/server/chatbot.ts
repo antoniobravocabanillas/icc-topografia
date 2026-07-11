@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 
 type BotAnswer = {
   answer: string;
@@ -10,6 +11,7 @@ type BotAnswer = {
 const humanIntent = ["asesor", "humano", "persona", "vendedor", "cotizar", "llamar", "whatsapp", "comprar", "precio"];
 
 export async function answerWithLocalKnowledge(question: string): Promise<BotAnswer> {
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
   const normalized = normalize(question);
   const wantsHuman = humanIntent.some((word) => normalized.includes(word));
   if (wantsHuman) {
@@ -23,9 +25,9 @@ export async function answerWithLocalKnowledge(question: string): Promise<BotAns
 
   const [faqs, services, products, projects] = await Promise.all([
     prisma.faq.findMany({ where: { active: true, approved: true }, orderBy: [{ usageCount: "desc" }, { position: "asc" }], take: 80 }),
-    prisma.service.findMany({ where: { isPublished: true }, take: 80 }),
-    prisma.product.findMany({ where: { isActive: true, isVisible: true }, include: { category: true }, take: 80 }),
-    prisma.project.findMany({ where: { isPublic: true }, take: 40 })
+    prisma.service.findMany({ where: { isPublished: true, terraqoWorkspaceId }, take: 80 }),
+    prisma.product.findMany({ where: { isActive: true, isVisible: true, terraqoWorkspaceId }, include: { category: true }, take: 80 }),
+    prisma.project.findMany({ where: { isPublic: true, terraqoWorkspaceId }, take: 40 })
   ]);
 
   const candidates = [

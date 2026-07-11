@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { created, fail, handleApiError, parseJson } from "@/lib/server/api";
+import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 import { registerSchema } from "@/lib/validations/crm";
 
 export async function POST(request: Request) {
@@ -12,6 +13,9 @@ export async function POST(request: Request) {
     }
 
     const passwordHash = await bcrypt.hash(payload.password, 12);
+    const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+    if (!terraqoWorkspaceId) return fail("Workspace Terraqo no configurado", 500);
+
     const user = await prisma.$transaction(async (tx) => {
       const createdUser = await tx.user.create({
         data: {
@@ -23,10 +27,61 @@ export async function POST(request: Request) {
         select: { id: true, name: true, email: true, role: true, createdAt: true }
       });
 
+      if (payload.accountType === "professional") {
+        const specialty = payload.specialty?.trim();
+        const equipment = payload.equipment
+          ? payload.equipment.split(",").map((item) => item.trim()).filter(Boolean)
+          : [];
+        const software = payload.software
+          ? payload.software.split(",").map((item) => item.trim()).filter(Boolean)
+          : [];
+
+        await tx.terraqoProfessionalProfile.create({
+          data: {
+            userId: createdUser.id,
+            headline: payload.roleTitle || specialty || "Profesional tecnico",
+            bio: "Perfil profesional creado desde Portal Terraqo. Pendiente de completar y validar experiencia.",
+            city: payload.city,
+            yearsExperience: payload.yearsExperience,
+            specialties: specialty ? [specialty] : [],
+            equipment,
+            software,
+            portfolioUrl: payload.portfolioUrl || undefined,
+            status: "OPEN_TO_PROJECTS",
+            visibility: "PRIVATE",
+            liveCvEnabled: false
+          }
+        });
+
+        await tx.terraqoWorkspaceMember.create({
+          data: {
+            workspaceId: terraqoWorkspaceId,
+            userId: createdUser.id,
+            role: "PROFESSIONAL",
+            title: payload.roleTitle || specialty || "Profesional tecnico",
+            active: true,
+            joinedAt: new Date()
+          }
+        });
+
+        await tx.notification.create({
+          data: {
+            type: "SYSTEM",
+            title: "Nuevo profesional registrado en Terraqo",
+            body: `${payload.name} creo un perfil profesional para la red Terraqo.`,
+            href: "/admin/terraqo"
+          }
+        });
+
+        return createdUser;
+      }
+
+      const companyName = payload.company || payload.name;
       const company = await tx.company.create({
         data: {
-          legalName: payload.company,
-          tradeName: payload.company,
+          terraqoWorkspaceId,
+          legalName: companyName,
+          tradeName: companyName,
           document: payload.document,
           email: payload.email,
           phone: payload.phone,
@@ -45,10 +100,11 @@ export async function POST(request: Request) {
 
       const client = await tx.client.create({
         data: {
+          terraqoWorkspaceId,
           userId: createdUser.id,
           companyId: company.id,
           name: payload.name,
-          company: payload.company,
+          company: companyName,
           document: payload.document,
           email: payload.email,
           phone: payload.phone,
@@ -59,6 +115,7 @@ export async function POST(request: Request) {
 
       await tx.clientAccount.create({
         data: {
+          terraqoWorkspaceId,
           userId: createdUser.id,
           companyId: company.id,
           contactId: company.contacts[0]?.id,
@@ -72,15 +129,30 @@ export async function POST(request: Request) {
         data: {
           type: "SYSTEM",
           title: "Nuevo registro de cliente pendiente",
-          body: `${payload.name} solicito acceso al portal para ${payload.company}.`,
+          body: `${payload.name} solicito acceso al portal para ${companyName}.`,
           href: "/admin/clientes"
+        }
+      });
+
+      await tx.terraqoWorkspaceMember.create({
+        data: {
+          workspaceId: terraqoWorkspaceId,
+          userId: createdUser.id,
+          role: "CLIENT",
+          title: companyName,
+          active: true,
+          joinedAt: new Date()
         }
       });
 
       return createdUser;
     });
 
-    return created({ ...user, status: "pending_approval" });
+    return created({
+      ...user,
+      accountType: payload.accountType,
+      status: payload.accountType === "professional" ? "professional_profile_created" : "pending_approval"
+    });
   } catch (error) {
     return handleApiError(error);
   }

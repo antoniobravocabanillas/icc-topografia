@@ -27,10 +27,26 @@ export const leadStatusSchema = z.object({
 });
 
 export const registerSchema = z.object({
+  accountType: z.enum(["client", "professional"]).default("client"),
   name: z.string().trim().min(2),
   email: z.string().email(),
   password: z.string().min(8),
-  company: z.string().trim().min(2),
+  company: z.string().trim().optional(),
   document: z.string().trim().optional(),
-  phone: z.string().trim().optional()
+  phone: z.string().trim().optional(),
+  roleTitle: z.string().trim().optional(),
+  specialty: z.string().trim().optional(),
+  city: z.string().trim().optional(),
+  yearsExperience: z.coerce.number().int().min(0).max(80).optional(),
+  equipment: z.string().trim().optional(),
+  software: z.string().trim().optional(),
+  portfolioUrl: z.string().trim().url().optional().or(z.literal(""))
+}).superRefine((value, ctx) => {
+  if (value.accountType === "client" && !value.company?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["company"],
+      message: "La empresa es obligatoria para cuentas de cliente."
+    });
+  }
 });

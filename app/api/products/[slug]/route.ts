@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { fail, handleApiError, ok } from "@/lib/server/api";
 import { serializeProduct } from "@/lib/server/serializers";
+import { getDefaultTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 import { slugParamSchema } from "@/lib/validations/common";
 
 type ProductRouteProps = {
@@ -10,8 +11,10 @@ type ProductRouteProps = {
 export async function GET(_request: Request, { params }: ProductRouteProps) {
   try {
     const { slug } = slugParamSchema.parse(await params);
+    const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+    await requireWorkspaceModule("TECHNICAL_STORE", terraqoWorkspaceId);
     const product = await prisma.product.findFirst({
-      where: { slug, isActive: true },
+      where: { slug, isActive: true, terraqoWorkspaceId },
       include: { category: true, variants: true }
     });
 

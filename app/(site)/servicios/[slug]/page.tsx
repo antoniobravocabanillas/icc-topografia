@@ -5,6 +5,7 @@ import { ArrowRight, BriefcaseBusiness, CheckCircle2, Clock3, Database, FileChec
 import { ServiceEvaluationForm } from "@/components/forms/service-evaluation-form";
 import { prisma } from "@/lib/prisma";
 import { safeDb } from "@/lib/server/safe-db";
+import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 import { createMetadata } from "@/lib/seo";
 
 type ServicePageProps = { params: Promise<{ slug: string }> };
@@ -21,7 +22,8 @@ export const revalidate = 0;
 
 export async function generateMetadata({ params }: ServicePageProps) {
   const { slug } = await params;
-  const service = await safeDb("service metadata", prisma.service.findUnique({ where: { slug } }), null);
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const service = await safeDb("service metadata", prisma.service.findFirst({ where: { slug, terraqoWorkspaceId } }), null);
   if (!service || !service.isPublished) return {};
   return createMetadata({
     title: service.seoTitle || service.title,
@@ -32,10 +34,11 @@ export async function generateMetadata({ params }: ServicePageProps) {
 
 export default async function ServicePage({ params }: ServicePageProps) {
   const { slug } = await params;
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
   const service = await safeDb(
     "service detail",
-    prisma.service.findUnique({
-      where: { slug },
+    prisma.service.findFirst({
+      where: { slug, terraqoWorkspaceId },
       include: { categoryRef: true, subcategoryRef: true }
     }),
     null
@@ -56,7 +59,7 @@ export default async function ServicePage({ params }: ServicePageProps) {
       ? safeDb(
           "service detail projects",
           prisma.project.findMany({
-            where: { slug: { in: service.relatedProjects }, isPublic: true },
+            where: { slug: { in: service.relatedProjects }, isPublic: true, terraqoWorkspaceId },
             include: { images: { orderBy: { position: "asc" }, take: 1 } },
             take: 3
           }),
@@ -64,7 +67,7 @@ export default async function ServicePage({ params }: ServicePageProps) {
         )
       : [],
     service.relatedServices.length
-      ? safeDb("service detail related services", prisma.service.findMany({ where: { slug: { in: service.relatedServices }, isPublished: true }, take: 3 }), [])
+      ? safeDb("service detail related services", prisma.service.findMany({ where: { slug: { in: service.relatedServices }, isPublished: true, terraqoWorkspaceId }, take: 3 }), [])
       : []
   ]);
 

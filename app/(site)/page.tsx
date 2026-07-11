@@ -15,6 +15,7 @@ import { brand } from "@/lib/brand";
 import { prisma } from "@/lib/prisma";
 import { safeDb } from "@/lib/server/safe-db";
 import { serializeProduct } from "@/lib/server/serializers";
+import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 
 const advantages = [
   { icon: ShieldCheck, title: "Confianza tecnica", text: "Trazabilidad, certificados, QA/QC y entregables consistentes." },
@@ -34,13 +35,14 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function HomePage() {
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
   const [services, faqs, testimonials, clientLogos, categories, products] = await Promise.all([
-    safeDb("home services", prisma.service.findMany({ where: { isPublished: true }, orderBy: { updatedAt: "desc" }, take: 8 }), []),
+    safeDb("home services", prisma.service.findMany({ where: { isPublished: true, terraqoWorkspaceId }, orderBy: { updatedAt: "desc" }, take: 8 }), []),
     safeDb("home faqs", prisma.faq.findMany({ where: { active: true }, orderBy: [{ position: "asc" }, { createdAt: "desc" }], take: 6 }), []),
     safeDb("home testimonials", prisma.testimonial.findMany({ where: { active: true }, orderBy: { createdAt: "desc" }, take: 2 }), []),
-    safeDb("home client logos", prisma.clientLogo.findMany({ where: { active: true }, orderBy: [{ position: "asc" }, { createdAt: "desc" }], take: 18 }), []),
-    safeDb("home categories", prisma.category.findMany({ where: { products: { some: { isActive: true } } }, orderBy: { name: "asc" }, take: 12 }), []),
-    safeDb("home products", prisma.product.findMany({ where: { isActive: true }, include: { category: true, variants: true }, orderBy: { updatedAt: "desc" }, take: 4 }), [])
+    safeDb("home client logos", prisma.clientLogo.findMany({ where: { active: true, terraqoWorkspaceId }, orderBy: [{ position: "asc" }, { createdAt: "desc" }], take: 18 }), []),
+    safeDb("home categories", prisma.category.findMany({ where: { products: { some: { isActive: true, terraqoWorkspaceId } } }, orderBy: { name: "asc" }, take: 12 }), []),
+    safeDb("home products", prisma.product.findMany({ where: { isActive: true, terraqoWorkspaceId }, include: { category: true, variants: true }, orderBy: { updatedAt: "desc" }, take: 4 }), [])
   ]);
   const featuredProducts = products.map(serializeProduct);
 

@@ -4,9 +4,10 @@ import { auth } from "@/auth";
 import { AdminNotificationMonitor } from "@/components/admin/admin-notification-monitor";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { brand } from "@/lib/brand";
+import { workspace } from "@/lib/workspace";
 
 const adminNav = [
-  { group: "Inicio", label: "Dashboard", href: "/admin", roles: ["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"] },
+  { group: "Workspace", label: "Inicio", href: "/admin", roles: ["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"] },
   { group: "Comercial", label: "Leads", href: "/admin/leads", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
   { group: "Comercial", label: "Oportunidades", href: "/admin/oportunidades", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
   { group: "Comercial", label: "Cotizaciones", href: "/admin/cotizaciones", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
@@ -15,15 +16,18 @@ const adminNav = [
   { group: "Operacion", label: "Proyectos", href: "/admin/proyectos", roles: ["EDITOR", "ADMIN", "SUPER_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT"] },
   { group: "Operacion", label: "Tecnicos", href: "/admin/tecnicos", roles: ["ADMIN", "SUPER_ADMIN", "ENGINEER", "SURVEYOR", "ARCHITECT", "SUPPORT"] },
   { group: "Soporte", label: "Tickets", href: "/admin/tickets", roles: ["SUPPORT", "TECHNICIAN", "SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
-  { group: "Gestion", label: "Productos", href: "/admin/productos", roles: ["EDITOR", "ADMIN", "SUPER_ADMIN"] },
-  { group: "Gestion", label: "Pedidos", href: "/admin/pedidos", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
-  { group: "Gestion", label: "Contenidos", href: "/admin/contenidos", roles: ["EDITOR", "ADMIN", "SUPER_ADMIN"] },
+  { group: "Catalogo", label: "Productos", href: "/admin/productos", roles: ["EDITOR", "ADMIN", "SUPER_ADMIN"] },
+  { group: "Catalogo", label: "Pedidos", href: "/admin/pedidos", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
+  { group: "Catalogo", label: "Contenidos", href: "/admin/contenidos", roles: ["EDITOR", "ADMIN", "SUPER_ADMIN"] },
   { group: "Comunicacion", label: "Chat", href: "/admin/chat", roles: ["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SUPPORT"] },
   { group: "Comunicacion", label: "Chat interno", href: "/admin/chat-interno", roles: ["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"] },
   { group: "Comunicacion", label: "Chatbot", href: "/admin/chatbot", roles: ["EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
   { group: "Gestion", label: "Reportes", href: "/admin/reportes", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
   { group: "Gestion", label: "Notificaciones", href: "/admin/notificaciones", roles: ["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"] },
-  { group: "Gestion", label: "Equipo", href: "/admin/equipo", roles: ["ADMIN", "SUPER_ADMIN"] }
+  { group: "Gestion", label: "Equipo", href: "/admin/equipo", roles: ["ADMIN", "SUPER_ADMIN"] },
+  { group: "Terraqo", label: "Workspaces", href: "/admin/terraqo", roles: ["ADMIN", "SUPER_ADMIN"] },
+  { group: "Terraqo", label: "Red profesional", href: "/admin/terraqo/red", roles: ["ADMIN", "SUPER_ADMIN"] },
+  { group: "Terraqo", label: "Comunidad", href: "/admin/terraqo/comunidad", roles: ["ADMIN", "SUPER_ADMIN"] }
 ];
 
 const allowedRoles = new Set(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"]);
@@ -39,8 +43,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="min-h-screen bg-[#f7f6f1]">
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r bg-[#063D63] p-5 text-white lg:block">
-        <div className="font-bold">{brand.shortName} Admin</div>
-        <p className="mt-2 text-xs text-white/60">{session.user.email}</p>
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-white/45">{workspace.name}</p>
+          <div className="mt-1 font-bold">{workspace.currentPanel}</div>
+          <p className="mt-2 text-xs leading-5 text-white/60">{brand.shortName} | {session.user.email}</p>
+        </div>
         <nav className="mt-6 max-h-[calc(100vh-9rem)] space-y-5 overflow-y-auto pr-1">
           {navGroups.map((group) => (
             <div key={group}>
@@ -58,6 +65,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         </div>
       </aside>
       <main className="lg:pl-64">
+        <div className="border-b bg-white lg:hidden">
+          <div className="container py-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-primary">{workspace.name}</p>
+            <p className="font-display text-xl font-bold">{workspace.currentPanel}</p>
+          </div>
+        </div>
         <div className="container py-10">{children}</div>
       </main>
       <AdminNotificationMonitor />

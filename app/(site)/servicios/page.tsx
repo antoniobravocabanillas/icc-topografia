@@ -7,6 +7,7 @@ import { TechnicalPageHero } from "@/components/technical-page-hero";
 import { Badge } from "@/components/ui/badge";
 import { prisma } from "@/lib/prisma";
 import { safeDb } from "@/lib/server/safe-db";
+import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 import { createMetadata } from "@/lib/seo";
 
 export const metadata = createMetadata({
@@ -29,10 +30,11 @@ type ServicesPageProps = {
 
 export default async function ServicesPage({ searchParams }: ServicesPageProps) {
   const resolvedSearchParams = await searchParams;
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
   const services = await safeDb(
     "services page",
     prisma.service.findMany({
-      where: { isPublished: true },
+      where: { isPublished: true, terraqoWorkspaceId },
       include: { categoryRef: true, subcategoryRef: true },
       orderBy: [{ isFeatured: "desc" }, { updatedAt: "desc" }]
     }),

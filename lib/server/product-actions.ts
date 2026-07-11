@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/server/api";
+import { getDefaultTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 
 function formValue(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -70,7 +71,9 @@ function productDataFromForm(formData: FormData) {
 }
 
 export async function createProductAction(formData: FormData) {
-  await prisma.product.create({ data: productDataFromForm(formData) });
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  await requireWorkspaceModule("TECHNICAL_STORE", terraqoWorkspaceId);
+  await prisma.product.create({ data: { ...productDataFromForm(formData), terraqoWorkspaceId } });
   revalidatePath("/tienda");
   revalidatePath("/admin/productos");
   redirect("/admin/productos");

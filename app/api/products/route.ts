@@ -1,17 +1,21 @@
 import { prisma } from "@/lib/prisma";
 import { getPagination, handleApiError, paginated } from "@/lib/server/api";
 import { serializeProduct } from "@/lib/server/serializers";
+import { getDefaultTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const { page, pageSize, skip, take } = getPagination(searchParams);
+    const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+    await requireWorkspaceModule("TECHNICAL_STORE", terraqoWorkspaceId);
     const q = searchParams.get("q")?.trim();
     const category = searchParams.get("category")?.trim();
 
     const where = {
       AND: [
         { isActive: true },
+        terraqoWorkspaceId ? { terraqoWorkspaceId } : {},
         q
           ? {
               OR: [

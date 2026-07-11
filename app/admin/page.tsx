@@ -4,26 +4,29 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { prisma } from "@/lib/prisma";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
+import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
+import { workspace } from "@/lib/workspace";
 
 export default async function AdminPage() {
   const session = await requireAdminPage(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"]);
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
   if (["TECHNICIAN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"].includes(session.user.role || "")) {
     const profile = await prisma.staffProfile.findUnique({ where: { userId: session.user.id } });
     const [assignedChats, assignedTickets, assignedProjects] = profile
       ? await Promise.all([
           prisma.chatConversation.findMany({
-            where: { assignedProfileId: profile.id },
+            where: { assignedProfileId: profile.id, terraqoWorkspaceId },
             include: { messages: { orderBy: { createdAt: "desc" }, take: 1 } },
             orderBy: { updatedAt: "desc" },
             take: 8
           }),
           prisma.ticket.findMany({
-            where: { assignedProfileId: profile.id, status: { notIn: ["RESOLVED", "CLOSED"] } },
+            where: { assignedProfileId: profile.id, terraqoWorkspaceId, status: { notIn: ["RESOLVED", "CLOSED"] } },
             orderBy: { updatedAt: "desc" },
             take: 8
           }),
           prisma.projectMember.findMany({
-            where: { staffProfileId: profile.id },
+            where: { staffProfileId: profile.id, project: { terraqoWorkspaceId } },
             include: { project: true },
             take: 8
           })
@@ -34,8 +37,9 @@ export default async function AdminPage() {
       <section>
         <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
           <div>
-            <h1 className="font-display text-3xl font-bold">Panel tecnico</h1>
-            <p className="mt-2 text-muted-foreground">{profile ? `Bandeja de ${profile.displayName}` : "Tu usuario aun no tiene perfil vinculado."}</p>
+            <p className="text-sm font-semibold uppercase text-primary">{workspace.currentPanel}</p>
+            <h1 className="font-display text-3xl font-bold">Bandeja tecnica</h1>
+            <p className="mt-2 text-muted-foreground">{profile ? `Operacion asignada a ${profile.displayName}` : "Tu usuario aun no tiene perfil vinculado."}</p>
           </div>
           <Button asChild><Link href="/admin/chat">Ver mis chats</Link></Button>
           <Button asChild variant="outline"><Link href="/admin/tickets">Ver tickets</Link></Button>
@@ -120,19 +124,19 @@ export default async function AdminPage() {
     rentableProducts,
     openTickets
   ] = await prisma.$transaction([
-    prisma.product.count({ where: { isActive: true } }),
-    prisma.order.count({ where: { status: "PENDING" } }),
-    prisma.lead.count({ where: { status: "NEW" } }),
-    prisma.chatConversation.count({ where: { status: "WAITING" } }),
-    prisma.lead.findMany({ include: { assignedProfile: true }, orderBy: { createdAt: "desc" }, take: 5 }),
-    prisma.quote.count({ where: { status: { in: ["DRAFT", "SENT", "VIEWED"] } } }),
-    prisma.quote.count({ where: { status: "ACCEPTED" } }),
-    prisma.quote.count({ where: { status: "REJECTED" } }),
-    prisma.quote.aggregate({ where: { status: "ACCEPTED" }, _sum: { total: true } }),
+    prisma.product.count({ where: { isActive: true, terraqoWorkspaceId } }),
+    prisma.order.count({ where: { status: "PENDING", terraqoWorkspaceId } }),
+    prisma.lead.count({ where: { status: "NEW", terraqoWorkspaceId } }),
+    prisma.chatConversation.count({ where: { status: "WAITING", terraqoWorkspaceId } }),
+    prisma.lead.findMany({ where: { terraqoWorkspaceId }, include: { assignedProfile: true }, orderBy: { createdAt: "desc" }, take: 5 }),
+    prisma.quote.count({ where: { status: { in: ["DRAFT", "SENT", "VIEWED"] }, terraqoWorkspaceId } }),
+    prisma.quote.count({ where: { status: "ACCEPTED", terraqoWorkspaceId } }),
+    prisma.quote.count({ where: { status: "REJECTED", terraqoWorkspaceId } }),
+    prisma.quote.aggregate({ where: { status: "ACCEPTED", terraqoWorkspaceId }, _sum: { total: true } }),
     prisma.commission.count({ where: { status: { in: ["PENDING", "APPROVED"] } } }),
-    prisma.project.count({ where: { status: { in: ["PLANNING", "IN_PROGRESS"] } } }),
-    prisma.product.count({ where: { isActive: true, commercialMode: { in: ["alquiler", "ambos"] } } }),
-    prisma.ticket.count({ where: { status: { in: ["OPEN", "REVIEWING", "IN_PROGRESS", "WAITING_CUSTOMER"] } } })
+    prisma.project.count({ where: { status: { in: ["PLANNING", "IN_PROGRESS"] }, terraqoWorkspaceId } }),
+    prisma.product.count({ where: { isActive: true, terraqoWorkspaceId, commercialMode: { in: ["alquiler", "ambos"] } } }),
+    prisma.ticket.count({ where: { status: { in: ["OPEN", "REVIEWING", "IN_PROGRESS", "WAITING_CUSTOMER"] }, terraqoWorkspaceId } })
   ]);
   const conversionRate = wonQuotes + lostQuotes ? Math.round((wonQuotes / (wonQuotes + lostQuotes)) * 100) : 0;
 
@@ -140,8 +144,9 @@ export default async function AdminPage() {
     <section>
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <div>
-          <h1 className="font-display text-3xl font-bold">Panel administrativo</h1>
-          <p className="mt-2 text-muted-foreground">Resumen comercial y operativo de ICC Topografia.</p>
+          <p className="text-sm font-semibold uppercase text-primary">{workspace.name}</p>
+          <h1 className="font-display text-3xl font-bold">{workspace.currentPanel}</h1>
+          <p className="mt-2 text-muted-foreground">{workspace.description}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline"><Link href="/admin/cotizaciones">Cotizaciones</Link></Button>
@@ -200,8 +205,8 @@ export default async function AdminPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Lineas de negocio</CardTitle>
-            <CardDescription>Base para reportes: productos, servicios, alquiler y soporte.</CardDescription>
+            <CardTitle>Lineas operativas de ICC Topografia</CardTitle>
+            <CardDescription>Base compartida para servicios, productos, alquiler, soporte y futura productizacion Terraqo.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
             {["Servicios topograficos", "Venta de equipos", "Alquiler", "Soporte/calibracion"].map((line) => (

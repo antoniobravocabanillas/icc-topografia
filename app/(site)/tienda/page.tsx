@@ -2,6 +2,7 @@ import { StoreCatalog } from "@/components/store/store-catalog";
 import { TechnicalPageHero } from "@/components/technical-page-hero";
 import { prisma } from "@/lib/prisma";
 import { serializeProduct } from "@/lib/server/serializers";
+import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 import { createMetadata } from "@/lib/seo";
 
 export const metadata = createMetadata({
@@ -14,13 +15,14 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function StorePage() {
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
   const [categories, products] = await Promise.all([
     prisma.category.findMany({
-      include: { _count: { select: { products: { where: { isActive: true } } } } },
+      include: { _count: { select: { products: { where: { isActive: true, terraqoWorkspaceId } } } } },
       orderBy: { name: "asc" }
     }),
     prisma.product.findMany({
-      where: { isActive: true },
+      where: { isActive: true, terraqoWorkspaceId },
       include: { category: true, variants: true },
       orderBy: { updatedAt: "desc" }
     })

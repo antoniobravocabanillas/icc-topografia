@@ -3,12 +3,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { prisma } from "@/lib/prisma";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
+import { getDefaultTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 import { formatCurrency } from "@/lib/utils";
 
 export default async function AdminProductsPage() {
   await requireAdminPage(["EDITOR", "ADMIN"]);
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  await requireWorkspaceModule("TECHNICAL_STORE", terraqoWorkspaceId);
   const products = await prisma.product.findMany({
-    where: { isActive: true },
+    where: { isActive: true, terraqoWorkspaceId },
     include: { category: true },
     orderBy: { updatedAt: "desc" }
   });

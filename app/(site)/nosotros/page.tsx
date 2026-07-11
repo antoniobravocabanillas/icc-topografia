@@ -7,6 +7,7 @@ import { brand } from "@/lib/brand";
 import { operatingStandard, partners } from "@/lib/content/site";
 import { prisma } from "@/lib/prisma";
 import { safeDb } from "@/lib/server/safe-db";
+import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 import { createMetadata } from "@/lib/seo";
 
 export const metadata = createMetadata({
@@ -58,18 +59,19 @@ const timeline = [
 ];
 
 export default async function AboutPage() {
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
   const [services, serviceCount, sectors, projectCount] = await Promise.all([
     safeDb(
       "about services",
       prisma.service.findMany({
-        where: { isPublished: true },
+        where: { isPublished: true, terraqoWorkspaceId },
         select: { title: true, slug: true, category: true },
         orderBy: [{ isFeatured: "desc" }, { updatedAt: "desc" }],
         take: 8
       }),
       []
     ),
-    safeDb("about service count", prisma.service.count({ where: { isPublished: true } }), 0),
+    safeDb("about service count", prisma.service.count({ where: { isPublished: true, terraqoWorkspaceId } }), 0),
     safeDb(
       "about sectors",
       prisma.sector.findMany({
@@ -79,7 +81,7 @@ export default async function AboutPage() {
       }),
       []
     ),
-    safeDb("about project count", prisma.project.count({ where: { isPublic: true } }), 0)
+    safeDb("about project count", prisma.project.count({ where: { isPublic: true, terraqoWorkspaceId } }), 0)
   ]);
 
   return (

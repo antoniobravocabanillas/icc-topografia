@@ -45,22 +45,22 @@ export function SignInForm() {
         </span>
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">Acceso seguro</p>
-          <h2 className="mt-1 font-display text-2xl font-bold">Ingresar al panel ICC</h2>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">Usa tus credenciales de equipo para gestionar chats, leads, pedidos, productos y contenidos.</p>
+          <h2 className="mt-1 font-display text-2xl font-bold">Ingresar al Portal Terraqo</h2>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">Usa tus credenciales para acceder segun tu perfil: cliente, profesional o equipo operativo.</p>
         </div>
       </div>
 
       <div className="grid gap-4">
       <div>
         <label className="text-sm font-semibold" htmlFor="email">Correo</label>
-        <Input id="email" name="email" type="email" autoComplete="email" required placeholder="admin@icctopografia.pe" className="mt-2 bg-muted/40 text-foreground" />
+        <Input id="email" name="email" type="email" autoComplete="email" required placeholder="correo@empresa.com" className="mt-2 bg-muted/40 text-foreground" />
       </div>
       <div>
         <label className="text-sm font-semibold" htmlFor="password">Contrasena</label>
         <Input id="password" name="password" type="password" autoComplete="current-password" required placeholder="********" className="mt-2 bg-muted/40 text-foreground" />
       </div>
       <Button type="submit" size="lg" disabled={isPending} className="mt-2 w-full">
-        {isPending ? "Validando acceso..." : "Ingresar al panel"}
+        {isPending ? "Validando acceso..." : "Ingresar"}
         <ArrowRight className="h-4 w-4" />
       </Button>
       {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}

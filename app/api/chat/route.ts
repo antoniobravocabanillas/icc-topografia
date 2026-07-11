@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { fail, handleApiError } from "@/lib/server/api";
+import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
+    const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
     const conversationId = String(formData.get("conversationId") || "");
     const body = String(formData.get("body") || "").trim();
 
@@ -44,6 +46,7 @@ export async function POST(request: Request) {
         customerEmail,
         customerPhone,
         topic,
+        terraqoWorkspace: terraqoWorkspaceId ? { connect: { id: terraqoWorkspaceId } } : undefined,
         status: "WAITING",
         messages: { create: { sender: "customer", body } }
       },

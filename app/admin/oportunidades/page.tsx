@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { prisma } from "@/lib/prisma";
 import { convertOpportunityToQuoteAction } from "@/lib/server/admin-actions";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
+import { getDefaultTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 import { formatCurrency } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -15,8 +16,10 @@ export const revalidate = 0;
 
 export default async function OpportunitiesPage() {
   await requireAdminPage(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  await requireWorkspaceModule("CRM", terraqoWorkspaceId);
   const opportunities = await prisma.opportunity.findMany({
-    where: { deletedAt: null },
+    where: { deletedAt: null, terraqoWorkspaceId },
     include: {
       company: true,
       contact: true,
@@ -36,7 +39,7 @@ export default async function OpportunitiesPage() {
   return (
     <section className="space-y-8">
       <div>
-        <p className="text-sm font-semibold uppercase text-primary">CRM comercial</p>
+        <p className="text-sm font-semibold uppercase text-primary">Workspace comercial</p>
         <h1 className="font-display text-3xl font-bold">Oportunidades</h1>
         <p className="mt-2 text-muted-foreground">Puente operativo entre lead, empresa, contacto, cotizacion y venta.</p>
       </div>

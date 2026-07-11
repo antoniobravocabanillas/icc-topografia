@@ -5,6 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { prisma } from "@/lib/prisma";
 import { sendTicketMessageAction, updateTicketAction } from "@/lib/server/admin-actions";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
+import { getDefaultTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 
 const ticketStatuses = ["OPEN", "REVIEWING", "WAITING_CUSTOMER", "IN_PROGRESS", "RESOLVED", "CLOSED"];
 const ticketPriorities = ["LOW", "MEDIUM", "HIGH", "URGENT"];
@@ -15,8 +16,11 @@ export const revalidate = 0;
 
 export default async function AdminTicketsPage() {
   await requireAdminPage(["SUPPORT", "TECHNICIAN", "SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  await requireWorkspaceModule("CRM", terraqoWorkspaceId);
   const [tickets, profiles] = await Promise.all([
     prisma.ticket.findMany({
+      where: { terraqoWorkspaceId },
       include: {
         client: true,
         assignedProfile: true,

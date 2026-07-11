@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, BadgeCheck, LayoutDashboard, LockKeyhole, MessageCircle, ShieldCheck, UserRound } from "lucide-react";
+import { ArrowRight, BadgeCheck, BriefcaseBusiness, Building2, LockKeyhole, Network, ShieldCheck, UserRound } from "lucide-react";
 import { auth } from "@/auth";
 import { ClientRegistrationForm } from "@/components/auth/client-registration-form";
 import { SignInForm } from "@/components/auth/sign-in-form";
@@ -9,10 +9,12 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { createMetadata } from "@/lib/seo";
 
-export const metadata = createMetadata({ title: "Cuenta de usuario", description: "Acceso de usuarios, pedidos, favoritos y cotizaciones.", path: "/cuenta" });
+export const metadata = createMetadata({ title: "Portal Terraqo", description: "Acceso a clientes, profesionales y equipo operativo de Terraqo.", path: "/cuenta" });
 
 export default async function AccountPage() {
   const session = await auth();
+  const portalHref = session?.user?.role === "CUSTOMER" ? "/portal" : "/admin";
+  const portalLabel = session?.user?.role === "CUSTOMER" ? "Ir al Portal Terraqo" : "Ir al panel operativo";
 
   return (
     <section className="relative isolate overflow-hidden bg-[#03111D] text-white">
@@ -21,19 +23,19 @@ export default async function AccountPage() {
 
       <div className="container relative grid min-h-[calc(100vh-4rem)] items-center gap-10 py-16 xl:grid-cols-[0.85fr_1.15fr]">
         <div className="max-w-3xl">
-          <Badge className="bg-white text-[#063D63] hover:bg-white">Cuenta ICC</Badge>
+          <Badge className="bg-white text-[#063D63] hover:bg-white">Portal Terraqo</Badge>
           <h1 className="mt-5 font-display text-4xl font-bold leading-tight md:text-6xl">
-            Acceso operativo para ventas, soporte y administracion tecnica.
+            Un solo acceso para clientes, profesionales y equipos operativos.
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-white/72">
-            Desde este punto el equipo ICC gestiona cotizaciones, leads, pedidos, productos, contenidos y conversaciones en linea con trazabilidad comercial.
+            Gestiona cotizaciones, solicitudes, proyectos, perfiles tecnicos y participacion profesional desde un entorno conectado por workspace.
           </p>
 
           <div className="mt-8 grid gap-3 sm:grid-cols-3">
             {[
-              { icon: MessageCircle, title: "Chat", text: "atencion asignada" },
-              { icon: LayoutDashboard, title: "Panel", text: "operacion B2B" },
-              { icon: ShieldCheck, title: "Roles", text: "permisos internos" }
+              { icon: Building2, title: "Cliente", text: "solicitudes y proyectos" },
+              { icon: BriefcaseBusiness, title: "Profesional", text: "perfil y CV vivo" },
+              { icon: Network, title: "Workspace", text: "modulos activables" }
             ].map((item) => (
               <div key={item.title} className="rounded-lg border border-white/14 bg-white/[0.055] p-4 backdrop-blur">
                 <item.icon className="h-5 w-5 text-[#24C8EE]" />
@@ -44,8 +46,9 @@ export default async function AccountPage() {
           </div>
 
           <div className="mt-8 flex flex-wrap gap-3 text-sm text-white/68">
-            <span className="inline-flex items-center gap-2"><BadgeCheck className="h-4 w-4 text-[#24C8EE]" /> Acceso para equipo autorizado</span>
-            <span className="inline-flex items-center gap-2"><LockKeyhole className="h-4 w-4 text-[#24C8EE]" /> Autenticacion con credenciales</span>
+            <span className="inline-flex items-center gap-2"><BadgeCheck className="h-4 w-4 text-[#24C8EE]" /> Acceso por perfil</span>
+            <span className="inline-flex items-center gap-2"><LockKeyhole className="h-4 w-4 text-[#24C8EE]" /> Datos privados por workspace</span>
+            <span className="inline-flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-[#24C8EE]" /> Modulos segun suscripcion</span>
           </div>
         </div>
 
@@ -67,14 +70,14 @@ export default async function AccountPage() {
                   </div>
                   <div className="grid gap-3">
                   <Button asChild size="lg">
-                    <Link href={session.user.role === "CUSTOMER" ? "/portal" : "/admin"}>
-                      {session.user.role === "CUSTOMER" ? "Ir al portal" : "Ir al panel"}
+                    <Link href={portalHref}>
+                      {portalLabel}
                       <ArrowRight className="h-4 w-4" />
                     </Link>
                   </Button>
                   <Button asChild size="lg" variant="outline">
                     <Link href="/registro">
-                      Registrar cliente
+                      Crear otro acceso
                       <ArrowRight className="h-4 w-4" />
                     </Link>
                   </Button>

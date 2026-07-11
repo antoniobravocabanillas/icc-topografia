@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { formatCurrency } from "@/lib/utils";
 import { createProjectFromSaleAction, updateCommissionStatusAction, updateSellerCommercialAction } from "@/lib/server/admin-actions";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
+import { getDefaultTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 
 const commissionTypes = [
   ["SALE_PERCENTAGE", "Porcentaje sobre venta"],
@@ -21,6 +22,8 @@ export const revalidate = 0;
 
 export default async function AdminSalesPage() {
   const session = await requireAdminPage(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  await requireWorkspaceModule("CRM", terraqoWorkspaceId);
   const role = String(session.user.role);
   const canManageCommercialConditions = ["ADMIN", "SUPER_ADMIN"].includes(role);
   const sellerWhere = canManageCommercialConditions
@@ -47,13 +50,13 @@ export default async function AdminSalesPage() {
   const restrictedSellerIds = sellerIds.length ? sellerIds : ["__no_seller_profile__"];
   const [commissions, sales, wonQuotes] = await Promise.all([
     prisma.commission.findMany({
-      where: canManageCommercialConditions ? undefined : { sellerProfileId: { in: restrictedSellerIds } },
+      where: canManageCommercialConditions ? { quote: { terraqoWorkspaceId } } : { sellerProfileId: { in: restrictedSellerIds }, quote: { terraqoWorkspaceId } },
       include: { sellerProfile: true, quote: true },
       orderBy: { createdAt: "desc" },
       take: 80
     }),
     prisma.sale.findMany({
-      where: canManageCommercialConditions ? { deletedAt: null } : { deletedAt: null, sellerProfileId: { in: restrictedSellerIds } },
+      where: canManageCommercialConditions ? { deletedAt: null, terraqoWorkspaceId } : { deletedAt: null, terraqoWorkspaceId, sellerProfileId: { in: restrictedSellerIds } },
       include: {
         company: true,
         contact: true,
@@ -67,8 +70,8 @@ export default async function AdminSalesPage() {
     }),
     prisma.quote.aggregate({
       where: canManageCommercialConditions
-        ? { status: "ACCEPTED", deletedAt: null }
-        : { status: "ACCEPTED", deletedAt: null, sellerProfileId: { in: restrictedSellerIds } },
+        ? { status: "ACCEPTED", deletedAt: null, terraqoWorkspaceId }
+        : { status: "ACCEPTED", deletedAt: null, terraqoWorkspaceId, sellerProfileId: { in: restrictedSellerIds } },
       _sum: { total: true }
     })
   ]);
@@ -80,7 +83,7 @@ export default async function AdminSalesPage() {
   return (
     <section className="space-y-8">
       <div>
-        <p className="text-sm font-semibold uppercase text-primary">CRM comercial</p>
+        <p className="text-sm font-semibold uppercase text-primary">Workspace comercial</p>
         <h1 className="font-display text-3xl font-bold">Ventas, vendedores y comisiones</h1>
         <p className="mt-2 text-muted-foreground">
           {canManageCommercialConditions

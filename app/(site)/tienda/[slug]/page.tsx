@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
 import { serializeProduct } from "@/lib/server/serializers";
+import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 import { createMetadata } from "@/lib/seo";
 import { absoluteUrl, formatCurrency } from "@/lib/utils";
 
@@ -18,22 +19,24 @@ export const revalidate = 0;
 
 export async function generateMetadata({ params }: ProductPageProps) {
   const { slug } = await params;
-  const product = await prisma.product.findFirst({ where: { slug, isActive: true } });
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const product = await prisma.product.findFirst({ where: { slug, isActive: true, terraqoWorkspaceId } });
   if (!product) return {};
   return createMetadata({ title: product.name, description: product.summary, path: `/tienda/${product.slug}` });
 }
 
 export default async function ProductPage({ params }: ProductPageProps) {
   const { slug } = await params;
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
   const dbProduct = await prisma.product.findFirst({
-    where: { slug, isActive: true },
+    where: { slug, isActive: true, terraqoWorkspaceId },
     include: { category: true, variants: true }
   });
   if (!dbProduct) notFound();
 
   const product = serializeProduct(dbProduct);
   const related = (await prisma.product.findMany({
-    where: { categoryId: dbProduct.categoryId, id: { not: dbProduct.id }, isActive: true },
+    where: { categoryId: dbProduct.categoryId, id: { not: dbProduct.id }, isActive: true, terraqoWorkspaceId },
     include: { category: true, variants: true },
     take: 3
   })).map(serializeProduct);
