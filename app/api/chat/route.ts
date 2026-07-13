@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { fail, handleApiError } from "@/lib/server/api";
-import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
+import { getDefaultTerraqoWorkspaceId, hasWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+    const chatEnabled = await hasWorkspaceModule("CUSTOMER_CHAT", terraqoWorkspaceId);
+    if (!chatEnabled) return fail("Chat no disponible para este workspace", 403);
+
     const conversationId = String(formData.get("conversationId") || "");
     const body = String(formData.get("body") || "").trim();
 
@@ -74,6 +77,10 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
+    const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+    const chatEnabled = await hasWorkspaceModule("CUSTOMER_CHAT", terraqoWorkspaceId);
+    if (!chatEnabled) return fail("Chat no disponible para este workspace", 403);
+
     const id = searchParams.get("conversationId");
     if (!id) return fail("conversationId requerido", 422);
 

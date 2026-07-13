@@ -8,12 +8,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { prisma } from "@/lib/prisma";
 import { reviewBotQuestionAction } from "@/lib/server/admin-actions";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
+import { getDefaultTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function ChatbotAdminPage() {
   await requireAdminPage(["EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  await requireWorkspaceModule("CUSTOMER_CHAT", terraqoWorkspaceId);
+
   const [conversations, unanswered, faqs] = await Promise.all([
     prisma.botConversation.findMany({
       include: { messages: { orderBy: { createdAt: "asc" } } },

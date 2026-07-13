@@ -20,6 +20,7 @@ export const terraqoModuleUpdateSchema = z.object({
     "PROJECTS",
     "PUBLIC_WEBSITE",
     "TECHNICAL_STORE",
+    "CUSTOMER_CHAT",
     "PROFESSIONAL_NETWORK",
     "LIVE_CV",
     "JOB_MARKETPLACE",
@@ -49,4 +50,3 @@ export const terraqoProfessionalProfileSchema = z.object({
   liveCvEnabled: z.boolean().default(false),
   liveCvVisibility: z.enum(["PUBLIC", "COMMUNITY", "WORKSPACE", "PRIVATE"]).default("PRIVATE")
 });
-

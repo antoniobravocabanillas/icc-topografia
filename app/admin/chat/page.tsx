@@ -47,7 +47,7 @@ export default async function AdminChatPage() {
   const role = session.user.role as Role;
   const canManage = canManageAdmin(role);
   const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
-  await requireWorkspaceModule("CRM", terraqoWorkspaceId);
+  await requireWorkspaceModule("CUSTOMER_CHAT", terraqoWorkspaceId);
   const currentProfile = await safeDb("admin chat current profile", prisma.staffProfile.findUnique({
     where: { userId: session.user.id }
   }), null);

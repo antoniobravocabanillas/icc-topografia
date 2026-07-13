@@ -42,6 +42,12 @@ export const terraqoModules: TerraqoModuleDefinition[] = [
     minimumTier: "PROFESSIONAL"
   },
   {
+    code: "CUSTOMER_CHAT",
+    label: "Chat comercial y soporte",
+    description: "Widget web, chatbot, conversaciones asignables y trazabilidad de atencion al cliente.",
+    minimumTier: "PROFESSIONAL"
+  },
+  {
     code: "PROFESSIONAL_NETWORK",
     label: "Red profesional",
     description: "Perfiles, disponibilidad, reputacion, comunidades y relacion profesional.",

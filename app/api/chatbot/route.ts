@@ -2,9 +2,14 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { answerWithLocalKnowledge } from "@/lib/server/chatbot";
 import { fail, handleApiError } from "@/lib/server/api";
+import { getDefaultTerraqoWorkspaceId, hasWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 
 export async function POST(request: Request) {
   try {
+    const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+    const chatEnabled = await hasWorkspaceModule("CUSTOMER_CHAT", terraqoWorkspaceId);
+    if (!chatEnabled) return fail("Chat no disponible para este workspace", 403);
+
     const payload = await request.json().catch(() => null);
     const question = String(payload?.question || "").trim();
     const conversationId = String(payload?.conversationId || "").trim();
@@ -39,6 +44,7 @@ export async function POST(request: Request) {
           customerEmail: payload?.email ? String(payload.email) : undefined,
           customerPhone: payload?.phone ? String(payload.phone) : undefined,
           topic: "Derivado desde chatbot",
+          terraqoWorkspace: terraqoWorkspaceId ? { connect: { id: terraqoWorkspaceId } } : undefined,
           status: "WAITING",
           messages: {
             create: {
