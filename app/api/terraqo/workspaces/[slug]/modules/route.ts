@@ -10,7 +10,7 @@ type RouteContext = {
 };
 
 export async function GET(_request: Request, context: RouteContext) {
-  const { response } = await requireRole("ADMIN");
+  const { response } = await requireRole("SUPER_ADMIN");
   if (response) return response;
 
   try {
@@ -36,7 +36,7 @@ export async function GET(_request: Request, context: RouteContext) {
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
-  const { response } = await requireRole("ADMIN");
+  const { response } = await requireRole("SUPER_ADMIN");
   if (response) return response;
 
   try {

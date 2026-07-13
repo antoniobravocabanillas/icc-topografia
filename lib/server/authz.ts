@@ -1,6 +1,7 @@
 import { Role } from "@prisma/client";
 import { auth } from "@/auth";
 import { fail } from "@/lib/server/api";
+import { hasWorkspaceAdminAccess } from "@/lib/terraqo/workspace-access";
 
 const roleRank: Record<Role, number> = {
   CUSTOMER: 0,
@@ -26,6 +27,10 @@ export async function requireRole(minRole: Role = "ADMIN") {
 
   if (roleRank[role] < roleRank[minRole]) {
     return { response: fail("Permisos insuficientes", 403), session: null };
+  }
+
+  if (!(await hasWorkspaceAdminAccess(session.user.id, role))) {
+    return { response: fail("Acceso no autorizado para este workspace", 403), session: null };
   }
 
   return { response: null, session };

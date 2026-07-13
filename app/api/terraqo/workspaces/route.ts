@@ -5,7 +5,7 @@ import { createTerraqoWorkspace } from "@/lib/terraqo/workspace-repository";
 import { terraqoWorkspaceCreateSchema } from "@/lib/validations/terraqo";
 
 export async function GET() {
-  const { response } = await requireRole("ADMIN");
+  const { response } = await requireRole("SUPER_ADMIN");
   if (response) return response;
 
   try {
@@ -27,7 +27,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const { response } = await requireRole("ADMIN");
+  const { response } = await requireRole("SUPER_ADMIN");
   if (response) return response;
 
   try {

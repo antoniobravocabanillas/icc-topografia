@@ -11,7 +11,7 @@ import { terraqoModules, workspace } from "@/lib/workspace";
 async function toggleWorkspaceModule(formData: FormData) {
   "use server";
 
-  await requireAdminPage(["ADMIN", "SUPER_ADMIN"]);
+  await requireAdminPage(["SUPER_ADMIN"]);
 
   const workspaceId = String(formData.get("workspaceId") || "");
   const code = String(formData.get("code") || "") as TerraqoModuleCode;
@@ -39,7 +39,7 @@ async function toggleWorkspaceModule(formData: FormData) {
 }
 
 export default async function TerraqoAdminPage() {
-  await requireAdminPage(["ADMIN", "SUPER_ADMIN"]);
+  await requireAdminPage(["SUPER_ADMIN"]);
 
   const workspaces = await prisma.terraqoWorkspace.findMany({
     where: { deletedAt: null },

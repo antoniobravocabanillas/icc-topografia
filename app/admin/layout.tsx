@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import type { Role } from "@prisma/client";
 import { auth } from "@/auth";
 import { AdminNotificationMonitor } from "@/components/admin/admin-notification-monitor";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { brand } from "@/lib/brand";
+import { hasWorkspaceAdminAccess } from "@/lib/terraqo/workspace-access";
 import { workspace } from "@/lib/workspace";
 
 const adminNav = [
@@ -25,7 +27,7 @@ const adminNav = [
   { group: "Gestion", label: "Reportes", href: "/admin/reportes", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
   { group: "Gestion", label: "Notificaciones", href: "/admin/notificaciones", roles: ["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"] },
   { group: "Gestion", label: "Equipo", href: "/admin/equipo", roles: ["ADMIN", "SUPER_ADMIN"] },
-  { group: "Terraqo", label: "Workspaces", href: "/admin/terraqo", roles: ["ADMIN", "SUPER_ADMIN"] },
+  { group: "Terraqo", label: "Workspaces", href: "/admin/terraqo", roles: ["SUPER_ADMIN"] },
   { group: "Terraqo", label: "Red profesional", href: "/admin/terraqo/red", roles: ["ADMIN", "SUPER_ADMIN"] },
   { group: "Terraqo", label: "Comunidad", href: "/admin/terraqo/comunidad", roles: ["ADMIN", "SUPER_ADMIN"] }
 ];
@@ -36,8 +38,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const session = await auth();
 
   if (!session?.user) redirect("/cuenta?callbackUrl=/admin");
-  if (!allowedRoles.has(session.user.role || "")) redirect("/");
-  const navItems = adminNav.filter((item) => item.roles.includes(session.user.role || ""));
+  const role = session.user.role as Role | undefined;
+  if (!role || !allowedRoles.has(role)) redirect("/");
+  if (!(await hasWorkspaceAdminAccess(session.user.id, role))) {
+    redirect("/cuenta?error=workspace-access");
+  }
+  const navItems = adminNav.filter((item) => item.roles.includes(role));
   const navGroups = Array.from(new Set(navItems.map((item) => item.group)));
 
   return (

@@ -8,6 +8,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/server/api";
 import { getDefaultTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
+import { hasWorkspaceAdminAccess } from "@/lib/terraqo/workspace-access";
 
 function value(formData: FormData, key: string) {
   const input = formData.get(key);
@@ -141,6 +142,10 @@ async function requireActionRole(allowedRoles: Role[]) {
 
   if (!session?.user?.id || !role || !allowedRoles.includes(role)) {
     throw new Error("Permisos insuficientes.");
+  }
+
+  if (!(await hasWorkspaceAdminAccess(session.user.id, role))) {
+    throw new Error("Acceso no autorizado para este workspace.");
   }
 
   return { session, role };

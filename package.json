@@ -18,7 +18,8 @@
     "prisma:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:terraqo": "tsx prisma/seed-terraqo.ts",
-    "db:seed:staff": "tsx prisma/seed-staff.ts"
+    "db:seed:staff": "tsx prisma/seed-staff.ts",
+    "workspace:create-admin": "tsx prisma/create-workspace-admin.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.7.4",
