@@ -41,7 +41,14 @@ export async function createTerraqoWorkspace(input: {
         create: moduleCodes.map((code) => ({
           code,
           active: true,
-          enabledAt: new Date()
+          enabledAt: new Date(),
+          config: {
+            provisioning: {
+              mode: "blank",
+              version: 1,
+              provisionedAt: new Date().toISOString()
+            }
+          }
         }))
       },
       ...(input.ownerUserId

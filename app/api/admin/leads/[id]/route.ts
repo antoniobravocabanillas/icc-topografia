@@ -3,6 +3,7 @@ import { handleApiError, ok, parseJson } from "@/lib/server/api";
 import { requireRole } from "@/lib/server/authz";
 import { idSchema } from "@/lib/validations/common";
 import { leadStatusSchema } from "@/lib/validations/crm";
+import { getSessionTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 
 type LeadAdminRouteProps = {
   params: Promise<{ id: string }>;
@@ -14,6 +15,9 @@ export async function PATCH(request: Request, { params }: LeadAdminRouteProps) {
 
   try {
     const { id } = idSchema.parse(await params);
+    const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
+    const owned = await prisma.lead.findFirst({ where: { id, terraqoWorkspaceId }, select: { id: true } });
+    if (!owned) return ok({ error: "Lead no encontrado" }, { status: 404 });
     const payload = await parseJson(request, leadStatusSchema);
     const lead = await prisma.lead.update({ where: { id }, data: payload });
     return ok(lead);
@@ -28,6 +32,9 @@ export async function DELETE(_request: Request, { params }: LeadAdminRouteProps)
 
   try {
     const { id } = idSchema.parse(await params);
+    const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
+    const owned = await prisma.lead.findFirst({ where: { id, terraqoWorkspaceId }, select: { id: true } });
+    if (!owned) return ok({ error: "Lead no encontrado" }, { status: 404 });
     await prisma.lead.delete({ where: { id } });
     return ok({ deleted: true });
   } catch (error) {

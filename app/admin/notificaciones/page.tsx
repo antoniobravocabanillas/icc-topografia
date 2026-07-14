@@ -5,14 +5,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { prisma } from "@/lib/prisma";
 import { markNotificationReadAction } from "@/lib/server/admin-actions";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
+import { getSessionTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function NotificationsPage() {
   const session = await requireAdminPage(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"]);
+  const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
   const notifications = await prisma.notification.findMany({
-    where: { OR: [{ userId: session.user.id }, { userId: null }] },
+    where: { terraqoWorkspaceId, OR: [{ userId: session.user.id }, { userId: null }] },
     orderBy: { createdAt: "desc" },
     take: 120
   });

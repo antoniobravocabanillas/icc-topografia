@@ -7,6 +7,7 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 import { createBlogPreview } from "@/lib/blog-content";
 import { prisma } from "@/lib/prisma";
 import { createMetadata } from "@/lib/seo";
+import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 
 export const metadata = createMetadata({
   title: "Blog y recursos",
@@ -18,8 +19,9 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function BlogPage() {
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
   const posts = await prisma.blogPost.findMany({
-    where: { publishedAt: { not: null } },
+    where: { publishedAt: { not: null }, terraqoWorkspaceId },
     orderBy: { publishedAt: "desc" }
   });
   const [featured, ...rest] = posts;

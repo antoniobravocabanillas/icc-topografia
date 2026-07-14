@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { prisma } from "@/lib/prisma";
 import { createQuoteAction, updateQuoteStatusAction } from "@/lib/server/admin-actions";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
-import { getDefaultTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
+import { getSessionTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 
 const quoteStatuses = ["DRAFT", "SENT", "VIEWED", "ACCEPTED", "REJECTED", "EXPIRED", "CONVERTED"];
 
@@ -16,7 +16,7 @@ export const revalidate = 0;
 
 export default async function AdminQuotesPage() {
   await requireAdminPage(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
-  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
   await requireWorkspaceModule("CRM", terraqoWorkspaceId);
   const [quotes, sellers, products, leads, opportunities] = await Promise.all([
     prisma.quote.findMany({
@@ -25,7 +25,7 @@ export default async function AdminQuotesPage() {
       orderBy: { createdAt: "desc" },
       take: 100
     }),
-    prisma.staffProfile.findMany({ where: { department: "SALES", active: true }, orderBy: { displayName: "asc" } }),
+    prisma.staffProfile.findMany({ where: { department: "SALES", active: true, terraqoWorkspaceId }, orderBy: { displayName: "asc" } }),
     prisma.product.findMany({ where: { isActive: true, terraqoWorkspaceId }, orderBy: { name: "asc" }, take: 120 }),
     prisma.lead.findMany({ where: { deletedAt: null, terraqoWorkspaceId }, orderBy: { createdAt: "desc" }, take: 80 }),
     prisma.opportunity.findMany({

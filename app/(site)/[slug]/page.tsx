@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
 import { createMetadata } from "@/lib/seo";
+import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 
 type CmsPublicPageProps = { params: Promise<{ slug: string }> };
 
@@ -15,7 +16,8 @@ export const revalidate = 0;
 
 export async function generateMetadata({ params }: CmsPublicPageProps) {
   const { slug } = await params;
-  const page = await prisma.cmsPage.findFirst({ where: { slug, isPublished: true } });
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const page = await prisma.cmsPage.findFirst({ where: { slug, isPublished: true, terraqoWorkspaceId } });
   if (!page) return {};
   return createMetadata({
     title: page.metaTitle || page.title,
@@ -26,7 +28,8 @@ export async function generateMetadata({ params }: CmsPublicPageProps) {
 
 export default async function CmsPublicPage({ params }: CmsPublicPageProps) {
   const { slug } = await params;
-  const page = await prisma.cmsPage.findFirst({ where: { slug, isPublished: true } });
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const page = await prisma.cmsPage.findFirst({ where: { slug, isPublished: true, terraqoWorkspaceId } });
   if (!page) notFound();
 
   const content = page.content as CmsContent;

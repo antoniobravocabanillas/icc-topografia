@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { prisma } from "@/lib/prisma";
 import { createInternalChannelAction, sendInternalMessageAction } from "@/lib/server/admin-actions";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
-import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
+import { getSessionTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 
 const defaultChannels = [
   { name: "General", slug: "general", description: "Coordinacion transversal del equipo ICC." },
@@ -21,18 +21,21 @@ export const revalidate = 0;
 
 export default async function InternalChatPage() {
   await requireAdminPage(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"]);
-  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
 
   for (const channel of defaultChannels) {
-    await prisma.internalChatChannel.upsert({
-      where: { slug: channel.slug },
-      update: {},
-      create: channel
+    const existingChannel = await prisma.internalChatChannel.findFirst({
+      where: { slug: channel.slug, terraqoWorkspaceId },
+      select: { id: true }
     });
+    if (!existingChannel) {
+      await prisma.internalChatChannel.create({ data: { ...channel, terraqoWorkspaceId } });
+    }
   }
 
   const [channels, leads, projects, tickets] = await Promise.all([
     prisma.internalChatChannel.findMany({
+      where: { terraqoWorkspaceId },
       include: { messages: { include: { user: true }, orderBy: { createdAt: "desc" }, take: 12 } },
       orderBy: { slug: "asc" }
     }),

@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { prisma } from "@/lib/prisma";
 import { createCustomerTicketAction, replyCustomerTicketAction, respondPublicQuoteFromFormAction, updateClientProfileAction } from "@/lib/server/customer-actions";
 import { createMetadata } from "@/lib/seo";
+import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 import { formatCurrency } from "@/lib/utils";
 
 export const metadata = createMetadata({
@@ -51,10 +52,12 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
   const params = await searchParams;
   const session = await auth();
   if (!session?.user?.email) redirect("/cuenta?callbackUrl=/portal");
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
 
   const account = await prisma.clientAccount.findFirst({
     where: {
       OR: [{ userId: session.user.id }, { user: { email: session.user.email } }],
+      terraqoWorkspaceId,
       deletedAt: null
     },
     include: {
@@ -62,9 +65,9 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
       contact: true,
       client: {
         include: {
-          quotes: { include: { items: true, sellerProfile: true }, orderBy: { createdAt: "desc" } },
-          projects: { include: { images: { orderBy: { position: "asc" }, take: 1 }, progress: { orderBy: { createdAt: "desc" }, take: 3 } }, orderBy: { updatedAt: "desc" } },
-          tickets: { include: { assignedProfile: true, messages: { orderBy: { createdAt: "asc" } } }, orderBy: { updatedAt: "desc" } },
+          quotes: { where: { terraqoWorkspaceId }, include: { items: true, sellerProfile: true }, orderBy: { createdAt: "desc" } },
+          projects: { where: { terraqoWorkspaceId }, include: { images: { orderBy: { position: "asc" }, take: 1 }, progress: { orderBy: { createdAt: "desc" }, take: 3 } }, orderBy: { updatedAt: "desc" } },
+          tickets: { where: { terraqoWorkspaceId }, include: { assignedProfile: true, messages: { orderBy: { createdAt: "asc" } } }, orderBy: { updatedAt: "desc" } },
           documents: { orderBy: { createdAt: "desc" } }
         }
       }
@@ -82,7 +85,7 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
     }
   });
 
-  if (!account || !["active", "approved"].includes(account.status) || !account.client) {
+  if (!account || !["active", "approved"].includes(account.status) || !account.client || account.client.terraqoWorkspaceId !== terraqoWorkspaceId) {
     if (professionalProfile) {
       return <ProfessionalPortal profile={professionalProfile} />;
     }

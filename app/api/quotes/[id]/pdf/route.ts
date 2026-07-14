@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 import { formatCurrency } from "@/lib/utils";
 
 type QuotePdfRouteProps = {
@@ -10,8 +11,9 @@ export const runtime = "nodejs";
 
 export async function GET(_request: Request, { params }: QuotePdfRouteProps) {
   const { id } = await params;
-  const quote = await prisma.quote.findUnique({
-    where: { id },
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const quote = await prisma.quote.findFirst({
+    where: { id, terraqoWorkspaceId },
     include: { items: true, sellerProfile: true }
   });
 

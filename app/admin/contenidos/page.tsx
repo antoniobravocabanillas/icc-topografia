@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { prisma } from "@/lib/prisma";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
 import { safeDb } from "@/lib/server/safe-db";
-import { getDefaultTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
+import { getSessionTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 import {
   createBannerAction,
   createClientLogoAction,
@@ -75,7 +75,7 @@ const serviceStatusOptions = [
 
 export default async function AdminContentPage({ searchParams }: AdminContentPageProps) {
   await requireAdminPage(["EDITOR", "ADMIN"]);
-  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
   await requireWorkspaceModule("PUBLIC_WEBSITE", terraqoWorkspaceId);
   const resolvedSearchParams = await searchParams;
   const blogStatus = resolvedSearchParams?.blogStatus;
@@ -85,13 +85,13 @@ export default async function AdminContentPage({ searchParams }: AdminContentPag
   const [services, serviceCategories, sectors, posts, faqs, testimonials, clientLogos, banners, pages] = await Promise.all([
     safeDb("admin content services", prisma.service.findMany({ where: { terraqoWorkspaceId }, orderBy: { updatedAt: "desc" } }), [] as Service[]),
     safeDb("admin content service categories", prisma.serviceCategory.findMany({ where: { terraqoWorkspaceId }, orderBy: [{ parentId: "asc" }, { position: "asc" }, { name: "asc" }] }), [] as ServiceCategory[]),
-    safeDb("admin content sectors", prisma.sector.findMany({ orderBy: [{ position: "asc" }, { name: "asc" }] }), [] as Sector[]),
-    safeDb("admin content posts", prisma.blogPost.findMany({ orderBy: { updatedAt: "desc" } }), []),
-    safeDb("admin content faqs", prisma.faq.findMany({ orderBy: [{ position: "asc" }, { createdAt: "desc" }] }), []),
-    safeDb("admin content testimonials", prisma.testimonial.findMany({ orderBy: { createdAt: "desc" } }), []),
+    safeDb("admin content sectors", prisma.sector.findMany({ where: { terraqoWorkspaceId }, orderBy: [{ position: "asc" }, { name: "asc" }] }), [] as Sector[]),
+    safeDb("admin content posts", prisma.blogPost.findMany({ where: { terraqoWorkspaceId }, orderBy: { updatedAt: "desc" } }), []),
+    safeDb("admin content faqs", prisma.faq.findMany({ where: { terraqoWorkspaceId }, orderBy: [{ position: "asc" }, { createdAt: "desc" }] }), []),
+    safeDb("admin content testimonials", prisma.testimonial.findMany({ where: { terraqoWorkspaceId }, orderBy: { createdAt: "desc" } }), []),
     safeDb("admin content client logos", prisma.clientLogo.findMany({ where: { terraqoWorkspaceId }, orderBy: [{ position: "asc" }, { createdAt: "desc" }] }), []),
-    safeDb("admin content banners", prisma.banner.findMany({ orderBy: { createdAt: "desc" } }), []),
-    safeDb("admin content pages", prisma.cmsPage.findMany({ orderBy: { updatedAt: "desc" } }), [])
+    safeDb("admin content banners", prisma.banner.findMany({ where: { terraqoWorkspaceId }, orderBy: { createdAt: "desc" } }), []),
+    safeDb("admin content pages", prisma.cmsPage.findMany({ where: { terraqoWorkspaceId }, orderBy: { updatedAt: "desc" } }), [])
   ]);
 
   return (

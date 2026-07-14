@@ -7,8 +7,8 @@ import { ActivityAction, BotQuestionStatus, CommissionType, Prisma, Role, StaffD
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/server/api";
-import { getDefaultTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
-import { hasWorkspaceAdminAccess } from "@/lib/terraqo/workspace-access";
+import { getSessionTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
+import { getWorkspaceForUser, hasWorkspaceAdminAccess } from "@/lib/terraqo/workspace-access";
 
 function value(formData: FormData, key: string) {
   const input = formData.get(key);
@@ -105,6 +105,7 @@ function adminErrorRedirect(message: string) {
 }
 
 const projectAdminRoles: Role[] = ["EDITOR", "ADMIN", "SUPER_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT"];
+const contentAdminRoles: Role[] = ["EDITOR", "ADMIN", "SUPER_ADMIN"];
 
 function staffToolsFromForm(formData: FormData) {
   return {
@@ -148,7 +149,16 @@ async function requireActionRole(allowedRoles: Role[]) {
     throw new Error("Acceso no autorizado para este workspace.");
   }
 
-  return { session, role };
+  const activeWorkspace = await getWorkspaceForUser(session.user.id, role);
+  if (!activeWorkspace?.active) throw new Error("Workspace inexistente o inactivo.");
+
+  return { session, role, workspaceId: activeWorkspace.id };
+}
+
+async function requireOwnedEntity(label: string, record: Promise<{ id: string } | null>) {
+  const ownedRecord = await record;
+  if (!ownedRecord) throw new Error(`${label} no pertenece al workspace activo.`);
+  return ownedRecord;
 }
 
 async function existingUserId(userId?: string | null) {
@@ -212,16 +222,24 @@ async function createActivityLog(data: {
   metadata?: Prisma.InputJsonValue;
 }) {
   const session = await auth();
+  const sessionWorkspaceId = await getSessionTerraqoWorkspaceId();
+  const { terraqoWorkspaceId: requestedWorkspaceId, ...activityData } = data;
+
+  if (requestedWorkspaceId && requestedWorkspaceId !== sessionWorkspaceId) {
+    throw new Error("El registro de actividad no pertenece al workspace activo");
+  }
+
   await prisma.activityLog.create({
     data: {
       actorId: session?.user?.id,
-      ...data
+      ...activityData,
+      terraqoWorkspaceId: sessionWorkspaceId
     }
   });
 }
 
 async function upsertCompanyAndContactFromForm(formData: FormData) {
-  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
   const companyName = value(formData, "company") || value(formData, "companyName");
   const contactEmail = value(formData, "customerEmail") || value(formData, "email");
   const contactName = value(formData, "customerName") || value(formData, "name");
@@ -236,10 +254,11 @@ async function upsertCompanyAndContactFromForm(formData: FormData) {
     contactEmail ? { email: contactEmail } : undefined
   ].filter(Boolean) as Prisma.CompanyWhereInput[];
   const existing = explicitCompanyId
-    ? await prisma.company.findUnique({ where: { id: explicitCompanyId } })
+    ? await prisma.company.findFirst({ where: { id: explicitCompanyId, terraqoWorkspaceId } })
     : companyLookup.length
       ? await prisma.company.findFirst({
         where: {
+          terraqoWorkspaceId,
           deletedAt: null,
           OR: companyLookup
         }
@@ -301,12 +320,12 @@ async function upsertCompanyAndContactFromForm(formData: FormData) {
 }
 
 async function upsertCompanyAndContactFromLead(leadId: string) {
-  const lead = await prisma.lead.findUnique({ where: { id: leadId } });
+  const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
+  const lead = await prisma.lead.findFirst({ where: { id: leadId, terraqoWorkspaceId } });
   if (!lead) throw new Error("Lead no encontrado.");
-  const terraqoWorkspaceId = lead.terraqoWorkspaceId || await getDefaultTerraqoWorkspaceId();
   if (lead.companyId) {
-    const company = await prisma.company.findUnique({ where: { id: lead.companyId } });
-    const contact = lead.contactId ? await prisma.contact.findUnique({ where: { id: lead.contactId } }) : null;
+    const company = await prisma.company.findFirst({ where: { id: lead.companyId, terraqoWorkspaceId } });
+    const contact = lead.contactId ? await prisma.contact.findFirst({ where: { id: lead.contactId, terraqoWorkspaceId } }) : null;
     return { lead, company, contact };
   }
   const company = await prisma.company.create({
@@ -338,22 +357,28 @@ async function upsertCompanyAndContactFromLead(leadId: string) {
 }
 
 async function upsertClientFromContact(formData: FormData) {
-  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
   const email = value(formData, "customerEmail") || value(formData, "email");
   const name = value(formData, "customerName") || value(formData, "name") || "Cliente sin nombre";
   if (!email) return null;
   const { company, contact } = await upsertCompanyAndContactFromForm(formData);
 
-  const client = await prisma.client.upsert({
-    where: { email },
-    update: {
+  const existingClient = await prisma.client.findFirst({
+    where: { email, terraqoWorkspaceId, deletedAt: null }
+  });
+  const client = existingClient
+    ? await prisma.client.update({
+      where: { id: existingClient.id },
+      data: {
       name,
       company: value(formData, "company"),
       phone: value(formData, "phone"),
       companyId: company?.id,
       terraqoWorkspaceId
-    },
-    create: {
+      }
+    })
+    : await prisma.client.create({
+      data: {
       name,
       email,
       company: value(formData, "company"),
@@ -361,18 +386,25 @@ async function upsertClientFromContact(formData: FormData) {
       contactName: name,
       companyId: company?.id,
       terraqoWorkspaceId
-    }
-  });
+      }
+    });
 
   if (company) {
-    await prisma.clientAccount.upsert({
-      where: { clientId: client.id },
-      update: {
+    const existingAccount = await prisma.clientAccount.findFirst({
+      where: { clientId: client.id, terraqoWorkspaceId }
+    });
+    if (existingAccount) {
+      await prisma.clientAccount.update({
+        where: { id: existingAccount.id },
+        data: {
         companyId: company.id,
         contactId: contact?.id,
         terraqoWorkspaceId
-      },
-      create: {
+        }
+      });
+    } else {
+      await prisma.clientAccount.create({
+        data: {
         clientId: client.id,
         userId: client.userId,
         companyId: company.id,
@@ -380,14 +412,17 @@ async function upsertClientFromContact(formData: FormData) {
         terraqoWorkspaceId,
         status: client.userId ? "active" : "invited",
         invitedAt: client.userId ? null : new Date()
-      }
-    });
+        }
+      });
+    }
   }
 
   return client;
 }
 
 export async function deleteLeadAction(id: string) {
+  const { workspaceId } = await requireActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  await requireOwnedEntity("Lead", prisma.lead.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   await prisma.lead.update({ where: { id }, data: { deletedAt: new Date() } });
   await createActivityLog({
     action: "DELETED",
@@ -395,20 +430,24 @@ export async function deleteLeadAction(id: string) {
     entityId: id,
     leadId: id,
     title: "Lead archivado",
-    body: "El lead fue marcado como eliminado sin borrar historial."
+    body: "El lead fue marcado como eliminado sin borrar historial.",
+    terraqoWorkspaceId: workspaceId
   });
   revalidatePath("/admin/leads");
   revalidatePath("/admin");
 }
 
 export async function updateLeadStatusAction(id: string, formData: FormData) {
+  const { workspaceId } = await requireActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  await requireOwnedEntity("Lead", prisma.lead.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   const status = value(formData, "status") as "NEW" | "CONTACTED" | "QUALIFIED" | "EVALUATION" | "QUOTED" | "NEGOTIATION" | "WON" | "LOST" | "REQUIRES_TECH_SUPPORT";
   await prisma.lead.update({ where: { id }, data: { status } });
   revalidatePath("/admin/leads");
 }
 
 export async function updateLeadPipelineAction(id: string, formData: FormData) {
-  await requireActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  const { workspaceId } = await requireActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  await requireOwnedEntity("Lead", prisma.lead.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   const assignedProfileId = value(formData, "assignedProfileId");
   await prisma.lead.update({
     where: { id },
@@ -426,7 +465,8 @@ export async function updateLeadPipelineAction(id: string, formData: FormData) {
 }
 
 export async function createLeadNoteAction(id: string, formData: FormData) {
-  const { session } = await requireActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  const { session, workspaceId } = await requireActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  await requireOwnedEntity("Lead", prisma.lead.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   const body = value(formData, "body");
   if (!body) return;
   await prisma.leadNote.create({
@@ -440,11 +480,11 @@ export async function createLeadNoteAction(id: string, formData: FormData) {
 }
 
 export async function convertLeadToOpportunityAction(id: string) {
-  await requireActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
-  await requireWorkspaceModule("CRM");
+  const { workspaceId } = await requireActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  await requireWorkspaceModule("CRM", workspaceId);
   const { lead, company, contact } = await upsertCompanyAndContactFromLead(id);
   if (!company) throw new Error("No se pudo crear empresa para la oportunidad.");
-  const existing = await prisma.opportunity.findUnique({ where: { leadId: id } });
+  const existing = await prisma.opportunity.findFirst({ where: { leadId: id, terraqoWorkspaceId: workspaceId } });
   if (existing) {
     revalidatePath("/admin/oportunidades");
     return;
@@ -457,7 +497,7 @@ export async function convertLeadToOpportunityAction(id: string) {
       companyId: company.id,
       contactId: contact?.id,
       leadId: lead.id,
-      terraqoWorkspaceId: lead.terraqoWorkspaceId || await getDefaultTerraqoWorkspaceId(),
+      terraqoWorkspaceId: workspaceId,
       sellerProfileId: lead.assignedProfileId,
       source: lead.source,
       interest: lead.interest,
@@ -483,7 +523,8 @@ export async function convertLeadToOpportunityAction(id: string) {
       type: "LEAD",
       title: "Lead convertido en oportunidad",
       body: `${lead.name} - ${opportunity.title}`,
-      href: "/admin/oportunidades"
+      href: "/admin/oportunidades",
+      terraqoWorkspaceId: workspaceId
     }
   });
   revalidatePath("/admin/leads");
@@ -493,10 +534,10 @@ export async function convertLeadToOpportunityAction(id: string) {
 }
 
 export async function convertOpportunityToQuoteAction(id: string, formData: FormData) {
-  await requireActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
-  await requireWorkspaceModule("CRM");
-  const opportunity = await prisma.opportunity.findUnique({
-    where: { id },
+  const { workspaceId } = await requireActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  await requireWorkspaceModule("CRM", workspaceId);
+  const opportunity = await prisma.opportunity.findFirst({
+    where: { id, terraqoWorkspaceId: workspaceId },
     include: { company: true, contact: true, lead: true, quotes: true }
   });
   if (!opportunity) throw new Error("Oportunidad no encontrada.");
@@ -505,24 +546,30 @@ export async function convertOpportunityToQuoteAction(id: string, formData: Form
   const unitPrice = numberValue(formData, "unitPrice", Number(opportunity.estimatedValue || 0));
   const quantity = Math.max(numberValue(formData, "quantity", 1), 1);
   const subtotal = unitPrice * quantity;
+  const existingClient = opportunity.contact?.email
+    ? await prisma.client.findFirst({ where: { email: opportunity.contact.email, terraqoWorkspaceId: workspaceId, deletedAt: null } })
+    : null;
   const client = opportunity.contact?.email
-    ? await prisma.client.upsert({
-        where: { email: opportunity.contact.email },
-        update: {
+    ? existingClient
+      ? await prisma.client.update({
+        where: { id: existingClient.id },
+        data: {
           name: opportunity.contact.name,
           company: opportunity.company.tradeName || opportunity.company.legalName,
           phone: opportunity.contact.phone,
-          companyId: opportunity.companyId
-          ,terraqoWorkspaceId: opportunity.terraqoWorkspaceId
-        },
-        create: {
+          companyId: opportunity.companyId,
+          terraqoWorkspaceId: workspaceId
+        }
+      })
+      : await prisma.client.create({
+        data: {
           name: opportunity.contact.name,
           email: opportunity.contact.email,
           company: opportunity.company.tradeName || opportunity.company.legalName,
           phone: opportunity.contact.phone,
           contactName: opportunity.contact.name,
           companyId: opportunity.companyId,
-          terraqoWorkspaceId: opportunity.terraqoWorkspaceId
+          terraqoWorkspaceId: workspaceId
         }
       })
     : null;
@@ -572,6 +619,8 @@ export async function convertOpportunityToQuoteAction(id: string, formData: Form
 }
 
 export async function updateOrderStatusAction(id: string, formData: FormData) {
+  const { workspaceId } = await requireActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  await requireOwnedEntity("Pedido", prisma.order.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   const status = value(formData, "status") as "PENDING" | "QUOTED" | "PAID" | "PROCESSING" | "SHIPPED" | "COMPLETED" | "CANCELLED";
   const notes = value(formData, "notes");
   await prisma.order.update({ where: { id }, data: { status, notes } });
@@ -580,15 +629,16 @@ export async function updateOrderStatusAction(id: string, formData: FormData) {
 }
 
 export async function deleteOrderAction(id: string) {
+  const { workspaceId } = await requireActionRole(["ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  await requireOwnedEntity("Pedido", prisma.order.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   await prisma.order.delete({ where: { id } });
   revalidatePath("/admin/pedidos");
   revalidatePath("/admin");
 }
 
 export async function createQuoteAction(formData: FormData) {
-  await requireActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
-  await requireWorkspaceModule("CRM");
-  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const { workspaceId: terraqoWorkspaceId } = await requireActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  await requireWorkspaceModule("CRM", terraqoWorkspaceId);
   const client = await upsertClientFromContact(formData);
   const { company, contact } = await upsertCompanyAndContactFromForm(formData);
   const quantity = Math.max(numberValue(formData, "quantity", 1), 1);
@@ -599,6 +649,16 @@ export async function createQuoteAction(formData: FormData) {
   const total = subtotal + tax;
   const now = new Date();
   const number = `COT-${now.getFullYear()}-${String(now.getTime()).slice(-7)}`;
+  const opportunityId = nullableValue(formData, "opportunityId");
+  const leadId = nullableValue(formData, "leadId");
+  const sellerProfileId = nullableValue(formData, "sellerProfileId");
+  const productId = nullableValue(formData, "productId");
+  await Promise.all([
+    opportunityId ? requireOwnedEntity("Oportunidad", prisma.opportunity.findFirst({ where: { id: opportunityId, terraqoWorkspaceId }, select: { id: true } })) : null,
+    leadId ? requireOwnedEntity("Lead", prisma.lead.findFirst({ where: { id: leadId, terraqoWorkspaceId }, select: { id: true } })) : null,
+    sellerProfileId ? requireOwnedEntity("Perfil", prisma.staffProfile.findFirst({ where: { id: sellerProfileId, terraqoWorkspaceId }, select: { id: true } })) : null,
+    productId ? requireOwnedEntity("Producto", prisma.product.findFirst({ where: { id: productId, terraqoWorkspaceId }, select: { id: true } })) : null
+  ]);
 
   const quote = await prisma.quote.create({
     data: {
@@ -606,10 +666,10 @@ export async function createQuoteAction(formData: FormData) {
       clientId: client?.id,
       companyId: company?.id || client?.companyId,
       contactId: contact?.id,
-      opportunityId: nullableValue(formData, "opportunityId"),
-      leadId: nullableValue(formData, "leadId"),
+      opportunityId,
+      leadId,
       terraqoWorkspaceId,
-      sellerProfileId: nullableValue(formData, "sellerProfileId"),
+      sellerProfileId,
       customerName: value(formData, "customerName") || client?.name || "",
       customerEmail: value(formData, "customerEmail") || client?.email,
       company: value(formData, "company") || client?.company,
@@ -625,7 +685,7 @@ export async function createQuoteAction(formData: FormData) {
       observations: value(formData, "observations"),
       items: {
         create: {
-          productId: nullableValue(formData, "productId"),
+          productId,
           type: value(formData, "itemType") || "product",
           description: value(formData, "description") || "Item comercial",
           quantity,
@@ -644,8 +704,8 @@ export async function createQuoteAction(formData: FormData) {
     body: value(formData, "description"),
     companyId: company?.id || client?.companyId,
     contactId: contact?.id,
-    leadId: nullableValue(formData, "leadId"),
-    opportunityId: nullableValue(formData, "opportunityId")
+    leadId,
+    opportunityId
     ,terraqoWorkspaceId
   });
   revalidatePath("/admin/cotizaciones");
@@ -654,7 +714,8 @@ export async function createQuoteAction(formData: FormData) {
 }
 
 export async function updateQuoteStatusAction(id: string, formData: FormData) {
-  await requireActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  const { workspaceId } = await requireActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  await requireOwnedEntity("Cotizacion", prisma.quote.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   const status = value(formData, "status") as "DRAFT" | "SENT" | "VIEWED" | "ACCEPTED" | "REJECTED" | "EXPIRED" | "CONVERTED";
   const quote = await prisma.quote.update({
     where: { id },
@@ -677,7 +738,8 @@ export async function updateQuoteStatusAction(id: string, formData: FormData) {
         type: quote.sellerProfile?.commissionType || "SALE_PERCENTAGE",
         baseAmount: quote.total,
         rate,
-        amount
+        amount,
+        terraqoWorkspaceId: workspaceId
       }
     });
   }
@@ -734,7 +796,8 @@ export async function updateQuoteStatusAction(id: string, formData: FormData) {
 }
 
 export async function updateCommissionStatusAction(id: string, formData: FormData) {
-  await requireActionRole(["ADMIN", "SUPER_ADMIN"]);
+  const { workspaceId } = await requireActionRole(["ADMIN", "SUPER_ADMIN"]);
+  await requireOwnedEntity("Comision", prisma.commission.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   const status = value(formData, "status") as "PENDING" | "APPROVED" | "PAID" | "CANCELLED";
   await prisma.commission.update({
     where: { id },
@@ -748,8 +811,10 @@ export async function updateCommissionStatusAction(id: string, formData: FormDat
 }
 
 export async function createFaqAction(formData: FormData) {
+  const { workspaceId } = await requireActionRole(contentAdminRoles);
   await prisma.faq.create({
     data: {
+      terraqoWorkspaceId: workspaceId,
       question: value(formData, "question") || "",
       answer: value(formData, "answer") || "",
       category: value(formData, "category"),
@@ -762,6 +827,8 @@ export async function createFaqAction(formData: FormData) {
 }
 
 export async function updateFaqAction(id: string, formData: FormData) {
+  const { workspaceId } = await requireActionRole(contentAdminRoles);
+  await requireOwnedEntity("FAQ", prisma.faq.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   await prisma.faq.update({
     where: { id },
     data: {
@@ -777,12 +844,15 @@ export async function updateFaqAction(id: string, formData: FormData) {
 }
 
 export async function deleteFaqAction(id: string) {
+  const { workspaceId } = await requireActionRole(contentAdminRoles);
+  await requireOwnedEntity("FAQ", prisma.faq.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   await prisma.faq.delete({ where: { id } });
   revalidatePath("/admin/contenidos");
   revalidatePath("/faq");
 }
 
 export async function createPostAction(formData: FormData) {
+  const { workspaceId } = await requireActionRole(contentAdminRoles);
   const title = value(formData, "title") || "";
   const slug = value(formData, "slug") || slugify(title);
   await prisma.blogPost.create({
@@ -795,7 +865,8 @@ export async function createPostAction(formData: FormData) {
       category: value(formData, "category"),
       metaTitle: value(formData, "metaTitle"),
       metaDesc: value(formData, "metaDesc"),
-      publishedAt: checked(formData, "isPublished") ? new Date() : null
+      publishedAt: checked(formData, "isPublished") ? new Date() : null,
+      terraqoWorkspaceId: workspaceId
     }
   });
   revalidatePath("/admin/contenidos");
@@ -805,12 +876,14 @@ export async function createPostAction(formData: FormData) {
 }
 
 export async function updatePostAction(id: string, formData: FormData) {
+  const { workspaceId } = await requireActionRole(contentAdminRoles);
   const title = value(formData, "title") || "";
   const slug = value(formData, "slug") || slugify(title);
-  const previousPost = await prisma.blogPost.findUnique({
-    where: { id },
+  const previousPost = await prisma.blogPost.findFirst({
+    where: { id, terraqoWorkspaceId: workspaceId },
     select: { slug: true }
   });
+  if (!previousPost) throw new Error("Post no pertenece al workspace activo.");
   await prisma.blogPost.update({
     where: { id },
     data: {
@@ -835,10 +908,12 @@ export async function updatePostAction(id: string, formData: FormData) {
 }
 
 export async function deletePostAction(id: string) {
-  const post = await prisma.blogPost.findUnique({
-    where: { id },
+  const { workspaceId } = await requireActionRole(contentAdminRoles);
+  const post = await prisma.blogPost.findFirst({
+    where: { id, terraqoWorkspaceId: workspaceId },
     select: { title: true, slug: true }
   });
+  if (!post) throw new Error("Post no pertenece al workspace activo.");
   await prisma.blogPost.delete({ where: { id } });
   revalidatePath("/admin/contenidos");
   revalidatePath("/blog");
@@ -849,7 +924,7 @@ export async function deletePostAction(id: string) {
 }
 
 export async function createServiceAction(formData: FormData) {
-  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const { workspaceId: terraqoWorkspaceId } = await requireActionRole(contentAdminRoles);
   await requireWorkspaceModule("PUBLIC_WEBSITE", terraqoWorkspaceId);
   const title = value(formData, "title") || "";
   const slug = value(formData, "slug") || slugify(title);
@@ -862,11 +937,13 @@ export async function createServiceAction(formData: FormData) {
 }
 
 export async function updateServiceAction(id: string, formData: FormData) {
+  const { workspaceId } = await requireActionRole(contentAdminRoles);
   const title = value(formData, "title") || "";
-  const previousService = await prisma.service.findUnique({
-    where: { id },
+  const previousService = await prisma.service.findFirst({
+    where: { id, terraqoWorkspaceId: workspaceId },
     select: { slug: true }
   });
+  if (!previousService) throw new Error("Servicio no pertenece al workspace activo.");
   const slug = value(formData, "slug") || slugify(title);
   await prisma.service.update({
     where: { id },
@@ -881,13 +958,15 @@ export async function updateServiceAction(id: string, formData: FormData) {
 }
 
 export async function deleteServiceAction(id: string) {
+  const { workspaceId } = await requireActionRole(contentAdminRoles);
+  await requireOwnedEntity("Servicio", prisma.service.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   await prisma.service.delete({ where: { id } });
   revalidatePath("/admin/contenidos");
   revalidatePath("/servicios");
 }
 
 export async function createServiceCategoryAction(formData: FormData) {
-  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const { workspaceId: terraqoWorkspaceId } = await requireActionRole(contentAdminRoles);
   await requireWorkspaceModule("PUBLIC_WEBSITE", terraqoWorkspaceId);
   await prisma.serviceCategory.create({
     data: { ...serviceCategoryFieldsFromForm(formData), terraqoWorkspaceId }
@@ -897,6 +976,8 @@ export async function createServiceCategoryAction(formData: FormData) {
 }
 
 export async function updateServiceCategoryAction(id: string, formData: FormData) {
+  const { workspaceId } = await requireActionRole(contentAdminRoles);
+  await requireOwnedEntity("Categoria de servicio", prisma.serviceCategory.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   await prisma.serviceCategory.update({
     where: { id },
     data: serviceCategoryFieldsFromForm(formData)
@@ -906,19 +987,24 @@ export async function updateServiceCategoryAction(id: string, formData: FormData
 }
 
 export async function deleteServiceCategoryAction(id: string) {
+  const { workspaceId } = await requireActionRole(contentAdminRoles);
+  await requireOwnedEntity("Categoria de servicio", prisma.serviceCategory.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   await prisma.serviceCategory.delete({ where: { id } });
   revalidatePath("/admin/contenidos");
   revalidatePath("/servicios");
 }
 
 export async function createSectorAction(formData: FormData) {
-  const sector = await prisma.sector.create({ data: sectorFieldsFromForm(formData) });
+  const { workspaceId } = await requireActionRole(contentAdminRoles);
+  const sector = await prisma.sector.create({ data: { ...sectorFieldsFromForm(formData), terraqoWorkspaceId: workspaceId } });
   revalidatePath("/admin/contenidos");
   revalidatePath("/sectores");
   redirect(`/admin/contenidos?contentStatus=created&item=${encodeURIComponent(`Sector creado: ${sector.name}`)}`);
 }
 
 export async function updateSectorAction(id: string, formData: FormData) {
+  const { workspaceId } = await requireActionRole(contentAdminRoles);
+  await requireOwnedEntity("Sector", prisma.sector.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   const sector = await prisma.sector.update({ where: { id }, data: sectorFieldsFromForm(formData) });
   revalidatePath("/admin/contenidos");
   revalidatePath("/sectores");
@@ -926,6 +1012,8 @@ export async function updateSectorAction(id: string, formData: FormData) {
 }
 
 export async function deleteSectorAction(id: string) {
+  const { workspaceId } = await requireActionRole(contentAdminRoles);
+  await requireOwnedEntity("Sector", prisma.sector.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   const sector = await prisma.sector.delete({ where: { id } });
   revalidatePath("/admin/contenidos");
   revalidatePath("/sectores");
@@ -1030,13 +1118,13 @@ const baseServiceCatalog = [
 ];
 
 export async function seedServiceCatalogAction() {
-  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const { workspaceId: terraqoWorkspaceId } = await requireActionRole(contentAdminRoles);
   await requireWorkspaceModule("PUBLIC_WEBSITE", terraqoWorkspaceId);
   const seededServiceSlugs: string[] = [];
 
   for (const [categoryIndex, category] of baseServiceCatalog.entries()) {
     const parent = await prisma.serviceCategory.upsert({
-      where: { slug: category.slug },
+      where: { terraqoWorkspaceId_slug: { terraqoWorkspaceId, slug: category.slug } },
       update: {
         name: category.name,
         description: category.description,
@@ -1068,7 +1156,7 @@ export async function seedServiceCatalogAction() {
       let categoryName = "categoryName" in group ? group.categoryName : category.name;
       if ("child" in group && group.child) {
         const child = await prisma.serviceCategory.upsert({
-          where: { slug: group.child.slug },
+          where: { terraqoWorkspaceId_slug: { terraqoWorkspaceId, slug: group.child.slug } },
           update: {
             name: group.child.name,
             parentId: parent.id,
@@ -1093,7 +1181,7 @@ export async function seedServiceCatalogAction() {
         const serviceSlug = slugify(title);
         seededServiceSlugs.push(serviceSlug);
         await prisma.service.upsert({
-          where: { slug: serviceSlug },
+          where: { terraqoWorkspaceId_slug: { terraqoWorkspaceId, slug: serviceSlug } },
           update: {
             title,
             category: categoryName,
@@ -1144,8 +1232,10 @@ export async function seedServiceCatalogAction() {
 }
 
 export async function createTestimonialAction(formData: FormData) {
+  const { workspaceId } = await requireActionRole(contentAdminRoles);
   await prisma.testimonial.create({
     data: {
+      terraqoWorkspaceId: workspaceId,
       quote: value(formData, "quote") || "",
       author: value(formData, "author") || "",
       company: value(formData, "company"),
@@ -1158,6 +1248,8 @@ export async function createTestimonialAction(formData: FormData) {
 }
 
 export async function updateTestimonialAction(id: string, formData: FormData) {
+  const { workspaceId } = await requireActionRole(contentAdminRoles);
+  await requireOwnedEntity("Testimonio", prisma.testimonial.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   await prisma.testimonial.update({
     where: { id },
     data: {
@@ -1173,13 +1265,15 @@ export async function updateTestimonialAction(id: string, formData: FormData) {
 }
 
 export async function deleteTestimonialAction(id: string) {
+  const { workspaceId } = await requireActionRole(contentAdminRoles);
+  await requireOwnedEntity("Testimonio", prisma.testimonial.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   await prisma.testimonial.delete({ where: { id } });
   revalidatePath("/admin/contenidos");
   revalidatePath("/");
 }
 
 export async function createClientLogoAction(formData: FormData) {
-  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const { workspaceId: terraqoWorkspaceId } = await requireActionRole(contentAdminRoles);
   await requireWorkspaceModule("PUBLIC_WEBSITE", terraqoWorkspaceId);
   const name = value(formData, "name") || "";
   const logoUrl = value(formData, "logoUrl");
@@ -1201,6 +1295,8 @@ export async function createClientLogoAction(formData: FormData) {
 }
 
 export async function updateClientLogoAction(id: string, formData: FormData) {
+  const { workspaceId } = await requireActionRole(contentAdminRoles);
+  await requireOwnedEntity("Logo de cliente", prisma.clientLogo.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   const name = value(formData, "name") || "";
   const logoUrl = value(formData, "logoUrl");
   if (!name || !logoUrl) return;
@@ -1213,7 +1309,8 @@ export async function updateClientLogoAction(id: string, formData: FormData) {
       website: value(formData, "website"),
       sector: value(formData, "sector"),
       position: numberValue(formData, "position"),
-      active: checked(formData, "active")
+      active: checked(formData, "active"),
+      terraqoWorkspaceId: workspaceId
     }
   });
   revalidatePath("/admin/contenidos");
@@ -1221,12 +1318,15 @@ export async function updateClientLogoAction(id: string, formData: FormData) {
 }
 
 export async function deleteClientLogoAction(id: string) {
+  const { workspaceId } = await requireActionRole(contentAdminRoles);
+  await requireOwnedEntity("Logo de cliente", prisma.clientLogo.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   await prisma.clientLogo.delete({ where: { id } });
   revalidatePath("/admin/contenidos");
   revalidatePath("/");
 }
 
 export async function createBannerAction(formData: FormData) {
+  const { workspaceId } = await requireActionRole(contentAdminRoles);
   await prisma.banner.create({
     data: {
       title: value(formData, "title") || "",
@@ -1235,7 +1335,8 @@ export async function createBannerAction(formData: FormData) {
       ctaHref: value(formData, "ctaHref"),
       image: value(formData, "image"),
       placement: value(formData, "placement") || "home",
-      active: checked(formData, "active")
+      active: checked(formData, "active"),
+      terraqoWorkspaceId: workspaceId
     }
   });
   revalidatePath("/admin/contenidos");
@@ -1243,6 +1344,8 @@ export async function createBannerAction(formData: FormData) {
 }
 
 export async function updateBannerAction(id: string, formData: FormData) {
+  const { workspaceId } = await requireActionRole(contentAdminRoles);
+  await requireOwnedEntity("Banner", prisma.banner.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   await prisma.banner.update({
     where: { id },
     data: {
@@ -1260,12 +1363,15 @@ export async function updateBannerAction(id: string, formData: FormData) {
 }
 
 export async function deleteBannerAction(id: string) {
+  const { workspaceId } = await requireActionRole(contentAdminRoles);
+  await requireOwnedEntity("Banner", prisma.banner.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   await prisma.banner.delete({ where: { id } });
   revalidatePath("/admin/contenidos");
   revalidatePath("/");
 }
 
 export async function createCmsPageAction(formData: FormData) {
+  const { workspaceId } = await requireActionRole(contentAdminRoles);
   const title = value(formData, "title") || "";
   await prisma.cmsPage.create({
     data: {
@@ -1274,13 +1380,16 @@ export async function createCmsPageAction(formData: FormData) {
       metaTitle: value(formData, "metaTitle"),
       metaDesc: value(formData, "metaDesc"),
       content: contentFromText(formData) as Prisma.InputJsonValue,
-      isPublished: checked(formData, "isPublished")
+      isPublished: checked(formData, "isPublished"),
+      terraqoWorkspaceId: workspaceId
     }
   });
   revalidatePath("/admin/contenidos");
 }
 
 export async function updateCmsPageAction(id: string, formData: FormData) {
+  const { workspaceId } = await requireActionRole(contentAdminRoles);
+  await requireOwnedEntity("Pagina CMS", prisma.cmsPage.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   const title = value(formData, "title") || "";
   await prisma.cmsPage.update({
     where: { id },
@@ -1297,14 +1406,17 @@ export async function updateCmsPageAction(id: string, formData: FormData) {
 }
 
 export async function deleteCmsPageAction(id: string) {
+  const { workspaceId } = await requireActionRole(contentAdminRoles);
+  await requireOwnedEntity("Pagina CMS", prisma.cmsPage.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   await prisma.cmsPage.delete({ where: { id } });
   revalidatePath("/admin/contenidos");
 }
 
 export async function takeChatConversationAction(id: string) {
-  const { session } = await requireActionRole(["EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  const { session, workspaceId } = await requireActionRole(["EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  await requireOwnedEntity("Conversacion", prisma.chatConversation.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   const [profile, userId] = await Promise.all([
-    session?.user?.id ? prisma.staffProfile.findUnique({ where: { userId: session.user.id } }) : null,
+    session?.user?.id ? prisma.staffProfile.findFirst({ where: { userId: session.user.id, terraqoWorkspaceId: workspaceId } }) : null,
     existingUserId(session.user.id)
   ]);
 
@@ -1319,8 +1431,12 @@ export async function takeChatConversationAction(id: string) {
 }
 
 export async function assignChatProfileAction(id: string, formData: FormData) {
-  await requireActionRole(["EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  const { workspaceId } = await requireActionRole(["EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  await requireOwnedEntity("Conversacion", prisma.chatConversation.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   const profileId = value(formData, "profileId");
+  if (profileId) {
+    await requireOwnedEntity("Perfil", prisma.staffProfile.findFirst({ where: { id: profileId, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
+  }
 
   await prisma.chatConversation.update({
     where: { id },
@@ -1333,9 +1449,10 @@ export async function assignChatProfileAction(id: string, formData: FormData) {
 }
 
 export async function closeChatConversationAction(id: string) {
-  const { session, role } = await requireActionRole(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SUPPORT"]);
+  const { session, role, workspaceId } = await requireActionRole(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SUPPORT"]);
+  await requireOwnedEntity("Conversacion", prisma.chatConversation.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   if (!["ADMIN", "EDITOR", "SUPER_ADMIN", "COMMERCIAL_ADMIN"].includes(role)) {
-    const profile = await prisma.staffProfile.findUnique({ where: { userId: session.user.id } });
+    const profile = await prisma.staffProfile.findFirst({ where: { userId: session.user.id, terraqoWorkspaceId: workspaceId } });
     const conversation = await prisma.chatConversation.findUnique({
       where: { id },
       select: { assignedProfileId: true, assignedToId: true }
@@ -1351,7 +1468,8 @@ export async function closeChatConversationAction(id: string) {
 }
 
 export async function deleteChatConversationAction(id: string) {
-  await requireActionRole(["EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  const { workspaceId } = await requireActionRole(["EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  await requireOwnedEntity("Conversacion", prisma.chatConversation.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   await prisma.chatConversation.delete({ where: { id } });
   revalidatePath("/admin/chat");
   revalidatePath("/admin");
@@ -1360,15 +1478,16 @@ export async function deleteChatConversationAction(id: string) {
 export async function sendAdminChatMessageAction(id: string, formData: FormData) {
   const body = value(formData, "body");
   if (!body) return;
-  const { session, role } = await requireActionRole(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SUPPORT"]);
+  const { session, role, workspaceId } = await requireActionRole(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SUPPORT"]);
   const [profile, userId] = await Promise.all([
-    prisma.staffProfile.findUnique({ where: { userId: session.user.id } }),
+    prisma.staffProfile.findFirst({ where: { userId: session.user.id, terraqoWorkspaceId: workspaceId } }),
     existingUserId(session.user.id)
   ]);
-  const conversation = await prisma.chatConversation.findUnique({
-    where: { id },
+  const conversation = await prisma.chatConversation.findFirst({
+    where: { id, terraqoWorkspaceId: workspaceId },
     select: { assignedProfileId: true, assignedToId: true }
   });
+  if (!conversation) throw new Error("Conversacion no pertenece al workspace activo.");
   const canManageAnyChat = ["ADMIN", "EDITOR", "SUPER_ADMIN", "COMMERCIAL_ADMIN"].includes(role);
   const canReply =
     canManageAnyChat ||
@@ -1395,7 +1514,7 @@ export async function sendAdminChatMessageAction(id: string, formData: FormData)
 }
 
 export async function createStaffProfileAction(formData: FormData) {
-  await requireActionRole(["ADMIN"]);
+  const { workspaceId } = await requireActionRole(["ADMIN"]);
   await prisma.staffProfile.create({
     data: {
       displayName: value(formData, "displayName") || "",
@@ -1406,7 +1525,8 @@ export async function createStaffProfileAction(formData: FormData) {
       ...staffCommercialFieldsFromForm(formData),
       specialties: listFromTextarea(formData, "specialties"),
       tools: staffToolsFromForm(formData) as Prisma.InputJsonValue,
-      active: checked(formData, "active")
+      active: checked(formData, "active"),
+      terraqoWorkspaceId: workspaceId
     }
   });
   revalidatePath("/admin/equipo");
@@ -1414,7 +1534,8 @@ export async function createStaffProfileAction(formData: FormData) {
 }
 
 export async function updateStaffProfileAction(id: string, formData: FormData) {
-  await requireActionRole(["ADMIN"]);
+  const { workspaceId } = await requireActionRole(["ADMIN"]);
+  await requireOwnedEntity("Perfil", prisma.staffProfile.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   await prisma.staffProfile.update({
     where: { id },
     data: {
@@ -1434,7 +1555,8 @@ export async function updateStaffProfileAction(id: string, formData: FormData) {
 }
 
 export async function updateSellerCommercialAction(id: string, formData: FormData) {
-  await requireActionRole(["ADMIN", "SUPER_ADMIN"]);
+  const { workspaceId } = await requireActionRole(["ADMIN", "SUPER_ADMIN"]);
+  await requireOwnedEntity("Perfil", prisma.staffProfile.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   await prisma.staffProfile.update({
     where: { id },
     data: staffCommercialFieldsFromForm(formData)
@@ -1444,21 +1566,29 @@ export async function updateSellerCommercialAction(id: string, formData: FormDat
 }
 
 export async function createProjectAction(formData: FormData) {
-  await requireActionRole(projectAdminRoles);
-  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const { workspaceId: terraqoWorkspaceId } = await requireActionRole(projectAdminRoles);
   await requireWorkspaceModule("PROJECTS", terraqoWorkspaceId);
   const title = value(formData, "title") || "";
   const clientId = nullableValue(formData, "clientId");
-  const client = clientId ? await prisma.client.findUnique({ where: { id: clientId } }) : null;
+  const client = clientId ? await prisma.client.findFirst({ where: { id: clientId, terraqoWorkspaceId } }) : null;
+  if (clientId && !client) throw new Error("Cliente no pertenece al workspace activo.");
+  const companyId = nullableValue(formData, "companyId") || client?.companyId;
+  const opportunityId = nullableValue(formData, "opportunityId");
+  const saleId = nullableValue(formData, "saleId");
+  await Promise.all([
+    companyId ? requireOwnedEntity("Empresa", prisma.company.findFirst({ where: { id: companyId, terraqoWorkspaceId }, select: { id: true } })) : null,
+    opportunityId ? requireOwnedEntity("Oportunidad", prisma.opportunity.findFirst({ where: { id: opportunityId, terraqoWorkspaceId }, select: { id: true } })) : null,
+    saleId ? requireOwnedEntity("Venta", prisma.sale.findFirst({ where: { id: saleId, terraqoWorkspaceId }, select: { id: true } })) : null
+  ]);
   try {
     await prisma.project.create({
       data: {
         title,
         slug: value(formData, "slug") || slugify(title),
         clientId,
-        companyId: nullableValue(formData, "companyId") || client?.companyId,
-        opportunityId: nullableValue(formData, "opportunityId"),
-        saleId: nullableValue(formData, "saleId"),
+        companyId,
+        opportunityId,
+        saleId,
         terraqoWorkspaceId,
         clientName: value(formData, "clientName"),
         location: value(formData, "location"),
@@ -1489,15 +1619,14 @@ export async function createProjectAction(formData: FormData) {
 }
 
 export async function createProjectFromSaleAction(id: string, formData: FormData) {
-  await requireActionRole(["ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "ENGINEER"]);
-  const fallbackWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const { workspaceId: fallbackWorkspaceId } = await requireActionRole(["ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "ENGINEER"]);
   await requireWorkspaceModule("PROJECTS", fallbackWorkspaceId);
-  const sale = await prisma.sale.findUnique({
-    where: { id },
+  const sale = await prisma.sale.findFirst({
+    where: { id, terraqoWorkspaceId: fallbackWorkspaceId },
     include: { quote: { include: { items: true } }, company: true, client: true }
   });
   if (!sale) throw new Error("Venta no encontrada.");
-  const existing = await prisma.project.findFirst({ where: { saleId: id, deletedAt: null } });
+  const existing = await prisma.project.findFirst({ where: { saleId: id, terraqoWorkspaceId: fallbackWorkspaceId, deletedAt: null } });
   if (existing) {
     revalidatePath("/admin/proyectos");
     return;
@@ -1547,7 +1676,8 @@ export async function createProjectFromSaleAction(id: string, formData: FormData
 }
 
 export async function updateProjectAction(id: string, formData: FormData) {
-  await requireActionRole(projectAdminRoles);
+  const { workspaceId } = await requireActionRole(projectAdminRoles);
+  await requireOwnedEntity("Proyecto", prisma.project.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   const title = value(formData, "title") || "";
   const images = listFromTextarea(formData, "images");
   try {
@@ -1586,7 +1716,8 @@ export async function updateProjectAction(id: string, formData: FormData) {
 }
 
 export async function deleteProjectAction(id: string) {
-  await requireActionRole(projectAdminRoles);
+  const { workspaceId } = await requireActionRole(projectAdminRoles);
+  await requireOwnedEntity("Proyecto", prisma.project.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   const project = await prisma.project.delete({ where: { id } });
   revalidatePath("/admin/proyectos");
   revalidatePath("/proyectos");
@@ -1594,11 +1725,12 @@ export async function deleteProjectAction(id: string) {
 }
 
 export async function createProjectProgressAction(projectId: string, formData: FormData) {
-  const { session } = await requireActionRole(["SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT", "EDITOR", "ADMIN", "SUPER_ADMIN"]);
+  const { session, workspaceId } = await requireActionRole(["SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT", "EDITOR", "ADMIN", "SUPER_ADMIN"]);
+  await requireOwnedEntity("Proyecto", prisma.project.findFirst({ where: { id: projectId, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   const title = value(formData, "title");
   const body = value(formData, "body");
   if (!title || !body) return;
-  const profile = await prisma.staffProfile.findUnique({ where: { userId: session.user.id } });
+  const profile = await prisma.staffProfile.findFirst({ where: { userId: session.user.id, terraqoWorkspaceId: workspaceId } });
 
   await prisma.projectProgress.create({
     data: {
@@ -1615,7 +1747,8 @@ export async function createProjectProgressAction(projectId: string, formData: F
 }
 
 export async function updateTechnicalProfileAction(id: string, formData: FormData) {
-  await requireActionRole(["ADMIN", "SUPER_ADMIN", "ENGINEER"]);
+  const { workspaceId } = await requireActionRole(["ADMIN", "SUPER_ADMIN", "ENGINEER"]);
+  await requireOwnedEntity("Perfil", prisma.staffProfile.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   await prisma.staffProfile.update({
     where: { id },
     data: {
@@ -1632,7 +1765,12 @@ export async function updateTechnicalProfileAction(id: string, formData: FormDat
 }
 
 export async function updateTicketAction(id: string, formData: FormData) {
-  await requireActionRole(["SUPPORT", "TECHNICIAN", "SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  const { workspaceId } = await requireActionRole(["SUPPORT", "TECHNICIAN", "SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  await requireOwnedEntity("Ticket", prisma.ticket.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
+  const assignedProfileId = nullableValue(formData, "assignedProfileId");
+  if (assignedProfileId) {
+    await requireOwnedEntity("Perfil", prisma.staffProfile.findFirst({ where: { id: assignedProfileId, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
+  }
   const status = (value(formData, "status") as TicketStatus | undefined) || "OPEN";
   await prisma.ticket.update({
     where: { id },
@@ -1640,7 +1778,7 @@ export async function updateTicketAction(id: string, formData: FormData) {
       status,
       priority: (value(formData, "priority") as TicketPriority | undefined) || "MEDIUM",
       category: (value(formData, "category") as TicketCategory | undefined) || "TECHNICAL_QUERY",
-      assignedProfileId: nullableValue(formData, "assignedProfileId"),
+      assignedProfileId,
       closedAt: ticketClosedAt(status)
     }
   });
@@ -1652,7 +1790,8 @@ export async function updateTicketAction(id: string, formData: FormData) {
 export async function sendTicketMessageAction(id: string, formData: FormData) {
   const body = value(formData, "body");
   if (!body) return;
-  const { session } = await requireActionRole(["SUPPORT", "TECHNICIAN", "SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  const { session, workspaceId } = await requireActionRole(["SUPPORT", "TECHNICIAN", "SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  await requireOwnedEntity("Ticket", prisma.ticket.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
 
   await prisma.ticket.update({
     where: { id },
@@ -1673,44 +1812,62 @@ export async function sendTicketMessageAction(id: string, formData: FormData) {
 }
 
 export async function createInternalChannelAction(formData: FormData) {
-  await requireActionRole(["ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  const { workspaceId } = await requireActionRole(["ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
   const name = value(formData, "name");
   if (!name) return;
-  await prisma.internalChatChannel.upsert({
-    where: { slug: value(formData, "slug") || slugify(name) },
-    update: {
+  const slug = value(formData, "slug") || slugify(name);
+  const channel = await prisma.internalChatChannel.findFirst({ where: { slug, terraqoWorkspaceId: workspaceId } });
+  if (channel) {
+    await prisma.internalChatChannel.update({
+      where: { id: channel.id },
+      data: {
       name,
       description: value(formData, "description")
-    },
-    create: {
+      }
+    });
+  } else {
+    await prisma.internalChatChannel.create({
+      data: {
       name,
-      slug: value(formData, "slug") || slugify(name),
-      description: value(formData, "description")
-    }
-  });
+      slug,
+      description: value(formData, "description"),
+      terraqoWorkspaceId: workspaceId
+      }
+    });
+  }
   revalidatePath("/admin/chat-interno");
 }
 
 export async function sendInternalMessageAction(channelId: string, formData: FormData) {
   const body = value(formData, "body");
   if (!body) return;
-  const { session } = await requireActionRole(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"]);
+  const { session, workspaceId } = await requireActionRole(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"]);
+  const leadId = nullableValue(formData, "leadId");
+  const projectId = nullableValue(formData, "projectId");
+  const ticketId = nullableValue(formData, "ticketId");
+  await requireOwnedEntity("Canal", prisma.internalChatChannel.findFirst({ where: { id: channelId, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
+  await Promise.all([
+    leadId ? requireOwnedEntity("Lead", prisma.lead.findFirst({ where: { id: leadId, terraqoWorkspaceId: workspaceId }, select: { id: true } })) : null,
+    projectId ? requireOwnedEntity("Proyecto", prisma.project.findFirst({ where: { id: projectId, terraqoWorkspaceId: workspaceId }, select: { id: true } })) : null,
+    ticketId ? requireOwnedEntity("Ticket", prisma.ticket.findFirst({ where: { id: ticketId, terraqoWorkspaceId: workspaceId }, select: { id: true } })) : null
+  ]);
   await prisma.internalChatMessage.create({
     data: {
       channelId,
       userId: session.user.id,
       body,
       files: listFromTextarea(formData, "files"),
-      leadId: nullableValue(formData, "leadId"),
-      projectId: nullableValue(formData, "projectId"),
-      ticketId: nullableValue(formData, "ticketId")
+      leadId,
+      projectId,
+      ticketId
     }
   });
   revalidatePath("/admin/chat-interno");
 }
 
 export async function reviewBotQuestionAction(id: string, formData: FormData) {
-  await requireActionRole(["EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  const { workspaceId } = await requireActionRole(["EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  await requireOwnedEntity("Pregunta", prisma.botUnansweredQuestion.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   const status = (value(formData, "status") as BotQuestionStatus | undefined) || "PENDING";
   const question = await prisma.botUnansweredQuestion.update({
     where: { id },
@@ -1729,7 +1886,8 @@ export async function reviewBotQuestionAction(id: string, formData: FormData) {
         category: question.category || "atencion",
         origin: "chatbot",
         approved: true,
-        active: true
+        active: true,
+        terraqoWorkspaceId: workspaceId
       }
     });
   }
@@ -1740,26 +1898,27 @@ export async function reviewBotQuestionAction(id: string, formData: FormData) {
 }
 
 export async function markNotificationReadAction(id: string) {
-  const { session } = await requireActionRole(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"]);
+  const { session, workspaceId } = await requireActionRole(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"]);
   await prisma.notification.updateMany({
-    where: { id, OR: [{ userId: session.user.id }, { userId: null }] },
+    where: { id, terraqoWorkspaceId: workspaceId, OR: [{ userId: session.user.id }, { userId: null }] },
     data: { readAt: new Date() }
   });
   revalidatePath("/admin/notificaciones");
 }
 
 export async function deleteStaffProfileAction(id: string) {
-  await requireActionRole(["ADMIN"]);
+  const { workspaceId } = await requireActionRole(["ADMIN"]);
+  await requireOwnedEntity("Perfil", prisma.staffProfile.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   await prisma.staffProfile.delete({ where: { id } });
   revalidatePath("/admin/equipo");
   revalidatePath("/admin/chat");
 }
 
 export async function upsertStaffAccessAction(profileId: string, formData: FormData) {
-  await requireActionRole(["ADMIN"]);
+  const { workspaceId } = await requireActionRole(["ADMIN"]);
 
-  const profile = await prisma.staffProfile.findUnique({
-    where: { id: profileId },
+  const profile = await prisma.staffProfile.findFirst({
+    where: { id: profileId, terraqoWorkspaceId: workspaceId },
     include: { user: true }
   });
   if (!profile) throw new Error("Perfil no encontrado.");
@@ -1781,12 +1940,21 @@ export async function upsertStaffAccessAction(profileId: string, formData: FormD
 
   let userId = profile.userId;
   if (profile.userId) {
+    const memberships = await prisma.terraqoWorkspaceMember.findMany({
+      where: { userId: profile.userId, active: true },
+      select: { workspaceId: true }
+    });
+    if (!memberships.some((membership) => membership.workspaceId === workspaceId)) {
+      throw new Error("El usuario vinculado no pertenece al workspace activo.");
+    }
+    if (memberships.some((membership) => membership.workspaceId !== workspaceId)) {
+      throw new Error("La identidad pertenece a varios workspaces y solo puede editarla un administrador Terraqo.");
+    }
     await prisma.user.update({ where: { id: profile.userId }, data });
   } else {
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
-      await prisma.user.update({ where: { id: existingUser.id }, data });
-      userId = existingUser.id;
+      throw new Error("Este correo ya pertenece a una identidad Terraqo. Solicita al administrador Terraqo que la incorpore al workspace.");
     } else {
       if (!temporaryPassword) throw new Error("La contraseña temporal es obligatoria para crear un acceso nuevo.");
       const user = await prisma.user.create({
@@ -1808,24 +1976,48 @@ export async function upsertStaffAccessAction(profileId: string, formData: FormD
       email: profile.email || email
     }
   });
+  if (userId) {
+    await prisma.terraqoWorkspaceMember.upsert({
+      where: { workspaceId_userId: { workspaceId, userId } },
+      update: { active: true, joinedAt: new Date() },
+      create: {
+        workspaceId,
+        userId,
+        role: role === "ADMIN" || role === "SUPER_ADMIN" ? "ADMIN" : "MEMBER",
+        title: profile.roleTitle,
+        active: true,
+        joinedAt: new Date()
+      }
+    });
+  }
   revalidatePath("/admin/equipo");
   revalidatePath("/admin/chat");
 }
 
 export async function unlinkStaffAccessAction(profileId: string) {
-  await requireActionRole(["ADMIN"]);
+  const { workspaceId } = await requireActionRole(["ADMIN"]);
+  const profile = await prisma.staffProfile.findFirst({ where: { id: profileId, terraqoWorkspaceId: workspaceId }, select: { id: true, userId: true } });
+  if (!profile) throw new Error("Perfil no pertenece al workspace activo.");
   await prisma.staffProfile.update({
     where: { id: profileId },
     data: { userId: null }
   });
+  if (profile.userId) {
+    await prisma.terraqoWorkspaceMember.updateMany({
+      where: { workspaceId, userId: profile.userId },
+      data: { active: false }
+    });
+  }
   revalidatePath("/admin/equipo");
   revalidatePath("/admin/chat");
 }
 
 export async function approveClientAccountAction(accountId: string) {
-  await requireActionRole(["ADMIN", "SUPER_ADMIN"]);
+  const { workspaceId } = await requireActionRole(["ADMIN", "SUPER_ADMIN"]);
+  const ownedAccount = await prisma.clientAccount.findFirst({ where: { id: accountId, terraqoWorkspaceId: workspaceId }, select: { id: true } });
+  if (!ownedAccount) throw new Error("Cuenta cliente no pertenece al workspace activo.");
   const account = await prisma.clientAccount.update({
-    where: { id: accountId },
+    where: { id: ownedAccount.id },
     data: { status: "active" },
     include: { client: true, company: true }
   });
@@ -1847,7 +2039,8 @@ export async function approveClientAccountAction(accountId: string) {
       type: "SYSTEM",
       title: "Acceso cliente aprobado",
       body: `${account.client?.name || account.company.legalName} ya puede ingresar al portal.`,
-      href: `/admin/clientes${account.clientId ? `/${account.clientId}` : ""}`
+      href: `/admin/clientes${account.clientId ? `/${account.clientId}` : ""}`,
+      terraqoWorkspaceId: workspaceId
     }
   });
 
@@ -1856,9 +2049,11 @@ export async function approveClientAccountAction(accountId: string) {
 }
 
 export async function rejectClientAccountAction(accountId: string) {
-  await requireActionRole(["ADMIN", "SUPER_ADMIN"]);
+  const { workspaceId } = await requireActionRole(["ADMIN", "SUPER_ADMIN"]);
+  const ownedAccount = await prisma.clientAccount.findFirst({ where: { id: accountId, terraqoWorkspaceId: workspaceId }, select: { id: true } });
+  if (!ownedAccount) throw new Error("Cuenta cliente no pertenece al workspace activo.");
   const account = await prisma.clientAccount.update({
-    where: { id: accountId },
+    where: { id: ownedAccount.id },
     data: { status: "rejected" },
     include: { client: true, company: true }
   });

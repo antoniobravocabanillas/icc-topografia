@@ -8,7 +8,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/server/api";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
-import { getDefaultTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
+import { getSessionTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 
 function field(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -26,7 +26,7 @@ async function createForumChannelAction(formData: FormData) {
   "use server";
 
   await requireAdminPage(["ADMIN", "SUPER_ADMIN"]);
-  const workspaceId = await getDefaultTerraqoWorkspaceId();
+  const workspaceId = await getSessionTerraqoWorkspaceId();
   if (!workspaceId) throw new Error("Workspace Terraqo no configurado.");
   await requireWorkspaceModule("FORUMS", workspaceId);
 
@@ -34,7 +34,7 @@ async function createForumChannelAction(formData: FormData) {
   if (!name) return;
 
   await prisma.terraqoForumChannel.upsert({
-    where: { slug: field(formData, "slug") || slugify(name) },
+    where: { workspaceId_slug: { workspaceId, slug: field(formData, "slug") || slugify(name) } },
     update: {
       name,
       description: field(formData, "description"),
@@ -58,7 +58,7 @@ async function createForumPostAction(formData: FormData) {
   "use server";
 
   await requireAdminPage(["ADMIN", "SUPER_ADMIN"]);
-  const workspaceId = await getDefaultTerraqoWorkspaceId();
+  const workspaceId = await getSessionTerraqoWorkspaceId();
   if (!workspaceId) throw new Error("Workspace Terraqo no configurado.");
   await requireWorkspaceModule("FORUMS", workspaceId);
   const session = await auth();
@@ -88,7 +88,7 @@ export const revalidate = 0;
 
 export default async function TerraqoCommunityPage() {
   await requireAdminPage(["ADMIN", "SUPER_ADMIN"]);
-  const workspaceId = await getDefaultTerraqoWorkspaceId();
+  const workspaceId = await getSessionTerraqoWorkspaceId();
   if (!workspaceId) throw new Error("Workspace Terraqo no configurado.");
   await requireWorkspaceModule("FORUMS", workspaceId);
 

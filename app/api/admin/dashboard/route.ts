@@ -1,14 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import { handleApiError, ok } from "@/lib/server/api";
 import { requireRole } from "@/lib/server/authz";
-import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
+import { getSessionTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 
 export async function GET() {
   const { response } = await requireRole("SALES");
   if (response) return response;
 
   try {
-    const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+    const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
     const [
       productCount,
       pendingOrders,

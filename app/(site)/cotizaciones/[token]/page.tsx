@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { prisma } from "@/lib/prisma";
 import { respondPublicQuoteFromFormAction } from "@/lib/server/customer-actions";
 import { createMetadata } from "@/lib/seo";
+import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 import { formatCurrency } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +15,8 @@ export const revalidate = 0;
 
 export async function generateMetadata({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const quote = await prisma.quote.findUnique({ where: { publicToken: token }, select: { number: true } });
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const quote = await prisma.quote.findFirst({ where: { publicToken: token, terraqoWorkspaceId }, select: { number: true } });
   return createMetadata({
     title: quote ? `Cotizacion ${quote.number}` : "Cotizacion ICC",
     description: "Propuesta comercial privada de ICC Topografia.",
@@ -24,8 +26,9 @@ export async function generateMetadata({ params }: { params: Promise<{ token: st
 
 export default async function PublicQuotePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const quote = await prisma.quote.findUnique({
-    where: { publicToken: token },
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const quote = await prisma.quote.findFirst({
+    where: { publicToken: token, terraqoWorkspaceId },
     include: { items: { include: { product: true } }, sellerProfile: true, client: true }
   });
   if (!quote) notFound();

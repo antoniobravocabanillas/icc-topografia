@@ -13,6 +13,7 @@ import {
   upsertStaffAccessAction
 } from "@/lib/server/admin-actions";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
+import { getSessionTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 
 const departments: Array<[StaffDepartment, string]> = [
   ["SALES", "Ventas tecnicas"],
@@ -53,7 +54,9 @@ export const revalidate = 0;
 
 export default async function AdminTeamPage() {
   await requireAdminPage(["ADMIN"]);
+  const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
   const profiles = await prisma.staffProfile.findMany({
+    where: { terraqoWorkspaceId },
     include: { user: true },
     orderBy: [{ active: "desc" }, { department: "asc" }, { displayName: "asc" }]
   });

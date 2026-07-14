@@ -9,6 +9,12 @@ const prisma = new PrismaClient();
 async function main() {
   const passwordHash = await bcrypt.hash("Admin12345!", 12);
   const clientPasswordHash = await bcrypt.hash("Cliente12345!", 12);
+  const tenant = await prisma.terraqoWorkspace.upsert({
+    where: { slug: "icc-topografia" },
+    update: {},
+    create: { name: "ICC Topografia", slug: "icc-topografia", brandName: "ICC Topografia", active: true }
+  });
+  const terraqoWorkspaceId = tenant.id;
   await prisma.user.upsert({
     where: { email: "admin@icctopografia.pe" },
     update: {},
@@ -92,18 +98,19 @@ async function main() {
 
   for (const profile of staffProfiles) {
     await prisma.staffProfile.upsert({
-      where: { email: profile.email },
-      update: profile,
-      create: profile
+      where: { terraqoWorkspaceId_email: { terraqoWorkspaceId, email: profile.email } },
+      update: { ...profile, terraqoWorkspaceId },
+      create: { ...profile, terraqoWorkspaceId }
     });
   }
 
   for (const name of categories) {
     await prisma.category.upsert({
-      where: { slug: slugify(name) },
+      where: { terraqoWorkspaceId_slug: { terraqoWorkspaceId, slug: slugify(name) } },
       update: {},
       create: {
         name,
+        terraqoWorkspaceId,
         slug: slugify(name),
         description: `Categoria tecnica para ${name.toLowerCase()}.`
       }
@@ -111,12 +118,13 @@ async function main() {
   }
 
   for (const product of products) {
-    const category = await prisma.category.findUniqueOrThrow({ where: { slug: slugify(product.category) } });
+    const category = await prisma.category.findUniqueOrThrow({ where: { terraqoWorkspaceId_slug: { terraqoWorkspaceId, slug: slugify(product.category) } } });
     await prisma.product.upsert({
-      where: { slug: product.slug },
+      where: { terraqoWorkspaceId_slug: { terraqoWorkspaceId, slug: product.slug } },
       update: {},
       create: {
         name: product.name,
+        terraqoWorkspaceId,
         slug: product.slug,
         sku: product.slug.toUpperCase().replaceAll("-", "_"),
         brand: product.brand,
@@ -137,10 +145,11 @@ async function main() {
 
   for (const service of services) {
     await prisma.service.upsert({
-      where: { slug: service.slug },
+      where: { terraqoWorkspaceId_slug: { terraqoWorkspaceId, slug: service.slug } },
       update: {},
       create: {
         title: service.title,
+        terraqoWorkspaceId,
         slug: service.slug,
         summary: service.summary,
         content: service
@@ -149,11 +158,11 @@ async function main() {
   }
 
   for (const testimonial of testimonials) {
-    await prisma.testimonial.create({ data: testimonial });
+    await prisma.testimonial.create({ data: { ...testimonial, terraqoWorkspaceId } });
   }
 
   for (const [position, faq] of faqs.entries()) {
-    await prisma.faq.create({ data: { ...faq, position } });
+    await prisma.faq.create({ data: { ...faq, position, terraqoWorkspaceId } });
   }
 
   const internalChannels = [
@@ -166,18 +175,19 @@ async function main() {
 
   for (const channel of internalChannels) {
     await prisma.internalChatChannel.upsert({
-      where: { slug: channel.slug },
-      update: channel,
-      create: channel
+      where: { terraqoWorkspaceId_slug: { terraqoWorkspaceId, slug: channel.slug } },
+      update: { ...channel, terraqoWorkspaceId },
+      create: { ...channel, terraqoWorkspaceId }
     });
   }
 
   for (const post of posts) {
     await prisma.blogPost.upsert({
-      where: { slug: post.slug },
+      where: { terraqoWorkspaceId_slug: { terraqoWorkspaceId, slug: post.slug } },
       update: {},
       create: {
         title: post.title,
+        terraqoWorkspaceId,
         slug: post.slug,
         excerpt: post.excerpt,
         category: post.category,
@@ -204,6 +214,7 @@ async function main() {
   const company = await prisma.company.upsert({
     where: { id: "seed-company-urbania" },
     update: {
+      terraqoWorkspaceId,
       legalName: "Urbania Capital Demo S.A.C.",
       tradeName: "Urbania Capital",
       email: "operaciones@urbania-demo.pe",
@@ -214,6 +225,7 @@ async function main() {
     },
     create: {
       id: "seed-company-urbania",
+      terraqoWorkspaceId,
       legalName: "Urbania Capital Demo S.A.C.",
       tradeName: "Urbania Capital",
       document: "20600000001",
@@ -229,6 +241,7 @@ async function main() {
   const contact = await prisma.contact.upsert({
     where: { companyId_email: { companyId: company.id, email: "operaciones@urbania-demo.pe" } },
     update: {
+      terraqoWorkspaceId,
       name: "Mariana Torres",
       roleTitle: "Jefa de operaciones",
       phone: "+51 988 220 440",
@@ -237,6 +250,7 @@ async function main() {
     },
     create: {
       companyId: company.id,
+      terraqoWorkspaceId,
       name: "Mariana Torres",
       roleTitle: "Jefa de operaciones",
       email: "operaciones@urbania-demo.pe",
@@ -247,9 +261,10 @@ async function main() {
   });
 
   const client = await prisma.client.upsert({
-    where: { email: "operaciones@urbania-demo.pe" },
-    update: { userId: clientUser.id, companyId: company.id },
+    where: { terraqoWorkspaceId_email: { terraqoWorkspaceId, email: "operaciones@urbania-demo.pe" } },
+    update: { userId: clientUser.id, companyId: company.id, terraqoWorkspaceId },
     create: {
+      terraqoWorkspaceId,
       userId: clientUser.id,
       companyId: company.id,
       name: "Mariana Torres",
@@ -264,12 +279,14 @@ async function main() {
   await prisma.clientAccount.upsert({
     where: { clientId: client.id },
     update: {
+      terraqoWorkspaceId,
       userId: clientUser.id,
       companyId: company.id,
       contactId: contact.id,
       status: "active"
     },
     create: {
+      terraqoWorkspaceId,
       userId: clientUser.id,
       companyId: company.id,
       contactId: contact.id,
@@ -279,10 +296,11 @@ async function main() {
     }
   });
 
-  const seller = await prisma.staffProfile.findUnique({ where: { email: "ventas@icctopografia.pe" } });
+  const seller = await prisma.staffProfile.findFirst({ where: { email: "ventas@icctopografia.pe", terraqoWorkspaceId } });
   const lead = await prisma.lead.upsert({
     where: { id: "seed-lead-urbania" },
     update: {
+      terraqoWorkspaceId,
       companyId: company.id,
       contactId: contact.id,
       clientId: client.id,
@@ -290,6 +308,7 @@ async function main() {
     },
     create: {
       id: "seed-lead-urbania",
+      terraqoWorkspaceId,
       clientId: client.id,
       companyId: company.id,
       contactId: contact.id,
@@ -310,6 +329,7 @@ async function main() {
   const opportunity = await prisma.opportunity.upsert({
     where: { code: "OPP-2026-0001" },
     update: {
+      terraqoWorkspaceId,
       companyId: company.id,
       contactId: contact.id,
       leadId: lead.id,
@@ -318,6 +338,7 @@ async function main() {
     },
     create: {
       code: "OPP-2026-0001",
+      terraqoWorkspaceId,
       title: "Control topografico semanal para corredor vial",
       companyId: company.id,
       contactId: contact.id,
@@ -336,6 +357,7 @@ async function main() {
   const quote = await prisma.quote.upsert({
     where: { number: "COT-2026-0001" },
     update: {
+      terraqoWorkspaceId,
       publicToken: "cot-demo-urbania-2026",
       companyId: company.id,
       contactId: contact.id,
@@ -344,6 +366,7 @@ async function main() {
     },
     create: {
       number: "COT-2026-0001",
+      terraqoWorkspaceId,
       publicToken: "cot-demo-urbania-2026",
       clientId: client.id,
       companyId: company.id,
@@ -374,6 +397,7 @@ async function main() {
   const sale = await prisma.sale.upsert({
     where: { number: "SALE-2026-0001" },
     update: {
+      terraqoWorkspaceId,
       quoteId: quote.id,
       opportunityId: opportunity.id,
       clientId: client.id,
@@ -384,6 +408,7 @@ async function main() {
     },
     create: {
       number: "SALE-2026-0001",
+      terraqoWorkspaceId,
       quoteId: quote.id,
       opportunityId: opportunity.id,
       clientId: client.id,
@@ -398,15 +423,17 @@ async function main() {
   });
 
   const project = await prisma.project.upsert({
-    where: { slug: "control-topografico-corredor-vial-demo" },
+    where: { terraqoWorkspaceId_slug: { terraqoWorkspaceId, slug: "control-topografico-corredor-vial-demo" } },
     update: {
       clientId: client.id,
       companyId: company.id,
       opportunityId: opportunity.id,
-      saleId: sale.id
+      saleId: sale.id,
+      terraqoWorkspaceId
     },
     create: {
       title: "Control topografico para corredor vial demo",
+      terraqoWorkspaceId,
       slug: "control-topografico-corredor-vial-demo",
       clientId: client.id,
       companyId: company.id,
@@ -472,6 +499,7 @@ async function main() {
     },
     create: {
       id: "seed-document-urbania-propuesta",
+      terraqoWorkspaceId,
       companyId: company.id,
       contactId: contact.id,
       projectId: project.id,
@@ -494,10 +522,11 @@ async function main() {
     }
   });
 
-  const support = await prisma.staffProfile.findUnique({ where: { email: "soporte@icctopografia.pe" } });
+  const support = await prisma.staffProfile.findFirst({ where: { email: "soporte@icctopografia.pe", terraqoWorkspaceId } });
   await prisma.ticket.upsert({
     where: { code: "TK-2026-0001" },
     update: {
+      terraqoWorkspaceId,
       clientId: client.id,
       companyId: company.id,
       contactId: contact.id,
@@ -505,6 +534,7 @@ async function main() {
     },
     create: {
       code: "TK-2026-0001",
+      terraqoWorkspaceId,
       clientId: client.id,
       companyId: company.id,
       contactId: contact.id,
@@ -541,6 +571,7 @@ async function main() {
       update: {},
       create: {
         id: "seed-activity-urbania-lead",
+        terraqoWorkspaceId,
         action: "CREATED",
         entityType: "Lead",
         entityId: lead.id,
@@ -556,6 +587,7 @@ async function main() {
       update: {},
       create: {
         id: "seed-activity-urbania-opportunity",
+        terraqoWorkspaceId,
         action: "CONVERTED",
         entityType: "Opportunity",
         entityId: opportunity.id,
@@ -572,6 +604,7 @@ async function main() {
       update: {},
       create: {
         id: "seed-activity-urbania-sale",
+        terraqoWorkspaceId,
         action: "CONVERTED",
         entityType: "Sale",
         entityId: sale.id,
@@ -588,10 +621,11 @@ async function main() {
   ]);
 
   await prisma.botUnansweredQuestion.upsert({
-    where: { question: "Que incluye una calibracion de estacion total?" },
+    where: { terraqoWorkspaceId_question: { terraqoWorkspaceId, question: "Que incluye una calibracion de estacion total?" } },
     update: {},
     create: {
       question: "Que incluye una calibracion de estacion total?",
+      terraqoWorkspaceId,
       answer: "Incluye revision funcional, verificacion de precision, diagnostico, ajustes necesarios y recomendaciones de uso.",
       category: "calibracion",
       source: "demo",
@@ -601,6 +635,7 @@ async function main() {
 
   await prisma.notification.create({
     data: {
+      terraqoWorkspaceId,
       type: "SYSTEM",
       title: "Fase 3 activa",
       body: "Chat interno, chatbot local, FAQ dinamica, reportes y notificaciones estan disponibles.",

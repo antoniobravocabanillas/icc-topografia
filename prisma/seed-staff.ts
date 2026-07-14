@@ -45,11 +45,16 @@ const staffProfiles = [
 ];
 
 async function main() {
+  const workspace = await prisma.terraqoWorkspace.upsert({
+    where: { slug: "icc-topografia" },
+    update: {},
+    create: { name: "ICC Topografia", slug: "icc-topografia", brandName: "ICC Topografia", active: true }
+  });
   for (const profile of staffProfiles) {
     await prisma.staffProfile.upsert({
-      where: { email: profile.email },
-      update: profile,
-      create: profile
+      where: { terraqoWorkspaceId_email: { terraqoWorkspaceId: workspace.id, email: profile.email } },
+      update: { ...profile, terraqoWorkspaceId: workspace.id },
+      create: { ...profile, terraqoWorkspaceId: workspace.id }
     });
   }
 }

@@ -24,7 +24,7 @@ export async function answerWithLocalKnowledge(question: string): Promise<BotAns
   }
 
   const [faqs, services, products, projects] = await Promise.all([
-    prisma.faq.findMany({ where: { active: true, approved: true }, orderBy: [{ usageCount: "desc" }, { position: "asc" }], take: 80 }),
+    prisma.faq.findMany({ where: { active: true, approved: true, terraqoWorkspaceId }, orderBy: [{ usageCount: "desc" }, { position: "asc" }], take: 80 }),
     prisma.service.findMany({ where: { isPublished: true, terraqoWorkspaceId }, take: 80 }),
     prisma.product.findMany({ where: { isActive: true, isVisible: true, terraqoWorkspaceId }, include: { category: true }, take: 80 }),
     prisma.project.findMany({ where: { isPublic: true, terraqoWorkspaceId }, take: 40 })
@@ -53,17 +53,19 @@ export async function answerWithLocalKnowledge(question: string): Promise<BotAns
     };
   }
 
-  await prisma.botUnansweredQuestion.upsert({
-    where: { question },
-    update: { frequency: { increment: 1 } },
-    create: { question, source: "web-chatbot" }
-  });
+  const existingQuestion = await prisma.botUnansweredQuestion.findFirst({ where: { question, terraqoWorkspaceId } });
+  if (existingQuestion) {
+    await prisma.botUnansweredQuestion.update({ where: { id: existingQuestion.id }, data: { frequency: { increment: 1 } } });
+  } else {
+    await prisma.botUnansweredQuestion.create({ data: { question, source: "web-chatbot", terraqoWorkspaceId } });
+  }
   await prisma.notification.create({
     data: {
       type: "FAQ",
       title: "Pregunta sin respuesta del chatbot",
       body: question,
-      href: "/admin/chatbot"
+      href: "/admin/chatbot",
+      terraqoWorkspaceId
     }
   });
 

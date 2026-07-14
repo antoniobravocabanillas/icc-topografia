@@ -4,14 +4,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { prisma } from "@/lib/prisma";
 import { convertLeadToOpportunityAction, createLeadNoteAction, deleteLeadAction, updateLeadPipelineAction } from "@/lib/server/admin-actions";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
-import { getDefaultTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
+import { getSessionTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 
 const leadStatuses = ["NEW", "CONTACTED", "QUALIFIED", "EVALUATION", "QUOTED", "NEGOTIATION", "WON", "LOST", "REQUIRES_TECH_SUPPORT"] as const;
 const leadPriorities = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
 
 export default async function AdminLeadsPage() {
   await requireAdminPage(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
-  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
   await requireWorkspaceModule("CRM", terraqoWorkspaceId);
   const [leads, sellers] = await Promise.all([
     prisma.lead.findMany({
@@ -25,7 +25,7 @@ export default async function AdminLeadsPage() {
     orderBy: { createdAt: "desc" },
     take: 100
     }),
-    prisma.staffProfile.findMany({ where: { department: "SALES", active: true }, orderBy: { displayName: "asc" } })
+    prisma.staffProfile.findMany({ where: { department: "SALES", active: true, terraqoWorkspaceId }, orderBy: { displayName: "asc" } })
   ]);
 
   return (

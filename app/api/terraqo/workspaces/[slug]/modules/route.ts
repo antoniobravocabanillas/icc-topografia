@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { fail, handleApiError, ok, parseJson } from "@/lib/server/api";
 import { requireRole } from "@/lib/server/authz";
 import { getWorkspaceWithEntitlements } from "@/lib/terraqo/workspace-repository";
+import { setWorkspaceModuleState } from "@/lib/terraqo/workspace-modules";
 import { terraqoModuleUpdateSchema } from "@/lib/validations/terraqo";
 
 type RouteContext = {
@@ -46,22 +47,15 @@ export async function PATCH(request: Request, context: RouteContext) {
     const workspace = await prisma.terraqoWorkspace.findUnique({ where: { slug }, select: { id: true } });
     if (!workspace) return fail("Workspace no encontrado", 404);
 
-    const workspaceModule = await prisma.terraqoWorkspaceModule.upsert({
-      where: { workspaceId_code: { workspaceId: workspace.id, code: payload.code } },
-      update: {
-        active: payload.active,
-        config,
-        enabledAt: payload.active ? new Date() : undefined,
-        disabledAt: payload.active ? null : new Date()
-      },
-      create: {
-        workspaceId: workspace.id,
-        code: payload.code,
-        active: payload.active,
-        config,
-        enabledAt: payload.active ? new Date() : undefined,
-        disabledAt: payload.active ? undefined : new Date()
-      }
+    const requestedMode = payload.config && typeof payload.config === "object" && !Array.isArray(payload.config)
+      ? (payload.config as { provisioning?: { mode?: unknown } }).provisioning?.mode
+      : undefined;
+    const workspaceModule = await setWorkspaceModuleState({
+      workspaceId: workspace.id,
+      code: payload.code,
+      active: payload.active,
+      config,
+      mode: requestedMode === "template" ? "template" : requestedMode === "blank" ? "blank" : undefined
     });
 
     return ok(workspaceModule);

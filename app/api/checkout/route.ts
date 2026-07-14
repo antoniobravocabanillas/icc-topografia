@@ -48,7 +48,7 @@ export async function POST(request: Request) {
         customerName: payload.name,
         customerPhone: payload.phone,
         notes: payload.notes,
-        terraqoWorkspace: terraqoWorkspaceId ? { connect: { id: terraqoWorkspaceId } } : undefined,
+        terraqoWorkspace: { connect: { id: terraqoWorkspaceId } },
         status: "PENDING",
         total,
         address: payload.address ? { create: payload.address } : undefined,

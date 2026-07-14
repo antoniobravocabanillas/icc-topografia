@@ -8,27 +8,29 @@ import { Textarea } from "@/components/ui/textarea";
 import { prisma } from "@/lib/prisma";
 import { reviewBotQuestionAction } from "@/lib/server/admin-actions";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
-import { getDefaultTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
+import { getSessionTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function ChatbotAdminPage() {
   await requireAdminPage(["EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
-  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
   await requireWorkspaceModule("CUSTOMER_CHAT", terraqoWorkspaceId);
 
   const [conversations, unanswered, faqs] = await Promise.all([
     prisma.botConversation.findMany({
+      where: { terraqoWorkspaceId },
       include: { messages: { orderBy: { createdAt: "asc" } } },
       orderBy: { updatedAt: "desc" },
       take: 30
     }),
     prisma.botUnansweredQuestion.findMany({
+      where: { terraqoWorkspaceId },
       orderBy: [{ status: "asc" }, { frequency: "desc" }, { updatedAt: "desc" }],
       take: 80
     }),
-    prisma.faq.findMany({ where: { active: true, approved: true }, orderBy: [{ usageCount: "desc" }, { position: "asc" }], take: 20 })
+    prisma.faq.findMany({ where: { active: true, approved: true, terraqoWorkspaceId }, orderBy: [{ usageCount: "desc" }, { position: "asc" }], take: 20 })
   ]);
 
   return (

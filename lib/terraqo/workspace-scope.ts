@@ -1,6 +1,8 @@
 import { cache } from "react";
-import type { TerraqoModuleCode } from "@prisma/client";
+import type { Role, TerraqoModuleCode } from "@prisma/client";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { getWorkspaceForUser } from "@/lib/terraqo/workspace-access";
 import { workspace } from "@/lib/workspace";
 
 export const getDefaultTerraqoWorkspace = cache(async () => {
@@ -12,7 +14,25 @@ export const getDefaultTerraqoWorkspace = cache(async () => {
 
 export async function getDefaultTerraqoWorkspaceId() {
   const defaultWorkspace = await getDefaultTerraqoWorkspace();
-  return defaultWorkspace?.id;
+  if (!defaultWorkspace?.active) throw new Error("Workspace publico inexistente o inactivo.");
+  return defaultWorkspace.id;
+}
+
+export async function getSessionTerraqoWorkspace() {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Sesion requerida.");
+
+  const activeWorkspace = await getWorkspaceForUser(
+    session.user.id,
+    session.user.role as Role | undefined
+  );
+
+  if (!activeWorkspace?.active) throw new Error("Workspace inexistente o inactivo.");
+  return activeWorkspace;
+}
+
+export async function getSessionTerraqoWorkspaceId() {
+  return (await getSessionTerraqoWorkspace()).id;
 }
 
 export const getDefaultWorkspaceEntitlements = cache(async () => {
@@ -63,7 +83,8 @@ export async function getWorkspaceIdBySlug(slug?: string | null) {
     select: { id: true }
   });
 
-  return tenant?.id ?? getDefaultTerraqoWorkspaceId();
+  if (!tenant) throw new Error("Workspace no encontrado.");
+  return tenant.id;
 }
 
 export function workspaceWhere(workspaceId?: string | null) {

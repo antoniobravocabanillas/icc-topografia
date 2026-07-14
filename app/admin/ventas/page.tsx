@@ -8,7 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { formatCurrency } from "@/lib/utils";
 import { createProjectFromSaleAction, updateCommissionStatusAction, updateSellerCommercialAction } from "@/lib/server/admin-actions";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
-import { getDefaultTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
+import { getSessionTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 
 const commissionTypes = [
   ["SALE_PERCENTAGE", "Porcentaje sobre venta"],
@@ -22,14 +22,15 @@ export const revalidate = 0;
 
 export default async function AdminSalesPage() {
   const session = await requireAdminPage(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
-  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
   await requireWorkspaceModule("CRM", terraqoWorkspaceId);
   const role = String(session.user.role);
   const canManageCommercialConditions = ["ADMIN", "SUPER_ADMIN"].includes(role);
   const sellerWhere = canManageCommercialConditions
-    ? { department: "SALES" as const }
+    ? { department: "SALES" as const, terraqoWorkspaceId }
     : {
         department: "SALES" as const,
+        terraqoWorkspaceId,
         OR: [
           { userId: session.user.id },
           ...(session.user.email ? [{ email: session.user.email }] : [])

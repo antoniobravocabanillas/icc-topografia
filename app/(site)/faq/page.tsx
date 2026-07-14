@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
 import { createMetadata } from "@/lib/seo";
+import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 
 export const metadata = createMetadata({
   title: "Preguntas frecuentes",
@@ -16,8 +17,9 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function FaqPage() {
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
   const faqs = await prisma.faq.findMany({
-    where: { active: true },
+    where: { active: true, terraqoWorkspaceId },
     orderBy: [{ position: "asc" }, { createdAt: "desc" }]
   });
 

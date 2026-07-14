@@ -4,6 +4,7 @@ import { handleApiError, ok, parseJson, slugify } from "@/lib/server/api";
 import { requireRole } from "@/lib/server/authz";
 import { idSchema } from "@/lib/validations/common";
 import { postUpdateSchema } from "@/lib/validations/content";
+import { getSessionTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 
 type PostAdminRouteProps = {
   params: Promise<{ id: string }>;
@@ -15,6 +16,9 @@ export async function PATCH(request: Request, { params }: PostAdminRouteProps) {
 
   try {
     const { id } = idSchema.parse(await params);
+    const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
+    const owned = await prisma.blogPost.findFirst({ where: { id, terraqoWorkspaceId }, select: { id: true } });
+    if (!owned) return ok({ error: "Post no encontrado" }, { status: 404 });
     const payload = await parseJson(request, postUpdateSchema);
     const post = await prisma.blogPost.update({
       where: { id },
@@ -36,6 +40,9 @@ export async function DELETE(_request: Request, { params }: PostAdminRouteProps)
 
   try {
     const { id } = idSchema.parse(await params);
+    const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
+    const owned = await prisma.blogPost.findFirst({ where: { id, terraqoWorkspaceId }, select: { id: true } });
+    if (!owned) return ok({ error: "Post no encontrado" }, { status: 404 });
     await prisma.blogPost.delete({ where: { id } });
     return ok({ deleted: true });
   } catch (error) {

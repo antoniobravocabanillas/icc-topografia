@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/server/authz";
 import { serializeProduct } from "@/lib/server/serializers";
 import { idSchema } from "@/lib/validations/common";
 import { productUpdateSchema } from "@/lib/validations/product";
+import { getSessionTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 
 type ProductAdminRouteProps = {
   params: Promise<{ id: string }>;
@@ -15,7 +16,8 @@ export async function GET(_request: Request, { params }: ProductAdminRouteProps)
 
   try {
     const { id } = idSchema.parse(await params);
-    const product = await prisma.product.findUnique({ where: { id }, include: { category: true, variants: true } });
+    const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
+    const product = await prisma.product.findFirst({ where: { id, terraqoWorkspaceId }, include: { category: true, variants: true } });
     if (!product) return fail("Producto no encontrado", 404);
     return ok(serializeProduct(product));
   } catch (error) {
@@ -29,7 +31,14 @@ export async function PATCH(request: Request, { params }: ProductAdminRouteProps
 
   try {
     const { id } = idSchema.parse(await params);
+    const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
+    const owned = await prisma.product.findFirst({ where: { id, terraqoWorkspaceId }, select: { id: true } });
+    if (!owned) return fail("Producto no encontrado", 404);
     const payload = await parseJson(request, productUpdateSchema);
+    if (payload.categoryId) {
+      const category = await prisma.category.findFirst({ where: { id: payload.categoryId, terraqoWorkspaceId }, select: { id: true } });
+      if (!category) return fail("Categoria no encontrada", 404);
+    }
     const product = await prisma.product.update({
       where: { id },
       data: {
@@ -52,6 +61,9 @@ export async function DELETE(_request: Request, { params }: ProductAdminRoutePro
 
   try {
     const { id } = idSchema.parse(await params);
+    const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
+    const owned = await prisma.product.findFirst({ where: { id, terraqoWorkspaceId }, select: { id: true } });
+    if (!owned) return fail("Producto no encontrado", 404);
     await prisma.product.update({ where: { id }, data: { isActive: false } });
     return ok({ deleted: true });
   } catch (error) {

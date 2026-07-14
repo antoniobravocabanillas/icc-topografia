@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { prisma } from "@/lib/prisma";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
-import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
+import { getSessionTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 import { formatCurrency } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -13,12 +13,12 @@ export const revalidate = 0;
 
 export default async function ReportsPage() {
   await requireAdminPage(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
-  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
   const [quotes, leads, tickets, commissions, products] = await Promise.all([
     prisma.quote.findMany({ where: { terraqoWorkspaceId }, include: { sellerProfile: true }, orderBy: { createdAt: "desc" }, take: 300 }),
     prisma.lead.findMany({ where: { terraqoWorkspaceId }, orderBy: { createdAt: "desc" }, take: 300 }),
     prisma.ticket.findMany({ where: { terraqoWorkspaceId }, orderBy: { createdAt: "desc" }, take: 300 }),
-    prisma.commission.findMany({ where: { quote: { terraqoWorkspaceId } }, include: { sellerProfile: true }, orderBy: { createdAt: "desc" }, take: 300 }),
+    prisma.commission.findMany({ where: { terraqoWorkspaceId }, include: { sellerProfile: true }, orderBy: { createdAt: "desc" }, take: 300 }),
     prisma.product.findMany({ where: { isActive: true, terraqoWorkspaceId }, include: { category: true }, take: 300 })
   ]);
   const accepted = quotes.filter((quote) => quote.status === "ACCEPTED");

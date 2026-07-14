@@ -16,11 +16,12 @@ export async function POST(request: Request) {
     if (!question) return fail("Pregunta requerida", 422);
 
     const conversation = conversationId
-      ? await prisma.botConversation.findUnique({ where: { id: conversationId } })
+      ? await prisma.botConversation.findFirst({ where: { id: conversationId, terraqoWorkspaceId } })
       : await prisma.botConversation.create({
           data: {
             customerName: payload?.name ? String(payload.name) : undefined,
-            customerEmail: payload?.email ? String(payload.email) : undefined
+            customerEmail: payload?.email ? String(payload.email) : undefined,
+            terraqoWorkspaceId
           }
         });
 
@@ -44,7 +45,7 @@ export async function POST(request: Request) {
           customerEmail: payload?.email ? String(payload.email) : undefined,
           customerPhone: payload?.phone ? String(payload.phone) : undefined,
           topic: "Derivado desde chatbot",
-          terraqoWorkspace: terraqoWorkspaceId ? { connect: { id: terraqoWorkspaceId } } : undefined,
+          terraqoWorkspace: { connect: { id: terraqoWorkspaceId } },
           status: "WAITING",
           messages: {
             create: {
@@ -60,7 +61,8 @@ export async function POST(request: Request) {
           type: "CHAT",
           title: "Chat derivado desde bot",
           body: question,
-          href: "/admin/chat"
+          href: "/admin/chat",
+          terraqoWorkspaceId
         }
       });
       await prisma.botConversation.update({

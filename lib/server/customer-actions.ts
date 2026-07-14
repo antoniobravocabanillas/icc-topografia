@@ -37,10 +37,16 @@ async function requireClient() {
     redirect("/portal?status=pending_approval");
   }
 
-  const client = account.client || await prisma.client.upsert({
-    where: { email: session.user.email },
-    update: { userId: session.user.id, companyId: account.companyId, terraqoWorkspaceId },
-    create: {
+  const existingClient = account.client || await prisma.client.findFirst({
+    where: { email: session.user.email, terraqoWorkspaceId, deletedAt: null }
+  });
+  const client = existingClient
+    ? await prisma.client.update({
+        where: { id: existingClient.id },
+        data: { userId: session.user.id, companyId: account.companyId }
+      })
+    : await prisma.client.create({
+        data: {
       userId: session.user.id,
       companyId: account.companyId,
       terraqoWorkspaceId,
@@ -49,8 +55,8 @@ async function requireClient() {
       email: session.user.email,
       phone: account.contact?.phone || account.company.phone,
       contactName: account.contact?.name || session.user.name || session.user.email
-    }
-  });
+        }
+      });
 
   return { session, client, account, terraqoWorkspaceId };
 }
@@ -61,7 +67,7 @@ function ticketCode() {
 }
 
 export async function updateClientProfileAction(formData: FormData) {
-  const { client, account } = await requireClient();
+  const { client, account, terraqoWorkspaceId } = await requireClient();
   const name = value(formData, "name") || client.name;
   const company = value(formData, "company") || client.company || account.company.legalName;
   const document = value(formData, "document");
@@ -69,8 +75,8 @@ export async function updateClientProfileAction(formData: FormData) {
   const address = value(formData, "address");
   const contactName = value(formData, "contactName") || name;
 
-  await prisma.client.update({
-    where: { id: client.id },
+  await prisma.client.updateMany({
+    where: { id: client.id, terraqoWorkspaceId },
     data: {
       name,
       company,
@@ -81,8 +87,8 @@ export async function updateClientProfileAction(formData: FormData) {
     }
   });
 
-  await prisma.company.update({
-    where: { id: account.companyId },
+  await prisma.company.updateMany({
+    where: { id: account.companyId, terraqoWorkspaceId },
     data: {
       legalName: company,
       tradeName: company,
@@ -93,8 +99,8 @@ export async function updateClientProfileAction(formData: FormData) {
   });
 
   if (account.contactId) {
-    await prisma.contact.update({
-      where: { id: account.contactId },
+    await prisma.contact.updateMany({
+      where: { id: account.contactId, terraqoWorkspaceId },
       data: {
         name: contactName,
         phone,
@@ -137,6 +143,7 @@ export async function createCustomerTicketAction(formData: FormData) {
   });
   await prisma.notification.create({
     data: {
+      terraqoWorkspaceId,
       type: "TICKET",
       title: "Nuevo ticket de cliente",
       body: `${client.name} solicito soporte: ${subject}`,
@@ -150,12 +157,12 @@ export async function createCustomerTicketAction(formData: FormData) {
 }
 
 export async function replyCustomerTicketAction(ticketId: string, formData: FormData) {
-  const { client } = await requireClient();
+  const { client, terraqoWorkspaceId } = await requireClient();
   const body = value(formData, "body");
   if (!body) return;
 
-  const ticket = await prisma.ticket.findUnique({
-    where: { id: ticketId },
+  const ticket = await prisma.ticket.findFirst({
+    where: { id: ticketId, terraqoWorkspaceId },
     select: { clientId: true }
   });
   if (ticket?.clientId !== client.id) throw new Error("Ticket no disponible para este cliente.");
@@ -180,8 +187,14 @@ export async function replyCustomerTicketAction(ticketId: string, formData: Form
 
 export async function respondPublicQuoteAction(token: string, status: QuoteStatus) {
   if (status !== "ACCEPTED" && status !== "REJECTED") return;
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const ownedQuote = await prisma.quote.findFirst({
+    where: { publicToken: token, terraqoWorkspaceId },
+    select: { id: true }
+  });
+  if (!ownedQuote) throw new Error("Cotizacion no disponible.");
   const quote = await prisma.quote.update({
-    where: { publicToken: token },
+    where: { id: ownedQuote.id },
     data: {
       status,
       acceptedAt: status === "ACCEPTED" ? new Date() : null,
@@ -196,6 +209,7 @@ export async function respondPublicQuoteAction(token: string, status: QuoteStatu
       data: {
         quoteId: quote.id,
         sellerProfileId: quote.sellerProfileId,
+        terraqoWorkspaceId: quote.terraqoWorkspaceId,
         type: quote.sellerProfile?.commissionType || "SALE_PERCENTAGE",
         baseAmount: quote.total,
         rate,
@@ -206,6 +220,7 @@ export async function respondPublicQuoteAction(token: string, status: QuoteStatu
 
   await prisma.notification.create({
     data: {
+      terraqoWorkspaceId: quote.terraqoWorkspaceId,
       type: "QUOTE",
       title: status === "ACCEPTED" ? "Cotizacion aceptada" : "Cotizacion rechazada",
       body: `${quote.customerName} actualizo ${quote.number}`,

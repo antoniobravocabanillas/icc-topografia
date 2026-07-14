@@ -7,15 +7,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { prisma } from "@/lib/prisma";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
 import { formatCurrency } from "@/lib/utils";
+import { getSessionTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requireAdminPage(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SUPPORT"]);
+  const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
   const { id } = await params;
-  const client = await prisma.client.findUnique({
-    where: { id },
+  const client = await prisma.client.findFirst({
+    where: { id, terraqoWorkspaceId },
     include: {
       companyRef: {
         include: {

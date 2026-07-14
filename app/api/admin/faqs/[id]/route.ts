@@ -3,6 +3,7 @@ import { handleApiError, ok, parseJson } from "@/lib/server/api";
 import { requireRole } from "@/lib/server/authz";
 import { idSchema } from "@/lib/validations/common";
 import { faqUpdateSchema } from "@/lib/validations/content";
+import { getSessionTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 
 type FaqAdminRouteProps = {
   params: Promise<{ id: string }>;
@@ -14,6 +15,9 @@ export async function PATCH(request: Request, { params }: FaqAdminRouteProps) {
 
   try {
     const { id } = idSchema.parse(await params);
+    const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
+    const owned = await prisma.faq.findFirst({ where: { id, terraqoWorkspaceId }, select: { id: true } });
+    if (!owned) return ok({ error: "FAQ no encontrada" }, { status: 404 });
     const payload = await parseJson(request, faqUpdateSchema);
     const faq = await prisma.faq.update({ where: { id }, data: payload });
     return ok(faq);
@@ -28,6 +32,9 @@ export async function DELETE(_request: Request, { params }: FaqAdminRouteProps) 
 
   try {
     const { id } = idSchema.parse(await params);
+    const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
+    const owned = await prisma.faq.findFirst({ where: { id, terraqoWorkspaceId }, select: { id: true } });
+    if (!owned) return ok({ error: "FAQ no encontrada" }, { status: 404 });
     await prisma.faq.delete({ where: { id } });
     return ok({ deleted: true });
   } catch (error) {

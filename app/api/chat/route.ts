@@ -16,8 +16,8 @@ export async function POST(request: Request) {
     if (!body) return fail("Mensaje requerido", 422);
 
     if (conversationId) {
-      const conversation = await prisma.chatConversation.findUnique({
-        where: { id: conversationId },
+      const conversation = await prisma.chatConversation.findFirst({
+        where: { id: conversationId, terraqoWorkspaceId },
         select: { status: true }
       });
       if (!conversation) return fail("Conversacion no encontrada", 404);
@@ -31,7 +31,8 @@ export async function POST(request: Request) {
           type: "CHAT",
           title: "Nuevo mensaje de cliente",
           body,
-          href: "/admin/chat"
+          href: "/admin/chat",
+          terraqoWorkspaceId
         }
       });
       return NextResponse.json({ conversationId, message }, { status: 201 });
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
         customerEmail,
         customerPhone,
         topic,
-        terraqoWorkspace: terraqoWorkspaceId ? { connect: { id: terraqoWorkspaceId } } : undefined,
+        terraqoWorkspace: { connect: { id: terraqoWorkspaceId } },
         status: "WAITING",
         messages: { create: { sender: "customer", body } }
       },
@@ -64,7 +65,8 @@ export async function POST(request: Request) {
         type: "CHAT",
         title: "Nuevo chat web",
         body: `${customerName}${topic ? ` - ${topic}` : ""}`,
-        href: "/admin/chat"
+        href: "/admin/chat",
+        terraqoWorkspaceId
       }
     });
 
@@ -84,8 +86,8 @@ export async function GET(request: Request) {
     const id = searchParams.get("conversationId");
     if (!id) return fail("conversationId requerido", 422);
 
-    const conversation = await prisma.chatConversation.findUnique({
-      where: { id },
+    const conversation = await prisma.chatConversation.findFirst({
+      where: { id, terraqoWorkspaceId },
       include: {
         assignedProfile: true,
         assignedTo: true,

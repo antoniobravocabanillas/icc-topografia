@@ -301,8 +301,8 @@ model User {
   internalMessages           InternalChatMessage[]
   notifications              Notification[]
   activityLogs               ActivityLog[]
-  staffProfile               StaffProfile?
-  clientProfile              Client?
+  staffProfiles              StaffProfile[]
+  clientProfiles             Client[]
   clientAccounts             ClientAccount[]
   terraqoMemberships         TerraqoWorkspaceMember[]
   ownedTerraqoWorkspaces     TerraqoWorkspace[]          @relation("TerraqoWorkspaceOwner")
@@ -337,8 +337,8 @@ model Company {
   documents          Document[]
   activities         ActivityLog[]
   terraqoWorkspaces  TerraqoWorkspace[]
-  terraqoWorkspaceId String?
-  terraqoWorkspace   TerraqoWorkspace?  @relation("TerraqoWorkspaceCompanies", fields: [terraqoWorkspaceId], references: [id], onDelete: SetNull)
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace   @relation("TerraqoWorkspaceCompanies", fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
   deletedAt          DateTime?
@@ -350,15 +350,15 @@ model Company {
 }
 
 model Contact {
-  id                 String            @id @default(cuid())
+  id                 String           @id @default(cuid())
   companyId          String
-  company            Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company            Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name               String
   roleTitle          String?
   email              String?
   phone              String?
   whatsapp           String?
-  isPrimary          Boolean           @default(false)
+  isPrimary          Boolean          @default(false)
   clientAccounts     ClientAccount[]
   leads              Lead[]
   opportunities      Opportunity[]
@@ -367,10 +367,10 @@ model Contact {
   tickets            Ticket[]
   documents          Document[]
   activities         ActivityLog[]
-  terraqoWorkspaceId String?
-  terraqoWorkspace   TerraqoWorkspace? @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: SetNull)
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
   deletedAt          DateTime?
 
   @@unique([companyId, email])
@@ -380,24 +380,25 @@ model Contact {
 }
 
 model ClientAccount {
-  id                 String            @id @default(cuid())
-  userId             String?           @unique
-  user               User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  id                 String           @id @default(cuid())
+  userId             String?
+  user               User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
   companyId          String
-  company            Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company            Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   contactId          String?
-  contact            Contact?          @relation(fields: [contactId], references: [id], onDelete: SetNull)
-  clientId           String?           @unique
-  client             Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  status             String            @default("invited")
-  terraqoWorkspaceId String?
-  terraqoWorkspace   TerraqoWorkspace? @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: SetNull)
+  contact            Contact?         @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  clientId           String?          @unique
+  client             Client?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  status             String           @default("invited")
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
   invitedAt          DateTime?
   lastLoginAt        DateTime?
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
   deletedAt          DateTime?
 
+  @@unique([terraqoWorkspaceId, userId])
   @@index([companyId])
   @@index([contactId])
   @@index([status])
@@ -405,32 +406,34 @@ model ClientAccount {
 }
 
 model Client {
-  id                 String            @id @default(cuid())
-  userId             String?           @unique
-  user               User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  id                 String           @id @default(cuid())
+  userId             String?
+  user               User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
   companyId          String?
-  companyRef         Company?          @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  companyRef         Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
   account            ClientAccount?
   name               String
   company            String?
   document           String?
-  email              String            @unique
+  email              String
   phone              String?
   address            String?
   contactName        String?
-  status             String            @default("prospecto")
+  status             String           @default("prospecto")
   leads              Lead[]
   quotes             Quote[]
   projects           Project[]
   tickets            Ticket[]
   documents          ClientDocument[]
   sales              Sale[]
-  terraqoWorkspaceId String?
-  terraqoWorkspace   TerraqoWorkspace? @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: SetNull)
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
   deletedAt          DateTime?
 
+  @@unique([terraqoWorkspaceId, userId])
+  @@unique([terraqoWorkspaceId, email])
   @@index([email])
   @@index([status])
   @@index([companyId])
@@ -473,56 +476,63 @@ model VerificationToken {
 }
 
 model Category {
-  id          String     @id @default(cuid())
-  name        String
-  slug        String     @unique
-  description String?
-  parentId    String?
-  parent      Category?  @relation("CategoryTree", fields: [parentId], references: [id])
-  children    Category[] @relation("CategoryTree")
-  products    Product[]
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id                 String           @id @default(cuid())
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
+  name               String
+  slug               String
+  description        String?
+  parentId           String?
+  parent             Category?        @relation("CategoryTree", fields: [parentId], references: [id])
+  children           Category[]       @relation("CategoryTree")
+  products           Product[]
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@unique([terraqoWorkspaceId, slug])
+  @@index([terraqoWorkspaceId])
 }
 
 model Product {
-  id                 String            @id @default(cuid())
+  id                 String           @id @default(cuid())
   name               String
-  slug               String            @unique
-  sku                String            @unique
+  slug               String
+  sku                String
   brand              String
   model              String?
   summary            String
   description        String
   price              Decimal?
-  stock              Int               @default(0)
-  currency           String            @default("USD")
-  requiresQuote      Boolean           @default(false)
+  stock              Int              @default(0)
+  currency           String           @default("USD")
+  requiresQuote      Boolean          @default(false)
   availability       String
   badge              String?
   images             String[]
   mainImage          String?
   manualUrl          String?
   rentalPrice        Decimal?
-  commercialMode     String            @default("venta")
+  commercialMode     String           @default("venta")
   location           String?
   tags               String[]
-  isFeatured         Boolean           @default(false)
-  isVisible          Boolean           @default(true)
+  isFeatured         Boolean          @default(false)
+  isVisible          Boolean          @default(true)
   technicalSheet     String?
   specifications     Json
-  isActive           Boolean           @default(true)
+  isActive           Boolean          @default(true)
   categoryId         String
-  category           Category          @relation(fields: [categoryId], references: [id])
-  terraqoWorkspaceId String?
-  terraqoWorkspace   TerraqoWorkspace? @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: SetNull)
+  category           Category         @relation(fields: [categoryId], references: [id])
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
   variants           ProductVariant[]
   orderItems         OrderItem[]
   quoteItems         QuoteItem[]
   favorites          Favorite[]
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 
+  @@unique([terraqoWorkspaceId, slug])
+  @@unique([terraqoWorkspaceId, sku])
   @@index([categoryId])
   @@index([brand])
   @@index([requiresQuote])
@@ -535,33 +545,34 @@ model ProductVariant {
   id        String   @id @default(cuid())
   productId String
   name      String
-  sku       String   @unique
+  sku       String
   price     Decimal?
   stock     Int      @default(0)
   options   Json
   product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 
+  @@unique([productId, sku])
   @@index([productId])
 }
 
 model Order {
-  id                 String            @id @default(cuid())
+  id                 String           @id @default(cuid())
   userId             String?
-  user               User?             @relation(fields: [userId], references: [id])
+  user               User?            @relation(fields: [userId], references: [id])
   customerName       String
   customerEmail      String
   customerPhone      String?
-  status             OrderStatus       @default(PENDING)
+  status             OrderStatus      @default(PENDING)
   total              Decimal
-  currency           String            @default("USD")
+  currency           String           @default("USD")
   notes              String?
-  terraqoWorkspaceId String?
-  terraqoWorkspace   TerraqoWorkspace? @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: SetNull)
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
   items              OrderItem[]
   addressId          String?
-  address            Address?          @relation(fields: [addressId], references: [id])
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+  address            Address?         @relation(fields: [addressId], references: [id])
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 
   @@index([status, createdAt])
   @@index([customerEmail])
@@ -607,43 +618,44 @@ model Favorite {
 }
 
 model Service {
-  id                 String            @id @default(cuid())
+  id                 String           @id @default(cuid())
   title              String
-  slug               String            @unique
+  slug               String
   category           String?
   categoryId         String?
   subcategoryId      String?
-  categoryRef        ServiceCategory?  @relation("ServiceCategoryPrimary", fields: [categoryId], references: [id], onDelete: SetNull)
-  subcategoryRef     ServiceCategory?  @relation("ServiceCategorySecondary", fields: [subcategoryId], references: [id], onDelete: SetNull)
-  isFeatured         Boolean           @default(false)
-  status             String            @default("ACTIVE")
+  categoryRef        ServiceCategory? @relation("ServiceCategoryPrimary", fields: [categoryId], references: [id], onDelete: SetNull)
+  subcategoryRef     ServiceCategory? @relation("ServiceCategorySecondary", fields: [subcategoryId], references: [id], onDelete: SetNull)
+  isFeatured         Boolean          @default(false)
+  status             String           @default("ACTIVE")
   icon               String?
   cover              String?
-  gallery            String[]          @default([])
+  gallery            String[]         @default([])
   video              String?
   headline           String?
   summary            String
-  benefits           String[]          @default([])
-  applications       String[]          @default([])
-  deliverables       String[]          @default([])
-  technologies       String[]          @default([])
+  benefits           String[]         @default([])
+  applications       String[]         @default([])
+  deliverables       String[]         @default([])
+  technologies       String[]         @default([])
   precision          String?
-  formats            String[]          @default([])
-  compatibility      String[]          @default([])
+  formats            String[]         @default([])
+  compatibility      String[]         @default([])
   seoTitle           String?
   metaDescription    String?
   ogImage            String?
-  relatedProjects    String[]          @default([])
-  successCases       String[]          @default([])
-  relatedServices    String[]          @default([])
-  sectorSlugs        String[]          @default([])
+  relatedProjects    String[]         @default([])
+  successCases       String[]         @default([])
+  relatedServices    String[]         @default([])
+  sectorSlugs        String[]         @default([])
   content            Json
-  terraqoWorkspaceId String?
-  terraqoWorkspace   TerraqoWorkspace? @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: SetNull)
-  isPublished        Boolean           @default(true)
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
+  isPublished        Boolean          @default(true)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 
+  @@unique([terraqoWorkspaceId, slug])
   @@index([isPublished, isFeatured])
   @@index([category])
   @@index([categoryId])
@@ -653,27 +665,31 @@ model Service {
 }
 
 model Sector {
-  id              String   @id @default(cuid())
-  name            String
-  slug            String   @unique
-  description     String
-  icon            String?
-  image           String?
-  position        Int      @default(0)
-  active          Boolean  @default(true)
-  seoTitle        String?
-  metaDescription String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                 String           @id @default(cuid())
+  name               String
+  slug               String
+  description        String
+  icon               String?
+  image              String?
+  position           Int              @default(0)
+  active             Boolean          @default(true)
+  seoTitle           String?
+  metaDescription    String?
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 
+  @@unique([terraqoWorkspaceId, slug])
   @@index([active])
   @@index([position])
+  @@index([terraqoWorkspaceId])
 }
 
 model ServiceCategory {
   id                  String            @id @default(cuid())
   name                String
-  slug                String            @unique
+  slug                String
   description         String?
   icon                String?
   seoTitle            String?
@@ -685,11 +701,12 @@ model ServiceCategory {
   children            ServiceCategory[] @relation("ServiceCategoryTree")
   services            Service[]         @relation("ServiceCategoryPrimary")
   subcategoryServices Service[]         @relation("ServiceCategorySecondary")
-  terraqoWorkspaceId  String?
-  terraqoWorkspace    TerraqoWorkspace? @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: SetNull)
+  terraqoWorkspaceId  String
+  terraqoWorkspace    TerraqoWorkspace  @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
 
+  @@unique([terraqoWorkspaceId, slug])
   @@index([parentId])
   @@index([active])
   @@index([position])
@@ -697,101 +714,121 @@ model ServiceCategory {
 }
 
 model CmsPage {
-  id          String   @id @default(cuid())
-  title       String
-  slug        String   @unique
-  metaTitle   String?
-  metaDesc    String?
-  content     Json
-  isPublished Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                 String           @id @default(cuid())
+  title              String
+  slug               String
+  metaTitle          String?
+  metaDesc           String?
+  content            Json
+  isPublished        Boolean          @default(true)
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@unique([terraqoWorkspaceId, slug])
+  @@index([terraqoWorkspaceId])
 }
 
 model Banner {
-  id        String   @id @default(cuid())
-  title     String
-  subtitle  String?
-  ctaLabel  String?
-  ctaHref   String?
-  image     String?
-  placement String
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
+  id                 String           @id @default(cuid())
+  title              String
+  subtitle           String?
+  ctaLabel           String?
+  ctaHref            String?
+  image              String?
+  placement          String
+  active             Boolean          @default(true)
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
+  createdAt          DateTime         @default(now())
+
+  @@index([terraqoWorkspaceId])
 }
 
 model Testimonial {
-  id        String   @id @default(cuid())
-  quote     String
-  author    String
-  company   String?
-  role      String?
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
+  id                 String           @id @default(cuid())
+  quote              String
+  author             String
+  company            String?
+  role               String?
+  active             Boolean          @default(true)
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
+  createdAt          DateTime         @default(now())
+
+  @@index([terraqoWorkspaceId])
 }
 
 model ClientLogo {
-  id                 String            @id @default(cuid())
+  id                 String           @id @default(cuid())
   name               String
   logoUrl            String
   website            String?
   sector             String?
-  position           Int               @default(0)
-  active             Boolean           @default(true)
-  terraqoWorkspaceId String?
-  terraqoWorkspace   TerraqoWorkspace? @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: SetNull)
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+  position           Int              @default(0)
+  active             Boolean          @default(true)
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 
   @@index([active, position])
   @@index([terraqoWorkspaceId])
 }
 
 model Faq {
-  id         String   @id @default(cuid())
-  question   String
-  answer     String
-  category   String?
-  origin     String   @default("manual")
-  approved   Boolean  @default(true)
-  usageCount Int      @default(0)
-  position   Int      @default(0)
-  active     Boolean  @default(true)
-  createdAt  DateTime @default(now())
+  id                 String           @id @default(cuid())
+  question           String
+  answer             String
+  category           String?
+  origin             String           @default("manual")
+  approved           Boolean          @default(true)
+  usageCount         Int              @default(0)
+  position           Int              @default(0)
+  active             Boolean          @default(true)
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
+  createdAt          DateTime         @default(now())
 
   @@index([active, approved, position])
+  @@index([terraqoWorkspaceId])
 }
 
 model BlogPost {
-  id          String    @id @default(cuid())
-  title       String
-  slug        String    @unique
-  excerpt     String
-  content     Json
-  author      String?
-  category    String?
-  metaTitle   String?
-  metaDesc    String?
-  publishedAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id                 String           @id @default(cuid())
+  title              String
+  slug               String
+  excerpt            String
+  content            Json
+  author             String?
+  category           String?
+  metaTitle          String?
+  metaDesc           String?
+  publishedAt        DateTime?
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 
+  @@unique([terraqoWorkspaceId, slug])
   @@index([publishedAt])
   @@index([category])
+  @@index([terraqoWorkspaceId])
 }
 
 model Lead {
-  id                 String            @id @default(cuid())
+  id                 String           @id @default(cuid())
   clientId           String?
-  client             Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  client             Client?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
   companyId          String?
-  companyRef         Company?          @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  companyRef         Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
   contactId          String?
-  contact            Contact?          @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  contact            Contact?         @relation(fields: [contactId], references: [id], onDelete: SetNull)
   assignedProfileId  String?
-  assignedProfile    StaffProfile?     @relation("LeadAssignedProfile", fields: [assignedProfileId], references: [id], onDelete: SetNull)
-  terraqoWorkspaceId String?
-  terraqoWorkspace   TerraqoWorkspace? @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: SetNull)
+  assignedProfile    StaffProfile?    @relation("LeadAssignedProfile", fields: [assignedProfileId], references: [id], onDelete: SetNull)
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
   name               String
   email              String
   phone              String?
@@ -799,16 +836,16 @@ model Lead {
   message            String
   source             String?
   interest           String?
-  priority           LeadPriority      @default(MEDIUM)
+  priority           LeadPriority     @default(MEDIUM)
   estimatedValue     Decimal?
   nextFollowUpAt     DateTime?
-  status             LeadStatus        @default(NEW)
+  status             LeadStatus       @default(NEW)
   notes              LeadNote[]
   quotes             Quote[]
   opportunity        Opportunity?
   activities         ActivityLog[]
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
   deletedAt          DateTime?
 
   @@index([status, createdAt])
@@ -833,32 +870,32 @@ model LeadNote {
 }
 
 model Quote {
-  id                 String            @id @default(cuid())
-  number             String            @unique
+  id                 String           @id @default(cuid())
+  number             String           @unique
   clientId           String?
-  client             Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  client             Client?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
   companyId          String?
-  companyRef         Company?          @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  companyRef         Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
   contactId          String?
-  contact            Contact?          @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  contact            Contact?         @relation(fields: [contactId], references: [id], onDelete: SetNull)
   opportunityId      String?
-  opportunity        Opportunity?      @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  opportunity        Opportunity?     @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
   leadId             String?
-  lead               Lead?             @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  lead               Lead?            @relation(fields: [leadId], references: [id], onDelete: SetNull)
   sellerProfileId    String?
-  sellerProfile      StaffProfile?     @relation("QuoteSellerProfile", fields: [sellerProfileId], references: [id], onDelete: SetNull)
-  terraqoWorkspaceId String?
-  terraqoWorkspace   TerraqoWorkspace? @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: SetNull)
-  publicToken        String?           @unique @default(cuid())
+  sellerProfile      StaffProfile?    @relation("QuoteSellerProfile", fields: [sellerProfileId], references: [id], onDelete: SetNull)
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
+  publicToken        String?          @unique @default(cuid())
   customerName       String
   customerEmail      String?
   company            String?
-  status             QuoteStatus       @default(DRAFT)
-  currency           String            @default("USD")
-  subtotal           Decimal           @default(0)
-  discount           Decimal           @default(0)
-  tax                Decimal           @default(0)
-  total              Decimal           @default(0)
+  status             QuoteStatus      @default(DRAFT)
+  currency           String           @default("USD")
+  subtotal           Decimal          @default(0)
+  discount           Decimal          @default(0)
+  tax                Decimal          @default(0)
+  total              Decimal          @default(0)
   validUntil         DateTime?
   terms              String?
   deliveryTime       String?
@@ -870,8 +907,8 @@ model Quote {
   commissions        Commission[]
   sale               Sale?
   activities         ActivityLog[]
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
   deletedAt          DateTime?
 
   @@index([status, createdAt])
@@ -902,23 +939,26 @@ model QuoteItem {
 }
 
 model Commission {
-  id              String           @id @default(cuid())
-  quoteId         String?
-  quote           Quote?           @relation(fields: [quoteId], references: [id], onDelete: SetNull)
-  sellerProfileId String
-  sellerProfile   StaffProfile     @relation("CommissionSellerProfile", fields: [sellerProfileId], references: [id], onDelete: Cascade)
-  type            CommissionType   @default(SALE_PERCENTAGE)
-  baseAmount      Decimal          @default(0)
-  rate            Decimal          @default(0)
-  amount          Decimal          @default(0)
-  status          CommissionStatus @default(PENDING)
-  paidAt          DateTime?
-  notes           String?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  id                 String           @id @default(cuid())
+  quoteId            String?
+  quote              Quote?           @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  sellerProfileId    String
+  sellerProfile      StaffProfile     @relation("CommissionSellerProfile", fields: [sellerProfileId], references: [id], onDelete: Cascade)
+  type               CommissionType   @default(SALE_PERCENTAGE)
+  baseAmount         Decimal          @default(0)
+  rate               Decimal          @default(0)
+  amount             Decimal          @default(0)
+  status             CommissionStatus @default(PENDING)
+  paidAt             DateTime?
+  notes              String?
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 
   @@index([sellerProfileId, status])
   @@index([quoteId])
+  @@index([terraqoWorkspaceId])
 }
 
 model Opportunity {
@@ -933,8 +973,8 @@ model Opportunity {
   lead               Lead?             @relation(fields: [leadId], references: [id], onDelete: SetNull)
   sellerProfileId    String?
   sellerProfile      StaffProfile?     @relation("OpportunitySellerProfile", fields: [sellerProfileId], references: [id], onDelete: SetNull)
-  terraqoWorkspaceId String?
-  terraqoWorkspace   TerraqoWorkspace? @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: SetNull)
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace  @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
   status             OpportunityStatus @default(OPEN)
   source             String?
   interest           String?
@@ -960,31 +1000,31 @@ model Opportunity {
 }
 
 model Sale {
-  id                 String            @id @default(cuid())
-  number             String            @unique
-  quoteId            String?           @unique
-  quote              Quote?            @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  id                 String           @id @default(cuid())
+  number             String           @unique
+  quoteId            String?          @unique
+  quote              Quote?           @relation(fields: [quoteId], references: [id], onDelete: SetNull)
   opportunityId      String?
-  opportunity        Opportunity?      @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  opportunity        Opportunity?     @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
   clientId           String?
-  client             Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  client             Client?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
   companyId          String?
-  company            Company?          @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  company            Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
   contactId          String?
-  contact            Contact?          @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  contact            Contact?         @relation(fields: [contactId], references: [id], onDelete: SetNull)
   sellerProfileId    String?
-  sellerProfile      StaffProfile?     @relation("SaleSellerProfile", fields: [sellerProfileId], references: [id], onDelete: SetNull)
-  terraqoWorkspaceId String?
-  terraqoWorkspace   TerraqoWorkspace? @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: SetNull)
-  status             SaleStatus        @default(PENDING)
-  currency           String            @default("USD")
-  amount             Decimal           @default(0)
-  commissionAmount   Decimal           @default(0)
+  sellerProfile      StaffProfile?    @relation("SaleSellerProfile", fields: [sellerProfileId], references: [id], onDelete: SetNull)
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
+  status             SaleStatus       @default(PENDING)
+  currency           String           @default("USD")
+  amount             Decimal          @default(0)
+  commissionAmount   Decimal          @default(0)
   paidAt             DateTime?
   projects           Project[]
   activities         ActivityLog[]
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
   deletedAt          DateTime?
 
   @@index([status, createdAt])
@@ -996,7 +1036,7 @@ model Sale {
 }
 
 model ContactMessage {
-  id                 String            @id @default(cuid())
+  id                 String           @id @default(cuid())
   name               String
   email              String
   phone              String?
@@ -1004,9 +1044,9 @@ model ContactMessage {
   message            String
   intent             String?
   context            String?
-  terraqoWorkspaceId String?
-  terraqoWorkspace   TerraqoWorkspace? @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: SetNull)
-  createdAt          DateTime          @default(now())
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
+  createdAt          DateTime         @default(now())
 
   @@index([createdAt])
   @@index([email])
@@ -1014,21 +1054,21 @@ model ContactMessage {
 }
 
 model ChatConversation {
-  id                 String            @id @default(cuid())
+  id                 String           @id @default(cuid())
   customerName       String
   customerEmail      String?
   customerPhone      String?
   topic              String?
-  status             ChatStatus        @default(WAITING)
+  status             ChatStatus       @default(WAITING)
   assignedToId       String?
-  assignedTo         User?             @relation(fields: [assignedToId], references: [id])
+  assignedTo         User?            @relation(fields: [assignedToId], references: [id])
   assignedProfileId  String?
-  assignedProfile    StaffProfile?     @relation(fields: [assignedProfileId], references: [id], onDelete: SetNull)
-  terraqoWorkspaceId String?
-  terraqoWorkspace   TerraqoWorkspace? @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: SetNull)
+  assignedProfile    StaffProfile?    @relation(fields: [assignedProfileId], references: [id], onDelete: SetNull)
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
   messages           ChatMessage[]
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 
   @@index([status, createdAt])
   @@index([assignedToId])
@@ -1048,13 +1088,18 @@ model ChatMessage {
 }
 
 model InternalChatChannel {
-  id          String                @id @default(cuid())
-  name        String
-  slug        String                @unique
-  description String?
-  messages    InternalChatMessage[]
-  createdAt   DateTime              @default(now())
-  updatedAt   DateTime              @updatedAt
+  id                 String                @id @default(cuid())
+  name               String
+  slug               String
+  description        String?
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace      @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
+  messages           InternalChatMessage[]
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  @@unique([terraqoWorkspaceId, slug])
+  @@index([terraqoWorkspaceId])
 }
 
 model InternalChatMessage {
@@ -1075,17 +1120,20 @@ model InternalChatMessage {
 }
 
 model BotConversation {
-  id              String       @id @default(cuid())
-  customerName    String?
-  customerEmail   String?
-  status          String       @default("bot")
-  provider        BotProvider  @default(LOCAL)
-  escalatedChatId String?
-  messages        BotMessage[]
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  id                 String           @id @default(cuid())
+  customerName       String?
+  customerEmail      String?
+  status             String           @default("bot")
+  provider           BotProvider      @default(LOCAL)
+  escalatedChatId    String?
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
+  messages           BotMessage[]
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 
   @@index([status, createdAt])
+  @@index([terraqoWorkspaceId])
 }
 
 model BotMessage {
@@ -1102,78 +1150,90 @@ model BotMessage {
 }
 
 model BotUnansweredQuestion {
-  id        String            @id @default(cuid())
-  question  String            @unique
-  answer    String?
-  category  String?
-  source    String?
-  frequency Int               @default(1)
-  status    BotQuestionStatus @default(PENDING)
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
+  id                 String            @id @default(cuid())
+  question           String
+  answer             String?
+  category           String?
+  source             String?
+  frequency          Int               @default(1)
+  status             BotQuestionStatus @default(PENDING)
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace  @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 
+  @@unique([terraqoWorkspaceId, question])
   @@index([status, frequency])
+  @@index([terraqoWorkspaceId])
 }
 
 model Notification {
-  id        String           @id @default(cuid())
-  userId    String?
-  user      User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type      NotificationType @default(SYSTEM)
-  title     String
-  body      String?
-  href      String?
-  readAt    DateTime?
-  createdAt DateTime         @default(now())
+  id                 String           @id @default(cuid())
+  userId             String?
+  user               User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type               NotificationType @default(SYSTEM)
+  title              String
+  body               String?
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
+  href               String?
+  readAt             DateTime?
+  createdAt          DateTime         @default(now())
 
   @@index([userId, readAt, createdAt])
   @@index([type, createdAt])
+  @@index([terraqoWorkspaceId])
 }
 
 model StaffProfile {
-  id              String                @id @default(cuid())
-  userId          String?               @unique
-  user            User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
-  displayName     String
-  email           String?               @unique
-  phone           String?
-  roleTitle       String
-  department      StaffDepartment       @default(SALES)
-  avatar          String?
-  availability    TechnicalAvailability @default(AVAILABLE)
-  workZone        String?
-  experience      String?
-  certifications  String[]
-  documents       String[]
-  commissionType  CommissionType        @default(SALE_PERCENTAGE)
-  commissionRate  Decimal               @default(5)
-  fixedCommission Decimal               @default(0)
-  monthlyGoal     Decimal               @default(0)
-  territory       String?
-  internalNotes   String?
-  specialties     String[]
-  tools           Json
-  active          Boolean               @default(true)
-  assignedChats   ChatConversation[]
-  assignedLeads   Lead[]                @relation("LeadAssignedProfile")
-  opportunities   Opportunity[]         @relation("OpportunitySellerProfile")
-  quotes          Quote[]               @relation("QuoteSellerProfile")
-  sales           Sale[]                @relation("SaleSellerProfile")
-  commissions     Commission[]          @relation("CommissionSellerProfile")
-  projectMembers  ProjectMember[]
-  tasks           Task[]                @relation("TaskAssigneeProfile")
-  ticketAssignee  Ticket[]              @relation("TicketAssigneeProfile")
-  progressEntries ProjectProgress[]
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
+  id                 String                @id @default(cuid())
+  userId             String?
+  user               User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace      @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
+  displayName        String
+  email              String?
+  phone              String?
+  roleTitle          String
+  department         StaffDepartment       @default(SALES)
+  avatar             String?
+  availability       TechnicalAvailability @default(AVAILABLE)
+  workZone           String?
+  experience         String?
+  certifications     String[]
+  documents          String[]
+  commissionType     CommissionType        @default(SALE_PERCENTAGE)
+  commissionRate     Decimal               @default(5)
+  fixedCommission    Decimal               @default(0)
+  monthlyGoal        Decimal               @default(0)
+  territory          String?
+  internalNotes      String?
+  specialties        String[]
+  tools              Json
+  active             Boolean               @default(true)
+  assignedChats      ChatConversation[]
+  assignedLeads      Lead[]                @relation("LeadAssignedProfile")
+  opportunities      Opportunity[]         @relation("OpportunitySellerProfile")
+  quotes             Quote[]               @relation("QuoteSellerProfile")
+  sales              Sale[]                @relation("SaleSellerProfile")
+  commissions        Commission[]          @relation("CommissionSellerProfile")
+  projectMembers     ProjectMember[]
+  tasks              Task[]                @relation("TaskAssigneeProfile")
+  ticketAssignee     Ticket[]              @relation("TicketAssigneeProfile")
+  progressEntries    ProjectProgress[]
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
 
+  @@unique([terraqoWorkspaceId, userId])
+  @@unique([terraqoWorkspaceId, email])
   @@index([department, active])
+  @@index([terraqoWorkspaceId])
 }
 
 model Project {
   id                 String                          @id @default(cuid())
   title              String
-  slug               String                          @unique
+  slug               String
   clientId           String?
   client             Client?                         @relation(fields: [clientId], references: [id], onDelete: SetNull)
   companyId          String?
@@ -1182,8 +1242,8 @@ model Project {
   opportunity        Opportunity?                    @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
   saleId             String?
   sale               Sale?                           @relation(fields: [saleId], references: [id], onDelete: SetNull)
-  terraqoWorkspaceId String?
-  terraqoWorkspace   TerraqoWorkspace?               @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: SetNull)
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace                @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
   clientName         String?
   location           String?
   category           String?
@@ -1209,6 +1269,7 @@ model Project {
   updatedAt          DateTime                        @updatedAt
   deletedAt          DateTime?
 
+  @@unique([terraqoWorkspaceId, slug])
   @@index([status, isPublic])
   @@index([isFeatured])
   @@index([clientId])
@@ -1306,32 +1367,32 @@ model Task {
 }
 
 model Ticket {
-  id                 String            @id @default(cuid())
-  code               String            @unique
+  id                 String           @id @default(cuid())
+  code               String           @unique
   clientId           String?
-  client             Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  client             Client?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
   companyId          String?
-  companyRef         Company?          @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  companyRef         Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
   contactId          String?
-  contact            Contact?          @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  contact            Contact?         @relation(fields: [contactId], references: [id], onDelete: SetNull)
   assignedProfileId  String?
-  assignedProfile    StaffProfile?     @relation("TicketAssigneeProfile", fields: [assignedProfileId], references: [id], onDelete: SetNull)
-  terraqoWorkspaceId String?
-  terraqoWorkspace   TerraqoWorkspace? @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: SetNull)
+  assignedProfile    StaffProfile?    @relation("TicketAssigneeProfile", fields: [assignedProfileId], references: [id], onDelete: SetNull)
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
   customerName       String
   customerEmail      String
   company            String?
   subject            String
-  category           TicketCategory    @default(TECHNICAL_QUERY)
-  priority           TicketPriority    @default(MEDIUM)
-  status             TicketStatus      @default(OPEN)
+  category           TicketCategory   @default(TECHNICAL_QUERY)
+  priority           TicketPriority   @default(MEDIUM)
+  status             TicketStatus     @default(OPEN)
   description        String
   attachments        String[]
   messages           TicketMessage[]
   documents          Document[]
   activities         ActivityLog[]
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
   closedAt           DateTime?
   deletedAt          DateTime?
 
@@ -1373,27 +1434,27 @@ model ClientDocument {
 }
 
 model Document {
-  id                 String            @id @default(cuid())
+  id                 String           @id @default(cuid())
   title              String
   url                String
   type               String?
-  visibility         String            @default("internal")
+  visibility         String           @default("internal")
   companyId          String?
-  company            Company?          @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  company            Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
   contactId          String?
-  contact            Contact?          @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  contact            Contact?         @relation(fields: [contactId], references: [id], onDelete: SetNull)
   projectId          String?
-  project            Project?          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project            Project?         @relation(fields: [projectId], references: [id], onDelete: Cascade)
   milestoneId        String?
-  milestone          Milestone?        @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  milestone          Milestone?       @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
   taskId             String?
-  task               Task?             @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  task               Task?            @relation(fields: [taskId], references: [id], onDelete: SetNull)
   ticketId           String?
-  ticket             Ticket?           @relation(fields: [ticketId], references: [id], onDelete: SetNull)
-  terraqoWorkspaceId String?
-  terraqoWorkspace   TerraqoWorkspace? @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: SetNull)
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+  ticket             Ticket?          @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
   deletedAt          DateTime?
 
   @@index([companyId])
@@ -1405,9 +1466,9 @@ model Document {
 }
 
 model ActivityLog {
-  id                 String            @id @default(cuid())
+  id                 String           @id @default(cuid())
   actorId            String?
-  actor              User?             @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actor              User?            @relation(fields: [actorId], references: [id], onDelete: SetNull)
   action             ActivityAction
   entityType         String
   entityId           String
@@ -1415,26 +1476,26 @@ model ActivityLog {
   body               String?
   metadata           Json?
   companyId          String?
-  company            Company?          @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  company            Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
   contactId          String?
-  contact            Contact?          @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  contact            Contact?         @relation(fields: [contactId], references: [id], onDelete: SetNull)
   leadId             String?
-  lead               Lead?             @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  lead               Lead?            @relation(fields: [leadId], references: [id], onDelete: SetNull)
   opportunityId      String?
-  opportunity        Opportunity?      @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  opportunity        Opportunity?     @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
   quoteId            String?
-  quote              Quote?            @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  quote              Quote?           @relation(fields: [quoteId], references: [id], onDelete: SetNull)
   saleId             String?
-  sale               Sale?             @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  sale               Sale?            @relation(fields: [saleId], references: [id], onDelete: SetNull)
   projectId          String?
-  project            Project?          @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  project            Project?         @relation(fields: [projectId], references: [id], onDelete: SetNull)
   taskId             String?
-  task               Task?             @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  task               Task?            @relation(fields: [taskId], references: [id], onDelete: SetNull)
   ticketId           String?
-  ticket             Ticket?           @relation(fields: [ticketId], references: [id], onDelete: SetNull)
-  terraqoWorkspaceId String?
-  terraqoWorkspace   TerraqoWorkspace? @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: SetNull)
-  createdAt          DateTime          @default(now())
+  ticket             Ticket?          @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  terraqoWorkspaceId String
+  terraqoWorkspace   TerraqoWorkspace @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
+  createdAt          DateTime         @default(now())
 
   @@index([entityType, entityId])
   @@index([companyId, createdAt])
@@ -1474,13 +1535,26 @@ model TerraqoWorkspace {
   orders            Order[]
   services          Service[]
   serviceCategories ServiceCategory[]
+  categories        Category[]
+  sectors           Sector[]
+  cmsPages          CmsPage[]
+  banners           Banner[]
+  testimonials      Testimonial[]
+  faqs              Faq[]
+  blogPosts         BlogPost[]
   clientLogos       ClientLogo[]
   leads             Lead[]
   quotes            Quote[]
   opportunities     Opportunity[]
   sales             Sale[]
+  commissions       Commission[]
   contactMessages   ContactMessage[]
   chatConversations ChatConversation[]
+  internalChannels  InternalChatChannel[]
+  botConversations  BotConversation[]
+  botQuestions      BotUnansweredQuestion[]
+  notifications     Notification[]
+  staffProfiles     StaffProfile[]
   projects          Project[]
   tickets           Ticket[]
   documents         Document[]
@@ -1609,7 +1683,7 @@ model TerraqoJobPost {
   projectId      String?
   project        Project?                    @relation(fields: [projectId], references: [id], onDelete: SetNull)
   title          String
-  slug           String                      @unique
+  slug           String
   summary        String
   description    String
   location       String?
@@ -1624,6 +1698,7 @@ model TerraqoJobPost {
   updatedAt      DateTime                    @updatedAt
   deletedAt      DateTime?
 
+  @@unique([workspaceId, slug])
   @@index([workspaceId, status])
   @@index([projectId])
   @@index([visibility])
@@ -1654,7 +1729,7 @@ model TerraqoForumChannel {
   workspaceId String?
   workspace   TerraqoWorkspace?  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   name        String
-  slug        String             @unique
+  slug        String
   description String?
   visibility  TerraqoVisibility  @default(COMMUNITY)
   active      Boolean            @default(true)
@@ -1662,6 +1737,7 @@ model TerraqoForumChannel {
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
 
+  @@unique([workspaceId, slug])
   @@index([workspaceId, active])
   @@index([visibility])
 }

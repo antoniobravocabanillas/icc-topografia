@@ -5,7 +5,8 @@ import { redirect } from "next/navigation";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/server/api";
-import { getDefaultTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
+import { requireWorkspaceActionRole } from "@/lib/server/workspace-action-auth";
+import { requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 
 function formValue(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -71,16 +72,24 @@ function productDataFromForm(formData: FormData) {
 }
 
 export async function createProductAction(formData: FormData) {
-  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const { workspaceId: terraqoWorkspaceId } = await requireWorkspaceActionRole(["EDITOR", "ADMIN"]);
   await requireWorkspaceModule("TECHNICAL_STORE", terraqoWorkspaceId);
-  await prisma.product.create({ data: { ...productDataFromForm(formData), terraqoWorkspaceId } });
+  const data = productDataFromForm(formData);
+  const category = await prisma.category.findFirst({ where: { id: data.categoryId, terraqoWorkspaceId }, select: { id: true } });
+  if (!category) throw new Error("Categoria no pertenece al workspace activo.");
+  await prisma.product.create({ data: { ...data, terraqoWorkspaceId } });
   revalidatePath("/tienda");
   revalidatePath("/admin/productos");
   redirect("/admin/productos");
 }
 
 export async function updateProductAction(id: string, formData: FormData) {
+  const { workspaceId: terraqoWorkspaceId } = await requireWorkspaceActionRole(["EDITOR", "ADMIN"]);
+  const product = await prisma.product.findFirst({ where: { id, terraqoWorkspaceId }, select: { id: true } });
+  if (!product) throw new Error("Producto no pertenece al workspace activo.");
   const data = productDataFromForm(formData);
+  const category = await prisma.category.findFirst({ where: { id: data.categoryId, terraqoWorkspaceId }, select: { id: true } });
+  if (!category) throw new Error("Categoria no pertenece al workspace activo.");
   await prisma.product.update({
     where: { id },
     data
@@ -92,6 +101,9 @@ export async function updateProductAction(id: string, formData: FormData) {
 }
 
 export async function deleteProductAction(id: string) {
+  const { workspaceId: terraqoWorkspaceId } = await requireWorkspaceActionRole(["EDITOR", "ADMIN"]);
+  const product = await prisma.product.findFirst({ where: { id, terraqoWorkspaceId }, select: { id: true } });
+  if (!product) throw new Error("Producto no pertenece al workspace activo.");
   await prisma.product.update({ where: { id }, data: { isActive: false } });
   revalidatePath("/tienda");
   revalidatePath("/admin/productos");

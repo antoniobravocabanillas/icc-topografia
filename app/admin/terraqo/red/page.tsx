@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/server/api";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
-import { getDefaultTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
+import { getSessionTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 
 function textValue(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -25,7 +25,7 @@ async function createJobPostAction(formData: FormData) {
   "use server";
 
   await requireAdminPage(["ADMIN", "SUPER_ADMIN"]);
-  const workspaceId = await getDefaultTerraqoWorkspaceId();
+  const workspaceId = await getSessionTerraqoWorkspaceId();
   if (!workspaceId) throw new Error("Workspace Terraqo no configurado.");
   await requireWorkspaceModule("JOB_MARKETPLACE", workspaceId);
 
@@ -60,7 +60,7 @@ export const revalidate = 0;
 
 export default async function TerraqoNetworkPage() {
   await requireAdminPage(["ADMIN", "SUPER_ADMIN"]);
-  const workspaceId = await getDefaultTerraqoWorkspaceId();
+  const workspaceId = await getSessionTerraqoWorkspaceId();
   if (!workspaceId) throw new Error("Workspace Terraqo no configurado.");
   await requireWorkspaceModule("PROFESSIONAL_NETWORK", workspaceId);
 

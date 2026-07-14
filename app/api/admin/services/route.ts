@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { created, handleApiError, ok, parseJson, slugify } from "@/lib/server/api";
 import { requireRole } from "@/lib/server/authz";
-import { getDefaultTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
+import { getSessionTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 import { serviceInputSchema } from "@/lib/validations/content";
 
 export async function GET() {
@@ -10,7 +10,7 @@ export async function GET() {
   if (response) return response;
 
   try {
-    const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+    const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
     await requireWorkspaceModule("PUBLIC_WEBSITE", terraqoWorkspaceId);
     const services = await prisma.service.findMany({ where: { terraqoWorkspaceId }, orderBy: { updatedAt: "desc" } });
     return ok(services);
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
   if (response) return response;
 
   try {
-    const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+    const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
     await requireWorkspaceModule("PUBLIC_WEBSITE", terraqoWorkspaceId);
     const payload = await parseJson(request, serviceInputSchema);
     const service = await prisma.service.create({

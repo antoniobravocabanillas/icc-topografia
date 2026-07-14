@@ -4,14 +4,14 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { prisma } from "@/lib/prisma";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
-import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
+import { getSessionTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 import { workspace } from "@/lib/workspace";
 
 export default async function AdminPage() {
   const session = await requireAdminPage(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"]);
-  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
   if (["TECHNICIAN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"].includes(session.user.role || "")) {
-    const profile = await prisma.staffProfile.findUnique({ where: { userId: session.user.id } });
+    const profile = await prisma.staffProfile.findFirst({ where: { userId: session.user.id, terraqoWorkspaceId } });
     const [assignedChats, assignedTickets, assignedProjects] = profile
       ? await Promise.all([
           prisma.chatConversation.findMany({
@@ -133,7 +133,7 @@ export default async function AdminPage() {
     prisma.quote.count({ where: { status: "ACCEPTED", terraqoWorkspaceId } }),
     prisma.quote.count({ where: { status: "REJECTED", terraqoWorkspaceId } }),
     prisma.quote.aggregate({ where: { status: "ACCEPTED", terraqoWorkspaceId }, _sum: { total: true } }),
-    prisma.commission.count({ where: { status: { in: ["PENDING", "APPROVED"] } } }),
+    prisma.commission.count({ where: { status: { in: ["PENDING", "APPROVED"] }, terraqoWorkspaceId } }),
     prisma.project.count({ where: { status: { in: ["PLANNING", "IN_PROGRESS"] }, terraqoWorkspaceId } }),
     prisma.product.count({ where: { isActive: true, terraqoWorkspaceId, commercialMode: { in: ["alquiler", "ambos"] } } }),
     prisma.ticket.count({ where: { status: { in: ["OPEN", "REVIEWING", "IN_PROGRESS", "WAITING_CUSTOMER"] }, terraqoWorkspaceId } })

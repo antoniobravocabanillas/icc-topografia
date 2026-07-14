@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { prisma } from "@/lib/prisma";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
 import { deleteProductAction, updateProductAction } from "@/lib/server/product-actions";
+import { getSessionTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 
 type EditProductPageProps = {
   params: Promise<{ id: string }>;
@@ -12,9 +13,10 @@ type EditProductPageProps = {
 export default async function EditProductPage({ params }: EditProductPageProps) {
   await requireAdminPage(["EDITOR", "ADMIN"]);
   const { id } = await params;
+  const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
   const [product, categories] = await Promise.all([
-    prisma.product.findUnique({ where: { id } }),
-    prisma.category.findMany({ orderBy: { name: "asc" } })
+    prisma.product.findFirst({ where: { id, terraqoWorkspaceId } }),
+    prisma.category.findMany({ where: { terraqoWorkspaceId }, orderBy: { name: "asc" } })
   ]);
 
   if (!product) notFound();

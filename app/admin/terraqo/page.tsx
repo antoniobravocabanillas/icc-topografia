@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
+import { setWorkspaceModuleState, type WorkspaceProvisioningMode } from "@/lib/terraqo/workspace-modules";
 import { terraqoModules, workspace } from "@/lib/workspace";
 
 async function toggleWorkspaceModule(formData: FormData) {
@@ -16,24 +17,12 @@ async function toggleWorkspaceModule(formData: FormData) {
   const workspaceId = String(formData.get("workspaceId") || "");
   const code = String(formData.get("code") || "") as TerraqoModuleCode;
   const active = String(formData.get("active") || "") === "true";
+  const requestedMode = String(formData.get("provisioningMode") || "blank");
+  const mode: WorkspaceProvisioningMode = requestedMode === "template" ? "template" : "blank";
 
   if (!workspaceId || !code) return;
 
-  await prisma.terraqoWorkspaceModule.upsert({
-    where: { workspaceId_code: { workspaceId, code } },
-    update: {
-      active,
-      enabledAt: active ? new Date() : undefined,
-      disabledAt: active ? null : new Date()
-    },
-    create: {
-      workspaceId,
-      code,
-      active,
-      enabledAt: active ? new Date() : undefined,
-      disabledAt: active ? undefined : new Date()
-    }
-  });
+  await setWorkspaceModuleState({ workspaceId, code, active, mode });
 
   revalidatePath("/admin/terraqo");
 }
@@ -140,7 +129,7 @@ export default async function TerraqoAdminPage() {
       <div className="space-y-5">
         {workspaces.map((item) => {
           const subscription = item.subscriptions[0];
-          const moduleState = new Map(item.modules.map((module) => [module.code, module.active]));
+          const moduleState = new Map(item.modules.map((module) => [module.code, module]));
 
           return (
             <Card key={item.id}>
@@ -181,7 +170,8 @@ export default async function TerraqoAdminPage() {
                 </div>
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                   {terraqoModules.map((module) => {
-                    const active = moduleState.get(module.code) ?? false;
+                    const moduleRecord = moduleState.get(module.code);
+                    const active = moduleRecord?.active ?? false;
 
                     return (
                       <div key={module.code} className="flex items-center justify-between gap-3 rounded-md border p-3">
@@ -189,10 +179,18 @@ export default async function TerraqoAdminPage() {
                           <p className="text-sm font-semibold">{module.label}</p>
                           <p className="text-xs text-muted-foreground">{module.code}</p>
                         </div>
-                        <form action={toggleWorkspaceModule}>
+                        <form action={toggleWorkspaceModule} className="flex items-center gap-2">
                           <input type="hidden" name="workspaceId" value={item.id} />
                           <input type="hidden" name="code" value={module.code} />
                           <input type="hidden" name="active" value={String(!active)} />
+                          {!active ? (
+                            <select name="provisioningMode" defaultValue="blank" className="h-9 rounded-md border bg-background px-2 text-xs">
+                              <option value="blank">En blanco</option>
+                              <option value="template">Con plantilla</option>
+                            </select>
+                          ) : (
+                            <input type="hidden" name="provisioningMode" value="blank" />
+                          )}
                           <Button size="sm" variant={active ? "default" : "outline"}>
                             {active ? "Activo" : "Activar"}
                           </Button>

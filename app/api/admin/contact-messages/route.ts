@@ -1,14 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import { getPagination, handleApiError, paginated } from "@/lib/server/api";
 import { requireRole } from "@/lib/server/authz";
-import { getDefaultTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
+import { getSessionTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 
 export async function GET(request: Request) {
   const { response } = await requireRole("SALES");
   if (response) return response;
 
   try {
-    const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+    const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
     await requireWorkspaceModule("CRM", terraqoWorkspaceId);
     const { searchParams } = new URL(request.url);
     const { page, pageSize, skip, take } = getPagination(searchParams);

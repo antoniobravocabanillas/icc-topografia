@@ -2,17 +2,20 @@ import { prisma } from "@/lib/prisma";
 import { getPagination, handleApiError, paginated } from "@/lib/server/api";
 import { requireRole } from "@/lib/server/authz";
 import { serializeOrder } from "@/lib/server/serializers";
+import { getSessionTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 
 export async function GET(request: Request) {
   const { response } = await requireRole("SALES");
   if (response) return response;
 
   try {
+    const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
     const { searchParams } = new URL(request.url);
     const { page, pageSize, skip, take } = getPagination(searchParams);
     const status = searchParams.get("status")?.trim();
     const q = searchParams.get("q")?.trim();
     const where = {
+      terraqoWorkspaceId,
       ...(status ? { status: status as "PENDING" } : {}),
       ...(q
         ? {

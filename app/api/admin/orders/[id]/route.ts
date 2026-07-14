@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/server/authz";
 import { serializeOrder } from "@/lib/server/serializers";
 import { idSchema } from "@/lib/validations/common";
 import { orderStatusSchema } from "@/lib/validations/commerce";
+import { getSessionTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 
 type OrderAdminRouteProps = {
   params: Promise<{ id: string }>;
@@ -15,8 +16,9 @@ export async function GET(_request: Request, { params }: OrderAdminRouteProps) {
 
   try {
     const { id } = idSchema.parse(await params);
-    const order = await prisma.order.findUnique({
-      where: { id },
+    const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
+    const order = await prisma.order.findFirst({
+      where: { id, terraqoWorkspaceId },
       include: { items: { include: { product: true } }, address: true }
     });
     if (!order) return fail("Pedido no encontrado", 404);
@@ -32,6 +34,9 @@ export async function PATCH(request: Request, { params }: OrderAdminRouteProps) 
 
   try {
     const { id } = idSchema.parse(await params);
+    const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
+    const owned = await prisma.order.findFirst({ where: { id, terraqoWorkspaceId }, select: { id: true } });
+    if (!owned) return fail("Pedido no encontrado", 404);
     const payload = await parseJson(request, orderStatusSchema);
     const order = await prisma.order.update({
       where: { id },
@@ -50,6 +55,9 @@ export async function DELETE(_request: Request, { params }: OrderAdminRouteProps
 
   try {
     const { id } = idSchema.parse(await params);
+    const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
+    const owned = await prisma.order.findFirst({ where: { id, terraqoWorkspaceId }, select: { id: true } });
+    if (!owned) return fail("Pedido no encontrado", 404);
     await prisma.order.delete({ where: { id } });
     return ok({ deleted: true });
   } catch (error) {

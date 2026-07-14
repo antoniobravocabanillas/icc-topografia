@@ -15,7 +15,7 @@ import {
 } from "@/lib/server/admin-actions";
 import { canManageAdmin, requireAdminPage } from "@/lib/server/admin-page-auth";
 import { safeDb } from "@/lib/server/safe-db";
-import { getDefaultTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
+import { getSessionTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 
 const statusLabels = {
   WAITING: "Esperando respuesta",
@@ -46,10 +46,10 @@ export default async function AdminChatPage() {
   const session = await requireAdminPage(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SUPPORT"]);
   const role = session.user.role as Role;
   const canManage = canManageAdmin(role);
-  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
   await requireWorkspaceModule("CUSTOMER_CHAT", terraqoWorkspaceId);
-  const currentProfile = await safeDb("admin chat current profile", prisma.staffProfile.findUnique({
-    where: { userId: session.user.id }
+  const currentProfile = await safeDb("admin chat current profile", prisma.staffProfile.findFirst({
+    where: { userId: session.user.id, terraqoWorkspaceId }
   }), null);
   const conversationWhere = canManage
     ? { terraqoWorkspaceId }
@@ -74,7 +74,7 @@ export default async function AdminChatPage() {
       }),
       canManage
         ? prisma.staffProfile.findMany({
-            where: { active: true },
+            where: { active: true, terraqoWorkspaceId },
             orderBy: [{ department: "asc" }, { displayName: "asc" }]
           })
         : Promise.resolve([])

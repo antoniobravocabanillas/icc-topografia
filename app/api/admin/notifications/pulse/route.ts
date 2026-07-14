@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { handleApiError } from "@/lib/server/api";
 import { requireUser } from "@/lib/server/authz";
+import { getSessionTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 
 const adminRoles = new Set(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"]);
 
@@ -13,23 +14,25 @@ export async function GET() {
   }
 
   try {
+    const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
     const unreadNotifications = await prisma.notification.count({
       where: {
+        terraqoWorkspaceId,
         readAt: null,
         OR: [{ userId: session.user.id }, { userId: null }]
       }
     });
     const latestNotification = await prisma.notification.findFirst({
-      where: { OR: [{ userId: session.user.id }, { userId: null }] },
+      where: { terraqoWorkspaceId, OR: [{ userId: session.user.id }, { userId: null }] },
       orderBy: { createdAt: "desc" }
     });
     const latestCustomerMessage = await prisma.chatMessage.findFirst({
-      where: { sender: "customer" },
+      where: { sender: "customer", conversation: { terraqoWorkspaceId } },
       include: { conversation: true },
       orderBy: { createdAt: "desc" }
     });
     const latestInternalMessage = await prisma.internalChatMessage.findFirst({
-      where: { userId: { not: session.user.id } },
+      where: { userId: { not: session.user.id }, channel: { terraqoWorkspaceId } },
       include: { channel: true, user: true },
       orderBy: { createdAt: "desc" }
     });

@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { createBlogPreview, getBlogArticleParagraphs } from "@/lib/blog-content";
 import { prisma } from "@/lib/prisma";
 import { createMetadata } from "@/lib/seo";
+import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 
 type BlogPostProps = { params: Promise<{ slug: string }> };
 
@@ -12,14 +13,16 @@ export const revalidate = 0;
 
 export async function generateMetadata({ params }: BlogPostProps) {
   const { slug } = await params;
-  const post = await prisma.blogPost.findUnique({ where: { slug } });
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const post = await prisma.blogPost.findFirst({ where: { slug, terraqoWorkspaceId } });
   if (!post) return {};
   return createMetadata({ title: post.metaTitle || post.title, description: post.metaDesc || post.excerpt, path: `/blog/${post.slug}` });
 }
 
 export default async function BlogPostPage({ params }: BlogPostProps) {
   const { slug } = await params;
-  const post = await prisma.blogPost.findUnique({ where: { slug } });
+  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const post = await prisma.blogPost.findFirst({ where: { slug, terraqoWorkspaceId } });
   if (!post || !post.publishedAt) notFound();
   const articleParagraphs = getBlogArticleParagraphs(post.excerpt, post.content);
   const summary = createBlogPreview(post.excerpt, post.content, 260);

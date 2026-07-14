@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { prisma } from "@/lib/prisma";
 import { updateTechnicalProfileAction } from "@/lib/server/admin-actions";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
+import { getSessionTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 
 const departments = ["FIELD_ENGINEERING", "TECHNICAL_SUPPORT", "RENTAL_SERVICE", "ADMINISTRATION"];
 const availability = ["AVAILABLE", "FIELD", "BUSY", "OFFLINE"];
@@ -15,8 +16,9 @@ export const revalidate = 0;
 
 export default async function AdminTechnicalProfilesPage() {
   await requireAdminPage(["ADMIN", "SUPER_ADMIN", "ENGINEER", "SURVEYOR", "ARCHITECT", "SUPPORT"]);
+  const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
   const profiles = await prisma.staffProfile.findMany({
-    where: { department: { in: ["FIELD_ENGINEERING", "TECHNICAL_SUPPORT", "RENTAL_SERVICE"] } },
+    where: { terraqoWorkspaceId, department: { in: ["FIELD_ENGINEERING", "TECHNICAL_SUPPORT", "RENTAL_SERVICE"] } },
     include: {
       projectMembers: { include: { project: true } },
       ticketAssignee: { where: { status: { notIn: ["RESOLVED", "CLOSED"] } } }

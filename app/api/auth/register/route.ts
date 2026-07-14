@@ -66,6 +66,7 @@ export async function POST(request: Request) {
 
         await tx.notification.create({
           data: {
+            terraqoWorkspaceId,
             type: "SYSTEM",
             title: "Nuevo profesional registrado en Terraqo",
             body: `${payload.name} creo un perfil profesional para la red Terraqo.`,
@@ -88,6 +89,7 @@ export async function POST(request: Request) {
           status: "pendiente_aprobacion",
           contacts: {
             create: {
+              terraqoWorkspaceId,
               name: payload.name,
               email: payload.email,
               phone: payload.phone,
@@ -127,6 +129,7 @@ export async function POST(request: Request) {
 
       await tx.notification.create({
         data: {
+          terraqoWorkspaceId,
           type: "SYSTEM",
           title: "Nuevo registro de cliente pendiente",
           body: `${payload.name} solicito acceso al portal para ${companyName}.`,
