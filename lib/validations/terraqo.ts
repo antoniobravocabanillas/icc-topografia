@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { professionalCategories } from "@/lib/terraqo/professional-categories";
 
 export const terraqoWorkspaceCreateSchema = z.object({
   name: z.string().min(2),
@@ -41,6 +42,7 @@ export const terraqoProfessionalProfileSchema = z.object({
   status: z.enum(["AVAILABLE", "WORKING", "OPEN_TO_PROJECTS", "NOT_AVAILABLE"]).default("OPEN_TO_PROJECTS"),
   visibility: z.enum(["PUBLIC", "COMMUNITY", "WORKSPACE", "PRIVATE"]).default("PRIVATE"),
   yearsExperience: z.number().int().min(0).max(80).optional(),
+  professionalCategories: z.array(z.enum(professionalCategories)).default([]),
   specialties: z.array(z.string().min(1)).default([]),
   equipment: z.array(z.string().min(1)).default([]),
   software: z.array(z.string().min(1)).default([]),
@@ -49,4 +51,29 @@ export const terraqoProfessionalProfileSchema = z.object({
   cvUrl: z.string().url().optional(),
   liveCvEnabled: z.boolean().default(false),
   liveCvVisibility: z.enum(["PUBLIC", "COMMUNITY", "WORKSPACE", "PRIVATE"]).default("PRIVATE")
+});
+
+const optionalUrl = z.union([z.string().url(), z.literal("")]).optional();
+
+export const publicCareerApplicationSchema = z.object({
+  jobPostId: z.string().min(1).optional(),
+  name: z.string().trim().min(3).max(160),
+  email: z.string().trim().email().transform((value) => value.toLowerCase()),
+  phone: z.string().trim().min(7).max(40),
+  password: z.string().min(8).max(100),
+  category: z.enum(professionalCategories),
+  specialty: z.string().trim().min(2).max(180),
+  roleTitle: z.string().trim().max(180).optional(),
+  city: z.string().trim().min(2).max(120),
+  yearsExperience: z.number().int().min(0).max(80),
+  currentCompany: z.string().trim().max(180).optional(),
+  currentRole: z.string().trim().max(180).optional(),
+  portfolioUrl: optionalUrl,
+  cvUrl: optionalUrl,
+  equipment: z.array(z.string().trim().min(1).max(120)).max(40).default([]),
+  software: z.array(z.string().trim().min(1).max(120)).max(40).default([]),
+  coverNote: z.string().trim().min(20).max(3000),
+  availabilityNote: z.string().trim().max(600).optional(),
+  termsAccepted: z.literal(true),
+  privacyAccepted: z.literal(true)
 });

@@ -7,6 +7,7 @@ import { auth } from "@/auth";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { PortalFileUploader } from "@/components/portal/file-uploader";
+import { ProfessionalDocumentUploader } from "@/components/portal/professional-document-uploader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -76,11 +77,19 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
   const professionalProfile = await prisma.terraqoProfessionalProfile.findUnique({
     where: { userId: session.user.id },
     include: {
-      experiences: { orderBy: { createdAt: "desc" }, take: 6 },
+      experiences: { include: { project: { select: { title: true, slug: true } } }, orderBy: { createdAt: "desc" }, take: 6 },
+      affiliations: { orderBy: [{ current: "desc" }, { updatedAt: "desc" }], take: 6 },
       applications: {
-        include: { jobPost: { select: { title: true, workspace: { select: { name: true } } } } },
+        include: {
+          workspace: { select: { name: true } },
+          jobPost: { select: { title: true } }
+        },
         orderBy: { createdAt: "desc" },
         take: 6
+      },
+      documents: {
+        orderBy: { uploadedAt: "desc" },
+        select: { id: true, type: true, fileName: true, reviewStatus: true, reviewNote: true }
       }
     }
   });
@@ -313,9 +322,16 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
 
 type ProfessionalPortalProfile = Prisma.TerraqoProfessionalProfileGetPayload<{
   include: {
-    experiences: true;
+    experiences: { include: { project: { select: { title: true; slug: true } } } };
+    affiliations: true;
     applications: {
-      include: { jobPost: { select: { title: true; workspace: { select: { name: true } } } } };
+      include: {
+        workspace: { select: { name: true } };
+        jobPost: { select: { title: true } };
+      };
+    };
+    documents: {
+      select: { id: true; type: true; fileName: true; reviewStatus: true; reviewNote: true };
     };
   };
 }>;
@@ -353,9 +369,9 @@ function ProfessionalPortal({ profile }: { profile: ProfessionalPortalProfile })
                 {profile.city || "Ciudad por completar"} | {profile.yearsExperience ?? 0} anios de experiencia
               </div>
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Especialidades</p>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Categorias y especialidades</p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {profile.specialties.length ? profile.specialties.map((item) => (
+                  {[...profile.professionalCategories, ...profile.specialties].length ? [...profile.professionalCategories, ...profile.specialties].map((item) => (
                     <span key={item} className="rounded-md border bg-muted px-2.5 py-1 text-xs font-semibold">{item}</span>
                   )) : <span className="text-sm text-muted-foreground">Pendiente de completar</span>}
                 </div>
@@ -364,7 +380,36 @@ function ProfessionalPortal({ profile }: { profile: ProfessionalPortalProfile })
           </Card>
         </div>
 
+        <ProfessionalDocumentUploader
+          identityStatus={profile.identityVerificationStatus}
+          identityNote={profile.identityVerificationNote}
+          documents={profile.documents}
+        />
+
         <div className="grid gap-6 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Vinculos profesionales</CardTitle>
+              <CardDescription>Empresas declaradas o verificadas dentro de tu trayectoria privada.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {profile.affiliations.map((affiliation) => (
+                <div key={affiliation.id} className="rounded-md border p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-display text-lg font-bold">{affiliation.companyName}</p>
+                      <p className="text-sm text-muted-foreground">{affiliation.roleTitle || "Rol por completar"}</p>
+                    </div>
+                    <span className="rounded-md bg-primary/10 px-2 py-1 text-xs font-bold text-primary">
+                      {affiliation.verificationStatus === "MATCHED" ? "Empresa vinculada" : "Pendiente de validar"}
+                    </span>
+                  </div>
+                </div>
+              ))}
+              {!profile.affiliations.length ? <p className="text-sm text-muted-foreground">Aun no has declarado una empresa actual.</p> : null}
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>Experiencia para CV vivo</CardTitle>
@@ -377,6 +422,7 @@ function ProfessionalPortal({ profile }: { profile: ProfessionalPortalProfile })
                     <div>
                       <p className="font-display text-lg font-bold">{experience.title}</p>
                       <p className="text-sm text-muted-foreground">{experience.companyName || "Empresa por confirmar"} | {experience.role || "Rol tecnico"}</p>
+                      {experience.project ? <p className="mt-2 text-xs font-semibold text-primary">Proyecto validado: {experience.project.title}</p> : null}
                     </div>
                     {experience.verifiedByTerraqo ? <span className="rounded-md bg-primary/10 px-2 py-1 text-xs font-bold text-primary">Validado</span> : null}
                   </div>
@@ -394,8 +440,8 @@ function ProfessionalPortal({ profile }: { profile: ProfessionalPortalProfile })
             <CardContent className="space-y-3">
               {profile.applications.map((application) => (
                 <div key={application.id} className="rounded-md border p-4">
-                  <p className="font-display text-lg font-bold">{application.jobPost.title}</p>
-                  <p className="text-sm text-muted-foreground">{application.jobPost.workspace.name}</p>
+                  <p className="font-display text-lg font-bold">{application.jobPost?.title || "Bolsa de talento general"}</p>
+                  <p className="text-sm text-muted-foreground">{application.workspace.name}</p>
                   <p className="mt-2 text-xs font-bold uppercase tracking-[0.16em] text-primary">{application.status}</p>
                 </div>
               ))}

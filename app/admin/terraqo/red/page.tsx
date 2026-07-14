@@ -1,4 +1,5 @@
 import { revalidatePath } from "next/cache";
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/server/api";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
 import { getSessionTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
+import { professionalCategories } from "@/lib/terraqo/professional-categories";
 
 function textValue(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -47,10 +49,141 @@ async function createJobPostAction(formData: FormData) {
       budgetRange: textValue(formData, "budgetRange"),
       requiredSkills: listValue(formData, "requiredSkills"),
       requiredTools: listValue(formData, "requiredTools"),
+      professionalCategories: listValue(formData, "professionalCategories"),
       visibility: "COMMUNITY",
       status: "OPEN"
     }
   });
+
+  revalidatePath("/admin/terraqo/red");
+}
+
+async function updateApplicationStatusAction(formData: FormData) {
+  "use server";
+
+  await requireAdminPage(["ADMIN", "SUPER_ADMIN"]);
+  const workspaceId = await getSessionTerraqoWorkspaceId();
+  const applicationId = textValue(formData, "applicationId");
+  const status = textValue(formData, "status");
+  const allowedStatuses = ["SUBMITTED", "REVIEWING", "SHORTLISTED", "ACCEPTED", "REJECTED"] as const;
+  if (!applicationId || !status || !allowedStatuses.includes(status as (typeof allowedStatuses)[number])) return;
+
+  await prisma.terraqoProjectApplication.updateMany({
+    where: { id: applicationId, workspaceId },
+    data: { status: status as (typeof allowedStatuses)[number] }
+  });
+
+  revalidatePath("/admin/terraqo/red");
+}
+
+async function reviewIdentityAction(formData: FormData) {
+  "use server";
+
+  const session = await requireAdminPage(["ADMIN", "SUPER_ADMIN"]);
+  const workspaceId = await getSessionTerraqoWorkspaceId();
+  const professionalProfileId = textValue(formData, "professionalProfileId");
+  const decision = textValue(formData, "decision");
+  const reviewNote = textValue(formData, "reviewNote");
+  if (!workspaceId || !professionalProfileId || !["VERIFIED", "REJECTED"].includes(decision || "")) return;
+
+  const profile = await prisma.terraqoProfessionalProfile.findFirst({
+    where: {
+      id: professionalProfileId,
+      applications: { some: { workspaceId } }
+    },
+    select: {
+      id: true,
+      documents: {
+        where: {
+          workspaceId,
+          type: { in: ["DNI_FRONT", "DNI_BACK"] },
+          reviewStatus: "SUBMITTED"
+        },
+        orderBy: { uploadedAt: "desc" }
+      }
+    }
+  });
+  if (!profile) return;
+
+  const hasFront = profile.documents.some((document) => document.type === "DNI_FRONT");
+  const hasBack = profile.documents.some((document) => document.type === "DNI_BACK");
+  if (decision === "VERIFIED" && (!hasFront || !hasBack)) return;
+
+  const reviewedAt = new Date();
+  await prisma.$transaction([
+    prisma.terraqoProfessionalDocument.updateMany({
+      where: {
+        professionalProfileId: profile.id,
+        workspaceId,
+        type: { in: ["DNI_FRONT", "DNI_BACK"] },
+        reviewStatus: "SUBMITTED"
+      },
+      data: {
+        reviewStatus: decision === "VERIFIED" ? "VERIFIED" : "REJECTED",
+        reviewNote,
+        reviewedAt,
+        reviewedByUserId: session.user.id
+      }
+    }),
+    prisma.terraqoProfessionalProfile.update({
+      where: { id: profile.id },
+      data: {
+        identityVerificationStatus: decision === "VERIFIED" ? "VERIFIED" : "REJECTED",
+        identityVerifiedAt: decision === "VERIFIED" ? reviewedAt : null,
+        identityVerificationNote: reviewNote || null
+      }
+    })
+  ]);
+
+  revalidatePath("/admin/terraqo/red");
+}
+
+async function linkProfessionalProjectAction(formData: FormData) {
+  "use server";
+
+  await requireAdminPage(["ADMIN", "SUPER_ADMIN"]);
+  const workspaceId = await getSessionTerraqoWorkspaceId();
+  await requireWorkspaceModule("LIVE_CV", workspaceId);
+
+  const professionalProfileId = textValue(formData, "professionalProfileId");
+  const projectId = textValue(formData, "projectId");
+  const title = textValue(formData, "title");
+  if (!professionalProfileId || !projectId || !title) return;
+
+  const [profile, project] = await Promise.all([
+    prisma.terraqoProfessionalProfile.findFirst({
+      where: {
+        id: professionalProfileId,
+        user: { terraqoMemberships: { some: { workspaceId, active: true } } }
+      },
+      select: { id: true }
+    }),
+    prisma.project.findFirst({
+      where: { id: projectId, terraqoWorkspaceId: workspaceId, deletedAt: null },
+      select: { id: true, title: true, clientName: true, location: true }
+    })
+  ]);
+  if (!profile || !project) return;
+
+  await prisma.$transaction([
+    prisma.terraqoProfessionalExperience.create({
+      data: {
+        professionalProfileId: profile.id,
+        projectId: project.id,
+        title,
+        companyName: textValue(formData, "companyName") || project.clientName,
+        role: textValue(formData, "role"),
+        location: textValue(formData, "location") || project.location,
+        verifiedByTerraqo: true,
+        verificationNote: `Experiencia vinculada al proyecto ${project.title} por el workspace.`,
+        visibility: "WORKSPACE"
+      }
+    }),
+    prisma.terraqoProfessionalProfile.update({
+      where: { id: profile.id },
+      data: { liveCvEnabled: true }
+    })
+  ]);
 
   revalidatePath("/admin/terraqo/red");
 }
@@ -64,16 +197,26 @@ export default async function TerraqoNetworkPage() {
   if (!workspaceId) throw new Error("Workspace Terraqo no configurado.");
   await requireWorkspaceModule("PROFESSIONAL_NETWORK", workspaceId);
 
-  const [workspace, profiles, jobs, projects] = await Promise.all([
+  const [workspace, profiles, jobs, projects, applications] = await Promise.all([
     prisma.terraqoWorkspace.findUnique({
       where: { id: workspaceId },
       include: { subscriptions: { orderBy: { createdAt: "desc" }, take: 1 } }
     }),
     prisma.terraqoProfessionalProfile.findMany({
+      where: { user: { terraqoMemberships: { some: { workspaceId, active: true } } } },
       include: {
         user: true,
+        affiliations: { where: { workspaceId }, orderBy: { updatedAt: "desc" }, take: 2 },
         experiences: { include: { project: true }, orderBy: { startedAt: "desc" }, take: 3 },
-        applications: { include: { jobPost: true }, orderBy: { createdAt: "desc" }, take: 3 }
+        applications: { where: { workspaceId }, include: { jobPost: true }, orderBy: { createdAt: "desc" }, take: 3 },
+        documents: {
+          where: {
+            workspaceId,
+            type: { in: ["CV", "DNI_FRONT", "DNI_BACK"] },
+            reviewStatus: { in: ["SUBMITTED", "VERIFIED"] }
+          },
+          orderBy: { uploadedAt: "desc" }
+        }
       },
       orderBy: { updatedAt: "desc" },
       take: 80
@@ -89,6 +232,16 @@ export default async function TerraqoNetworkPage() {
       orderBy: { updatedAt: "desc" },
       select: { id: true, title: true },
       take: 80
+    }),
+    prisma.terraqoProjectApplication.findMany({
+      where: { workspaceId },
+      include: {
+        user: { select: { name: true, email: true } },
+        professionalProfile: { select: { headline: true, city: true, professionalCategories: true } },
+        jobPost: { select: { title: true } }
+      },
+      orderBy: { createdAt: "desc" },
+      take: 100
     })
   ]);
 
@@ -116,6 +269,34 @@ export default async function TerraqoNetworkPage() {
         <Metric title={verifiedExperiences} label="Experiencias validadas" />
       </div>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Vincular experiencia a un proyecto</CardTitle>
+          <CardDescription>
+            Una experiencia validada alimenta el CV vivo del profesional y conserva el proyecto que la respalda.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form action={linkProfessionalProjectAction} className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+            <select name="professionalProfileId" className="h-11 rounded-md border bg-background px-3 text-sm" required>
+              <option value="">Seleccionar profesional</option>
+              {profiles.map((profile) => (
+                <option key={profile.id} value={profile.id}>{profile.user.name || profile.user.email}</option>
+              ))}
+            </select>
+            <select name="projectId" className="h-11 rounded-md border bg-background px-3 text-sm" required>
+              <option value="">Seleccionar proyecto</option>
+              {projects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}
+            </select>
+            <Input name="title" placeholder="Experiencia que aparecera en el CV" required />
+            <Input name="role" placeholder="Rol desempenado" />
+            <Input name="companyName" placeholder="Empresa o cliente" />
+            <Input name="location" placeholder="Ubicacion" />
+            <Button type="submit" className="lg:col-span-2 xl:col-span-3">Validar y vincular al CV vivo</Button>
+          </form>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-5 xl:grid-cols-[420px_1fr]">
         <Card>
           <CardHeader>
@@ -142,6 +323,10 @@ export default async function TerraqoNetworkPage() {
               <Textarea name="description" placeholder="Alcance, responsabilidades y contexto" required />
               <Textarea name="requiredSkills" placeholder="Habilidades requeridas, una por linea" />
               <Textarea name="requiredTools" placeholder="Equipos o software, uno por linea" />
+              <Textarea
+                name="professionalCategories"
+                placeholder={`Categorias profesionales, una por linea. Ej. ${professionalCategories.slice(0, 3).join(", ")}`}
+              />
               <Button type="submit">Crear convocatoria</Button>
             </form>
           </CardContent>
@@ -177,6 +362,44 @@ export default async function TerraqoNetworkPage() {
 
       <Card>
         <CardHeader>
+          <CardTitle>Postulaciones recibidas</CardTitle>
+          <CardDescription>Seguimiento privado de candidatos del workspace, incluida la bolsa de talento general.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {applications.map((application) => (
+            <div key={application.id} className="grid gap-4 rounded-md border p-4 lg:grid-cols-[1.2fr_1fr_auto] lg:items-center">
+              <div>
+                <p className="font-semibold">{application.user?.name || application.user?.email || "Profesional"}</p>
+                <p className="text-sm text-muted-foreground">{application.user?.email}</p>
+                <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-primary">
+                  {application.professionalCategory || application.professionalProfile?.professionalCategories[0] || "Categoria por revisar"}
+                </p>
+              </div>
+              <div>
+                <p className="font-medium">{application.jobPost?.title || "Bolsa de talento general"}</p>
+                <p className="text-sm text-muted-foreground">
+                  {application.professionalProfile?.headline || "Perfil por completar"} | {application.professionalProfile?.city || "Ciudad por confirmar"}
+                </p>
+              </div>
+              <form action={updateApplicationStatusAction} className="flex gap-2">
+                <input type="hidden" name="applicationId" value={application.id} />
+                <select name="status" defaultValue={application.status} className="h-10 rounded-md border bg-background px-3 text-sm">
+                  <option value="SUBMITTED">Recibida</option>
+                  <option value="REVIEWING">En revision</option>
+                  <option value="SHORTLISTED">Preseleccionada</option>
+                  <option value="ACCEPTED">Aceptada</option>
+                  <option value="REJECTED">No seleccionada</option>
+                </select>
+                <Button type="submit" variant="outline">Guardar</Button>
+              </form>
+            </div>
+          ))}
+          {!applications.length ? <p className="text-sm text-muted-foreground">Aun no hay postulaciones para este workspace.</p> : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Profesionales</CardTitle>
           <CardDescription>
             La experiencia validada alimenta el CV vivo. La visibilidad se controla por plan y permisos.
@@ -184,13 +407,14 @@ export default async function TerraqoNetworkPage() {
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto rounded-md border">
-            <table className="w-full min-w-[980px] text-sm">
+            <table className="w-full min-w-[1180px] text-sm">
               <thead className="bg-muted text-left">
                 <tr>
                   <th className="p-3">Perfil</th>
                   <th className="p-3">Estado</th>
                   <th className="p-3">Especialidad</th>
                   <th className="p-3">Herramientas</th>
+                  <th className="p-3">Identidad</th>
                   <th className="p-3">CV vivo</th>
                   <th className="p-3">Postulaciones</th>
                 </tr>
@@ -206,8 +430,37 @@ export default async function TerraqoNetworkPage() {
                     <td className="p-3">{profile.specialties.slice(0, 3).join(", ") || "Sin especialidad"}</td>
                     <td className="p-3">{[...profile.equipment, ...profile.software].slice(0, 4).join(", ") || "Por completar"}</td>
                     <td className="p-3">
+                      <div className="space-y-2">
+                        <Badge variant={profile.identityVerificationStatus === "VERIFIED" ? "default" : "outline"}>
+                          {profile.identityVerificationStatus.replaceAll("_", " ")}
+                        </Badge>
+                        <div className="flex flex-wrap gap-2">
+                          {profile.documents.filter((document) => ["DNI_FRONT", "DNI_BACK"].includes(document.type)).slice(0, 2).map((document) => (
+                            <Button key={document.id} asChild size="sm" variant="outline">
+                              <Link href={`/api/terraqo/professional-documents/${document.id}`} target="_blank">
+                                {document.type === "DNI_FRONT" ? "Ver frente" : "Ver reverso"}
+                              </Link>
+                            </Button>
+                          ))}
+                        </div>
+                        {profile.identityVerificationStatus === "UNDER_REVIEW" ? (
+                          <form action={reviewIdentityAction} className="grid min-w-[240px] gap-2">
+                            <input type="hidden" name="professionalProfileId" value={profile.id} />
+                            <Input name="reviewNote" placeholder="Observacion opcional" className="h-9" />
+                            <div className="flex gap-2">
+                              <Button name="decision" value="VERIFIED" type="submit" size="sm">Verificar</Button>
+                              <Button name="decision" value="REJECTED" type="submit" size="sm" variant="outline">Rechazar</Button>
+                            </div>
+                          </form>
+                        ) : null}
+                      </div>
+                    </td>
+                    <td className="p-3">
                       <div>{profile.liveCvEnabled ? "Activado" : "No activado"}</div>
                       <div className="text-xs text-muted-foreground">{profile.experiences.length} experiencias recientes</div>
+                      {profile.documents.find((document) => document.type === "CV") ? (
+                        <Link className="mt-2 inline-block font-semibold text-primary" href={`/api/terraqo/professional-documents/${profile.documents.find((document) => document.type === "CV")?.id}`} target="_blank">Ver CV</Link>
+                      ) : null}
                     </td>
                     <td className="p-3">{profile.applications.length}</td>
                   </tr>

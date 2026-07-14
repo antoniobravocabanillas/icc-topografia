@@ -11,9 +11,25 @@ export async function GET() {
     const profile = await prisma.terraqoProfessionalProfile.findUnique({
       where: { userId: session.user.id },
       include: {
+        documents: {
+          orderBy: { uploadedAt: "desc" },
+          select: {
+            id: true,
+            type: true,
+            fileName: true,
+            reviewStatus: true,
+            reviewNote: true,
+            uploadedAt: true,
+            reviewedAt: true
+          }
+        },
         experiences: { orderBy: { startedAt: "desc" } },
+        affiliations: { orderBy: [{ current: "desc" }, { updatedAt: "desc" }] },
         applications: {
-          include: { jobPost: { select: { id: true, title: true, slug: true, status: true, workspaceId: true } } },
+          include: {
+            workspace: { select: { id: true, name: true, slug: true } },
+            jobPost: { select: { id: true, title: true, slug: true, status: true, workspaceId: true } }
+          },
           orderBy: { createdAt: "desc" }
         }
       }
