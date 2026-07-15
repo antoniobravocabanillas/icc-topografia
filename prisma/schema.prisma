@@ -244,9 +244,23 @@ enum TerraqoModuleCode {
   LIVE_CV
   JOB_MARKETPLACE
   FORUMS
+  PROFESSIONAL_MESSAGING
   ANALYTICS
   AUTOMATIONS
   DOCUMENTS
+}
+
+enum TerraqoConversationType {
+  DIRECT
+  COMPANY
+  PROJECT
+  GROUP
+}
+
+enum TerraqoConversationParticipantRole {
+  OWNER
+  MODERATOR
+  MEMBER
 }
 
 enum TerraqoMemberRole {
@@ -324,37 +338,40 @@ enum TerraqoDocumentReviewStatus {
 }
 
 model User {
-  id                         String                      @id @default(cuid())
-  name                       String?
-  email                      String                      @unique
-  emailVerified              DateTime?
-  image                      String?
-  passwordHash               String?
-  role                       Role                        @default(CUSTOMER)
-  accounts                   Account[]
-  sessions                   Session[]
-  orders                     Order[]
-  addresses                  Address[]
-  favorites                  Favorite[]
-  assignedChats              ChatConversation[]
-  ticketMessages             TicketMessage[]
-  internalMessages           InternalChatMessage[]
-  notifications              Notification[]
-  activityLogs               ActivityLog[]
-  staffProfiles              StaffProfile[]
-  clientProfiles             Client[]
-  clientAccounts             ClientAccount[]
-  terraqoMemberships         TerraqoWorkspaceMember[]
-  ownedTerraqoWorkspaces     TerraqoWorkspace[]          @relation("TerraqoWorkspaceOwner")
-  terraqoProfessionalProfile TerraqoProfessionalProfile?
-  terraqoForumPosts          TerraqoForumPost[]
-  terraqoForumReplies        TerraqoForumReply[]
-  terraqoApplications        TerraqoProjectApplication[]
-  terraqoWorklogs            TerraqoWorklogEntry[]       @relation("TerraqoWorklogAuthor")
-  terraqoWorklogComments     TerraqoWorklogComment[]
-  terraqoWorklogReactions    TerraqoWorklogReaction[]
-  createdAt                  DateTime                    @default(now())
-  updatedAt                  DateTime                    @updatedAt
+  id                          String                           @id @default(cuid())
+  name                        String?
+  email                       String                           @unique
+  emailVerified               DateTime?
+  image                       String?
+  passwordHash                String?
+  role                        Role                             @default(CUSTOMER)
+  accounts                    Account[]
+  sessions                    Session[]
+  orders                      Order[]
+  addresses                   Address[]
+  favorites                   Favorite[]
+  assignedChats               ChatConversation[]
+  ticketMessages              TicketMessage[]
+  internalMessages            InternalChatMessage[]
+  notifications               Notification[]
+  activityLogs                ActivityLog[]
+  staffProfiles               StaffProfile[]
+  clientProfiles              Client[]
+  clientAccounts              ClientAccount[]
+  terraqoMemberships          TerraqoWorkspaceMember[]
+  ownedTerraqoWorkspaces      TerraqoWorkspace[]               @relation("TerraqoWorkspaceOwner")
+  terraqoProfessionalProfile  TerraqoProfessionalProfile?
+  terraqoForumPosts           TerraqoForumPost[]
+  terraqoForumReplies         TerraqoForumReply[]
+  terraqoApplications         TerraqoProjectApplication[]
+  terraqoWorklogs             TerraqoWorklogEntry[]            @relation("TerraqoWorklogAuthor")
+  terraqoWorklogComments      TerraqoWorklogComment[]
+  terraqoWorklogReactions     TerraqoWorklogReaction[]
+  terraqoConversationsCreated TerraqoConversation[]            @relation("TerraqoConversationCreator")
+  terraqoConversationMembers  TerraqoConversationParticipant[]
+  terraqoDirectMessages       TerraqoDirectMessage[]           @relation("TerraqoDirectMessageSender")
+  createdAt                   DateTime                         @default(now())
+  updatedAt                   DateTime                         @updatedAt
 }
 
 model Company {
@@ -1275,44 +1292,45 @@ model StaffProfile {
 }
 
 model Project {
-  id                 String                          @id @default(cuid())
-  title              String
-  slug               String
-  clientId           String?
-  client             Client?                         @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  companyId          String?
-  company            Company?                        @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  opportunityId      String?
-  opportunity        Opportunity?                    @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
-  saleId             String?
-  sale               Sale?                           @relation(fields: [saleId], references: [id], onDelete: SetNull)
-  terraqoWorkspaceId String
-  terraqoWorkspace   TerraqoWorkspace                @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
-  clientName         String?
-  location           String?
-  category           String?
-  servicesApplied    String[]
-  summary            String
-  description        String
-  challenge          String?
-  solution           String?
-  results            String?
-  status             ProjectStatus                   @default(PLANNING)
-  isPublic           Boolean                         @default(false)
-  isFeatured         Boolean                         @default(false)
-  images             ProjectImage[]
-  members            ProjectMember[]
-  progress           ProjectProgress[]
-  milestones         Milestone[]
-  tasks              Task[]
-  documents          Document[]
-  activities         ActivityLog[]
-  terraqoExperiences TerraqoProfessionalExperience[]
-  terraqoJobPosts    TerraqoJobPost[]
-  terraqoWorklogs    TerraqoWorklogEntry[]
-  createdAt          DateTime                        @default(now())
-  updatedAt          DateTime                        @updatedAt
-  deletedAt          DateTime?
+  id                   String                          @id @default(cuid())
+  title                String
+  slug                 String
+  clientId             String?
+  client               Client?                         @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  companyId            String?
+  company              Company?                        @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  opportunityId        String?
+  opportunity          Opportunity?                    @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  saleId               String?
+  sale                 Sale?                           @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  terraqoWorkspaceId   String
+  terraqoWorkspace     TerraqoWorkspace                @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
+  clientName           String?
+  location             String?
+  category             String?
+  servicesApplied      String[]
+  summary              String
+  description          String
+  challenge            String?
+  solution             String?
+  results              String?
+  status               ProjectStatus                   @default(PLANNING)
+  isPublic             Boolean                         @default(false)
+  isFeatured           Boolean                         @default(false)
+  images               ProjectImage[]
+  members              ProjectMember[]
+  progress             ProjectProgress[]
+  milestones           Milestone[]
+  tasks                Task[]
+  documents            Document[]
+  activities           ActivityLog[]
+  terraqoExperiences   TerraqoProfessionalExperience[]
+  terraqoJobPosts      TerraqoJobPost[]
+  terraqoWorklogs      TerraqoWorklogEntry[]
+  terraqoConversations TerraqoConversation[]
+  createdAt            DateTime                        @default(now())
+  updatedAt            DateTime                        @updatedAt
+  deletedAt            DateTime?
 
   @@unique([terraqoWorkspaceId, slug])
   @@index([status, isPublic])
@@ -1610,6 +1628,7 @@ model TerraqoWorkspace {
   professionalDocuments    TerraqoProfessionalDocument[]
   forumChannels            TerraqoForumChannel[]
   worklogs                 TerraqoWorklogEntry[]
+  directConversations      TerraqoConversation[]
   createdAt                DateTime                         @default(now())
   updatedAt                DateTime                         @updatedAt
   deletedAt                DateTime?
@@ -1618,6 +1637,61 @@ model TerraqoWorkspace {
   @@index([companyId])
   @@index([ownerUserId])
   @@index([deletedAt])
+}
+
+model TerraqoConversation {
+  id            String                           @id @default(cuid())
+  type          TerraqoConversationType          @default(DIRECT)
+  title         String?
+  directKey     String?                          @unique
+  workspaceId   String?
+  workspace     TerraqoWorkspace?                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projectId     String?
+  project       Project?                         @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdById   String
+  createdBy     User                             @relation("TerraqoConversationCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  participants  TerraqoConversationParticipant[]
+  messages      TerraqoDirectMessage[]
+  lastMessageAt DateTime?
+  archivedAt    DateTime?
+  createdAt     DateTime                         @default(now())
+  updatedAt     DateTime                         @updatedAt
+
+  @@index([workspaceId, updatedAt])
+  @@index([projectId])
+  @@index([type, updatedAt])
+}
+
+model TerraqoConversationParticipant {
+  id             String                             @id @default(cuid())
+  conversationId String
+  conversation   TerraqoConversation                @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User                               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           TerraqoConversationParticipantRole @default(MEMBER)
+  lastReadAt     DateTime?
+  mutedAt        DateTime?
+  leftAt         DateTime?
+  joinedAt       DateTime                           @default(now())
+
+  @@unique([conversationId, userId])
+  @@index([userId, leftAt])
+}
+
+model TerraqoDirectMessage {
+  id             String              @id @default(cuid())
+  conversationId String
+  conversation   TerraqoConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User                @relation("TerraqoDirectMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  body           String
+  attachments    String[]            @default([])
+  editedAt       DateTime?
+  deletedAt      DateTime?
+  createdAt      DateTime            @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([senderId, createdAt])
 }
 
 model TerraqoWorkspaceModule {

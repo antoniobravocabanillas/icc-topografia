@@ -72,6 +72,12 @@ export const terraqoModules: TerraqoModuleDefinition[] = [
     minimumTier: "PREMIUM"
   },
   {
+    code: "PROFESSIONAL_MESSAGING",
+    label: "Mensajeria profesional",
+    description: "Conversaciones directas entre profesionales, empresas y equipos vinculados a proyectos.",
+    minimumTier: "PREMIUM"
+  },
+  {
     code: "ANALYTICS",
     label: "Analitica ejecutiva",
     description: "Indicadores de conversion, operacion, proyectos, talento y uso del producto.",

@@ -65,7 +65,9 @@ export const adminNavigation: AdminNavItem[] = [
   { group: "Gestion", label: "Notificaciones", href: "/admin/notificaciones", icon: "bell", roles: allRoles },
   { group: "Gestion", label: "Equipo", href: "/admin/equipo", icon: "users", roles: ["ADMIN", "SUPER_ADMIN"] },
   { group: "Terraqo", label: "Workspaces", href: "/admin/terraqo", icon: "workspace", roles: ["SUPER_ADMIN"] },
+  { group: "Terraqo", label: "Recorridos", href: "/admin/terraqo/recorridos", icon: "activity", roles: ["SUPER_ADMIN"] },
   { group: "Terraqo", label: "Red profesional", href: "/admin/terraqo/red", icon: "community", roles: ["ADMIN", "SUPER_ADMIN"] },
+  { group: "Terraqo", label: "Mensajes red", href: "/admin/terraqo/mensajes", icon: "messages", roles: ["ADMIN", "SUPER_ADMIN"] },
   { group: "Terraqo", label: "Comunidad", href: "/admin/terraqo/comunidad", icon: "store", roles: ["ADMIN", "SUPER_ADMIN"] }
 ];
 

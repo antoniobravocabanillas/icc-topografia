@@ -1,16 +1,17 @@
 import Link from "next/link";
-import { BriefcaseBusiness, Compass, LayoutDashboard, NotebookPen } from "lucide-react";
+import { BriefcaseBusiness, Compass, LayoutDashboard, MessagesSquare, NotebookPen } from "lucide-react";
 
 const items = [
   { href: "/portal", label: "Resumen", icon: LayoutDashboard },
   { href: "/portal/bitacora", label: "Bitacora", icon: NotebookPen },
   { href: "/portal/commons", label: "Commons", icon: Compass },
-  { href: "/portal/oportunidades", label: "Oportunidades", icon: BriefcaseBusiness }
+  { href: "/portal/oportunidades", label: "Oportunidades", icon: BriefcaseBusiness },
+  { href: "/portal/mensajes", label: "Mensajes", icon: MessagesSquare }
 ];
 
 export function ProfessionalPortalNav({ current }: { current: string }) {
   return (
-    <nav aria-label="Portal profesional Terraqo" className="grid gap-2 rounded-lg border bg-white p-2 shadow-technical sm:grid-cols-4">
+    <nav aria-label="Portal profesional Terraqo" className="grid gap-2 rounded-lg border bg-white p-2 shadow-technical sm:grid-cols-2 xl:grid-cols-5">
       {items.map((item) => {
         const Icon = item.icon;
         const active = current === item.href;
