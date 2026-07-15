@@ -53,6 +53,32 @@ export const terraqoProfessionalProfileSchema = z.object({
   liveCvVisibility: z.enum(["PUBLIC", "COMMUNITY", "WORKSPACE", "PRIVATE"]).default("PRIVATE")
 });
 
+const worklogVisibility = z.enum(["PUBLIC", "COMMUNITY", "WORKSPACE", "PRIVATE"]);
+
+export const terraqoWorklogCreateSchema = z.object({
+  workspaceId: z.string().cuid().optional(),
+  projectId: z.string().cuid().optional(),
+  title: z.string().trim().min(4).max(180),
+  summary: z.string().trim().min(20).max(2400),
+  outcome: z.string().trim().max(800).optional(),
+  type: z.enum(["FIELD_UPDATE", "DELIVERABLE", "PROBLEM_SOLVED", "LEARNING", "MILESTONE"]).default("FIELD_UPDATE"),
+  visibility: worklogVisibility.default("PRIVATE"),
+  skills: z.array(z.string().trim().min(1).max(80)).max(20).default([]),
+  evidenceUrls: z.array(z.string().url()).max(10).default([]),
+  occurredAt: z.coerce.date().optional()
+});
+
+export const terraqoWorklogEngagementSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("comment"),
+    body: z.string().trim().min(2).max(800)
+  }),
+  z.object({
+    action: z.literal("react"),
+    type: z.enum(["USEFUL", "INSIGHTFUL", "RESPECT"])
+  })
+]);
+
 const optionalUrl = z.union([z.string().url(), z.literal("")]).optional();
 
 export const publicCareerApplicationSchema = z.object({

@@ -188,6 +188,25 @@ async function linkProfessionalProjectAction(formData: FormData) {
   revalidatePath("/admin/terraqo/red");
 }
 
+async function reviewWorklogAction(formData: FormData) {
+  "use server";
+
+  const session = await requireAdminPage(["ADMIN", "SUPER_ADMIN"]);
+  const workspaceId = await getSessionTerraqoWorkspaceId();
+  const worklogId = textValue(formData, "worklogId");
+  const evidenceStatus = textValue(formData, "evidenceStatus");
+  if (!workspaceId || !worklogId || !["LINKED", "CONFIRMED", "VERIFIED"].includes(evidenceStatus || "")) return;
+  if (evidenceStatus === "VERIFIED" && session.user.role !== "SUPER_ADMIN") return;
+
+  await prisma.terraqoWorklogEntry.updateMany({
+    where: { id: worklogId, workspaceId, deletedAt: null },
+    data: { evidenceStatus: evidenceStatus as "LINKED" | "CONFIRMED" | "VERIFIED" }
+  });
+
+  revalidatePath("/admin/terraqo/red");
+  revalidatePath("/portal/commons");
+}
+
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -197,7 +216,7 @@ export default async function TerraqoNetworkPage() {
   if (!workspaceId) throw new Error("Workspace Terraqo no configurado.");
   await requireWorkspaceModule("PROFESSIONAL_NETWORK", workspaceId);
 
-  const [workspace, profiles, jobs, projects, applications] = await Promise.all([
+  const [workspace, profiles, jobs, projects, applications, worklogs] = await Promise.all([
     prisma.terraqoWorkspace.findUnique({
       where: { id: workspaceId },
       include: { subscriptions: { orderBy: { createdAt: "desc" }, take: 1 } }
@@ -242,6 +261,15 @@ export default async function TerraqoNetworkPage() {
       },
       orderBy: { createdAt: "desc" },
       take: 100
+    }),
+    prisma.terraqoWorklogEntry.findMany({
+      where: { workspaceId, deletedAt: null },
+      include: {
+        author: { select: { name: true, email: true } },
+        project: { select: { title: true } }
+      },
+      orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
+      take: 60
     })
   ]);
 
@@ -359,6 +387,41 @@ export default async function TerraqoNetworkPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Bitacoras y evidencia del workspace</CardTitle>
+          <CardDescription>
+            Confirma solo evidencia producida dentro de {workspace?.name}. La verificacion Terraqo queda reservada para una revision independiente.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {worklogs.map((worklog) => (
+            <div key={worklog.id} className="grid gap-4 rounded-md border p-4 lg:grid-cols-[1fr_220px] lg:items-center">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-semibold">{worklog.title}</p>
+                  <Badge variant="outline">{worklog.evidenceStatus}</Badge>
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">{worklog.summary}</p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {worklog.author.name || worklog.author.email || "Profesional"} | {worklog.project?.title || "Sin proyecto vinculado"}
+                </p>
+              </div>
+              <form action={reviewWorklogAction} className="flex gap-2">
+                <input type="hidden" name="worklogId" value={worklog.id} />
+                <select name="evidenceStatus" defaultValue={worklog.evidenceStatus} className="h-10 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm">
+                  <option value="LINKED">Vinculada</option>
+                  <option value="CONFIRMED">Confirmada por ICC</option>
+                  {worklog.evidenceStatus === "VERIFIED" ? <option value="VERIFIED">Verificada por Terraqo</option> : null}
+                </select>
+                <Button type="submit" variant="outline">Guardar</Button>
+              </form>
+            </div>
+          ))}
+          {!worklogs.length ? <p className="text-sm text-muted-foreground">Aun no hay bitacoras vinculadas a este workspace.</p> : null}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

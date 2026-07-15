@@ -8,6 +8,8 @@ import { StatusBadge } from "@/components/admin/status-badge";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { PortalFileUploader } from "@/components/portal/file-uploader";
 import { ProfessionalDocumentUploader } from "@/components/portal/professional-document-uploader";
+import { ProfessionalPortalNav } from "@/components/terraqo/professional-portal-nav";
+import { WorklogCard } from "@/components/terraqo/worklog-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -16,6 +18,7 @@ import { prisma } from "@/lib/prisma";
 import { createCustomerTicketAction, replyCustomerTicketAction, respondPublicQuoteFromFormAction, updateClientProfileAction } from "@/lib/server/customer-actions";
 import { createMetadata } from "@/lib/seo";
 import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
+import { worklogInclude } from "@/lib/terraqo/worklog";
 import { formatCurrency } from "@/lib/utils";
 
 export const metadata = createMetadata({
@@ -90,6 +93,12 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
       documents: {
         orderBy: { uploadedAt: "desc" },
         select: { id: true, type: true, fileName: true, reviewStatus: true, reviewNote: true }
+      },
+      worklogs: {
+        where: { deletedAt: null },
+        include: worklogInclude,
+        orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
+        take: 4
       }
     }
   });
@@ -333,6 +342,7 @@ type ProfessionalPortalProfile = Prisma.TerraqoProfessionalProfileGetPayload<{
     documents: {
       select: { id: true; type: true; fileName: true; reviewStatus: true; reviewNote: true };
     };
+    worklogs: { include: typeof worklogInclude };
   };
 }>;
 
@@ -340,13 +350,18 @@ function ProfessionalPortal({ profile }: { profile: ProfessionalPortalProfile })
   return (
     <section className="bg-[#f6fbff] py-12">
       <div className="container space-y-8">
+        <ProfessionalPortalNav current="/portal" />
         <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
           <div className="rounded-lg border bg-[#03111D] p-7 text-white shadow-xl">
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#24C8EE]">Portal Terraqo</p>
             <h1 className="mt-4 font-display text-4xl font-bold">Perfil profesional y CV vivo</h1>
             <p className="mt-4 max-w-2xl text-white/72">
-              Administra tu disponibilidad, experiencia tecnica y postulaciones. Tu CV vivo se alimentara de proyectos reales validados dentro de Terraqo.
+              Administra tu disponibilidad, documenta trabajo real y encuentra oportunidades. Tu CV vivo crece con evidencia vinculada a proyectos y empresas.
             </p>
+            <div className="mt-5 flex flex-wrap gap-2">
+              <Button asChild variant="secondary"><Link href="/portal/bitacora">Registrar evidencia</Link></Button>
+              <Button asChild variant="outline" className="border-white/25 bg-transparent text-white hover:bg-white/10"><Link href="/portal/commons">Explorar Commons</Link></Button>
+            </div>
             <div className="mt-6 grid gap-3 sm:grid-cols-3">
               <Metric icon={BriefcaseBusiness} label="Experiencias" value={profile.experiences.length} />
               <Metric icon={FileText} label="Postulaciones" value={profile.applications.length} />
@@ -378,6 +393,18 @@ function ProfessionalPortal({ profile }: { profile: ProfessionalPortalProfile })
               </div>
             </CardContent>
           </Card>
+
+          {profile.worklogs.length ? (
+            <div className="space-y-4 lg:col-span-2">
+              <div className="flex items-end justify-between gap-4">
+                <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Bitacora reciente</p><h2 className="mt-1 font-display text-2xl font-bold">Evidencia que alimenta tu CV vivo</h2></div>
+                <Link href="/portal/bitacora" className="text-sm font-semibold text-primary hover:underline">Ver toda la bitacora</Link>
+              </div>
+              <div className="grid gap-5 xl:grid-cols-2">
+                {profile.worklogs.map((worklog) => <WorklogCard key={worklog.id} worklog={worklog} viewerId={profile.userId} />)}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <ProfessionalDocumentUploader

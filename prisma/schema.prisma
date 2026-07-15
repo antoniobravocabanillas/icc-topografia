@@ -273,6 +273,27 @@ enum TerraqoVisibility {
   PRIVATE
 }
 
+enum TerraqoWorklogType {
+  FIELD_UPDATE
+  DELIVERABLE
+  PROBLEM_SOLVED
+  LEARNING
+  MILESTONE
+}
+
+enum TerraqoEvidenceStatus {
+  DECLARED
+  LINKED
+  CONFIRMED
+  VERIFIED
+}
+
+enum TerraqoReactionType {
+  USEFUL
+  INSIGHTFUL
+  RESPECT
+}
+
 enum TerraqoApplicationStatus {
   DRAFT
   SUBMITTED
@@ -329,6 +350,9 @@ model User {
   terraqoForumPosts          TerraqoForumPost[]
   terraqoForumReplies        TerraqoForumReply[]
   terraqoApplications        TerraqoProjectApplication[]
+  terraqoWorklogs            TerraqoWorklogEntry[]       @relation("TerraqoWorklogAuthor")
+  terraqoWorklogComments     TerraqoWorklogComment[]
+  terraqoWorklogReactions    TerraqoWorklogReaction[]
   createdAt                  DateTime                    @default(now())
   updatedAt                  DateTime                    @updatedAt
 }
@@ -1285,6 +1309,7 @@ model Project {
   activities         ActivityLog[]
   terraqoExperiences TerraqoProfessionalExperience[]
   terraqoJobPosts    TerraqoJobPost[]
+  terraqoWorklogs    TerraqoWorklogEntry[]
   createdAt          DateTime                        @default(now())
   updatedAt          DateTime                        @updatedAt
   deletedAt          DateTime?
@@ -1584,6 +1609,7 @@ model TerraqoWorkspace {
   professionalAffiliations TerraqoProfessionalAffiliation[]
   professionalDocuments    TerraqoProfessionalDocument[]
   forumChannels            TerraqoForumChannel[]
+  worklogs                 TerraqoWorklogEntry[]
   createdAt                DateTime                         @default(now())
   updatedAt                DateTime                         @updatedAt
   deletedAt                DateTime?
@@ -1679,6 +1705,7 @@ model TerraqoProfessionalProfile {
   affiliations               TerraqoProfessionalAffiliation[]
   applications               TerraqoProjectApplication[]
   documents                  TerraqoProfessionalDocument[]
+  worklogs                   TerraqoWorklogEntry[]
   createdAt                  DateTime                          @default(now())
   updatedAt                  DateTime                          @updatedAt
 
@@ -1753,6 +1780,67 @@ model TerraqoProfessionalExperience {
   @@index([professionalProfileId, startedAt])
   @@index([projectId])
   @@index([verifiedByTerraqo])
+}
+
+model TerraqoWorklogEntry {
+  id                    String                     @id @default(cuid())
+  professionalProfileId String
+  professionalProfile   TerraqoProfessionalProfile @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
+  authorId              String
+  author                User                       @relation("TerraqoWorklogAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  workspaceId           String?
+  workspace             TerraqoWorkspace?          @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  projectId             String?
+  project               Project?                   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  title                 String
+  summary               String
+  outcome               String?
+  type                  TerraqoWorklogType         @default(FIELD_UPDATE)
+  evidenceStatus        TerraqoEvidenceStatus      @default(DECLARED)
+  visibility            TerraqoVisibility          @default(PRIVATE)
+  skills                String[]                   @default([])
+  evidenceUrls          String[]                   @default([])
+  occurredAt            DateTime                   @default(now())
+  comments              TerraqoWorklogComment[]
+  reactions             TerraqoWorklogReaction[]
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+  deletedAt             DateTime?
+
+  @@index([professionalProfileId, occurredAt])
+  @@index([workspaceId, visibility, occurredAt])
+  @@index([projectId])
+  @@index([evidenceStatus])
+  @@index([deletedAt])
+}
+
+model TerraqoWorklogComment {
+  id        String              @id @default(cuid())
+  worklogId String
+  worklog   TerraqoWorklogEntry @relation(fields: [worklogId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User                @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  body      String
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  deletedAt DateTime?
+
+  @@index([worklogId, createdAt])
+  @@index([authorId])
+}
+
+model TerraqoWorklogReaction {
+  id        String              @id @default(cuid())
+  worklogId String
+  worklog   TerraqoWorklogEntry @relation(fields: [worklogId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      TerraqoReactionType @default(USEFUL)
+  createdAt DateTime            @default(now())
+
+  @@unique([worklogId, userId])
+  @@index([userId])
+  @@index([worklogId, type])
 }
 
 model TerraqoJobPost {

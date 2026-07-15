@@ -72,8 +72,55 @@ export async function GET(request: Request, { params }: RouteContext) {
                 jobPost: { select: { title: true, slug: true } },
               },
             },
+            worklogs: {
+              where: { workspaceId: token.workspaceId, deletedAt: null },
+              orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
+              take: 30,
+              select: {
+                id: true,
+                title: true,
+                summary: true,
+                outcome: true,
+                type: true,
+                evidenceStatus: true,
+                visibility: true,
+                skills: true,
+                evidenceUrls: true,
+                occurredAt: true,
+                project: { select: { id: true, title: true, slug: true } },
+                _count: { select: { comments: true, reactions: true } },
+              },
+            },
           },
         })
+      : null;
+
+    const professionalNetwork = professional
+      ? await Promise.all([
+          prisma.project.findMany({
+            where: {
+              terraqoWorkspaceId: token.workspaceId,
+              deletedAt: null,
+              OR: [
+                { terraqoExperiences: { some: { professionalProfileId: professional.id } } },
+                { terraqoJobPosts: { some: { applications: { some: { professionalProfileId: professional.id, status: "ACCEPTED" } } } } },
+              ],
+            },
+            select: { id: true, title: true, slug: true },
+            orderBy: { updatedAt: "desc" },
+          }),
+          prisma.terraqoJobPost.findMany({
+            where: {
+              workspaceId: token.workspaceId,
+              status: "OPEN",
+              deletedAt: null,
+              visibility: { in: ["PUBLIC", "COMMUNITY", "WORKSPACE"] },
+            },
+            select: { id: true, title: true, slug: true, summary: true, location: true, modality: true, requiredSkills: true, requiredTools: true },
+            orderBy: { createdAt: "desc" },
+            take: 20,
+          }),
+        ])
       : null;
 
     const client = membership.role === "CLIENT"
@@ -109,6 +156,7 @@ export async function GET(request: Request, { params }: RouteContext) {
       workspace: membership.workspace,
       user: { ...membership.user, role: membership.role.toLowerCase(), title: membership.title },
       professional,
+      professionalNetwork: professionalNetwork ? { projects: professionalNetwork[0], opportunities: professionalNetwork[1] } : null,
       client,
     });
   } catch (error) {
