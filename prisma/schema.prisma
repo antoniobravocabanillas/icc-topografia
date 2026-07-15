@@ -245,9 +245,21 @@ enum TerraqoModuleCode {
   JOB_MARKETPLACE
   FORUMS
   PROFESSIONAL_MESSAGING
+  TERRAQO_MEET
   ANALYTICS
   AUTOMATIONS
   DOCUMENTS
+}
+
+enum TerraqoMeetingStatus {
+  LIVE
+  ENDED
+  CANCELLED
+}
+
+enum TerraqoMeetingProvider {
+  JITSI
+  CUSTOM_JITSI
 }
 
 enum TerraqoConversationType {
@@ -370,6 +382,8 @@ model User {
   terraqoConversationsCreated TerraqoConversation[]            @relation("TerraqoConversationCreator")
   terraqoConversationMembers  TerraqoConversationParticipant[]
   terraqoDirectMessages       TerraqoDirectMessage[]           @relation("TerraqoDirectMessageSender")
+  terraqoMeetingsCreated      TerraqoMeeting[]                 @relation("TerraqoMeetingCreator")
+  terraqoMeetingParticipants  TerraqoMeetingParticipant[]
   createdAt                   DateTime                         @default(now())
   updatedAt                   DateTime                         @updatedAt
 }
@@ -1328,6 +1342,7 @@ model Project {
   terraqoJobPosts      TerraqoJobPost[]
   terraqoWorklogs      TerraqoWorklogEntry[]
   terraqoConversations TerraqoConversation[]
+  terraqoMeetings      TerraqoMeeting[]
   createdAt            DateTime                        @default(now())
   updatedAt            DateTime                        @updatedAt
   deletedAt            DateTime?
@@ -1629,6 +1644,7 @@ model TerraqoWorkspace {
   forumChannels            TerraqoForumChannel[]
   worklogs                 TerraqoWorklogEntry[]
   directConversations      TerraqoConversation[]
+  meetings                 TerraqoMeeting[]
   createdAt                DateTime                         @default(now())
   updatedAt                DateTime                         @updatedAt
   deletedAt                DateTime?
@@ -1652,6 +1668,7 @@ model TerraqoConversation {
   createdBy     User                             @relation("TerraqoConversationCreator", fields: [createdById], references: [id], onDelete: Cascade)
   participants  TerraqoConversationParticipant[]
   messages      TerraqoDirectMessage[]
+  meetings      TerraqoMeeting[]
   lastMessageAt DateTime?
   archivedAt    DateTime?
   createdAt     DateTime                         @default(now())
@@ -1692,6 +1709,45 @@ model TerraqoDirectMessage {
 
   @@index([conversationId, createdAt])
   @@index([senderId, createdAt])
+}
+
+model TerraqoMeeting {
+  id             String                      @id @default(cuid())
+  roomKey        String                      @unique
+  title          String?
+  status         TerraqoMeetingStatus        @default(LIVE)
+  provider       TerraqoMeetingProvider      @default(JITSI)
+  workspaceId    String
+  workspace      TerraqoWorkspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  conversationId String
+  conversation   TerraqoConversation         @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  projectId      String?
+  project        Project?                    @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdById    String
+  createdBy      User                        @relation("TerraqoMeetingCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  participants   TerraqoMeetingParticipant[]
+  startedAt      DateTime                    @default(now())
+  endedAt        DateTime?
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
+
+  @@index([workspaceId, status, createdAt])
+  @@index([conversationId, status])
+  @@index([projectId])
+}
+
+model TerraqoMeetingParticipant {
+  id        String         @id @default(cuid())
+  meetingId String
+  meeting   TerraqoMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt  DateTime?
+  leftAt    DateTime?
+  createdAt DateTime       @default(now())
+
+  @@unique([meetingId, userId])
+  @@index([userId, createdAt])
 }
 
 model TerraqoWorkspaceModule {

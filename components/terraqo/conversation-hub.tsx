@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { Building2, MessageSquareText, Send, UserRound } from "lucide-react";
+import { Building2, MessageSquareText, Send, UserRound, Video } from "lucide-react";
 import type { ConversationHubData } from "@/lib/terraqo/messaging";
 import { sendMessageAction, startConversationAction } from "@/lib/terraqo/messaging-actions";
+import { createMeetingAction } from "@/lib/terraqo/meet-actions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -21,6 +22,7 @@ function participantLabel(conversation: ConversationHubData["conversations"][num
 export function ConversationHub({ data, currentUserId, basePath, compactIntro, projects = [] }: ConversationHubProps) {
   const startAction = startConversationAction.bind(null, basePath);
   const replyAction = sendMessageAction.bind(null, basePath);
+  const meetingAction = createMeetingAction.bind(null, basePath);
 
   return (
     <div className="space-y-6">
@@ -89,9 +91,23 @@ export function ConversationHub({ data, currentUserId, basePath, compactIntro, p
         <section className="flex w-full min-w-0 min-h-[620px] flex-col">
           {data.selected ? (
             <>
-              <header className="border-b px-5 py-4">
-                <h3 className="font-display text-lg font-bold">{participantLabel(data.selected, currentUserId)}</h3>
-                <p className="text-xs text-muted-foreground">{data.selected.project?.title || data.selected.workspace?.name} · {data.selected.type.toLowerCase()}</p>
+              <header className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4">
+                <div className="min-w-0">
+                  <h3 className="truncate font-display text-lg font-bold">{participantLabel(data.selected, currentUserId)}</h3>
+                  <p className="text-xs text-muted-foreground">{data.selected.project?.title || data.selected.workspace?.name} | {data.selected.type.toLowerCase()}</p>
+                </div>
+                {data.selected.workspaceId && data.meetWorkspaceIds.includes(data.selected.workspaceId) ? (
+                  data.selected.meetings[0] ? (
+                    <Button asChild className="gap-2 bg-[#008f87] hover:bg-[#00766f]">
+                      <Link href={`/reuniones/${data.selected.meetings[0].id}?volver=${encodeURIComponent(basePath)}`}><Video className="h-4 w-4" /> Entrar a reunion</Link>
+                    </Button>
+                  ) : (
+                    <form action={meetingAction}>
+                      <input type="hidden" name="conversationId" value={data.selected.id} />
+                      <Button type="submit" variant="outline" className="gap-2"><Video className="h-4 w-4" /> Iniciar reunion</Button>
+                    </form>
+                  )
+                ) : null}
               </header>
               <div className="flex-1 space-y-3 overflow-y-auto bg-[#fbfdfd] p-5">
                 {data.selected.messages.length ? data.selected.messages.map((message) => {

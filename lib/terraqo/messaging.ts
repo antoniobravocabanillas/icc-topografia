@@ -27,6 +27,12 @@ const conversationInclude = {
     orderBy: { createdAt: "asc" as const },
     take: 120
   },
+  meetings: {
+    where: { status: "LIVE" as const },
+    select: { id: true, createdById: true, startedAt: true },
+    orderBy: { createdAt: "desc" as const },
+    take: 1
+  },
   project: { select: { id: true, title: true } },
   workspace: { select: { id: true, name: true, slug: true } }
 };
@@ -50,7 +56,7 @@ export async function getConversationHub(userId: string, selectedId?: string, wo
   if (workspaceId && !allowedWorkspaceIds.has(workspaceId)) throw new TerraqoMessagingError("El modulo de mensajeria no esta activo para este workspace.", 403);
 
   const participantWhere = { participants: { some: { userId, leftAt: null } } };
-  const [conversations, recipientMembers] = await Promise.all([
+  const [conversations, recipientMembers, meetModules] = await Promise.all([
     prisma.terraqoConversation.findMany({
       where: {
         ...participantWhere,
@@ -79,6 +85,10 @@ export async function getConversationHub(userId: string, selectedId?: string, wo
         }
       },
       orderBy: { user: { name: "asc" } }
+    }),
+    prisma.terraqoWorkspaceModule.findMany({
+      where: { workspaceId: { in: [...allowedWorkspaceIds] }, code: "TERRAQO_MEET", active: true },
+      select: { workspaceId: true }
     })
   ]);
 
@@ -100,7 +110,7 @@ export async function getConversationHub(userId: string, selectedId?: string, wo
     });
   }
 
-  return { conversations, selected, recipients, workspaces };
+  return { conversations, selected, recipients, workspaces, meetWorkspaceIds: meetModules.map((module) => module.workspaceId) };
 }
 
 export async function startConversation(input: {

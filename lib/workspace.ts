@@ -78,6 +78,12 @@ export const terraqoModules: TerraqoModuleDefinition[] = [
     minimumTier: "PREMIUM"
   },
   {
+    code: "TERRAQO_MEET",
+    label: "Terraqo Meet",
+    description: "Videollamadas privadas entre participantes autorizados de conversaciones y proyectos.",
+    minimumTier: "PREMIUM"
+  },
+  {
     code: "ANALYTICS",
     label: "Analitica ejecutiva",
     description: "Indicadores de conversion, operacion, proyectos, talento y uso del producto.",
