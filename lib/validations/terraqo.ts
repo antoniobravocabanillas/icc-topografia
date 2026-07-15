@@ -26,6 +26,9 @@ export const terraqoModuleUpdateSchema = z.object({
     "LIVE_CV",
     "JOB_MARKETPLACE",
     "FORUMS",
+    "PROFESSIONAL_MESSAGING",
+    "TERRAQO_MEET",
+    "COLLABORATION_TEAMS",
     "ANALYTICS",
     "AUTOMATIONS",
     "DOCUMENTS"
@@ -78,6 +81,31 @@ export const terraqoWorklogEngagementSchema = z.discriminatedUnion("action", [
     type: z.enum(["USEFUL", "INSIGHTFUL", "RESPECT"])
   })
 ]);
+
+export const terraqoForumPostCreateSchema = z.object({
+  channelId: z.string().cuid(),
+  title: z.string().trim().min(8).max(180),
+  body: z.string().trim().min(30).max(6000),
+  tags: z.array(z.string().trim().min(1).max(40)).max(8).default([])
+});
+
+export const terraqoForumReplyCreateSchema = z.object({
+  postId: z.string().cuid(),
+  body: z.string().trim().min(4).max(3000)
+});
+
+export const terraqoTeamCreateSchema = z.object({
+  workspaceId: z.string().cuid(),
+  name: z.string().trim().min(3).max(120),
+  purpose: z.string().trim().min(20).max(1200),
+  projectId: z.string().cuid().optional(),
+  memberUserIds: z.array(z.string().cuid()).min(1).max(12)
+});
+
+export const terraqoTeamInvitationSchema = z.object({
+  teamId: z.string().cuid(),
+  action: z.enum(["accept", "decline"])
+});
 
 const optionalUrl = z.union([z.string().url(), z.literal("")]).optional();
 

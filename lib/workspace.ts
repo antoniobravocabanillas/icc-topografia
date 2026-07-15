@@ -84,6 +84,12 @@ export const terraqoModules: TerraqoModuleDefinition[] = [
     minimumTier: "PREMIUM"
   },
   {
+    code: "COLLABORATION_TEAMS",
+    label: "Equipos Terraqo",
+    description: "Duplas y squads privados con invitaciones, mensajeria grupal y reuniones integradas.",
+    minimumTier: "PREMIUM"
+  },
+  {
     code: "ANALYTICS",
     label: "Analitica ejecutiva",
     description: "Indicadores de conversion, operacion, proyectos, talento y uso del producto.",

@@ -246,6 +246,7 @@ enum TerraqoModuleCode {
   FORUMS
   PROFESSIONAL_MESSAGING
   TERRAQO_MEET
+  COLLABORATION_TEAMS
   ANALYTICS
   AUTOMATIONS
   DOCUMENTS
@@ -273,6 +274,24 @@ enum TerraqoConversationParticipantRole {
   OWNER
   MODERATOR
   MEMBER
+}
+
+enum TerraqoTeamStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum TerraqoTeamRole {
+  OWNER
+  LEAD
+  MEMBER
+}
+
+enum TerraqoTeamMemberStatus {
+  INVITED
+  ACTIVE
+  DECLINED
+  REMOVED
 }
 
 enum TerraqoMemberRole {
@@ -384,6 +403,9 @@ model User {
   terraqoDirectMessages       TerraqoDirectMessage[]           @relation("TerraqoDirectMessageSender")
   terraqoMeetingsCreated      TerraqoMeeting[]                 @relation("TerraqoMeetingCreator")
   terraqoMeetingParticipants  TerraqoMeetingParticipant[]
+  terraqoTeamsOwned           TerraqoTeam[]                    @relation("TerraqoTeamOwner")
+  terraqoTeamMemberships      TerraqoTeamMember[]              @relation("TerraqoTeamMemberUser")
+  terraqoTeamInvitationsSent  TerraqoTeamMember[]              @relation("TerraqoTeamMemberInviter")
   createdAt                   DateTime                         @default(now())
   updatedAt                   DateTime                         @updatedAt
 }
@@ -1343,6 +1365,7 @@ model Project {
   terraqoWorklogs      TerraqoWorklogEntry[]
   terraqoConversations TerraqoConversation[]
   terraqoMeetings      TerraqoMeeting[]
+  terraqoTeams         TerraqoTeam[]
   createdAt            DateTime                        @default(now())
   updatedAt            DateTime                        @updatedAt
   deletedAt            DateTime?
@@ -1645,6 +1668,7 @@ model TerraqoWorkspace {
   worklogs                 TerraqoWorklogEntry[]
   directConversations      TerraqoConversation[]
   meetings                 TerraqoMeeting[]
+  teams                    TerraqoTeam[]
   createdAt                DateTime                         @default(now())
   updatedAt                DateTime                         @updatedAt
   deletedAt                DateTime?
@@ -1669,6 +1693,7 @@ model TerraqoConversation {
   participants  TerraqoConversationParticipant[]
   messages      TerraqoDirectMessage[]
   meetings      TerraqoMeeting[]
+  team          TerraqoTeam?
   lastMessageAt DateTime?
   archivedAt    DateTime?
   createdAt     DateTime                         @default(now())
@@ -1677,6 +1702,48 @@ model TerraqoConversation {
   @@index([workspaceId, updatedAt])
   @@index([projectId])
   @@index([type, updatedAt])
+}
+
+model TerraqoTeam {
+  id             String               @id @default(cuid())
+  workspaceId    String
+  workspace      TerraqoWorkspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  ownerUserId    String
+  owner          User                 @relation("TerraqoTeamOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  name           String
+  purpose        String
+  status         TerraqoTeamStatus    @default(ACTIVE)
+  projectId      String?
+  project        Project?             @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  conversationId String?              @unique
+  conversation   TerraqoConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  members        TerraqoTeamMember[]
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@index([workspaceId, status, updatedAt])
+  @@index([ownerUserId, status])
+  @@index([projectId])
+}
+
+model TerraqoTeamMember {
+  id              String                  @id @default(cuid())
+  teamId          String
+  team            TerraqoTeam             @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User                    @relation("TerraqoTeamMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+  role            TerraqoTeamRole         @default(MEMBER)
+  status          TerraqoTeamMemberStatus @default(INVITED)
+  invitedByUserId String
+  invitedBy       User                    @relation("TerraqoTeamMemberInviter", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+  invitedAt       DateTime                @default(now())
+  joinedAt        DateTime?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  @@unique([teamId, userId])
+  @@index([userId, status, updatedAt])
+  @@index([teamId, status])
 }
 
 model TerraqoConversationParticipant {

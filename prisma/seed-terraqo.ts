@@ -93,6 +93,77 @@ async function main() {
     });
   }
 
+  const forumChannels = [
+    {
+      slug: "obra-y-control",
+      name: "Obra y control",
+      description: "Criterios de ejecucion, replanteo, control geometrico, calidad y coordinacion de frentes."
+    },
+    {
+      slug: "tecnologia-y-datos",
+      name: "Tecnologia y datos",
+      description: "Herramientas, automatizacion, captura digital, software y decisiones respaldadas por datos."
+    },
+    {
+      slug: "carrera-y-oficio",
+      name: "Carrera y oficio",
+      description: "Aprendizajes de campo, empleabilidad, certificaciones y desarrollo de capacidades profesionales."
+    }
+  ];
+
+  for (const channel of forumChannels) {
+    await prisma.terraqoForumChannel.upsert({
+      where: { workspaceId_slug: { workspaceId: terraqoWorkspace.id, slug: channel.slug } },
+      update: { name: channel.name, description: channel.description, visibility: "COMMUNITY", active: true },
+      create: {
+        workspaceId: terraqoWorkspace.id,
+        slug: channel.slug,
+        name: channel.name,
+        description: channel.description,
+        visibility: "COMMUNITY",
+        active: true
+      }
+    });
+  }
+
+  const [demoProfessional, demoColleague] = await Promise.all([
+    prisma.user.findUnique({ where: { email: "demo.profesional@terraqo.com" }, select: { id: true } }),
+    prisma.user.findUnique({ where: { email: "demo.colega@terraqo.com" }, select: { id: true } })
+  ]);
+  if (demoProfessional && demoColleague) {
+    const existingTeam = await prisma.terraqoTeam.findFirst({
+      where: { workspaceId: terraqoWorkspace.id, ownerUserId: demoProfessional.id, name: "Squad control y captura 3D", status: "ACTIVE" },
+      select: { id: true }
+    });
+    if (!existingTeam) {
+      const conversation = await prisma.terraqoConversation.create({
+        data: {
+          type: "GROUP",
+          title: "Squad control y captura 3D",
+          workspaceId: terraqoWorkspace.id,
+          createdById: demoProfessional.id,
+          participants: { create: { userId: demoProfessional.id, role: "OWNER", lastReadAt: new Date() } }
+        },
+        select: { id: true }
+      });
+      await prisma.terraqoTeam.create({
+        data: {
+          workspaceId: terraqoWorkspace.id,
+          ownerUserId: demoProfessional.id,
+          name: "Squad control y captura 3D",
+          purpose: "Combinar control topografico, captura LiDAR y evidencia de campo para presentar una propuesta tecnica conjunta.",
+          conversationId: conversation.id,
+          members: {
+            create: [
+              { userId: demoProfessional.id, invitedByUserId: demoProfessional.id, role: "OWNER", status: "ACTIVE", joinedAt: new Date() },
+              { userId: demoColleague.id, invitedByUserId: demoProfessional.id, role: "MEMBER", status: "INVITED" }
+            ]
+          }
+        }
+      });
+    }
+  }
+
   console.log(`Terraqo workspace ready: ${terraqoWorkspace.slug} (${tier})`);
 }
 

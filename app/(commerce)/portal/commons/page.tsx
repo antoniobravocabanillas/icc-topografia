@@ -4,6 +4,7 @@ import { ProfessionalPortalNav } from "@/components/terraqo/professional-portal-
 import { PortalPageHeading } from "@/components/terraqo/portal-page-heading";
 import { WorklogCard } from "@/components/terraqo/worklog-card";
 import { prisma } from "@/lib/prisma";
+import { getVisibleForumChannels } from "@/lib/terraqo/forums";
 import { requireProfessionalPortal } from "@/lib/terraqo/professional-portal";
 import { getVisibleWorklogs } from "@/lib/terraqo/worklog";
 
@@ -19,7 +20,7 @@ export default async function CommonsPage() {
     ...worklogs.flatMap((worklog) => worklog.workspaceId ? [worklog.workspaceId] : [])
   ]));
 
-  const [companies, channels] = await Promise.all([
+  const [companies, forumResult] = await Promise.all([
     prisma.terraqoWorkspace.findMany({
       where: { id: { in: workspaceIds }, active: true, deletedAt: null, modules: { some: { code: "PROFESSIONAL_NETWORK", active: true } } },
       select: {
@@ -28,17 +29,9 @@ export default async function CommonsPage() {
       },
       orderBy: { name: "asc" }
     }),
-    prisma.terraqoForumChannel.findMany({
-      where: {
-        active: true,
-        visibility: { in: ["PUBLIC", "COMMUNITY", "WORKSPACE"] },
-        OR: [{ workspaceId: null }, { workspaceId: { in: workspaceIds } }]
-      },
-      include: { _count: { select: { posts: true } } },
-      orderBy: { updatedAt: "desc" },
-      take: 8
-    })
+    getVisibleForumChannels(session.user.id)
   ]);
+  const channels = forumResult.channels.slice(0, 8);
 
   return (
     <section className="bg-[#f6fbff] py-10 md:py-14">
@@ -68,7 +61,7 @@ export default async function CommonsPage() {
             <div className="rounded-lg border bg-[#03111D] p-5 text-white shadow-xl">
               <div className="flex items-center gap-2"><MessagesSquare className="h-5 w-5 text-[#24C8EE]" /><h2 className="font-display text-xl font-bold">Gremios y foros</h2></div>
               <p className="mt-2 text-sm text-white/65">Conversaciones tecnicas organizadas por rubro y especialidad.</p>
-              <div className="mt-4 space-y-2">{channels.map((channel) => <div key={channel.id} className="flex items-center justify-between border-t border-white/10 py-3 text-sm"><span>{channel.name}</span><span className="text-[#7DE4FF]">{channel._count.posts}</span></div>)}</div>
+              <div className="mt-4 space-y-1">{channels.map((channel) => <Link key={channel.id} href={`/portal/commons/${channel.id}`} className="group flex items-center justify-between gap-3 border-t border-white/10 py-3 text-sm"><span><strong className="block text-white group-hover:text-[#7DE4FF]">{channel.name}</strong><span className="mt-0.5 block text-xs text-white/45">{channel.posts[0]?.title || "Abre la primera conversacion"}</span></span><span className="shrink-0 text-[#7DE4FF]">{channel._count.posts}</span></Link>)}</div>
               {!channels.length ? <p className="mt-4 text-sm text-white/60">Los primeros gremios se habilitaran desde el panel Terraqo.</p> : null}
             </div>
 
