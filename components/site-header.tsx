@@ -103,8 +103,8 @@ export function SiteHeader() {
         <Link href="/" className="flex items-center gap-3 font-bold" aria-label={`${brand.name} inicio`}>
           <BrandLogo variant="mark" className="h-11 w-11" priority />
           <span className="leading-tight">
-            <span className="font-display">{brand.shortName}</span>
-            <span className="block text-xs font-medium text-muted-foreground">{brand.tagline}</span>
+            {/* <span className="font-display">{brand.shortName}</span>
+            <span className="block text-xs font-medium text-muted-foreground">{brand.tagline}</span> */}
           </span>
         </Link>
         <nav className="hidden items-center gap-5 text-sm font-medium lg:flex">

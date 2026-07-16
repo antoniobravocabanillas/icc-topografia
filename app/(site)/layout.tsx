@@ -1,18 +1,12 @@
-import { SiteFooter } from "@/components/site-footer";
-import { SiteHeader } from "@/components/site-header";
-import { ChatWidget } from "@/components/chat/chat-widget";
-import { safeDb } from "@/lib/server/safe-db";
-import { hasWorkspaceModule } from "@/lib/terraqo/workspace-scope";
+import { TerraqoPublicFooter } from "@/components/terraqo/terraqo-public-footer";
+import { TerraqoPublicHeader } from "@/components/terraqo/terraqo-public-header";
 
-export default async function SiteLayout({ children }: { children: React.ReactNode }) {
-  const chatEnabled = await safeDb("site customer chat entitlement", hasWorkspaceModule("CUSTOMER_CHAT"), false);
-
+export default function SiteLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
-      <SiteHeader />
+      <TerraqoPublicHeader />
       <main>{children}</main>
-      <SiteFooter />
-      {chatEnabled ? <ChatWidget /> : null}
+      <TerraqoPublicFooter />
     </>
   );
 }

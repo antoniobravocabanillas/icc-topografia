@@ -1,15 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import type { Prisma } from "@prisma/client";
 import type { ElementType } from "react";
-import { BadgeCheck, BriefcaseBusiness, FileText, FolderKanban, LifeBuoy, MapPin, UserRound } from "lucide-react";
+import { FileText, FolderKanban, LifeBuoy, UserRound } from "lucide-react";
 import { auth } from "@/auth";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { PortalFileUploader } from "@/components/portal/file-uploader";
-import { ProfessionalDocumentUploader } from "@/components/portal/professional-document-uploader";
-import { ProfessionalPortalNav } from "@/components/terraqo/professional-portal-nav";
-import { WorklogCard } from "@/components/terraqo/worklog-card";
+import { ProfessionalDashboard } from "@/components/terraqo/professional-dashboard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -77,10 +74,25 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
       }
     }
   });
-  const professionalProfile = await prisma.terraqoProfessionalProfile.findUnique({
-    where: { userId: session.user.id },
+  const professionalProfile = await prisma.terraqoProfessionalProfile.findFirst({
+    where: {
+      OR: [
+        { userId: session.user.id },
+        { user: { email: session.user.email } }
+      ],
+      user: {
+        terraqoMemberships: {
+          some: {
+            workspaceId: terraqoWorkspaceId,
+            role: "PROFESSIONAL",
+            active: true
+          }
+        }
+      }
+    },
     include: {
-      experiences: { include: { project: { select: { title: true, slug: true } } }, orderBy: { createdAt: "desc" }, take: 6 },
+      user: { select: { name: true, email: true, image: true } },
+      experiences: { include: { project: { select: { title: true, slug: true, location: true, images: { select: { url: true }, orderBy: { position: "asc" }, take: 1 } } } }, orderBy: { createdAt: "desc" }, take: 6 },
       affiliations: { orderBy: [{ current: "desc" }, { updatedAt: "desc" }], take: 6 },
       applications: {
         include: {
@@ -105,12 +117,11 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
 
   if (!account || !["active", "approved"].includes(account.status) || !account.client || account.client.terraqoWorkspaceId !== terraqoWorkspaceId) {
     if (professionalProfile) {
-      return <ProfessionalPortal profile={professionalProfile} />;
+      return <ProfessionalDashboard profile={professionalProfile} />;
     }
 
     return (
-      <section className="bg-[#f6fbff] py-16">
-        <div className="container max-w-3xl">
+      <div className="max-w-3xl py-8 lg:py-12">
           <Card>
             <CardHeader>
               <CardTitle>Acceso pendiente de validacion</CardTitle>
@@ -128,16 +139,14 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
               </Button>
             </CardContent>
           </Card>
-        </div>
-      </section>
+      </div>
     );
   }
 
   const client = account.client;
 
   return (
-    <section className="bg-[#f6fbff] py-12">
-      <div className="container space-y-8">
+    <div className="min-w-0 space-y-8 py-6 lg:py-8">
         {params.success && successMessages[params.success] ? (
           <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
             {successMessages[params.success]}
@@ -158,7 +167,7 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
             </div>
           </div>
 
-          <Card>
+          <Card id="cotizaciones" className="scroll-mt-28">
             <CardHeader>
               <CardTitle>Perfil comercial</CardTitle>
               <CardDescription>Datos usados para propuestas, tickets y seguimiento.</CardDescription>
@@ -178,7 +187,7 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
         </div>
 
         <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-          <Card>
+          <Card id="soporte" className="scroll-mt-28">
             <CardHeader>
               <CardTitle>Cotizaciones recibidas</CardTitle>
               <CardDescription>Acepta, rechaza o descarga tus propuestas comerciales.</CardDescription>
@@ -221,7 +230,7 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
             </CardContent>
           </Card>
 
-          <Card>
+          <Card id="proyectos" className="scroll-mt-28">
             <CardHeader>
               <CardTitle>Nuevo ticket de soporte</CardTitle>
               <CardDescription>Solicita asistencia, calibracion, garantia o revision tecnica.</CardDescription>
@@ -280,7 +289,7 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
         </Card>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          <Card>
+          <Card id="documentos" className="scroll-mt-28">
             <CardHeader>
               <CardTitle>Proyectos contratados</CardTitle>
               <CardDescription>Avances, estado y evidencia tecnica asociada.</CardDescription>
@@ -324,160 +333,7 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
             </CardContent>
           </Card>
         </div>
-      </div>
-    </section>
-  );
-}
-
-type ProfessionalPortalProfile = Prisma.TerraqoProfessionalProfileGetPayload<{
-  include: {
-    experiences: { include: { project: { select: { title: true; slug: true } } } };
-    affiliations: true;
-    applications: {
-      include: {
-        workspace: { select: { name: true } };
-        jobPost: { select: { title: true } };
-      };
-    };
-    documents: {
-      select: { id: true; type: true; fileName: true; reviewStatus: true; reviewNote: true };
-    };
-    worklogs: { include: typeof worklogInclude };
-  };
-}>;
-
-function ProfessionalPortal({ profile }: { profile: ProfessionalPortalProfile }) {
-  return (
-    <section className="bg-[#f6fbff] py-12">
-      <div className="container space-y-8">
-        <ProfessionalPortalNav current="/portal" />
-        <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
-          <div className="rounded-lg border bg-[#03111D] p-7 text-white shadow-xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#24C8EE]">Portal Terraqo</p>
-            <h1 className="mt-4 font-display text-4xl font-bold">Perfil profesional y CV vivo</h1>
-            <p className="mt-4 max-w-2xl text-white/72">
-              Administra tu disponibilidad, documenta trabajo real y encuentra oportunidades. Tu CV vivo crece con evidencia vinculada a proyectos y empresas.
-            </p>
-            <div className="mt-5 flex flex-wrap gap-2">
-              <Button asChild variant="secondary"><Link href="/portal/bitacora">Registrar evidencia</Link></Button>
-              <Button asChild variant="outline" className="border-white/25 bg-transparent text-white hover:bg-white/10"><Link href="/portal/commons">Explorar Commons</Link></Button>
-            </div>
-            <div className="mt-6 grid gap-3 sm:grid-cols-3">
-              <Metric icon={BriefcaseBusiness} label="Experiencias" value={profile.experiences.length} />
-              <Metric icon={FileText} label="Postulaciones" value={profile.applications.length} />
-              <Metric icon={BadgeCheck} label="Validaciones" value={profile.experiences.filter((item) => item.verifiedByTerraqo).length} />
-            </div>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Estado profesional</CardTitle>
-              <CardDescription>Informacion visible segun permisos y suscripcion.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="rounded-md border bg-muted/40 p-4">
-                <p className="text-xs font-bold uppercase text-muted-foreground">Disponibilidad</p>
-                <p className="mt-1 font-display text-2xl font-bold">{profile.status.replaceAll("_", " ")}</p>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <MapPin className="h-4 w-4 text-primary" />
-                {profile.city || "Ciudad por completar"} | {profile.yearsExperience ?? 0} anios de experiencia
-              </div>
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Categorias y especialidades</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {[...profile.professionalCategories, ...profile.specialties].length ? [...profile.professionalCategories, ...profile.specialties].map((item) => (
-                    <span key={item} className="rounded-md border bg-muted px-2.5 py-1 text-xs font-semibold">{item}</span>
-                  )) : <span className="text-sm text-muted-foreground">Pendiente de completar</span>}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {profile.worklogs.length ? (
-            <div className="space-y-4 lg:col-span-2">
-              <div className="flex items-end justify-between gap-4">
-                <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Bitacora reciente</p><h2 className="mt-1 font-display text-2xl font-bold">Evidencia que alimenta tu CV vivo</h2></div>
-                <Link href="/portal/bitacora" className="text-sm font-semibold text-primary hover:underline">Ver toda la bitacora</Link>
-              </div>
-              <div className="grid gap-5 xl:grid-cols-2">
-                {profile.worklogs.map((worklog) => <WorklogCard key={worklog.id} worklog={worklog} viewerId={profile.userId} />)}
-              </div>
-            </div>
-          ) : null}
-        </div>
-
-        <ProfessionalDocumentUploader
-          identityStatus={profile.identityVerificationStatus}
-          identityNote={profile.identityVerificationNote}
-          documents={profile.documents}
-        />
-
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Vinculos profesionales</CardTitle>
-              <CardDescription>Empresas declaradas o verificadas dentro de tu trayectoria privada.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {profile.affiliations.map((affiliation) => (
-                <div key={affiliation.id} className="rounded-md border p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-display text-lg font-bold">{affiliation.companyName}</p>
-                      <p className="text-sm text-muted-foreground">{affiliation.roleTitle || "Rol por completar"}</p>
-                    </div>
-                    <span className="rounded-md bg-primary/10 px-2 py-1 text-xs font-bold text-primary">
-                      {affiliation.verificationStatus === "MATCHED" ? "Empresa vinculada" : "Pendiente de validar"}
-                    </span>
-                  </div>
-                </div>
-              ))}
-              {!profile.affiliations.length ? <p className="text-sm text-muted-foreground">Aun no has declarado una empresa actual.</p> : null}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Experiencia para CV vivo</CardTitle>
-              <CardDescription>Los proyectos validados por Terraqo daran mas peso a tu perfil profesional.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {profile.experiences.map((experience) => (
-                <div key={experience.id} className="rounded-md border p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-display text-lg font-bold">{experience.title}</p>
-                      <p className="text-sm text-muted-foreground">{experience.companyName || "Empresa por confirmar"} | {experience.role || "Rol tecnico"}</p>
-                      {experience.project ? <p className="mt-2 text-xs font-semibold text-primary">Proyecto validado: {experience.project.title}</p> : null}
-                    </div>
-                    {experience.verifiedByTerraqo ? <span className="rounded-md bg-primary/10 px-2 py-1 text-xs font-bold text-primary">Validado</span> : null}
-                  </div>
-                </div>
-              ))}
-              {!profile.experiences.length ? <p className="text-sm text-muted-foreground">Aun no hay experiencias registradas.</p> : null}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Postulaciones y oportunidades</CardTitle>
-              <CardDescription>Seguimiento privado de convocatorias vinculadas a workspaces Terraqo.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {profile.applications.map((application) => (
-                <div key={application.id} className="rounded-md border p-4">
-                  <p className="font-display text-lg font-bold">{application.jobPost?.title || "Bolsa de talento general"}</p>
-                  <p className="text-sm text-muted-foreground">{application.workspace.name}</p>
-                  <p className="mt-2 text-xs font-bold uppercase tracking-[0.16em] text-primary">{application.status}</p>
-                </div>
-              ))}
-              {!profile.applications.length ? <p className="text-sm text-muted-foreground">Aun no tienes postulaciones.</p> : null}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </section>
+    </div>
   );
 }
 

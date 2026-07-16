@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight, BriefcaseBusiness, Building2, FolderKanban, UsersRound } from "lucide-react";
-import { ProfessionalPortalNav } from "@/components/terraqo/professional-portal-nav";
 import { WorklogCard } from "@/components/terraqo/worklog-card";
 import { prisma } from "@/lib/prisma";
 import { requireProfessionalPortal } from "@/lib/terraqo/professional-portal";
@@ -35,9 +34,7 @@ export default async function CompanyProfilePage({ params }: PageProps) {
   ]);
 
   return (
-    <section className="bg-[#f6fbff] py-10 md:py-14">
-      <div className="container space-y-8">
-        <ProfessionalPortalNav current="" />
+    <div className="min-w-0 space-y-8 py-6 lg:py-8">
         <header className="rounded-lg border bg-[#03111D] p-8 text-white shadow-xl md:p-10">
           <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
             <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-[#7DE4FF]">Empresa Terraqo</p><h1 className="mt-4 font-display text-4xl font-bold md:text-5xl">{workspace.brandName || workspace.name}</h1><p className="mt-3 text-lg text-white/65">{workspace.industry || "Organizacion profesional"}</p><p className="mt-5 max-w-3xl leading-7 text-white/72">{workspace.description || "Perfil empresarial conectado a proyectos, oportunidades y profesionales en Terraqo."}</p></div>
@@ -54,8 +51,7 @@ export default async function CompanyProfilePage({ params }: PageProps) {
         {projects.length ? <section><p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Proyectos</p><h2 className="mt-2 font-display text-3xl font-bold">Trabajo de la empresa</h2><div className="mt-5 grid gap-4 lg:grid-cols-3">{projects.map((project) => <article key={project.id} className="rounded-lg border bg-white p-5 shadow-technical"><span className="text-xs font-bold uppercase text-primary">{project.category || "Proyecto"}</span><h3 className="mt-2 font-display text-xl font-bold">{project.title}</h3><p className="mt-2 text-sm leading-6 text-muted-foreground">{project.summary}</p></article>)}</div></section> : null}
 
         {worklogs.length ? <section><p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Evidencia reciente</p><h2 className="mt-2 font-display text-3xl font-bold">Trabajo vinculado</h2><div className="mt-5 grid gap-5 xl:grid-cols-2">{worklogs.map((worklog) => <WorklogCard key={worklog.id} worklog={worklog} viewerId={session.user.id} />)}</div></section> : null}
-      </div>
-    </section>
+    </div>
   );
 }
 

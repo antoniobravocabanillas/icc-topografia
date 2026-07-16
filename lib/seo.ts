@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { brand } from "@/lib/brand";
 import { absoluteUrl } from "@/lib/utils";
 
 type SeoInput = {
@@ -9,7 +8,7 @@ type SeoInput = {
 };
 
 export function createMetadata({ title, description, path = "" }: SeoInput): Metadata {
-  const fullTitle = `${title} | ${brand.shortName}`;
+  const fullTitle = `${title} | Terraqo`;
   const url = absoluteUrl(path);
 
   return {
@@ -20,7 +19,7 @@ export function createMetadata({ title, description, path = "" }: SeoInput): Met
       title: fullTitle,
       description,
       url,
-      siteName: brand.name,
+      siteName: "Terraqo",
       locale: "es_PE",
       type: "website"
     },

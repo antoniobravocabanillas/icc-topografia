@@ -13,11 +13,10 @@ export const metadata = createMetadata({
 
 export default function ClientRegisterPage() {
   return (
-    <section className="relative isolate overflow-hidden bg-[#03111D] text-white">
-      <div className="absolute inset-0 opacity-35 [background-image:linear-gradient(rgba(36,200,238,0.15)_1px,transparent_1px),linear-gradient(90deg,rgba(36,200,238,0.11)_1px,transparent_1px)] [background-size:44px_44px]" />
+    <section className="tq-auth-surface relative isolate overflow-hidden bg-[#171510] text-white">
       <div className="container relative grid min-h-[calc(100vh-4rem)] items-center gap-10 py-16 lg:grid-cols-[1fr_480px]">
         <div className="max-w-3xl">
-          <Badge className="bg-white text-[#063D63] hover:bg-white">Portal Terraqo</Badge>
+          <Badge className="bg-[#f0eadf] text-[#171510] hover:bg-[#f0eadf]">Portal Terraqo</Badge>
           <h1 className="mt-5 font-display text-4xl font-bold leading-tight md:text-6xl">
             Crea tu acceso como cliente o profesional.
           </h1>
@@ -27,20 +26,20 @@ export default function ClientRegisterPage() {
 
           <div className="mt-8 grid gap-3 sm:grid-cols-2">
             <div className="rounded-lg border border-white/14 bg-white/[0.055] p-4 backdrop-blur">
-              <Building2 className="h-5 w-5 text-[#24C8EE]" />
+              <Building2 className="h-5 w-5 text-[#c89a38]" />
               <p className="mt-4 font-display text-xl font-bold">Cliente</p>
               <p className="mt-1 text-sm text-white/60">Solicita servicios, revisa cotizaciones y da seguimiento a proyectos activos.</p>
             </div>
             <div className="rounded-lg border border-white/14 bg-white/[0.055] p-4 backdrop-blur">
-              <BriefcaseBusiness className="h-5 w-5 text-[#24C8EE]" />
+              <BriefcaseBusiness className="h-5 w-5 text-[#c89a38]" />
               <p className="mt-4 font-display text-xl font-bold">Profesional</p>
               <p className="mt-1 text-sm text-white/60">Crea tu perfil tecnico, CV vivo privado y base para participar en proyectos.</p>
             </div>
           </div>
 
           <div className="mt-8 flex flex-wrap gap-3 text-sm text-white/68">
-            <span className="inline-flex items-center gap-2"><BadgeCheck className="h-4 w-4 text-[#24C8EE]" /> Acceso por perfil</span>
-            <span className="inline-flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-[#24C8EE]" /> Informacion privada</span>
+            <span className="inline-flex items-center gap-2"><BadgeCheck className="h-4 w-4 text-[#c89a38]" /> Acceso por perfil</span>
+            <span className="inline-flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-[#c89a38]" /> Informacion privada</span>
           </div>
 
           <Button asChild variant="outline" className="mt-8 border-white/30 bg-white/5 text-white hover:bg-white/10">

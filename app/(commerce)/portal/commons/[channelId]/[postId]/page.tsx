@@ -2,7 +2,6 @@ import Link from "next/link";
 import { BadgeCheck, MessageCircleMore, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ForumReplyForm } from "@/components/terraqo/forum-reply-form";
-import { ProfessionalPortalNav } from "@/components/terraqo/professional-portal-nav";
 import { startConversationAction } from "@/lib/terraqo/messaging-actions";
 import { getForumPostForUser } from "@/lib/terraqo/forums";
 import { requireProfessionalPortal } from "@/lib/terraqo/professional-portal";
@@ -25,9 +24,7 @@ export default async function ForumPostPage({ params }: { params: Promise<{ chan
   const messageAction = startConversationAction.bind(null, "/portal/mensajes");
 
   return (
-    <section className="bg-[#f6fbff] py-10 md:py-14">
-      <div className="container space-y-8">
-        <ProfessionalPortalNav current="/portal/commons" />
+    <div className="min-w-0 space-y-8 py-6 lg:py-8">
         <nav aria-label="Ruta de Commons" className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground"><Link href="/portal/commons" className="hover:text-primary">Commons</Link><span>/</span><Link href={`/portal/commons/${channel.id}`} className="hover:text-primary">{channel.name}</Link><span>/</span><span className="max-w-72 truncate text-foreground">{post.title}</span></nav>
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -53,7 +50,6 @@ export default async function ForumPostPage({ params }: { params: Promise<{ chan
             <div className="rounded-lg bg-[#03111D] p-5 text-sm leading-6 text-white/70"><strong className="block text-white">Canal: {channel.name}</strong><span className="mt-2 block">{channel.description || "Intercambio profesional basado en experiencia real."}</span></div>
           </aside>
         </div>
-      </div>
-    </section>
+    </div>
   );
 }

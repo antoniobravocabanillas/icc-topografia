@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { Building2, MessageSquareText, Send, UserRound, Video } from "lucide-react";
+import { Building2, MessageSquareText, Send, Video } from "lucide-react";
 import type { ConversationHubData } from "@/lib/terraqo/messaging";
 import { sendMessageAction, startConversationAction } from "@/lib/terraqo/messaging-actions";
 import { createMeetingAction } from "@/lib/terraqo/meet-actions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { UserAvatar } from "@/components/terraqo/user-avatar";
 
 type ConversationHubProps = {
   data: ConversationHubData;
@@ -17,6 +18,11 @@ type ConversationHubProps = {
 function participantLabel(conversation: ConversationHubData["conversations"][number], currentUserId: string) {
   const others = conversation.participants.filter((participant) => participant.userId !== currentUserId);
   return conversation.title || others.map((participant) => participant.user.name || participant.user.email).join(", ") || "Conversacion";
+}
+
+function conversationAvatar(conversation: ConversationHubData["conversations"][number], currentUserId: string) {
+  const other = conversation.participants.find((participant) => participant.userId !== currentUserId)?.user;
+  return { name: other?.name || participantLabel(conversation, currentUserId), image: other?.image };
 }
 
 export function ConversationHub({ data, currentUserId, basePath, compactIntro, projects = [] }: ConversationHubProps) {
@@ -51,7 +57,7 @@ export function ConversationHub({ data, currentUserId, basePath, compactIntro, p
                     <input type="hidden" name="recipientUserId" value={recipient.userId} />
                     <input type="hidden" name="workspaceId" value={recipient.workspaceId} />
                     <button className="flex w-full items-center gap-3 rounded-md border bg-white p-3 text-left transition hover:border-primary/50 hover:bg-primary/5">
-                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">{recipient.professional ? <UserRound className="h-4 w-4" /> : <Building2 className="h-4 w-4" />}</span>
+                      {recipient.professional ? <UserAvatar name={recipient.name} image={recipient.image} size="md" /> : <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"><Building2 className="h-4 w-4" /></span>}
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-semibold">{recipient.name}</span>
                         <span className="block truncate text-xs text-muted-foreground">{recipient.headline}</span>
@@ -75,13 +81,16 @@ export function ConversationHub({ data, currentUserId, basePath, compactIntro, p
             {data.conversations.map((conversation) => {
               const active = data.selected?.id === conversation.id;
               const lastMessage = conversation.messages.at(-1);
+              const avatar = conversationAvatar(conversation, currentUserId);
               return (
                 <Link key={conversation.id} href={`${basePath}?conversation=${conversation.id}`} className={`block rounded-md p-3 transition ${active ? "bg-[#063D63] text-white" : "hover:bg-white"}`}>
-                  <div className="flex items-center gap-2">
-                    <MessageSquareText className="h-4 w-4 shrink-0" />
-                    <span className="truncate text-sm font-semibold">{participantLabel(conversation, currentUserId)}</span>
+                  <div className="flex items-center gap-3">
+                    <UserAvatar name={avatar.name} image={avatar.image} size="md" className={active ? "border-white/30 bg-white/10 text-white" : ""} />
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold">{participantLabel(conversation, currentUserId)}</span>
+                      <span className={`mt-1 block truncate text-xs ${active ? "text-white/70" : "text-muted-foreground"}`}>{lastMessage?.body || conversation.workspace?.name || "Conversacion iniciada"}</span>
+                    </span>
                   </div>
-                  <p className={`mt-1 truncate text-xs ${active ? "text-white/70" : "text-muted-foreground"}`}>{lastMessage?.body || conversation.workspace?.name || "Conversacion iniciada"}</p>
                 </Link>
               );
             })}
@@ -92,9 +101,12 @@ export function ConversationHub({ data, currentUserId, basePath, compactIntro, p
           {data.selected ? (
             <>
               <header className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4">
-                <div className="min-w-0">
-                  <h3 className="truncate font-display text-lg font-bold">{participantLabel(data.selected, currentUserId)}</h3>
-                  <p className="text-xs text-muted-foreground">{data.selected.project?.title || data.selected.workspace?.name} | {data.selected.type.toLowerCase()}</p>
+                <div className="flex min-w-0 items-center gap-3">
+                  <UserAvatar {...conversationAvatar(data.selected, currentUserId)} size="md" />
+                  <div className="min-w-0">
+                    <h3 className="truncate font-display text-lg font-bold">{participantLabel(data.selected, currentUserId)}</h3>
+                    <p className="text-xs text-muted-foreground">{data.selected.project?.title || data.selected.workspace?.name} | {data.selected.type.toLowerCase()}</p>
+                  </div>
                 </div>
                 {data.selected.workspaceId && data.meetWorkspaceIds.includes(data.selected.workspaceId) ? (
                   data.selected.meetings[0] ? (
@@ -113,7 +125,8 @@ export function ConversationHub({ data, currentUserId, basePath, compactIntro, p
                 {data.selected.messages.length ? data.selected.messages.map((message) => {
                   const mine = message.senderId === currentUserId;
                   return (
-                    <article key={message.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                    <article key={message.id} className={`flex items-end gap-2 ${mine ? "justify-end" : "justify-start"}`}>
+                      {!mine ? <UserAvatar name={message.sender.name} image={message.sender.image} size="sm" /> : null}
                       <div className={`max-w-[82%] rounded-lg px-4 py-3 ${mine ? "bg-[#063D63] text-white" : "border bg-white"}`}>
                         {!mine ? <p className="mb-1 text-xs font-semibold text-primary">{message.sender.name || "Participante"}</p> : null}
                         <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.body}</p>

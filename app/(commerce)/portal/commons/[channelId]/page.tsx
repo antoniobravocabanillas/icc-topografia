@@ -2,7 +2,6 @@ import Link from "next/link";
 import { ArrowRight, LockKeyhole, MessageCircleMore, Pin, UsersRound } from "lucide-react";
 import { ForumPostComposer } from "@/components/terraqo/forum-post-composer";
 import { PortalPageHeading } from "@/components/terraqo/portal-page-heading";
-import { ProfessionalPortalNav } from "@/components/terraqo/professional-portal-nav";
 import { getForumChannelForUser } from "@/lib/terraqo/forums";
 import { requireProfessionalPortal } from "@/lib/terraqo/professional-portal";
 
@@ -17,9 +16,7 @@ export default async function ForumChannelPage({ params }: { params: Promise<{ c
   const { channel } = await getForumChannelForUser(session.user.id, channelId);
 
   return (
-    <section className="bg-[#f6fbff] py-10 md:py-14">
-      <div className="container space-y-8">
-        <ProfessionalPortalNav current="/portal/commons" />
+    <div className="min-w-0 space-y-8 py-6 lg:py-8">
         <nav aria-label="Ruta de Commons" className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <Link href="/portal/commons" className="hover:text-primary">Commons</Link><span>/</span><span className="text-foreground">{channel.name}</span>
         </nav>
@@ -58,7 +55,6 @@ export default async function ForumChannelPage({ params }: { params: Promise<{ c
             <Link href="/portal/mensajes" className="flex items-center justify-between rounded-lg border bg-white p-5 font-semibold hover:border-primary/40"><span>Continuar en privado</span><ArrowRight className="h-4 w-4 text-primary" /></Link>
           </aside>
         </div>
-      </div>
-    </section>
+    </div>
   );
 }

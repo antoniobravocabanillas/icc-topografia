@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BadgeCheck, Building2, MapPin } from "lucide-react";
-import { ProfessionalPortalNav } from "@/components/terraqo/professional-portal-nav";
 import { WorklogCard } from "@/components/terraqo/worklog-card";
 import { prisma } from "@/lib/prisma";
 import { requireProfessionalPortal } from "@/lib/terraqo/professional-portal";
@@ -41,9 +40,7 @@ export default async function ProfessionalProfilePage({ params }: PageProps) {
   const visibleAffiliations = profile.affiliations.filter((affiliation) => owner || affiliation.visibility === "PUBLIC" || affiliation.visibility === "COMMUNITY" || (affiliation.visibility === "WORKSPACE" && viewerWorkspaceIds.includes(affiliation.workspaceId)));
 
   return (
-    <section className="bg-[#f6fbff] py-10 md:py-14">
-      <div className="container space-y-8">
-        <ProfessionalPortalNav current="" />
+    <div className="min-w-0 space-y-8 py-6 lg:py-8">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
           <div className="rounded-lg border bg-[#03111D] p-7 text-white shadow-xl md:p-9">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#7DE4FF]">Perfil Terraqo</p>
@@ -68,7 +65,6 @@ export default async function ProfessionalProfilePage({ params }: PageProps) {
         <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Bitacora verificable</p><h2 className="mt-2 font-display text-3xl font-bold">Trabajo documentado</h2></div>
         <div className="grid gap-5 xl:grid-cols-2">{worklogs.map((worklog) => <WorklogCard key={worklog.id} worklog={worklog} viewerId={session.user.id} />)}</div>
         {!worklogs.length ? <p className="rounded-lg border bg-white p-8 text-center text-muted-foreground">Este perfil aun no comparte evidencia contigo.</p> : null}
-      </div>
-    </section>
+    </div>
   );
 }

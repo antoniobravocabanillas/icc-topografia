@@ -46,7 +46,7 @@ export function SignInForm() {
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">Acceso seguro</p>
           <h2 className="mt-1 font-display text-2xl font-bold">Ingresar al Portal Terraqo</h2>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">Usa tus credenciales para acceder segun tu perfil: cliente, profesional o equipo operativo.</p>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">Usa tus credenciales para acceder segun tu perfil: empresa, profesional o equipo operativo.</p>
         </div>
       </div>
 

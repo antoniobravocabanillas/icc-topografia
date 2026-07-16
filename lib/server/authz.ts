@@ -1,5 +1,6 @@
 import { Role } from "@prisma/client";
 import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
 import { fail } from "@/lib/server/api";
 import { hasWorkspaceAdminAccess } from "@/lib/terraqo/workspace-access";
 
@@ -17,9 +18,34 @@ const roleRank: Record<Role, number> = {
   SUPER_ADMIN: 4
 };
 
-export async function requireRole(minRole: Role = "ADMIN") {
+async function getCurrentSession() {
   const session = await auth();
-  const role = session?.user?.role as Role | undefined;
+  if (!session?.user?.id && !session?.user?.email) return null;
+
+  const user = session.user.email
+    ? await prisma.user.findUnique({
+        where: { email: session.user.email },
+        select: { id: true, email: true, name: true, image: true, role: true }
+      })
+    : await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { id: true, email: true, name: true, image: true, role: true }
+      });
+
+  if (!user) return null;
+
+  return {
+    ...session,
+    user: {
+      ...session.user,
+      ...user
+    }
+  };
+}
+
+export async function requireRole(minRole: Role = "ADMIN") {
+  const session = await getCurrentSession();
+  const role = session?.user.role;
 
   if (!session?.user?.id || !role) {
     return { response: fail("Autenticacion requerida", 401), session: null };
@@ -37,8 +63,8 @@ export async function requireRole(minRole: Role = "ADMIN") {
 }
 
 export async function requireUser() {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const session = await getCurrentSession();
+  if (!session) {
     return { response: fail("Autenticacion requerida", 401), session: null };
   }
 

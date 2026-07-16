@@ -2,7 +2,6 @@ import Link from "next/link";
 import { ArrowRight, MessageSquareText, UsersRound } from "lucide-react";
 import { TeamComposer } from "@/components/terraqo/team-composer";
 import { PortalPageHeading } from "@/components/terraqo/portal-page-heading";
-import { ProfessionalPortalNav } from "@/components/terraqo/professional-portal-nav";
 import { requireProfessionalPortal } from "@/lib/terraqo/professional-portal";
 import { getTeamHub } from "@/lib/terraqo/teams";
 
@@ -13,9 +12,7 @@ export default async function ProfessionalTeamsPage() {
   const data = await getTeamHub(session.user.id);
 
   return (
-    <main className="min-h-screen bg-[#f4f8f8] py-8">
-      <div className="container space-y-8">
-        <ProfessionalPortalNav current="/portal/equipos" />
+    <div className="min-w-0 space-y-8 py-6 lg:py-8">
         <PortalPageHeading eyebrow="Colaboracion privada" title="Equipos Terraqo" description="Forma una dupla o squad con profesionales de tu workspace. Cada equipo tiene invitaciones controladas, conversacion grupal y acceso a Terraqo Meet." />
         {data.workspaces.length ? <TeamComposer workspaces={data.workspaces} colleagues={data.colleagues} projects={data.projects} /> : (
           <section className="rounded-lg border border-dashed bg-white p-8 text-center">
@@ -44,7 +41,6 @@ export default async function ProfessionalTeamsPage() {
             <div className="rounded-lg border border-dashed bg-white p-8 md:col-span-2 xl:col-span-3"><MessageSquareText className="h-7 w-7 text-primary" /><h2 className="mt-4 text-xl font-bold">Tu primera colaboracion empieza aqui</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Crea un equipo, invita a un colega y define un objetivo concreto. La sala privada se prepara automaticamente.</p></div>
           ) : null}
         </section>
-      </div>
-    </main>
+    </div>
   );
 }

@@ -1,5 +1,4 @@
 import { LockKeyhole } from "lucide-react";
-import { ProfessionalPortalNav } from "@/components/terraqo/professional-portal-nav";
 import { PortalPageHeading } from "@/components/terraqo/portal-page-heading";
 import { WorklogCard } from "@/components/terraqo/worklog-card";
 import { WorklogComposer } from "@/components/terraqo/worklog-composer";
@@ -31,9 +30,7 @@ export default async function WorklogPage() {
   }));
 
   return (
-    <section className="bg-[#f6fbff] py-10 md:py-14">
-      <div className="container space-y-8">
-        <ProfessionalPortalNav current="/portal/bitacora" />
+    <div className="min-w-0 space-y-8 py-6 lg:py-8">
         <PortalPageHeading eyebrow="CV vivo" title="Tu trabajo habla por ti." description="Convierte avances, decisiones y entregables en una trayectoria verificable. Cada entrada conserva su contexto, proyecto y nivel de visibilidad." />
 
         {workspaceOptions.length ? <WorklogComposer workspaces={workspaceOptions} /> : (
@@ -48,7 +45,6 @@ export default async function WorklogPage() {
           {worklogs.map((worklog) => <WorklogCard key={worklog.id} worklog={worklog} viewerId={session.user.id} />)}
         </div>
         {!worklogs.length ? <p className="rounded-lg border bg-white p-8 text-center text-muted-foreground">Aun no hay entradas. Tu primera evidencia puede ser un avance, un entregable o un problema resuelto.</p> : null}
-      </div>
-    </section>
+    </div>
   );
 }

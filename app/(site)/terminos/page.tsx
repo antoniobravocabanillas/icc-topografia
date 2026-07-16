@@ -1,12 +1,19 @@
 import { createMetadata } from "@/lib/seo";
 
-export const metadata = createMetadata({ title: "Terminos y condiciones", description: "Terminos comerciales de tienda, cotizacion, servicios y soporte.", path: "/terminos" });
+export const metadata = createMetadata({ title: "Terminos y condiciones", description: "Condiciones de acceso y uso de la plataforma Terraqo.", path: "/terminos" });
 
 export default function TermsPage() {
   return (
-    <section className="container max-w-3xl py-16">
-      <h1 className="text-4xl font-bold">Terminos y condiciones</h1>
-      <p className="mt-5 leading-7 text-muted-foreground">Las condiciones de compra, garantia, alquiler, entrega y soporte dependen del producto o servicio contratado. Este texto inicial debe ser reemplazado por condiciones legales definitivas antes de produccion.</p>
+    <section className="tq-public-site min-h-[70svh] py-24">
+      <div className="tq-public-wrap max-w-4xl">
+        <p className="tq-kicker">Uso responsable</p>
+        <h1 className="mt-6 text-5xl font-black md:text-7xl">Terminos y condiciones</h1>
+        <div className="mt-12 space-y-8 border-t border-black/15 pt-8 text-base leading-8 text-black/65">
+          <p>El acceso a Terraqo depende del tipo de cuenta, suscripcion, modulos habilitados y permisos asignados por cada workspace. El usuario es responsable de proteger sus credenciales y mantener actualizada su informacion.</p>
+          <p>La evidencia profesional debe corresponder a trabajo real y respetar la confidencialidad de empresas, clientes y proyectos. Las validaciones pueden ser revocadas cuando exista informacion falsa, incompleta o no autorizada.</p>
+          <p>Las empresas administran sus propios usuarios y contenidos dentro de su workspace. Terraqo puede limitar cuentas o actividad que infrinjan derechos, generen spam o comprometan la seguridad de la comunidad.</p>
+        </div>
+      </div>
     </section>
   );
 }

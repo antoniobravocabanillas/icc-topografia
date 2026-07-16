@@ -2,9 +2,11 @@
 
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
 import { MessageCircle, Send, X } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { UserAvatar } from "@/components/terraqo/user-avatar";
 
 type ChatMessage = {
   id: string;
@@ -16,12 +18,14 @@ type ChatMessage = {
 type ChatAssignee = {
   name?: string | null;
   email?: string | null;
+  image?: string | null;
 };
 
 type ChatProfile = {
   displayName: string;
   roleTitle: string;
   department: string;
+  avatar?: string | null;
 };
 
 type ChatConversation = {
@@ -50,6 +54,7 @@ const topics = [
 ];
 
 export function ChatWidget() {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [conversationId, setConversationId] = useState("");
   const [conversation, setConversation] = useState<ChatConversation | null>(null);
@@ -71,6 +76,7 @@ export function ChatWidget() {
 
   const assignedName = conversation?.assignedProfile?.displayName || conversation?.assignedTo?.name || conversation?.assignedTo?.email || "";
   const assignedRole = conversation?.assignedProfile?.roleTitle || "Asesor tecnico";
+  const assignedImage = conversation?.assignedProfile?.avatar || conversation?.assignedTo?.image || null;
   const hasAdminReply = Boolean(conversation?.messages.some((message) => message.sender === "admin"));
   const isOnline = conversation?.status === "ACTIVE" || hasAdminReply;
   const waitingNotice = conversationId && conversation?.status !== "CLOSED" && !hasAdminReply
@@ -214,16 +220,21 @@ export function ChatWidget() {
     }
   }
 
+  if (pathname.startsWith("/portal")) return null;
+
   return (
     <div className="fixed bottom-5 right-5 z-50">
       {open ? (
         <section className="mb-3 w-[calc(100vw-2.5rem)] max-w-[390px] overflow-hidden rounded-xl border bg-background shadow-2xl">
           <header className="flex items-center justify-between bg-[#063D63] px-4 py-3 text-white">
-            <div>
-              <p className="text-sm font-bold">{assignedName || "Asesor tecnico ICC"}</p>
-              <p className="text-xs text-white/70">
-                {conversation?.status === "CLOSED" ? "Conversacion cerrada" : isOnline ? `${assignedRole} en linea` : assignedName ? "Perfil asignado" : "Esperando asesor"}
-              </p>
+            <div className="flex items-center gap-3">
+              <UserAvatar name={assignedName || "Asesor tecnico ICC"} image={assignedImage} size="sm" className="border-white/30" />
+              <div>
+                <p className="text-sm font-bold">{assignedName || "Asesor tecnico ICC"}</p>
+                <p className="text-xs text-white/70">
+                  {conversation?.status === "CLOSED" ? "Conversacion cerrada" : isOnline ? `${assignedRole} en linea` : assignedName ? "Perfil asignado" : "Esperando asesor"}
+                </p>
+              </div>
             </div>
             <Button type="button" variant="ghost" size="icon" aria-label="Cerrar chat" className="text-white hover:bg-white/10" onClick={() => setOpen(false)}>
               <X className="h-4 w-4" />
@@ -235,9 +246,12 @@ export function ChatWidget() {
               <>
                 <div ref={messagesRef} className="max-h-72 space-y-3 overflow-auto rounded-lg bg-muted/40 p-3">
                   {conversation?.messages.map((message) => (
-                    <div key={message.id} className={message.sender === "admin" ? "mr-auto max-w-[85%] rounded-lg bg-white p-3 text-sm shadow-sm" : "ml-auto max-w-[85%] rounded-lg bg-primary p-3 text-sm text-primary-foreground"}>
-                      {message.sender === "admin" ? <p className="mb-1 text-[11px] font-bold uppercase opacity-60">{assignedName || "ICC Topografia"}</p> : null}
-                      <p className="whitespace-pre-line leading-5">{message.body}</p>
+                    <div key={message.id} className={message.sender === "admin" ? "flex items-end gap-2" : "flex justify-end"}>
+                      {message.sender === "admin" ? <UserAvatar name={assignedName || "ICC Topografia"} image={assignedImage} size="sm" /> : null}
+                      <div className={message.sender === "admin" ? "max-w-[78%] rounded-lg bg-white p-3 text-sm shadow-sm" : "max-w-[85%] rounded-lg bg-primary p-3 text-sm text-primary-foreground"}>
+                        {message.sender === "admin" ? <p className="mb-1 text-[11px] font-bold uppercase opacity-60">{assignedName || "ICC Topografia"}</p> : null}
+                        <p className="whitespace-pre-line leading-5">{message.body}</p>
+                      </div>
                     </div>
                   ))}
                 </div>

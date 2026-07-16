@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { ArrowRight, Building2, MessagesSquare, UsersRound } from "lucide-react";
-import { ProfessionalPortalNav } from "@/components/terraqo/professional-portal-nav";
 import { PortalPageHeading } from "@/components/terraqo/portal-page-heading";
 import { WorklogCard } from "@/components/terraqo/worklog-card";
 import { prisma } from "@/lib/prisma";
@@ -34,9 +33,7 @@ export default async function CommonsPage() {
   const channels = forumResult.channels.slice(0, 8);
 
   return (
-    <section className="bg-[#f6fbff] py-10 md:py-14">
-      <div className="container space-y-8">
-        <ProfessionalPortalNav current="/portal/commons" />
+    <div className="min-w-0 space-y-8 py-6 lg:py-8">
         <PortalPageHeading eyebrow="Terraqo Commons" title="Conocimiento de quienes hacen." description="Un espacio profesional basado en evidencia: trabajo real, empresas activas y conversaciones que ayudan a resolver mejor." />
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
@@ -68,7 +65,6 @@ export default async function CommonsPage() {
             <div className="flex items-start gap-3 rounded-lg border bg-white p-5"><UsersRound className="mt-1 h-5 w-5 text-primary" /><p className="text-sm leading-6 text-muted-foreground">Commons evita el ruido: prioriza evidencia, aportes tecnicos y conexiones vinculadas al trabajo.</p></div>
           </aside>
         </div>
-      </div>
-    </section>
+    </div>
   );
 }

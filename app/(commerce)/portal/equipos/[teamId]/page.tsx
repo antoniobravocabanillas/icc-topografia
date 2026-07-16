@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { TeamInvitationActions } from "@/components/terraqo/team-invitation-actions";
 import { PortalPageHeading } from "@/components/terraqo/portal-page-heading";
-import { ProfessionalPortalNav } from "@/components/terraqo/professional-portal-nav";
 import { requireProfessionalPortal } from "@/lib/terraqo/professional-portal";
 import { getTeamForUser, TerraqoTeamError } from "@/lib/terraqo/teams";
 
@@ -24,9 +23,7 @@ export default async function ProfessionalTeamDetailPage({ params }: { params: P
   const isActive = ownMembership?.status === "ACTIVE";
 
   return (
-    <main className="min-h-screen bg-[#f4f8f8] py-8">
-      <div className="container space-y-8">
-        <ProfessionalPortalNav current="/portal/equipos" />
+    <div className="min-w-0 space-y-8 py-6 lg:py-8">
         <Link href="/portal/equipos" className="inline-flex items-center gap-2 text-sm font-semibold text-primary"><ArrowLeft className="h-4 w-4" /> Volver a equipos</Link>
         <PortalPageHeading eyebrow={`${team.workspace.name} / Equipo privado`} title={team.name} description={team.purpose} action={isActive && team.conversationId ? <Button asChild><Link href={`/portal/mensajes?conversation=${team.conversationId}`}><MessageSquareText className="mr-2 h-4 w-4" /> Abrir sala</Link></Button> : undefined} />
         {ownMembership?.status === "INVITED" ? (
@@ -53,7 +50,6 @@ export default async function ProfessionalTeamDetailPage({ params }: { params: P
             <div className="rounded-lg border bg-white p-6"><Video className="h-5 w-5 text-primary" /><p className="mt-4 font-semibold">Mensajes y Terraqo Meet</p><p className="mt-2 text-sm leading-6 text-muted-foreground">Cuando aceptas la invitacion, la sala del equipo aparece en Mensajes. Desde alli pueden iniciar una videollamada.</p></div>
           </aside>
         </section>
-      </div>
-    </main>
+    </div>
   );
 }

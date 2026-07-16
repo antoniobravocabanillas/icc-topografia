@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { BriefcaseBusiness, Building2, MapPin } from "lucide-react";
 import { OpportunityApplyButton } from "@/components/terraqo/opportunity-apply-button";
-import { ProfessionalPortalNav } from "@/components/terraqo/professional-portal-nav";
 import { PortalPageHeading } from "@/components/terraqo/portal-page-heading";
 import { prisma } from "@/lib/prisma";
 import { requireProfessionalPortal } from "@/lib/terraqo/professional-portal";
@@ -32,9 +31,7 @@ export default async function OpportunitiesPage() {
   });
 
   return (
-    <section className="bg-[#f6fbff] py-10 md:py-14">
-      <div className="container space-y-8">
-        <ProfessionalPortalNav current="/portal/oportunidades" />
+    <div className="min-w-0 space-y-8 py-6 lg:py-8">
         <PortalPageHeading eyebrow="Terraqo Market" title="Oportunidades con contexto real." description="Explora empleos, proyectos y retos publicados por empresas Terraqo. Postula con un perfil respaldado por tu Bitacora y tu CV vivo." />
 
         <div className="grid gap-5 lg:grid-cols-2">
@@ -55,7 +52,6 @@ export default async function OpportunitiesPage() {
           ))}
         </div>
         {!jobs.length ? <p className="rounded-lg border bg-white p-8 text-center text-muted-foreground">No hay oportunidades abiertas en este momento.</p> : null}
-      </div>
-    </section>
+    </div>
   );
 }

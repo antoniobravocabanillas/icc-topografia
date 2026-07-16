@@ -79,6 +79,7 @@ export async function getConversationHub(userId: string, selectedId?: string, wo
             id: true,
             name: true,
             email: true,
+            image: true,
             role: true,
             terraqoProfessionalProfile: { select: { id: true, headline: true, status: true } }
           }
@@ -96,6 +97,7 @@ export async function getConversationHub(userId: string, selectedId?: string, wo
     userId: member.userId,
     name: member.user.name || member.user.email,
     email: member.user.email,
+    image: member.user.image,
     headline: member.user.terraqoProfessionalProfile?.headline || member.title || member.role,
     workspaceId: member.workspaceId,
     workspaceName: member.workspace.name,

@@ -15,13 +15,13 @@ const accountOptions: Array<{
 }> = [
   {
     value: "client",
-    title: "Cliente",
+    title: "Empresas",
     description: "Empresas que solicitan servicios, cotizaciones o seguimiento de proyectos.",
     icon: Building2
   },
   {
     value: "professional",
-    title: "Profesional",
+    title: "Profesionales",
     description: "Tecnicos, especialistas y profesionales que quieren participar en proyectos.",
     icon: BriefcaseBusiness
   }
