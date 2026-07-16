@@ -374,6 +374,28 @@ enum TerraqoDocumentReviewStatus {
   REJECTED
 }
 
+enum TerraqoNoteKind {
+  SIMPLE
+  SECURE
+}
+
+enum TerraqoFileVisibility {
+  PRIVATE
+  WORKSPACE
+}
+
+enum TerraqoFileCategory {
+  PLAN
+  REPORT
+  SPREADSHEET
+  PRESENTATION
+  IMAGE
+  SOURCE_FILE
+  CONTRACT
+  TEMPLATE
+  OTHER
+}
+
 model User {
   id                          String                           @id @default(cuid())
   name                        String?
@@ -412,6 +434,8 @@ model User {
   terraqoTeamsOwned           TerraqoTeam[]                    @relation("TerraqoTeamOwner")
   terraqoTeamMemberships      TerraqoTeamMember[]              @relation("TerraqoTeamMemberUser")
   terraqoTeamInvitationsSent  TerraqoTeamMember[]              @relation("TerraqoTeamMemberInviter")
+  terraqoPrivateNotes         TerraqoPrivateNote[]
+  terraqoWorkspaceFiles       TerraqoWorkspaceFile[]
   createdAt                   DateTime                         @default(now())
   updatedAt                   DateTime                         @updatedAt
 }
@@ -1675,6 +1699,8 @@ model TerraqoWorkspace {
   directConversations      TerraqoConversation[]
   meetings                 TerraqoMeeting[]
   teams                    TerraqoTeam[]
+  privateNotes             TerraqoPrivateNote[]
+  workspaceFiles           TerraqoWorkspaceFile[]
   createdAt                DateTime                         @default(now())
   updatedAt                DateTime                         @updatedAt
   deletedAt                DateTime?
@@ -1936,6 +1962,44 @@ model TerraqoProfessionalDocument {
 
   @@index([professionalProfileId, type, uploadedAt])
   @@index([workspaceId, reviewStatus])
+}
+
+model TerraqoPrivateNote {
+  id            String           @id @default(cuid())
+  userId        String
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId   String
+  workspace     TerraqoWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  kind          TerraqoNoteKind  @default(SIMPLE)
+  title         String?
+  body          String?
+  securePayload String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([userId, workspaceId, updatedAt])
+}
+
+model TerraqoWorkspaceFile {
+  id          String                @id @default(cuid())
+  userId      String
+  user        User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId String
+  workspace   TerraqoWorkspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  category    TerraqoFileCategory   @default(OTHER)
+  visibility  TerraqoFileVisibility @default(PRIVATE)
+  title       String
+  description String?
+  projectName String?
+  storageKey  String                @unique
+  fileName    String
+  contentType String
+  size        Int
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  @@index([userId, workspaceId, createdAt])
+  @@index([workspaceId, visibility, createdAt])
 }
 
 model TerraqoProfessionalAffiliation {

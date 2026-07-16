@@ -85,6 +85,8 @@ export const PROFESSIONAL_AVATAR_STORE = "terraqo-professional-avatars";
 export const PROFESSIONAL_AVATAR_PREFIX = "professional-avatars";
 export const WORKLOG_EVIDENCE_STORE = "terraqo-worklog-evidence";
 export const WORKLOG_EVIDENCE_PREFIX = "worklog-evidence";
+export const WORKSPACE_FILE_STORE = "terraqo-workspace-files";
+export const WORKSPACE_FILE_PREFIX = "workspace-files";
 export const SERVICE_ICON_PREFIX = "service-icons";
 export const MAX_PRODUCT_IMAGE_SIZE = 5 * 1024 * 1024;
 export const MAX_CUSTOMER_FILE_SIZE = 10 * 1024 * 1024;
@@ -93,6 +95,7 @@ export const MAX_PROJECT_IMAGE_SIZE = 8 * 1024 * 1024;
 export const MAX_PROFESSIONAL_DOCUMENT_SIZE = 10 * 1024 * 1024;
 export const MAX_PROFESSIONAL_AVATAR_SIZE = 3 * 1024 * 1024;
 export const MAX_WORKLOG_EVIDENCE_SIZE = 8 * 1024 * 1024;
+export const MAX_WORKSPACE_FILE_SIZE = 35 * 1024 * 1024;
 export const ALLOWED_PRODUCT_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
 export const ALLOWED_CLIENT_LOGO_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif", "image/svg+xml"]);
 export const ALLOWED_PROJECT_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
@@ -122,6 +125,30 @@ export const ALLOWED_PRIVATE_DOCUMENT_TYPES = new Set([
 ]);
 export const ALLOWED_PROFESSIONAL_AVATAR_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
 export const ALLOWED_WORKLOG_EVIDENCE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
+export const ALLOWED_WORKSPACE_FILE_TYPES = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/avif",
+  "text/plain",
+  "text/csv",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/zip",
+  "application/x-zip-compressed",
+  "application/acad",
+  "application/x-acad",
+  "application/dwg",
+  "image/vnd.dwg",
+  "application/dxf",
+  "image/vnd.dxf",
+  "application/octet-stream"
+]);
 
 export function getProductMediaStore() {
   return getMediaStore(PRODUCT_IMAGE_STORE);
@@ -149,6 +176,10 @@ export function getProfessionalAvatarStore() {
 
 export function getWorklogEvidenceStore() {
   return getMediaStore(WORKLOG_EVIDENCE_STORE);
+}
+
+export function getWorkspaceFileStore() {
+  return getMediaStore(WORKSPACE_FILE_STORE);
 }
 
 export function sanitizeFileName(fileName: string) {
@@ -214,4 +245,11 @@ export function createWorklogEvidenceKey(worklogId: string, fileName: string) {
   const extension = safeName.includes(".") ? safeName.split(".").pop() : "jpg";
   const baseName = safeName.replace(/\.[^.]+$/, "");
   return `${WORKLOG_EVIDENCE_PREFIX}/${worklogId}/${crypto.randomUUID()}-${baseName}.${extension}`;
+}
+
+export function createWorkspaceFileKey(workspaceId: string, userId: string, fileName: string) {
+  const safeName = sanitizeFileName(fileName) || "archivo";
+  const extension = safeName.includes(".") ? safeName.split(".").pop() : "bin";
+  const baseName = safeName.replace(/\.[^.]+$/, "");
+  return `${WORKSPACE_FILE_PREFIX}/${workspaceId}/${userId}/${crypto.randomUUID()}-${baseName}.${extension}`;
 }
