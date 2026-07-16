@@ -1,8 +1,8 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Link2, NotebookPen } from "lucide-react";
+import { CheckCircle2, ImagePlus, Link2, NotebookPen, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type WorkspaceOption = {
@@ -16,7 +16,25 @@ export function WorklogComposer({ workspaces }: { workspaces: WorkspaceOption[] 
   const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id || "");
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
+  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
+  const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
   const projects = useMemo(() => workspaces.find((item) => item.id === workspaceId)?.projects || [], [workspaceId, workspaces]);
+
+  useEffect(() => {
+    const previews = photoFiles.map((file) => URL.createObjectURL(file));
+    setPhotoPreviews(previews);
+    return () => previews.forEach((preview) => URL.revokeObjectURL(preview));
+  }, [photoFiles]);
+
+  function selectPhotos(event: ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(event.target.files || []);
+    if (selected.length > 6) setMessage("Puedes adjuntar hasta 6 fotos por bitacora.");
+    setPhotoFiles(selected.slice(0, 6));
+  }
+
+  function removePhoto(index: number) {
+    setPhotoFiles((current) => current.filter((_, photoIndex) => photoIndex !== index));
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -44,8 +62,23 @@ export function WorklogComposer({ workspaces }: { workspaces: WorkspaceOption[] 
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload?.error?.message || "No pudimos registrar la bitacora.");
+
+      if (photoFiles.length) {
+        const evidenceData = new FormData();
+        photoFiles.forEach((file) => evidenceData.append("photos", file));
+        const uploadResponse = await fetch(`/api/terraqo/worklog/${payload.data.id}/evidence`, {
+          method: "POST",
+          body: evidenceData
+        });
+        const uploadPayload = await uploadResponse.json().catch(() => ({}));
+        if (!uploadResponse.ok) {
+          throw new Error(uploadPayload?.error?.message || "La bitacora se guardo, pero no pudimos adjuntar las fotos.");
+        }
+      }
+
       form.reset();
       setWorkspaceId(workspaces[0]?.id || "");
+      setPhotoFiles([]);
       setMessage("Bitacora registrada. Tu trabajo ya suma evidencia a tu perfil.");
       router.refresh();
     } catch (error) {
@@ -113,6 +146,20 @@ export function WorklogComposer({ workspaces }: { workspaces: WorkspaceOption[] 
         <label className="grid gap-2 text-sm font-semibold md:col-span-2"><span className="flex items-center gap-2"><Link2 className="h-4 w-4" /> Evidencias externas, una URL por linea</span>
           <textarea name="evidenceUrls" className="min-h-20 rounded-md border bg-background p-3" placeholder="https://..." />
         </label>
+        <label className="grid gap-2 text-sm font-semibold md:col-span-2">
+          <span className="flex items-center gap-2"><ImagePlus className="h-4 w-4" /> Fotos desde tu dispositivo</span>
+          <span className="rounded-md border border-dashed bg-muted/25 p-4 text-sm font-medium text-muted-foreground">
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/avif" multiple onChange={selectPhotos} className="block w-full text-sm file:mr-4 file:rounded-md file:border-0 file:bg-primary file:px-4 file:py-2 file:font-bold file:text-primary-foreground" />
+            <small className="mt-2 block">Hasta 6 fotos en JPG, PNG, WEBP o AVIF. Maximo 8 MB por archivo.</small>
+          </span>
+        </label>
+        {photoPreviews.length ? <div className="grid grid-cols-2 gap-3 md:col-span-2 sm:grid-cols-3">
+          {photoPreviews.map((preview, index) => <figure key={preview} className="group relative aspect-[4/3] overflow-hidden rounded-md border bg-muted">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={preview} alt={`Vista previa ${index + 1}`} className="h-full w-full object-cover" />
+            <button type="button" onClick={() => removePhoto(index)} className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-md bg-black/70 text-white" aria-label={`Quitar foto ${index + 1}`}><X className="h-4 w-4" /></button>
+          </figure>)}
+        </div> : null}
       </div>
 
       <div className="mt-5 flex flex-col gap-3 border-t pt-5 sm:flex-row sm:items-center sm:justify-between">

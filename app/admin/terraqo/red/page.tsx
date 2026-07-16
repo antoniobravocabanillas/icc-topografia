@@ -1,10 +1,10 @@
 import { revalidatePath } from "next/cache";
-import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { ProfessionalDocumentPreview } from "@/components/terraqo/professional-document-preview";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/server/api";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
@@ -22,6 +22,18 @@ function listValue(formData: FormData, key: string) {
     .map((item) => item.trim())
     .filter(Boolean);
 }
+
+const documentTypeLabels: Record<string, string> = {
+  CV: "CV",
+  DNI_FRONT: "DNI frontal",
+  DNI_BACK: "DNI posterior",
+  CERTIFICATE: "Certificado",
+  PROFESSIONAL_LICENSE: "Colegiatura / licencia",
+  CRIMINAL_RECORD: "Antecedentes",
+  MEDICAL_EXAM: "Examen medico",
+  BANK_CERTIFICATE: "Constancia bancaria",
+  OTHER: "Otro documento",
+};
 
 async function createJobPostAction(formData: FormData) {
   "use server";
@@ -231,7 +243,6 @@ export default async function TerraqoNetworkPage() {
         documents: {
           where: {
             workspaceId,
-            type: { in: ["CV", "DNI_FRONT", "DNI_BACK"] },
             reviewStatus: { in: ["SUBMITTED", "VERIFIED"] }
           },
           orderBy: { uploadedAt: "desc" }
@@ -470,7 +481,7 @@ export default async function TerraqoNetworkPage() {
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto rounded-md border">
-            <table className="w-full min-w-[1180px] text-sm">
+            <table className="w-full min-w-[1360px] text-sm">
               <thead className="bg-muted text-left">
                 <tr>
                   <th className="p-3">Perfil</th>
@@ -479,6 +490,7 @@ export default async function TerraqoNetworkPage() {
                   <th className="p-3">Herramientas</th>
                   <th className="p-3">Identidad</th>
                   <th className="p-3">CV vivo</th>
+                  <th className="p-3">Expediente privado</th>
                   <th className="p-3">Postulaciones</th>
                 </tr>
               </thead>
@@ -499,11 +511,13 @@ export default async function TerraqoNetworkPage() {
                         </Badge>
                         <div className="flex flex-wrap gap-2">
                           {profile.documents.filter((document) => ["DNI_FRONT", "DNI_BACK"].includes(document.type)).slice(0, 2).map((document) => (
-                            <Button key={document.id} asChild size="sm" variant="outline">
-                              <Link href={`/api/terraqo/professional-documents/${document.id}`} target="_blank">
-                                {document.type === "DNI_FRONT" ? "Ver frente" : "Ver reverso"}
-                              </Link>
-                            </Button>
+                            <ProfessionalDocumentPreview
+                              key={document.id}
+                              href={`/api/terraqo/professional-documents/${document.id}`}
+                              title={document.type === "DNI_FRONT" ? "Ver frente" : "Ver reverso"}
+                              fileName={document.fileName}
+                              contentType={document.contentType}
+                            />
                           ))}
                         </div>
                         {profile.identityVerificationStatus === "UNDER_REVIEW" ? (
@@ -522,8 +536,25 @@ export default async function TerraqoNetworkPage() {
                       <div>{profile.liveCvEnabled ? "Activado" : "No activado"}</div>
                       <div className="text-xs text-muted-foreground">{profile.experiences.length} experiencias recientes</div>
                       {profile.documents.find((document) => document.type === "CV") ? (
-                        <Link className="mt-2 inline-block font-semibold text-primary" href={`/api/terraqo/professional-documents/${profile.documents.find((document) => document.type === "CV")?.id}`} target="_blank">Ver CV</Link>
+                        (() => {
+                          const cv = profile.documents.find((document) => document.type === "CV")!;
+                          return <div className="mt-2"><ProfessionalDocumentPreview href={`/api/terraqo/professional-documents/${cv.id}`} title="Previsualizar CV" fileName={cv.fileName} contentType={cv.contentType} /></div>;
+                        })()
                       ) : null}
+                    </td>
+                    <td className="p-3">
+                      <div className="flex max-w-[280px] flex-wrap gap-2">
+                        {profile.documents.filter((document) => !["CV", "DNI_FRONT", "DNI_BACK"].includes(document.type)).map((document) => (
+                          <ProfessionalDocumentPreview
+                            key={document.id}
+                            href={`/api/terraqo/professional-documents/${document.id}`}
+                            title={documentTypeLabels[document.type] || "Documento"}
+                            fileName={document.fileName}
+                            contentType={document.contentType}
+                          />
+                        ))}
+                        {!profile.documents.some((document) => !["CV", "DNI_FRONT", "DNI_BACK"].includes(document.type)) ? <span className="text-xs text-muted-foreground">Sin documentos complementarios</span> : null}
+                      </div>
                     </td>
                     <td className="p-3">{profile.applications.length}</td>
                   </tr>

@@ -360,6 +360,12 @@ enum TerraqoProfessionalDocumentType {
   CV
   DNI_FRONT
   DNI_BACK
+  CERTIFICATE
+  PROFESSIONAL_LICENSE
+  CRIMINAL_RECORD
+  MEDICAL_EXAM
+  BANK_CERTIFICATE
+  OTHER
 }
 
 enum TerraqoDocumentReviewStatus {
@@ -2000,6 +2006,7 @@ model TerraqoWorklogEntry {
   occurredAt            DateTime                   @default(now())
   comments              TerraqoWorklogComment[]
   reactions             TerraqoWorklogReaction[]
+  media                 TerraqoWorklogMedia[]
   createdAt             DateTime                   @default(now())
   updatedAt             DateTime                   @updatedAt
   deletedAt             DateTime?
@@ -2009,6 +2016,20 @@ model TerraqoWorklogEntry {
   @@index([projectId])
   @@index([evidenceStatus])
   @@index([deletedAt])
+}
+
+model TerraqoWorklogMedia {
+  id          String              @id @default(cuid())
+  worklogId   String
+  worklog     TerraqoWorklogEntry @relation(fields: [worklogId], references: [id], onDelete: Cascade)
+  storageKey  String              @unique
+  fileName    String
+  contentType String
+  size        Int
+  sortOrder   Int                 @default(0)
+  createdAt   DateTime            @default(now())
+
+  @@index([worklogId, sortOrder])
 }
 
 model TerraqoWorklogComment {

@@ -1,42 +1,38 @@
 import { prisma } from "@/lib/prisma";
 import { fail, handleApiError } from "@/lib/server/api";
-import { requireUser } from "@/lib/server/authz";
 import { getProfessionalDocumentStore } from "@/lib/server/media";
+import { getWorkspacePortalToken } from "@/lib/server/workspace-portal-session";
 
-type DocumentRouteProps = {
-  params: Promise<{ id: string }>;
-};
+type RouteContext = { params: Promise<{ workspaceSlug: string; id: string }> };
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export async function GET(request: Request, { params }: DocumentRouteProps) {
-  const { response, session } = await requireUser();
-  if (response) return response;
-
+export async function GET(request: Request, { params }: RouteContext) {
   try {
-    const { id } = await params;
-    const document = await prisma.terraqoProfessionalDocument.findUnique({
-      where: { id },
-      include: { professionalProfile: { select: { userId: true } } }
+    const { workspaceSlug, id } = await params;
+    const token = getWorkspacePortalToken(request, workspaceSlug);
+    if (!token) return fail("La sesion no es valida o ha vencido.", 401);
+
+    const document = await prisma.terraqoProfessionalDocument.findFirst({
+      where: { id, workspaceId: token.workspaceId },
+      include: { professionalProfile: { select: { userId: true } } },
     });
     if (!document) return fail("Documento no encontrado.", 404);
 
-    const isOwner = document.professionalProfile.userId === session.user.id;
-    const isSuperAdmin = session.user.role === "SUPER_ADMIN";
-    const reviewerMembership = !isOwner && !isSuperAdmin
+    const isOwner = document.professionalProfile.userId === token.sub;
+    const reviewerMembership = !isOwner
       ? await prisma.terraqoWorkspaceMember.findFirst({
           where: {
-            workspaceId: document.workspaceId,
-            userId: session.user.id,
+            workspaceId: token.workspaceId,
+            userId: token.sub,
             active: true,
-            role: { in: ["OWNER", "ADMIN", "MANAGER"] }
+            role: { in: ["OWNER", "ADMIN", "MANAGER"] },
           },
-          select: { id: true }
+          select: { id: true },
         })
       : null;
-
-    if (!isOwner && !isSuperAdmin && !reviewerMembership) return fail("No tienes permiso para ver este documento.", 403);
+    if (!isOwner && !reviewerMembership) return fail("No tienes permiso para ver este documento.", 403);
 
     const entry = await getProfessionalDocumentStore().getWithMetadata(document.storageKey, { type: "arrayBuffer" });
     if (!entry) return fail("El archivo ya no esta disponible.", 404);
@@ -50,8 +46,8 @@ export async function GET(request: Request, { params }: DocumentRouteProps) {
         "Cache-Control": "private, no-store, max-age=0",
         "X-Content-Type-Options": "nosniff",
         "Content-Security-Policy": "sandbox",
-        ETag: entry.etag || ""
-      }
+        ETag: entry.etag || "",
+      },
     });
   } catch (error) {
     return handleApiError(error);

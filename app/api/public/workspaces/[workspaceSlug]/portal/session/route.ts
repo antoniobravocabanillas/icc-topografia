@@ -43,7 +43,7 @@ export async function GET(request: Request, { params }: RouteContext) {
             identityVerificationNote: true,
             documents: {
               orderBy: { uploadedAt: "desc" },
-              select: { id: true, type: true, fileName: true, reviewStatus: true, reviewNote: true, uploadedAt: true },
+              select: { id: true, type: true, fileName: true, contentType: true, size: true, reviewStatus: true, reviewNote: true, uploadedAt: true },
             },
             affiliations: {
               orderBy: [{ current: "desc" }, { updatedAt: "desc" }],
@@ -86,6 +86,10 @@ export async function GET(request: Request, { params }: RouteContext) {
                 visibility: true,
                 skills: true,
                 evidenceUrls: true,
+                media: {
+                  orderBy: { sortOrder: "asc" },
+                  select: { id: true, fileName: true, contentType: true, size: true, sortOrder: true, createdAt: true },
+                },
                 occurredAt: true,
                 project: { select: { id: true, title: true, slug: true } },
                 _count: { select: { comments: true, reactions: true } },

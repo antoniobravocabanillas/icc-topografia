@@ -1,5 +1,5 @@
 import { prisma } from "../lib/prisma";
-import { createProfessionalWorklog, visibleWorklogWhere } from "../lib/terraqo/worklog";
+import { canViewWorklog, createProfessionalWorklog, visibleWorklogWhere } from "../lib/terraqo/worklog";
 
 async function main() {
   const workspace = await prisma.terraqoWorkspace.findUnique({
@@ -35,6 +35,16 @@ async function main() {
     });
     worklogId = worklog.id;
 
+    const media = await prisma.terraqoWorklogMedia.create({
+      data: {
+        worklogId: worklog.id,
+        storageKey: `test/${worklog.id}/evidence.jpg`,
+        fileName: "evidence.jpg",
+        contentType: "image/jpeg",
+        size: 1024,
+      },
+    });
+
     const visibleToWorkspace = await prisma.terraqoWorklogEntry.count({
       where: { id: worklog.id, ...visibleWorklogWhere(authorId, [workspace.id]) }
     });
@@ -49,13 +59,20 @@ async function main() {
         })
       : 0;
 
-    if (visibleToWorkspace !== 1 || visibleToOutsider !== 0) {
-      throw new Error(`Aislamiento invalido: workspace=${visibleToWorkspace}, outsider=${visibleToOutsider}`);
+    const ownerCanReadEvidence = await canViewWorklog(authorId, media.worklogId);
+    const outsiderCanReadEvidence = outsider ? await canViewWorklog(outsider.userId, media.worklogId) : null;
+
+    if (visibleToWorkspace !== 1 || visibleToOutsider !== 0 || !ownerCanReadEvidence || outsiderCanReadEvidence) {
+      throw new Error(`Aislamiento invalido: workspace=${visibleToWorkspace}, outsider=${visibleToOutsider}, evidenciaOwner=${Boolean(ownerCanReadEvidence)}, evidenciaOutsider=${Boolean(outsiderCanReadEvidence)}`);
     }
 
-    console.log("Worklog isolation: OK");
+    console.log("Worklog and evidence isolation: OK");
   } finally {
-    if (worklogId) await prisma.terraqoWorklogEntry.delete({ where: { id: worklogId } });
+    if (worklogId) {
+      await prisma.terraqoWorklogEntry.delete({ where: { id: worklogId } });
+      const orphanedMedia = await prisma.terraqoWorklogMedia.count({ where: { worklogId } });
+      if (orphanedMedia) throw new Error("La evidencia no se elimino con su bitacora.");
+    }
     await prisma.$disconnect();
   }
 }

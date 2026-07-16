@@ -2,16 +2,19 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import { BadgeCheck, FileText, IdCard, Loader2, LockKeyhole, Upload } from "lucide-react";
+import { BadgeCheck, Eye, FileBadge2, FileText, IdCard, Loader2, LockKeyhole, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 type ProfessionalDocument = {
   id: string;
-  type: "CV" | "DNI_FRONT" | "DNI_BACK";
+  type: "CV" | "DNI_FRONT" | "DNI_BACK" | "CERTIFICATE" | "PROFESSIONAL_LICENSE" | "CRIMINAL_RECORD" | "MEDICAL_EXAM" | "BANK_CERTIFICATE" | "OTHER";
   fileName: string;
+  contentType: string;
+  size: number;
   reviewStatus: "SUBMITTED" | "VERIFIED" | "REJECTED";
   reviewNote: string | null;
+  uploadedAt: Date | string;
 };
 
 type ProfessionalDocumentUploaderProps = {
@@ -43,12 +46,14 @@ export function ProfessionalDocumentUploader({ identityStatus, identityNote, doc
   const router = useRouter();
   const cvFormRef = useRef<HTMLFormElement>(null);
   const identityFormRef = useRef<HTMLFormElement>(null);
-  const [busy, setBusy] = useState<"cv" | "identity" | null>(null);
+  const privateFormRef = useRef<HTMLFormElement>(null);
+  const [busy, setBusy] = useState<"cv" | "identity" | "document" | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [preview, setPreview] = useState<ProfessionalDocument | null>(null);
   const latestCv = documents.find((document) => document.type === "CV");
   const statusCopy = identityCopy[identityStatus];
 
-  async function upload(form: HTMLFormElement, purpose: "cv" | "identity") {
+  async function upload(form: HTMLFormElement, purpose: "cv" | "identity" | "document") {
     setBusy(purpose);
     setFeedback(null);
     const formData = new FormData(form);
@@ -75,8 +80,22 @@ export function ProfessionalDocumentUploader({ identityStatus, identityNote, doc
     }
   }
 
+  const labels: Record<ProfessionalDocument["type"], string> = {
+    CV: "CV profesional",
+    DNI_FRONT: "DNI por delante",
+    DNI_BACK: "DNI por detras",
+    CERTIFICATE: "Certificado o constancia",
+    PROFESSIONAL_LICENSE: "Colegiatura o licencia profesional",
+    CRIMINAL_RECORD: "Antecedentes penales",
+    MEDICAL_EXAM: "Examen medico ocupacional",
+    BANK_CERTIFICATE: "Constancia bancaria",
+    OTHER: "Otro documento",
+  };
+  const privateDocuments = documents.filter((document) => !["CV", "DNI_FRONT", "DNI_BACK"].includes(document.type));
+  const canPreview = (document: ProfessionalDocument) => document.contentType === "application/pdf" || document.contentType.startsWith("image/");
+
   return (
-    <div className="grid gap-6 xl:grid-cols-2">
+    <div id="documentos-datos" className="grid scroll-mt-24 gap-6 xl:grid-cols-2">
       <Card>
         <CardHeader>
           <div className="flex items-start justify-between gap-4">
@@ -89,13 +108,14 @@ export function ProfessionalDocumentUploader({ identityStatus, identityNote, doc
         </CardHeader>
         <CardContent className="space-y-4">
           {latestCv ? (
-            <a
-              href={`/api/terraqo/professional-documents/${latestCv.id}`}
+            <button
+              type="button"
+              onClick={() => setPreview(latestCv)}
               className="flex items-center justify-between rounded-md border bg-muted/35 p-3 text-sm font-semibold hover:border-primary"
             >
               <span className="truncate">{latestCv.fileName}</span>
-              <span className="text-primary">Ver archivo</span>
-            </a>
+              <span className="inline-flex items-center gap-1 text-primary"><Eye className="h-4 w-4" /> Previsualizar</span>
+            </button>
           ) : null}
           <form ref={cvFormRef} className="grid gap-3" onSubmit={(event) => { event.preventDefault(); void upload(event.currentTarget, "cv"); }}>
             <label className="grid gap-2 text-sm font-semibold">
@@ -150,10 +170,59 @@ export function ProfessionalDocumentUploader({ identityStatus, identityNote, doc
         </CardContent>
       </Card>
 
+      <Card className="xl:col-span-2">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><FileBadge2 className="h-5 w-5 text-primary" /> Documentos y datos profesionales</CardTitle>
+          <CardDescription className="mt-2 max-w-3xl">Organiza certificados, colegiatura, antecedentes, examen medico y constancias bancarias. El expediente es privado y solo puede verlo tu cuenta y la empresa vinculada a este workspace.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
+          <form ref={privateFormRef} className="grid content-start gap-3 rounded-lg border bg-muted/20 p-4" onSubmit={(event) => { event.preventDefault(); void upload(event.currentTarget, "document"); }}>
+            <label className="grid gap-2 text-sm font-semibold">Categoria
+              <select name="documentType" required className="h-11 rounded-md border bg-background px-3 font-normal">
+                <option value="CERTIFICATE">Certificado o constancia</option>
+                <option value="PROFESSIONAL_LICENSE">Colegiatura o licencia</option>
+                <option value="CRIMINAL_RECORD">Antecedentes penales</option>
+                <option value="MEDICAL_EXAM">Examen medico ocupacional</option>
+                <option value="BANK_CERTIFICATE">Constancia bancaria</option>
+                <option value="OTHER">Otro documento</option>
+              </select>
+            </label>
+            <label className="grid gap-2 text-sm font-semibold">Archivo para expediente
+              <input name="documentFile" type="file" accept="image/jpeg,image/png,image/webp,.pdf" required className="rounded-md border bg-background p-3 font-normal" />
+            </label>
+            <p className="text-xs leading-5 text-muted-foreground">PDF, JPG, PNG o WEBP, maximo 10 MB. No ingreses numeros de cuenta en texto libre; utiliza una constancia emitida por tu entidad bancaria.</p>
+            <Button type="submit" disabled={busy !== null}>{busy === "document" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}Agregar al expediente</Button>
+          </form>
+
+          <div className="min-w-0">
+            <div className="grid gap-3 sm:grid-cols-2">
+              {privateDocuments.map((document) => (
+                <article key={document.id} className="flex min-h-28 flex-col justify-between rounded-lg border bg-background p-4">
+                  <div><p className="text-xs font-bold uppercase text-primary">{labels[document.type]}</p><p className="mt-2 truncate text-sm font-semibold">{document.fileName}</p><p className="mt-1 text-xs text-muted-foreground">{document.reviewStatus === "VERIFIED" ? "Verificado" : document.reviewStatus === "REJECTED" ? "Requiere correccion" : "Pendiente de revision"}</p></div>
+                  <button type="button" onClick={() => setPreview(document)} className="mt-4 inline-flex items-center gap-2 self-start text-sm font-bold text-primary"><Eye className="h-4 w-4" /> Ver dentro del portal</button>
+                </article>
+              ))}
+            </div>
+            {!privateDocuments.length ? <div className="grid min-h-48 place-items-center rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">Aun no agregaste documentos complementarios a tu expediente.</div> : null}
+          </div>
+        </CardContent>
+      </Card>
+
       {feedback ? (
         <p className={`rounded-md border p-3 text-sm font-medium xl:col-span-2 ${feedback.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-red-200 bg-red-50 text-red-800"}`} role="status">
           {feedback.message}
         </p>
+      ) : null}
+
+      {preview ? (
+        <div className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/75 p-4" role="dialog" aria-modal="true" aria-label={`Vista previa de ${labels[preview.type]}`}>
+          <div className="flex h-[min(860px,92vh)] w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl">
+            <div className="flex items-center justify-between gap-4 border-b px-5 py-4"><div className="min-w-0"><p className="text-xs font-bold uppercase text-primary">{labels[preview.type]}</p><p className="truncate font-semibold">{preview.fileName}</p></div><button type="button" onClick={() => setPreview(null)} className="grid h-10 w-10 shrink-0 place-items-center rounded-md border" aria-label="Cerrar vista previa"><X className="h-5 w-5" /></button></div>
+            <div className="min-h-0 flex-1 bg-slate-100 p-3">
+              {canPreview(preview) ? <iframe title={preview.fileName} src={`/api/terraqo/professional-documents/${preview.id}?inline=1`} className="h-full w-full rounded-md bg-white" /> : <div className="grid h-full place-items-center p-8 text-center"><div><FileText className="mx-auto h-12 w-12 text-primary" /><p className="mt-4 font-semibold">Este formato no puede representarse directamente en el navegador.</p><Button asChild className="mt-4"><a href={`/api/terraqo/professional-documents/${preview.id}`}>Descargar archivo protegido</a></Button></div></div>}
+            </div>
+          </div>
+        </div>
       ) : null}
     </div>
   );

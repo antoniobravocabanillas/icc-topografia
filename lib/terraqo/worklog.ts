@@ -17,6 +17,10 @@ export const worklogInclude = {
   },
   workspace: { select: { id: true, slug: true, name: true, brandName: true, logoUrl: true } },
   project: { select: { id: true, slug: true, title: true } },
+  media: {
+    orderBy: { sortOrder: "asc" },
+    select: { id: true, fileName: true, contentType: true, size: true, sortOrder: true, createdAt: true }
+  },
   comments: {
     where: { deletedAt: null },
     orderBy: { createdAt: "desc" },

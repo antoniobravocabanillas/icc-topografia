@@ -26,7 +26,7 @@ export type ProfessionalDashboardProfile = Prisma.TerraqoProfessionalProfileGetP
     experiences: { include: { project: { select: { title: true; slug: true; location: true; images: { select: { url: true } } } } } };
     affiliations: true;
     applications: { include: { workspace: { select: { name: true } }; jobPost: { select: { title: true } } } };
-    documents: { select: { id: true; type: true; fileName: true; reviewStatus: true; reviewNote: true } };
+    documents: { select: { id: true; type: true; fileName: true; contentType: true; size: true; reviewStatus: true; reviewNote: true; uploadedAt: true } };
     worklogs: { include: typeof worklogInclude };
   };
 }>;

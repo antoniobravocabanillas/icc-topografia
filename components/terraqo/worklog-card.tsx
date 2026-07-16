@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { BadgeCheck, Building2, CalendarDays, ExternalLink, FolderKanban, LockKeyhole } from "lucide-react";
 import type { WorklogWithContext } from "@/lib/terraqo/worklog";
 import { WorklogEngagement } from "@/components/terraqo/worklog-engagement";
@@ -53,6 +54,12 @@ export function WorklogCard({ worklog, viewerId }: { worklog: WorklogWithContext
       </div>
 
       {worklog.evidenceUrls.length ? <div className="mt-4 flex flex-wrap gap-2">{worklog.evidenceUrls.map((url) => <a key={url} href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"><ExternalLink className="h-3.5 w-3.5" />Ver evidencia</a>)}</div> : null}
+
+      {worklog.media.length ? <div className={`mt-5 grid gap-2 ${worklog.media.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
+        {worklog.media.map((media, index) => <a key={media.id} href={`/api/terraqo/worklog/evidence/${media.id}`} target="_blank" rel="noreferrer" className={`relative overflow-hidden rounded-md border bg-muted ${worklog.media.length === 3 && index === 0 ? "col-span-2 aspect-[16/8]" : "aspect-[4/3]"}`}>
+          <Image src={`/api/terraqo/worklog/evidence/${media.id}`} alt={`${worklog.title}, evidencia ${index + 1}`} fill sizes="(max-width: 768px) 100vw, 680px" className="object-cover transition duration-500 hover:scale-[1.02]" unoptimized />
+        </a>)}
+      </div> : null}
 
       {worklog.comments.length ? <div className="mt-5 space-y-2 border-t pt-4">{worklog.comments.slice().reverse().map((comment) => <div key={comment.id} className="rounded-md bg-muted/45 px-3 py-2 text-sm"><strong>{comment.author.name || "Profesional"}:</strong> {comment.body}</div>)}</div> : null}
       <div className="mt-5"><WorklogEngagement worklogId={worklog.id} currentReaction={ownReaction} reactionCount={worklog._count.reactions} commentCount={worklog._count.comments} /></div>

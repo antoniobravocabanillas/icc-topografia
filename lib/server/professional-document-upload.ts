@@ -3,12 +3,31 @@ import { fail, handleApiError, ok } from "@/lib/server/api";
 import {
   ALLOWED_CV_FILE_TYPES,
   ALLOWED_IDENTITY_FILE_TYPES,
+  ALLOWED_PRIVATE_DOCUMENT_TYPES,
   createProfessionalDocumentKey,
   getProfessionalDocumentStore,
   MAX_PROFESSIONAL_DOCUMENT_SIZE,
 } from "@/lib/server/media";
 
-type DocumentType = "CV" | "DNI_FRONT" | "DNI_BACK";
+type DocumentType =
+  | "CV"
+  | "DNI_FRONT"
+  | "DNI_BACK"
+  | "CERTIFICATE"
+  | "PROFESSIONAL_LICENSE"
+  | "CRIMINAL_RECORD"
+  | "MEDICAL_EXAM"
+  | "BANK_CERTIFICATE"
+  | "OTHER";
+
+const privateDocumentTypes = new Set<DocumentType>([
+  "CERTIFICATE",
+  "PROFESSIONAL_LICENSE",
+  "CRIMINAL_RECORD",
+  "MEDICAL_EXAM",
+  "BANK_CERTIFICATE",
+  "OTHER",
+]);
 
 function getFile(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -16,11 +35,17 @@ function getFile(formData: FormData, name: string) {
 }
 
 function validateFile(file: File, type: DocumentType) {
-  const allowed = type === "CV" ? ALLOWED_CV_FILE_TYPES : ALLOWED_IDENTITY_FILE_TYPES;
+  const allowed = type === "CV"
+    ? ALLOWED_CV_FILE_TYPES
+    : type === "DNI_FRONT" || type === "DNI_BACK"
+      ? ALLOWED_IDENTITY_FILE_TYPES
+      : ALLOWED_PRIVATE_DOCUMENT_TYPES;
   if (!allowed.has(file.type)) {
     return type === "CV"
       ? "El CV debe estar en formato PDF, DOC o DOCX."
-      : "Las imagenes del DNI deben estar en JPG, PNG, WEBP o PDF.";
+      : type === "DNI_FRONT" || type === "DNI_BACK"
+        ? "Las imagenes del DNI deben estar en JPG, PNG, WEBP o PDF."
+        : "El documento debe estar en PDF, JPG, PNG o WEBP para poder previsualizarlo de forma segura.";
   }
   if (file.size > MAX_PROFESSIONAL_DOCUMENT_SIZE) return "Cada archivo debe pesar como maximo 10 MB.";
   return null;
@@ -30,7 +55,7 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
   try {
     const formData = await request.formData();
     const purpose = String(formData.get("purpose") || "");
-    if (!["cv", "identity"].includes(purpose)) return fail("Tipo de carga no valido.", 400);
+    if (!["cv", "identity", "document"].includes(purpose)) return fail("Tipo de carga no valido.", 400);
 
     const profile = await prisma.terraqoProfessionalProfile.findUnique({
       where: { userId },
@@ -59,11 +84,17 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
       const cvFile = getFile(formData, "cvFile");
       if (!cvFile) return fail("Selecciona un archivo de CV.", 400);
       requestedFiles.push({ type: "CV", file: cvFile });
-    } else {
+    } else if (purpose === "identity") {
       const dniFront = getFile(formData, "dniFront");
       const dniBack = getFile(formData, "dniBack");
       if (!dniFront || !dniBack) return fail("Sube el frente y el reverso del DNI para solicitar la validacion.", 400);
       requestedFiles.push({ type: "DNI_FRONT", file: dniFront }, { type: "DNI_BACK", file: dniBack });
+    } else {
+      const documentType = String(formData.get("documentType") || "") as DocumentType;
+      const documentFile = getFile(formData, "documentFile");
+      if (!privateDocumentTypes.has(documentType)) return fail("Selecciona una categoria documental valida.", 400);
+      if (!documentFile) return fail("Selecciona el documento que deseas cargar.", 400);
+      requestedFiles.push({ type: documentType, file: documentFile });
     }
 
     for (const item of requestedFiles) {
@@ -93,15 +124,17 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
       }
 
       const documents = await prisma.$transaction(async (tx) => {
-        await tx.terraqoProfessionalDocument.updateMany({
-          where: {
-            professionalProfileId: profile.id,
-            workspaceId,
-            type: { in: requestedFiles.map((item) => item.type) },
-            reviewStatus: "SUBMITTED",
-          },
-          data: { reviewStatus: "REJECTED", reviewNote: "Documento reemplazado por una carga posterior." },
-        });
+        if (purpose !== "document") {
+          await tx.terraqoProfessionalDocument.updateMany({
+            where: {
+              professionalProfileId: profile.id,
+              workspaceId,
+              type: { in: requestedFiles.map((item) => item.type) },
+              reviewStatus: "SUBMITTED",
+            },
+            data: { reviewStatus: "REJECTED", reviewNote: "Documento reemplazado por una carga posterior." },
+          });
+        }
 
         const createdDocuments = [];
         for (const item of stored) {
@@ -142,7 +175,9 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
         identityVerificationStatus: purpose === "identity" ? "UNDER_REVIEW" : profile.identityVerificationStatus,
         message: purpose === "identity"
           ? "Documentos recibidos. Terraqo revisara tu identidad antes de marcar el perfil como verificado."
-          : "CV actualizado correctamente.",
+          : purpose === "cv"
+            ? "CV actualizado correctamente."
+            : "Documento agregado a tu expediente privado.",
       });
     } catch (error) {
       await Promise.all(stored.map((item) => store.delete(item.storageKey).catch(() => undefined)));
