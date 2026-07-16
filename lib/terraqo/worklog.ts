@@ -28,6 +28,14 @@ export const worklogInclude = {
     include: { author: { select: { id: true, name: true, image: true } } }
   },
   reactions: { select: { id: true, userId: true, type: true } },
+  validations: {
+    orderBy: { requestedAt: "desc" },
+    take: 3,
+    include: {
+      validator: { select: { id: true, name: true, image: true } },
+      requestedBy: { select: { id: true, name: true } }
+    }
+  },
   _count: { select: { comments: true, reactions: true } }
 } satisfies Prisma.TerraqoWorklogEntryInclude;
 
@@ -176,7 +184,7 @@ export async function createProfessionalWorklog(input: {
       visibility: input.payload.visibility,
       skills: input.payload.skills,
       evidenceUrls: input.payload.evidenceUrls,
-      occurredAt: input.payload.occurredAt,
+      occurredAt: new Date(),
       evidenceStatus: input.payload.projectId ? "LINKED" : "DECLARED"
     },
     include: worklogInclude

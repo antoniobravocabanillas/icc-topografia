@@ -20,6 +20,7 @@ async function main() {
   let worklogId: string | undefined;
 
   try {
+    const createdAfter = new Date();
     const worklog = await createProfessionalWorklog({
       userId: authorId,
       requiredWorkspaceId: workspace.id,
@@ -29,11 +30,15 @@ async function main() {
         type: "FIELD_UPDATE",
         visibility: "WORKSPACE",
         skills: ["tenant-isolation"],
-        evidenceUrls: [],
-        occurredAt: new Date()
+        evidenceUrls: []
       }
     });
     worklogId = worklog.id;
+
+    const serverTimestampDrift = Math.abs(worklog.occurredAt.getTime() - createdAfter.getTime());
+    if (serverTimestampDrift > 10_000) {
+      throw new Error(`La hora de la bitacora no fue generada por el servidor: drift=${serverTimestampDrift}ms`);
+    }
 
     const media = await prisma.terraqoWorklogMedia.create({
       data: {

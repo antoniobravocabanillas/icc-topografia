@@ -17,6 +17,7 @@ import {
 import { ProfessionalPhotoUploader } from "@/components/portal/professional-photo-uploader";
 import { ProfessionalDocumentUploader } from "@/components/portal/professional-document-uploader";
 import { WorklogCard } from "@/components/terraqo/worklog-card";
+import { FieldVerificationPanel } from "@/components/terraqo/field-verification-panel";
 import { Button } from "@/components/ui/button";
 import { worklogInclude } from "@/lib/terraqo/worklog";
 
@@ -73,7 +74,7 @@ function ActivityRow({ icon: Icon, title, detail }: { icon: ElementType; title: 
   );
 }
 
-export function ProfessionalDashboard({ profile }: { profile: ProfessionalDashboardProfile }) {
+export function ProfessionalDashboard({ profile, workspaceId }: { profile: ProfessionalDashboardProfile; workspaceId: string }) {
   const name = profile.user.name || profile.user.email;
   const percent = completion(profile);
   const verifiedExperiences = profile.experiences.filter((experience) => experience.verifiedByTerraqo).length;
@@ -100,6 +101,8 @@ export function ProfessionalDashboard({ profile }: { profile: ProfessionalDashbo
               </div>
             </div>
           </section>
+
+          <FieldVerificationPanel endpoint={`/api/terraqo/field-verification?workspaceId=${workspaceId}`} compact />
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <ProfileMetric icon={BriefcaseBusiness} value={profile.experiences.length} label="Experiencias" detail="registradas" />

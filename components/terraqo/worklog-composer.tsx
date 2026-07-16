@@ -2,7 +2,7 @@
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, ImagePlus, Link2, NotebookPen, X } from "lucide-react";
+import { CalendarClock, CheckCircle2, ImagePlus, Link2, NotebookPen, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type WorkspaceOption = {
@@ -56,8 +56,7 @@ export function WorklogComposer({ workspaces }: { workspaces: WorkspaceOption[] 
           type: String(data.get("type") || "FIELD_UPDATE"),
           visibility: String(data.get("visibility") || "PRIVATE"),
           skills: String(data.get("skills") || "").split(",").map((item) => item.trim()).filter(Boolean),
-          evidenceUrls: String(data.get("evidenceUrls") || "").split(/\r?\n/).map((item) => item.trim()).filter(Boolean),
-          occurredAt: String(data.get("occurredAt") || "") || undefined
+          evidenceUrls: String(data.get("evidenceUrls") || "").split(/\r?\n/).map((item) => item.trim()).filter(Boolean)
         })
       });
       const payload = await response.json().catch(() => ({}));
@@ -140,9 +139,10 @@ export function WorklogComposer({ workspaces }: { workspaces: WorkspaceOption[] 
         <label className="grid gap-2 text-sm font-semibold">Habilidades, separadas por coma
           <input name="skills" className="h-11 rounded-md border bg-background px-3" placeholder="Topografia, GNSS, AutoCAD" />
         </label>
-        <label className="grid gap-2 text-sm font-semibold">Fecha del trabajo
-          <input name="occurredAt" type="date" className="h-11 rounded-md border bg-background px-3" />
-        </label>
+        <div className="flex min-h-11 items-center gap-3 rounded-md border bg-[#f2f8f7] px-3 text-sm text-[#35525c]">
+          <CalendarClock className="h-4 w-4 shrink-0 text-primary" />
+          <span><b>Fecha y hora automáticas.</b> Se registran al guardar y no podrán modificarse.</span>
+        </div>
         <label className="grid gap-2 text-sm font-semibold md:col-span-2"><span className="flex items-center gap-2"><Link2 className="h-4 w-4" /> Evidencias externas, una URL por linea</span>
           <textarea name="evidenceUrls" className="min-h-20 rounded-md border bg-background p-3" placeholder="https://..." />
         </label>

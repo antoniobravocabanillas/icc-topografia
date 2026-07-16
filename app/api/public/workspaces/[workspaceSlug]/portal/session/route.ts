@@ -92,6 +92,17 @@ export async function GET(request: Request, { params }: RouteContext) {
                 },
                 occurredAt: true,
                 project: { select: { id: true, title: true, slug: true } },
+                validations: {
+                  orderBy: { requestedAt: "desc" },
+                  take: 3,
+                  select: {
+                    id: true,
+                    status: true,
+                    requestedAt: true,
+                    resolvedAt: true,
+                    validator: { select: { id: true, name: true, image: true } },
+                  },
+                },
                 _count: { select: { comments: true, reactions: true } },
               },
             },

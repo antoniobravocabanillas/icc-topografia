@@ -67,8 +67,20 @@ export const terraqoWorklogCreateSchema = z.object({
   type: z.enum(["FIELD_UPDATE", "DELIVERABLE", "PROBLEM_SOLVED", "LEARNING", "MILESTONE"]).default("FIELD_UPDATE"),
   visibility: worklogVisibility.default("PRIVATE"),
   skills: z.array(z.string().trim().min(1).max(80)).max(20).default([]),
-  evidenceUrls: z.array(z.string().url()).max(10).default([]),
-  occurredAt: z.coerce.date().optional()
+  evidenceUrls: z.array(z.string().url()).max(10).default([])
+});
+
+export const terraqoWorklogValidationRequestSchema = z.object({
+  validatorUserId: z.string().cuid(),
+  note: z.string().trim().max(500).optional()
+});
+
+export const terraqoAttendanceOptionsSchema = z.object({
+  projectId: z.string().cuid(),
+  type: z.enum(["CHECK_IN", "CHECK_OUT"]),
+  latitude: z.number().finite().min(-90).max(90),
+  longitude: z.number().finite().min(-180).max(180),
+  accuracyMeters: z.number().finite().positive().max(5000)
 });
 
 export const terraqoWorklogEngagementSchema = z.discriminatedUnion("action", [

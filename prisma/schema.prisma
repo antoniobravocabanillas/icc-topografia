@@ -333,6 +333,31 @@ enum TerraqoEvidenceStatus {
   VERIFIED
 }
 
+enum TerraqoWorklogValidationStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum TerraqoWebAuthnPurpose {
+  REGISTRATION
+  WORKLOG_VALIDATION
+  ATTENDANCE
+}
+
+enum TerraqoAttendanceType {
+  CHECK_IN
+  CHECK_OUT
+}
+
+enum TerraqoAttendanceStatus {
+  ACCEPTED
+  OUTSIDE_GEOFENCE
+  LOCATION_UNAVAILABLE
+  REJECTED
+}
+
 enum TerraqoReactionType {
   USEFUL
   INSIGHTFUL
@@ -436,6 +461,11 @@ model User {
   terraqoTeamInvitationsSent  TerraqoTeamMember[]              @relation("TerraqoTeamMemberInviter")
   terraqoPrivateNotes         TerraqoPrivateNote[]
   terraqoWorkspaceFiles       TerraqoWorkspaceFile[]
+  terraqoPasskeys             TerraqoWebAuthnCredential[]
+  terraqoWebAuthnChallenges   TerraqoWebAuthnChallenge[]
+  terraqoValidationRequests   TerraqoWorklogValidation[]       @relation("TerraqoValidationRequester")
+  terraqoValidationsAssigned  TerraqoWorklogValidation[]       @relation("TerraqoValidationSupervisor")
+  terraqoAttendanceEvents     TerraqoAttendanceEvent[]
   createdAt                   DateTime                         @default(now())
   updatedAt                   DateTime                         @updatedAt
 }
@@ -1396,6 +1426,11 @@ model Project {
   terraqoConversations TerraqoConversation[]
   terraqoMeetings      TerraqoMeeting[]
   terraqoTeams         TerraqoTeam[]
+  worklogValidations   TerraqoWorklogValidation[]
+  attendanceEvents     TerraqoAttendanceEvent[]
+  latitude             Float?
+  longitude            Float?
+  geofenceRadiusMeters Int                             @default(250)
   createdAt            DateTime                        @default(now())
   updatedAt            DateTime                        @updatedAt
   deletedAt            DateTime?
@@ -1701,6 +1736,9 @@ model TerraqoWorkspace {
   teams                    TerraqoTeam[]
   privateNotes             TerraqoPrivateNote[]
   workspaceFiles           TerraqoWorkspaceFile[]
+  webAuthnChallenges       TerraqoWebAuthnChallenge[]
+  worklogValidations       TerraqoWorklogValidation[]
+  attendanceEvents         TerraqoAttendanceEvent[]
   createdAt                DateTime                         @default(now())
   updatedAt                DateTime                         @updatedAt
   deletedAt                DateTime?
@@ -1935,6 +1973,7 @@ model TerraqoProfessionalProfile {
   applications               TerraqoProjectApplication[]
   documents                  TerraqoProfessionalDocument[]
   worklogs                   TerraqoWorklogEntry[]
+  attendanceEvents           TerraqoAttendanceEvent[]
   createdAt                  DateTime                          @default(now())
   updatedAt                  DateTime                          @updatedAt
 
@@ -2071,6 +2110,7 @@ model TerraqoWorklogEntry {
   comments              TerraqoWorklogComment[]
   reactions             TerraqoWorklogReaction[]
   media                 TerraqoWorklogMedia[]
+  validations           TerraqoWorklogValidation[]
   createdAt             DateTime                   @default(now())
   updatedAt             DateTime                   @updatedAt
   deletedAt             DateTime?
@@ -2080,6 +2120,95 @@ model TerraqoWorklogEntry {
   @@index([projectId])
   @@index([evidenceStatus])
   @@index([deletedAt])
+}
+
+model TerraqoWebAuthnCredential {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  credentialId String
+  publicKey    Bytes
+  counter      BigInt    @default(0)
+  transports   String[]  @default([])
+  rpId         String
+  deviceName   String?
+  backedUp     Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  lastUsedAt   DateTime?
+
+  @@unique([credentialId, rpId])
+  @@index([userId, rpId])
+}
+
+model TerraqoWebAuthnChallenge {
+  id             String                 @id @default(cuid())
+  userId         String
+  user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId    String?
+  workspace      TerraqoWorkspace?      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  purpose        TerraqoWebAuthnPurpose
+  challenge      String                 @unique
+  rpId           String
+  expectedOrigin String
+  payload        Json?
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  createdAt      DateTime               @default(now())
+
+  @@index([userId, purpose, expiresAt])
+  @@index([workspaceId, purpose, expiresAt])
+}
+
+model TerraqoWorklogValidation {
+  id                String                         @id @default(cuid())
+  worklogId         String
+  worklog           TerraqoWorklogEntry            @relation(fields: [worklogId], references: [id], onDelete: Cascade)
+  workspaceId       String
+  workspace         TerraqoWorkspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projectId         String?
+  project           Project?                       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  requestedByUserId String
+  requestedBy       User                           @relation("TerraqoValidationRequester", fields: [requestedByUserId], references: [id], onDelete: Cascade)
+  validatorUserId   String
+  validator         User                           @relation("TerraqoValidationSupervisor", fields: [validatorUserId], references: [id], onDelete: Restrict)
+  status            TerraqoWorklogValidationStatus @default(REQUESTED)
+  requestNote       String?
+  responseNote      String?
+  credentialId      String?
+  requestedAt       DateTime                       @default(now())
+  resolvedAt        DateTime?
+  createdAt         DateTime                       @default(now())
+  updatedAt         DateTime                       @updatedAt
+
+  @@index([worklogId, status])
+  @@index([workspaceId, status, requestedAt])
+  @@index([validatorUserId, status, requestedAt])
+}
+
+model TerraqoAttendanceEvent {
+  id                    String                     @id @default(cuid())
+  userId                String
+  user                  User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  professionalProfileId String
+  professionalProfile   TerraqoProfessionalProfile @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
+  workspaceId           String
+  workspace             TerraqoWorkspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projectId             String
+  project               Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type                  TerraqoAttendanceType
+  status                TerraqoAttendanceStatus
+  latitude              Float
+  longitude             Float
+  accuracyMeters        Float
+  distanceMeters        Float
+  geofenceRadiusMeters  Int
+  credentialId          String?
+  capturedAt            DateTime                   @default(now())
+  createdAt             DateTime                   @default(now())
+
+  @@index([userId, workspaceId, capturedAt])
+  @@index([professionalProfileId, projectId, capturedAt])
+  @@index([workspaceId, status, capturedAt])
 }
 
 model TerraqoWorklogMedia {

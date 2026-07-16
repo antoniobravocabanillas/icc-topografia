@@ -238,6 +238,13 @@ async function createActivityLog(data: {
   });
 }
 
+function nullableNumberValue(formData: FormData, key: string) {
+  const raw = value(formData, key);
+  if (!raw) return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 async function upsertCompanyAndContactFromForm(formData: FormData) {
   const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
   const companyName = value(formData, "company") || value(formData, "companyName");
@@ -1592,6 +1599,9 @@ export async function createProjectAction(formData: FormData) {
         terraqoWorkspaceId,
         clientName: value(formData, "clientName"),
         location: value(formData, "location"),
+        latitude: nullableNumberValue(formData, "latitude"),
+        longitude: nullableNumberValue(formData, "longitude"),
+        geofenceRadiusMeters: Math.max(25, Math.round(numberValue(formData, "geofenceRadiusMeters", 250))),
         category: value(formData, "category"),
         servicesApplied: listFromTextarea(formData, "servicesApplied"),
         summary: value(formData, "summary") || "",
@@ -1688,6 +1698,9 @@ export async function updateProjectAction(id: string, formData: FormData) {
         slug: value(formData, "slug") || slugify(title),
         clientName: value(formData, "clientName"),
         location: value(formData, "location"),
+        latitude: nullableNumberValue(formData, "latitude"),
+        longitude: nullableNumberValue(formData, "longitude"),
+        geofenceRadiusMeters: Math.max(25, Math.round(numberValue(formData, "geofenceRadiusMeters", 250))),
         category: value(formData, "category"),
         servicesApplied: listFromTextarea(formData, "servicesApplied"),
         summary: value(formData, "summary") || "",

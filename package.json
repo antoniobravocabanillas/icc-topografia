@@ -35,6 +35,8 @@
     "@netlify/blobs": "^10.7.4",
     "@prisma/client": "^6.5.0",
     "@radix-ui/react-slot": "^1.1.2",
+    "@simplewebauthn/browser": "^9.0.1",
+    "@simplewebauthn/server": "^9.0.3",
     "bcryptjs": "^3.0.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

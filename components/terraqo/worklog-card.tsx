@@ -3,6 +3,7 @@ import Image from "next/image";
 import { BadgeCheck, Building2, CalendarDays, ExternalLink, FolderKanban, LockKeyhole } from "lucide-react";
 import type { WorklogWithContext } from "@/lib/terraqo/worklog";
 import { WorklogEngagement } from "@/components/terraqo/worklog-engagement";
+import { WorklogValidationControl } from "@/components/terraqo/worklog-validation-control";
 
 const typeLabels: Record<string, string> = {
   FIELD_UPDATE: "Avance de trabajo",
@@ -62,6 +63,7 @@ export function WorklogCard({ worklog, viewerId }: { worklog: WorklogWithContext
       </div> : null}
 
       {worklog.comments.length ? <div className="mt-5 space-y-2 border-t pt-4">{worklog.comments.slice().reverse().map((comment) => <div key={comment.id} className="rounded-md bg-muted/45 px-3 py-2 text-sm"><strong>{comment.author.name || "Profesional"}:</strong> {comment.body}</div>)}</div> : null}
+      {worklog.authorId === viewerId && worklog.workspaceId ? <div className="mt-5 border-t pt-4"><WorklogValidationControl worklogId={worklog.id} endpoint={`/api/terraqo/field-verification?workspaceId=${worklog.workspaceId}`} validations={worklog.validations} /></div> : null}
       <div className="mt-5"><WorklogEngagement worklogId={worklog.id} currentReaction={ownReaction} reactionCount={worklog._count.reactions} commentCount={worklog._count.comments} /></div>
     </article>
   );

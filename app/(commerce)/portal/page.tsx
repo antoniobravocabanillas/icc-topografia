@@ -117,7 +117,7 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
 
   if (!account || !["active", "approved"].includes(account.status) || !account.client || account.client.terraqoWorkspaceId !== terraqoWorkspaceId) {
     if (professionalProfile) {
-      return <ProfessionalDashboard profile={professionalProfile} />;
+      return <ProfessionalDashboard profile={professionalProfile} workspaceId={terraqoWorkspaceId} />;
     }
 
     return (
