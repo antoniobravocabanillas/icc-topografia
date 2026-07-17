@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/server/authz";
-import { getSessionTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
+import { getSessionTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 
 export async function GET() {
   const { response } = await requireRole("SALES");
   if (response) return response;
 
   const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
+  await requireWorkspaceModule("ANALYTICS", terraqoWorkspaceId);
   const quotes = await prisma.quote.findMany({
     where: { terraqoWorkspaceId },
     include: { sellerProfile: true, items: true },

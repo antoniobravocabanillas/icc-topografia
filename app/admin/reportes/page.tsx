@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { prisma } from "@/lib/prisma";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
-import { getSessionTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
+import { getSessionTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 import { formatCurrency } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +14,7 @@ export const revalidate = 0;
 export default async function ReportsPage() {
   await requireAdminPage(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
   const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
+  await requireWorkspaceModule("ANALYTICS", terraqoWorkspaceId);
   const [quotes, leads, tickets, commissions, products] = await Promise.all([
     prisma.quote.findMany({ where: { terraqoWorkspaceId }, include: { sellerProfile: true }, orderBy: { createdAt: "desc" }, take: 300 }),
     prisma.lead.findMany({ where: { terraqoWorkspaceId }, orderBy: { createdAt: "desc" }, take: 300 }),

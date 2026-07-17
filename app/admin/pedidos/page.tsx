@@ -3,13 +3,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { prisma } from "@/lib/prisma";
 import { deleteOrderAction, updateOrderStatusAction } from "@/lib/server/admin-actions";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
+import { getSessionTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 import { formatCurrency } from "@/lib/utils";
 
 const orderStatuses = ["PENDING", "QUOTED", "PAID", "PROCESSING", "SHIPPED", "COMPLETED", "CANCELLED"] as const;
 
 export default async function AdminOrdersPage() {
   await requireAdminPage(["SALES", "ADMIN"]);
+  const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
+  await requireWorkspaceModule("TECHNICAL_STORE", terraqoWorkspaceId);
   const orders = await prisma.order.findMany({
+    where: { terraqoWorkspaceId },
     include: { items: { include: { product: true } }, address: true },
     orderBy: { createdAt: "desc" },
     take: 100

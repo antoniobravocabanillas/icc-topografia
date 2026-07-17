@@ -4,7 +4,7 @@ import { handleApiError, ok, parseJson, slugify } from "@/lib/server/api";
 import { requireRole } from "@/lib/server/authz";
 import { idSchema } from "@/lib/validations/common";
 import { serviceUpdateSchema } from "@/lib/validations/content";
-import { getSessionTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
+import { getSessionTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 
 type ServiceAdminRouteProps = {
   params: Promise<{ id: string }>;
@@ -17,6 +17,7 @@ export async function PATCH(request: Request, { params }: ServiceAdminRouteProps
   try {
     const { id } = idSchema.parse(await params);
     const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
+    await requireWorkspaceModule("PUBLIC_WEBSITE", terraqoWorkspaceId);
     const owned = await prisma.service.findFirst({ where: { id, terraqoWorkspaceId }, select: { id: true } });
     if (!owned) return ok({ error: "Servicio no encontrado" }, { status: 404 });
     const payload = await parseJson(request, serviceUpdateSchema);
@@ -41,6 +42,7 @@ export async function DELETE(_request: Request, { params }: ServiceAdminRoutePro
   try {
     const { id } = idSchema.parse(await params);
     const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
+    await requireWorkspaceModule("PUBLIC_WEBSITE", terraqoWorkspaceId);
     const owned = await prisma.service.findFirst({ where: { id, terraqoWorkspaceId }, select: { id: true } });
     if (!owned) return ok({ error: "Servicio no encontrado" }, { status: 404 });
     await prisma.service.delete({ where: { id } });

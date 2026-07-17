@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
 import { getConversationHub } from "@/lib/terraqo/messaging";
 import { getWorkspaceForUser } from "@/lib/terraqo/workspace-access";
+import { requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,7 @@ export default async function WorkspaceMessagesPage({ searchParams }: { searchPa
   const session = await requireAdminPage(["ADMIN", "SUPER_ADMIN"]);
   const params = await searchParams;
   const workspace = await getWorkspaceForUser(session.user.id, session.user.role as Role);
+  await requireWorkspaceModule("PROFESSIONAL_MESSAGING", workspace?.id);
   const [data, projects] = await Promise.all([
     getConversationHub(session.user.id, params.conversation, workspace?.id),
     workspace ? prisma.project.findMany({

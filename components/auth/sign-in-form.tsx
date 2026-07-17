@@ -31,7 +31,12 @@ export function SignInForm() {
 
       const session = await fetch("/api/auth/session").then((res) => res.json()).catch(() => null);
       const role = session?.user?.role;
-      router.push(!explicitCallbackUrl && role === "CUSTOMER" ? "/portal" : callbackUrl);
+      const destination = !explicitCallbackUrl && role === "CUSTOMER"
+        ? "/portal"
+        : !explicitCallbackUrl && role === "SUPER_ADMIN"
+          ? "/admin/terraqo"
+          : callbackUrl;
+      router.push(destination);
       router.refresh();
     });
   }

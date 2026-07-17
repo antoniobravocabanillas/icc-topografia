@@ -26,6 +26,8 @@
     "db:seed:terraqo": "tsx prisma/seed-terraqo.ts",
     "db:seed:staff": "tsx prisma/seed-staff.ts",
     "workspace:create-admin": "tsx prisma/create-workspace-admin.ts",
+    "admins:provision": "tsx prisma/create-platform-administrators.ts",
+    "admins:test-boundaries": "tsx scripts/test-admin-boundaries.ts",
     "workspace:backfill": "tsx prisma/backfill-workspace-ownership.ts",
     "workspace:test-isolation": "tsx prisma/test-workspace-isolation.ts",
     "demo:create-accesses": "tsx prisma/create-demo-accesses.ts"

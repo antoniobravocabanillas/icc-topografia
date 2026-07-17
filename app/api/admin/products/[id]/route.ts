@@ -4,7 +4,7 @@ import { requireRole } from "@/lib/server/authz";
 import { serializeProduct } from "@/lib/server/serializers";
 import { idSchema } from "@/lib/validations/common";
 import { productUpdateSchema } from "@/lib/validations/product";
-import { getSessionTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
+import { getSessionTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 
 type ProductAdminRouteProps = {
   params: Promise<{ id: string }>;
@@ -17,6 +17,7 @@ export async function GET(_request: Request, { params }: ProductAdminRouteProps)
   try {
     const { id } = idSchema.parse(await params);
     const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
+    await requireWorkspaceModule("TECHNICAL_STORE", terraqoWorkspaceId);
     const product = await prisma.product.findFirst({ where: { id, terraqoWorkspaceId }, include: { category: true, variants: true } });
     if (!product) return fail("Producto no encontrado", 404);
     return ok(serializeProduct(product));
@@ -32,6 +33,7 @@ export async function PATCH(request: Request, { params }: ProductAdminRouteProps
   try {
     const { id } = idSchema.parse(await params);
     const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
+    await requireWorkspaceModule("TECHNICAL_STORE", terraqoWorkspaceId);
     const owned = await prisma.product.findFirst({ where: { id, terraqoWorkspaceId }, select: { id: true } });
     if (!owned) return fail("Producto no encontrado", 404);
     const payload = await parseJson(request, productUpdateSchema);
@@ -62,6 +64,7 @@ export async function DELETE(_request: Request, { params }: ProductAdminRoutePro
   try {
     const { id } = idSchema.parse(await params);
     const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
+    await requireWorkspaceModule("TECHNICAL_STORE", terraqoWorkspaceId);
     const owned = await prisma.product.findFirst({ where: { id, terraqoWorkspaceId }, select: { id: true } });
     if (!owned) return fail("Producto no encontrado", 404);
     await prisma.product.update({ where: { id }, data: { isActive: false } });

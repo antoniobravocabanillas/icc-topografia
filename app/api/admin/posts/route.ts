@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { created, getPagination, handleApiError, paginated, parseJson, slugify } from "@/lib/server/api";
 import { requireRole } from "@/lib/server/authz";
 import { postInputSchema } from "@/lib/validations/content";
-import { getSessionTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
+import { getSessionTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 
 export async function GET(request: Request) {
   const { response } = await requireRole("EDITOR");
@@ -11,6 +11,7 @@ export async function GET(request: Request) {
 
   try {
     const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
+    await requireWorkspaceModule("PUBLIC_WEBSITE", terraqoWorkspaceId);
     const { searchParams } = new URL(request.url);
     const { page, pageSize, skip, take } = getPagination(searchParams);
     const [posts, total] = await prisma.$transaction([
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
 
   try {
     const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
+    await requireWorkspaceModule("PUBLIC_WEBSITE", terraqoWorkspaceId);
     const payload = await parseJson(request, postInputSchema);
     const post = await prisma.blogPost.create({
       data: { ...payload, terraqoWorkspaceId, slug: payload.slug ?? slugify(payload.title), content: payload.content as Prisma.InputJsonValue }

@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getPagination, handleApiError, paginated } from "@/lib/server/api";
 import { requireRole } from "@/lib/server/authz";
 import { serializeOrder } from "@/lib/server/serializers";
-import { getSessionTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
+import { getSessionTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 
 export async function GET(request: Request) {
   const { response } = await requireRole("SALES");
@@ -10,6 +10,7 @@ export async function GET(request: Request) {
 
   try {
     const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
+    await requireWorkspaceModule("TECHNICAL_STORE", terraqoWorkspaceId);
     const { searchParams } = new URL(request.url);
     const { page, pageSize, skip, take } = getPagination(searchParams);
     const status = searchParams.get("status")?.trim();

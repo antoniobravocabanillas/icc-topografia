@@ -10,7 +10,7 @@ function createTemporaryPassword() {
 
 async function main() {
   const workspaceSlug = process.env.WORKSPACE_SLUG?.trim() || "icc-topografia";
-  const email = (process.env.WORKSPACE_ADMIN_EMAIL?.trim() || "administracion@icctopografia.com").toLowerCase();
+  const email = (process.env.WORKSPACE_ADMIN_EMAIL?.trim() || "admin@icctopografia.com").toLowerCase();
   const name = process.env.WORKSPACE_ADMIN_NAME?.trim() || "Administrador ICC Topografia";
   const configuredPassword = process.env.WORKSPACE_ADMIN_PASSWORD?.trim();
 
@@ -60,7 +60,7 @@ async function main() {
       },
       update: {
         role: "ADMIN",
-        title: "Administrador del workspace ICC Topografia",
+        title: `Administrador del workspace ${workspace.name}`,
         active: true,
         joinedAt: new Date()
       },
@@ -68,7 +68,7 @@ async function main() {
         workspaceId: workspace.id,
         userId: workspaceAdmin.id,
         role: "ADMIN",
-        title: "Administrador del workspace ICC Topografia",
+        title: `Administrador del workspace ${workspace.name}`,
         active: true,
         invitedAt: new Date(),
         joinedAt: new Date()

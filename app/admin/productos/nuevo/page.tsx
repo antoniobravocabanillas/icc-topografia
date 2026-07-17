@@ -2,11 +2,12 @@ import { ProductForm } from "@/components/admin/products/product-form";
 import { prisma } from "@/lib/prisma";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
 import { createProductAction } from "@/lib/server/product-actions";
-import { getSessionTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
+import { getSessionTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 
 export default async function NewProductPage() {
   await requireAdminPage(["EDITOR", "ADMIN"]);
   const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
+  await requireWorkspaceModule("TECHNICAL_STORE", terraqoWorkspaceId);
   const categories = await prisma.category.findMany({ where: { terraqoWorkspaceId }, orderBy: { name: "asc" } });
 
   return (

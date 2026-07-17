@@ -4,10 +4,65 @@ import { revalidatePath } from "next/cache";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { prisma } from "@/lib/prisma";
+import { slugify } from "@/lib/server/api";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
+import { createTerraqoWorkspace } from "@/lib/terraqo/workspace-repository";
 import { setWorkspaceModuleState, type WorkspaceProvisioningMode } from "@/lib/terraqo/workspace-modules";
-import { terraqoModules, workspace } from "@/lib/workspace";
+import { terraqoModules } from "@/lib/workspace";
+
+function textField(formData: FormData, key: string) {
+  return String(formData.get(key) || "").trim();
+}
+
+async function createWorkspaceAction(formData: FormData) {
+  "use server";
+  await requireAdminPage(["SUPER_ADMIN"]);
+  const name = textField(formData, "name");
+  const slug = slugify(textField(formData, "slug") || name);
+  const plan = textField(formData, "plan") as "FREE" | "BASIC" | "PROFESSIONAL" | "PREMIUM" | "ENTERPRISE";
+  if (!name || !slug || !["FREE", "BASIC", "PROFESSIONAL", "PREMIUM", "ENTERPRISE"].includes(plan)) return;
+  await createTerraqoWorkspace({
+    name,
+    slug,
+    industry: textField(formData, "industry") || undefined,
+    domain: textField(formData, "domain") || undefined,
+    brandName: textField(formData, "brandName") || name,
+    description: textField(formData, "description") || undefined,
+    plan
+  });
+  revalidatePath("/admin/terraqo");
+}
+
+async function updateWorkspaceAction(formData: FormData) {
+  "use server";
+  await requireAdminPage(["SUPER_ADMIN"]);
+  const workspaceId = textField(formData, "workspaceId");
+  const tier = textField(formData, "tier") as "FREE" | "BASIC" | "PROFESSIONAL" | "PREMIUM" | "ENTERPRISE";
+  const status = textField(formData, "subscriptionStatus") as "TRIALING" | "ACTIVE" | "PAST_DUE" | "SUSPENDED" | "CANCELLED";
+  const seats = Math.max(1, Number(textField(formData, "seats") || 1));
+  if (!workspaceId) return;
+  const latestSubscription = await prisma.terraqoSubscription.findFirst({ where: { workspaceId }, orderBy: { createdAt: "desc" }, select: { id: true } });
+  await prisma.$transaction(async (tx) => {
+    await tx.terraqoWorkspace.update({
+      where: { id: workspaceId },
+      data: {
+        name: textField(formData, "name"),
+        brandName: textField(formData, "brandName") || null,
+        domain: textField(formData, "domain") || null,
+        industry: textField(formData, "industry") || null,
+        active: textField(formData, "active") === "true"
+      }
+    });
+    if (latestSubscription) {
+      await tx.terraqoSubscription.update({ where: { id: latestSubscription.id }, data: { tier, status, seats } });
+    } else {
+      await tx.terraqoSubscription.create({ data: { workspaceId, tier, status, seats } });
+    }
+  });
+  revalidatePath("/admin/terraqo");
+}
 
 async function toggleWorkspaceModule(formData: FormData) {
   "use server";
@@ -69,11 +124,6 @@ export default async function TerraqoAdminPage() {
             CV vivo, marketplace laboral, foros, documentos y analitica.
           </p>
         </div>
-        <Button asChild variant="outline">
-          <a href={`/api/terraqo/workspaces/${workspace.defaultWorkspaceSlug}/modules`} target="_blank" rel="noreferrer">
-            Ver API ICC
-          </a>
-        </Button>
         <Button asChild>
           <Link href="/admin/terraqo/red">Red profesional</Link>
         </Button>
@@ -102,6 +152,27 @@ export default async function TerraqoAdminPage() {
           </CardHeader>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Nuevo cliente Terraqo</CardTitle>
+          <CardDescription>Crea un workspace aislado. Sus datos comienzan en blanco y solo recibe los modulos incluidos en el plan seleccionado.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form action={createWorkspaceAction} className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <Input name="name" placeholder="Empresa o workspace" required />
+            <Input name="slug" placeholder="slug-del-workspace" />
+            <Input name="brandName" placeholder="Marca visible" />
+            <Input name="domain" placeholder="empresa.com" />
+            <Input name="industry" placeholder="Industria o rubro" />
+            <select name="plan" defaultValue="BASIC" className="h-10 rounded-md border bg-background px-3 text-sm">
+              {['FREE', 'BASIC', 'PROFESSIONAL', 'PREMIUM', 'ENTERPRISE'].map((tier) => <option key={tier}>{tier}</option>)}
+            </select>
+            <Input name="description" placeholder="Descripcion interna" className="xl:col-span-2" />
+            <Button type="submit" className="md:col-span-2 xl:col-span-4">Crear workspace aislado</Button>
+          </form>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -153,6 +224,22 @@ export default async function TerraqoAdminPage() {
                 </div>
               </CardHeader>
               <CardContent>
+                <form action={updateWorkspaceAction} className="mb-6 grid gap-3 rounded-md border bg-muted/20 p-4 md:grid-cols-2 xl:grid-cols-4">
+                  <input type="hidden" name="workspaceId" value={item.id} />
+                  <Input name="name" defaultValue={item.name} aria-label="Nombre del workspace" required />
+                  <Input name="brandName" defaultValue={item.brandName || ""} placeholder="Marca" />
+                  <Input name="domain" defaultValue={item.domain || ""} placeholder="Dominio" />
+                  <Input name="industry" defaultValue={item.industry || ""} placeholder="Industria" />
+                  <select name="tier" defaultValue={subscription?.tier || "BASIC"} className="h-10 rounded-md border bg-background px-3 text-sm">
+                    {['FREE', 'BASIC', 'PROFESSIONAL', 'PREMIUM', 'ENTERPRISE'].map((tier) => <option key={tier}>{tier}</option>)}
+                  </select>
+                  <select name="subscriptionStatus" defaultValue={subscription?.status || "TRIALING"} className="h-10 rounded-md border bg-background px-3 text-sm">
+                    {['TRIALING', 'ACTIVE', 'PAST_DUE', 'SUSPENDED', 'CANCELLED'].map((status) => <option key={status}>{status}</option>)}
+                  </select>
+                  <Input name="seats" type="number" min={1} defaultValue={subscription?.seats || 1} aria-label="Cantidad de usuarios" />
+                  <select name="active" defaultValue={String(item.active)} className="h-10 rounded-md border bg-background px-3 text-sm"><option value="true">Workspace activo</option><option value="false">Workspace suspendido</option></select>
+                  <Button type="submit" variant="outline" className="md:col-span-2 xl:col-span-4">Guardar configuracion del cliente</Button>
+                </form>
                 <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
                   {[
                     ["Clientes", item._count.clients],

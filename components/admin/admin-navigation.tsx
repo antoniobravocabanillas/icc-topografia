@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import type { AdminNavIcon, AdminNavItem } from "@/lib/admin-navigation";
+import { selectAdminWorkspace } from "@/lib/server/admin-workspace-actions";
 import { cn } from "@/lib/utils";
 
 type AdminNavigationProps = {
@@ -39,6 +40,8 @@ type AdminNavigationProps = {
   brandName: string;
   email: string;
   role: string;
+  activeWorkspaceId: string;
+  workspaceOptions: Array<{ id: string; name: string; slug: string }>;
 };
 
 const icons = {
@@ -74,7 +77,7 @@ function NavIcon({ name, className }: { name: AdminNavIcon; className?: string }
   return <Icon className={className} strokeWidth={1.8} />;
 }
 
-export function AdminNavigation({ items, workspaceName, panelName, brandName, email, role }: AdminNavigationProps) {
+export function AdminNavigation({ items, workspaceName, panelName, brandName, email, role, activeWorkspaceId, workspaceOptions }: AdminNavigationProps) {
   const pathname = usePathname();
   const shellRef = useRef<HTMLElement>(null);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
@@ -150,6 +153,16 @@ export function AdminNavigation({ items, workspaceName, panelName, brandName, em
           </Link>
 
           <div className="hidden min-w-0 items-center gap-5 md:flex">
+            {role === "SUPER_ADMIN" ? (
+              <form action={selectAdminWorkspace} className="flex items-center gap-2">
+                <input type="hidden" name="returnTo" value={pathname} />
+                <label className="sr-only" htmlFor="admin-workspace">Workspace activo</label>
+                <select id="admin-workspace" name="workspaceId" defaultValue={activeWorkspaceId} className="h-10 max-w-64 rounded-md border border-white/15 bg-[#0a424c] px-3 text-sm font-semibold text-white outline-none focus:border-[#83efe2]/60">
+                  {workspaceOptions.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
+                </select>
+                <button type="submit" className="h-10 rounded-md border border-[#83efe2]/35 px-3 text-xs font-bold text-[#83efe2] transition-colors hover:bg-white/10">Cambiar</button>
+              </form>
+            ) : null}
             <div className="min-w-0 text-right">
               <p className="truncate text-sm font-semibold text-white/88">{email}</p>
               <p className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/42">{brandName} · {role.replaceAll("_", " ")}</p>
@@ -245,6 +258,16 @@ export function AdminNavigation({ items, workspaceName, panelName, brandName, em
             ) : null}
 
             <div className="mt-5 flex flex-col gap-3 border-t border-[#cfdfdd] pt-5 md:hidden">
+              {role === "SUPER_ADMIN" ? (
+                <form action={selectAdminWorkspace} className="grid gap-2 rounded-md border border-[#cfdfdd] bg-white p-3">
+                  <input type="hidden" name="returnTo" value={pathname} />
+                  <label htmlFor="admin-workspace-mobile" className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#668087]">Workspace activo</label>
+                  <select id="admin-workspace-mobile" name="workspaceId" defaultValue={activeWorkspaceId} className="h-11 rounded-md border border-[#bddbd9] bg-white px-3 text-sm font-semibold">
+                    {workspaceOptions.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
+                  </select>
+                  <button type="submit" className="h-11 rounded-md bg-[#006e70] px-4 text-sm font-bold text-white">Cambiar workspace</button>
+                </form>
+              ) : null}
               <p className="truncate text-sm font-semibold text-[#24454d]">{email}</p>
               <SignOutButton className="h-11 w-full border-[#b9d8d5] bg-white text-[#082d35] hover:bg-[#eaf7f5]" />
             </div>

@@ -4,12 +4,13 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { prisma } from "@/lib/prisma";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
-import { getSessionTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
-import { workspace } from "@/lib/workspace";
+import { getSessionTerraqoWorkspace } from "@/lib/terraqo/workspace-scope";
+import { terraqoModules } from "@/lib/workspace";
 
 export default async function AdminPage() {
   const session = await requireAdminPage(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"]);
-  const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
+  const activeWorkspace = await getSessionTerraqoWorkspace();
+  const terraqoWorkspaceId = activeWorkspace.id;
   if (["TECHNICIAN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"].includes(session.user.role || "")) {
     const profile = await prisma.staffProfile.findFirst({ where: { userId: session.user.id, terraqoWorkspaceId } });
     const [assignedChats, assignedTickets, assignedProjects] = profile
@@ -37,7 +38,7 @@ export default async function AdminPage() {
       <section>
         <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
           <div>
-            <p className="text-sm font-semibold uppercase text-primary">{workspace.currentPanel}</p>
+            <p className="text-sm font-semibold uppercase text-primary">Panel {activeWorkspace.name}</p>
             <h1 className="font-display text-3xl font-bold">Bandeja tecnica</h1>
             <p className="mt-2 text-muted-foreground">{profile ? `Operacion asignada a ${profile.displayName}` : "Tu usuario aun no tiene perfil vinculado."}</p>
           </div>
@@ -122,7 +123,8 @@ export default async function AdminPage() {
     pendingCommissions,
     activeProjects,
     rentableProducts,
-    openTickets
+    openTickets,
+    activeModules
   ] = await prisma.$transaction([
     prisma.product.count({ where: { isActive: true, terraqoWorkspaceId } }),
     prisma.order.count({ where: { status: "PENDING", terraqoWorkspaceId } }),
@@ -136,7 +138,8 @@ export default async function AdminPage() {
     prisma.commission.count({ where: { status: { in: ["PENDING", "APPROVED"] }, terraqoWorkspaceId } }),
     prisma.project.count({ where: { status: { in: ["PLANNING", "IN_PROGRESS"] }, terraqoWorkspaceId } }),
     prisma.product.count({ where: { isActive: true, terraqoWorkspaceId, commercialMode: { in: ["alquiler", "ambos"] } } }),
-    prisma.ticket.count({ where: { status: { in: ["OPEN", "REVIEWING", "IN_PROGRESS", "WAITING_CUSTOMER"] }, terraqoWorkspaceId } })
+    prisma.ticket.count({ where: { status: { in: ["OPEN", "REVIEWING", "IN_PROGRESS", "WAITING_CUSTOMER"] }, terraqoWorkspaceId } }),
+    prisma.terraqoWorkspaceModule.findMany({ where: { workspaceId: terraqoWorkspaceId, active: true }, select: { code: true } })
   ]);
   const conversionRate = wonQuotes + lostQuotes ? Math.round((wonQuotes / (wonQuotes + lostQuotes)) * 100) : 0;
 
@@ -144,9 +147,9 @@ export default async function AdminPage() {
     <section>
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <div>
-          <p className="text-sm font-semibold uppercase text-primary">{workspace.name}</p>
-          <h1 className="font-display text-3xl font-bold">{workspace.currentPanel}</h1>
-          <p className="mt-2 text-muted-foreground">{workspace.description}</p>
+          <p className="text-sm font-semibold uppercase text-primary">Terraqo Workspace</p>
+          <h1 className="font-display text-3xl font-bold">Panel {activeWorkspace.name}</h1>
+          <p className="mt-2 text-muted-foreground">Operacion comercial, proyectos, contenido, comunicaciones y equipo aislados para este workspace.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline"><Link href="/admin/cotizaciones">Cotizaciones</Link></Button>
@@ -205,14 +208,14 @@ export default async function AdminPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Lineas operativas de ICC Topografia</CardTitle>
-            <CardDescription>Base compartida para servicios, productos, alquiler, soporte y futura productizacion Terraqo.</CardDescription>
+            <CardTitle>Capacidades del workspace</CardTitle>
+            <CardDescription>Productos Terraqo habilitados para {activeWorkspace.name} segun su suscripcion.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
-            {["Servicios topograficos", "Venta de equipos", "Alquiler", "Soporte/calibracion"].map((line) => (
-              <div key={line} className="rounded-md border bg-muted/30 p-4">
-                <p className="text-sm font-semibold">{line}</p>
-                <p className="mt-2 text-xs text-muted-foreground">Reporte preparado para Fase 2.</p>
+            {activeModules.map(({ code }) => terraqoModules.find((module) => module.code === code)).filter((module): module is NonNullable<typeof module> => Boolean(module)).map((module) => (
+              <div key={module.code} className="rounded-md border bg-muted/30 p-4">
+                <p className="text-sm font-semibold">{module.label}</p>
+                <p className="mt-2 text-xs text-muted-foreground">{module.description}</p>
               </div>
             ))}
           </CardContent>

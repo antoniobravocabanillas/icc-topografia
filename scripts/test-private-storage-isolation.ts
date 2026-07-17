@@ -38,7 +38,7 @@ async function main() {
       if (reviewerFiles !== 1 || outsiderFiles !== 0) throw new Error("Los archivos compartidos cruzan el limite del workspace.");
       if (privateLeak !== 1) throw new Error("La precondicion del archivo privado no pudo verificarse.");
       throw new Error(rollbackMessage);
-    });
+    }, { timeout: 15_000 });
   } catch (error) {
     if (error instanceof Error && error.message === rollbackMessage) {
       console.log("OK: notas personales y archivos privados/compartidos respetan usuario y workspace.");
