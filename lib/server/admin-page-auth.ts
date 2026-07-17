@@ -6,8 +6,11 @@ import { hasWorkspaceAdminAccess } from "@/lib/terraqo/workspace-access";
 export async function requireAdminPage(allowedRoles: Role[]) {
   const session = await auth();
   const role = session?.user?.role as Role | undefined;
+  const callbackUrl = allowedRoles.length === 1 && allowedRoles[0] === "SUPER_ADMIN"
+    ? "/admin/terraqo"
+    : "/admin";
 
-  if (!session?.user) redirect("/cuenta?callbackUrl=/admin");
+  if (!session?.user) redirect(`/cuenta?callbackUrl=${callbackUrl}`);
   if (!role || !allowedRoles.includes(role)) redirect("/admin");
   if (!(await hasWorkspaceAdminAccess(session.user.id, role))) redirect("/cuenta?error=workspace-access");
 
