@@ -1,11 +1,90 @@
+import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-export function middleware() {
-  const response = NextResponse.next();
+const HOSTS = {
+  portal: "portal.terraqoglobal.com",
+  api: "api.terraqoglobal.com",
+  admin: "admin.terraqoglobal.com"
+} as const;
+
+function secure(response: NextResponse) {
   response.headers.set("X-Frame-Options", "DENY");
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   return response;
+}
+
+function requestHost(request: NextRequest) {
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const host = forwardedHost ?? request.headers.get("host") ?? request.nextUrl.hostname;
+  return host.split(",")[0]?.trim().split(":")[0]?.toLowerCase() ?? "";
+}
+
+function isSharedRoute(pathname: string) {
+  return [
+    "/api",
+    "/cuenta",
+    "/registro",
+    "/reuniones",
+    "/_next",
+    "/favicon.ico",
+    "/robots.txt",
+    "/sitemap.xml"
+  ].some((route) => pathname === route || pathname.startsWith(`${route}/`));
+}
+
+function redirect(request: NextRequest, pathname: string) {
+  const url = request.nextUrl.clone();
+  url.pathname = pathname;
+  return secure(NextResponse.redirect(url, 308));
+}
+
+function rewrite(request: NextRequest, pathname: string, surface: string) {
+  const url = request.nextUrl.clone();
+  url.pathname = pathname;
+  const response = NextResponse.rewrite(url);
+  response.headers.set("X-Terraqo-Surface", surface);
+  return secure(response);
+}
+
+export function middleware(request: NextRequest) {
+  const host = requestHost(request);
+  const { pathname } = request.nextUrl;
+
+  if (host === HOSTS.portal) {
+    if (pathname === "/portal" || pathname.startsWith("/portal/")) {
+      const cleanPath = pathname.slice("/portal".length) || "/";
+      return redirect(request, cleanPath);
+    }
+
+    if (!isSharedRoute(pathname)) {
+      const portalPath = pathname === "/" ? "/portal" : `/portal${pathname}`;
+      return rewrite(request, portalPath, "portal");
+    }
+  }
+
+  if (host === HOSTS.admin) {
+    if (pathname === "/") {
+      return rewrite(request, "/admin/terraqo", "admin");
+    }
+
+    const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
+    if (!isAdminRoute && !isSharedRoute(pathname)) {
+      return redirect(request, "/");
+    }
+  }
+
+  if (host === HOSTS.api) {
+    if (pathname === "/") {
+      return rewrite(request, "/api/health", "api");
+    }
+
+    if (!pathname.startsWith("/api/")) {
+      return rewrite(request, `/api${pathname}`, "api");
+    }
+  }
+
+  return secure(NextResponse.next());
 }
 
 export const config = {
