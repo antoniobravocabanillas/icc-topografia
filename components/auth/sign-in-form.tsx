@@ -31,10 +31,10 @@ export function SignInForm() {
 
       const session = await fetch("/api/auth/session").then((res) => res.json()).catch(() => null);
       const role = session?.user?.role;
-      const destination = !explicitCallbackUrl && role === "CUSTOMER"
-        ? "/portal"
-        : !explicitCallbackUrl && role === "SUPER_ADMIN"
-          ? "/admin/terraqo"
+      const destination = role === "SUPER_ADMIN"
+        ? "/admin/terraqo"
+        : !explicitCallbackUrl && role === "CUSTOMER"
+          ? "/portal"
           : callbackUrl;
       router.push(destination);
       router.refresh();
