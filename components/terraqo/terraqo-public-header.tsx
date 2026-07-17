@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowUpRight, LogIn, Menu, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import { terraqoDomains } from "@/lib/terraqo-domains";
 
 const navItems = [
   { label: "Plataforma", href: "/#plataforma" },
@@ -39,7 +40,7 @@ export function TerraqoPublicHeader() {
         </nav>
 
         <div className="tq-header-actions">
-          <Link href="/cuenta" className="tq-login-link"><LogIn aria-hidden="true" /> Entrar</Link>
+          <Link href={terraqoDomains.portal} className="tq-login-link"><LogIn aria-hidden="true" /> Entrar</Link>
           <Link href="/#demo" className="tq-header-cta">Solicitar acceso <ArrowUpRight aria-hidden="true" /></Link>
           <button type="button" className="tq-menu-button" aria-label={open ? "Cerrar menu" : "Abrir menu"} aria-expanded={open} onClick={() => setOpen((value) => !value)}>
             {open ? <X /> : <Menu />}
@@ -51,7 +52,7 @@ export function TerraqoPublicHeader() {
         <nav className="tq-mobile-nav" aria-label="Navegacion movil de Terraqo">
           <div className="tq-public-wrap">
             {navItems.map((item) => <Link key={item.href} href={item.href}>{item.label}<ArrowUpRight /></Link>)}
-            <Link href="/cuenta">Entrar a Terraqo <LogIn /></Link>
+            <Link href={terraqoDomains.portal}>Entrar a Terraqo <LogIn /></Link>
           </div>
         </nav>
       ) : null}

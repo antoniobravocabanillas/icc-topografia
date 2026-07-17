@@ -8,12 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { createMetadata } from "@/lib/seo";
+import { terraqoDomains } from "@/lib/terraqo-domains";
 
 export const metadata = createMetadata({ title: "Portal Terraqo", description: "Acceso a clientes, profesionales y equipo operativo de Terraqo.", path: "/cuenta" });
 
 export default async function AccountPage() {
   const session = await auth();
-  const portalHref = session?.user?.role === "CUSTOMER" ? "/portal" : "/admin";
+  const portalHref = session?.user?.role === "CUSTOMER" ? terraqoDomains.portal : terraqoDomains.admin;
   const portalLabel = session?.user?.role === "CUSTOMER" ? "Ir al Portal Terraqo" : "Ir al panel operativo";
 
   return (

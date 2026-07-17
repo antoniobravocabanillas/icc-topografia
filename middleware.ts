@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 const HOSTS = {
+  public: "terraqoglobal.com",
   portal: "portal.terraqoglobal.com",
   api: "api.terraqoglobal.com",
   admin: "admin.terraqoglobal.com"
@@ -39,6 +40,15 @@ function redirect(request: NextRequest, pathname: string) {
   return secure(NextResponse.redirect(url, 308));
 }
 
+function redirectToHost(request: NextRequest, host: string, pathname: string) {
+  const url = request.nextUrl.clone();
+  url.protocol = "https:";
+  url.hostname = host;
+  url.port = "";
+  url.pathname = pathname;
+  return secure(NextResponse.redirect(url, 308));
+}
+
 function rewrite(request: NextRequest, pathname: string, surface: string) {
   const url = request.nextUrl.clone();
   url.pathname = pathname;
@@ -50,6 +60,21 @@ function rewrite(request: NextRequest, pathname: string, surface: string) {
 export function middleware(request: NextRequest) {
   const host = requestHost(request);
   const { pathname } = request.nextUrl;
+
+  if (host === HOSTS.public) {
+    if (pathname === "/portal" || pathname.startsWith("/portal/")) {
+      const cleanPath = pathname.slice("/portal".length) || "/";
+      return redirectToHost(request, HOSTS.portal, cleanPath);
+    }
+
+    if (pathname === "/cuenta" || pathname.startsWith("/cuenta/") || pathname === "/registro" || pathname.startsWith("/registro/")) {
+      return redirectToHost(request, HOSTS.portal, pathname);
+    }
+
+    if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+      return redirectToHost(request, HOSTS.admin, pathname);
+    }
+  }
 
   if (host === HOSTS.portal) {
     if (pathname === "/portal" || pathname.startsWith("/portal/")) {

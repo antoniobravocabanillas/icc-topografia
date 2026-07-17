@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
+import { terraqoDomains } from "@/lib/terraqo-domains";
 
 export function TerraqoPublicFooter() {
   return (
@@ -8,7 +9,7 @@ export function TerraqoPublicFooter() {
         <div className="tq-footer-statement">
           <p className="tq-kicker tq-kicker-light">Terraqo</p>
           <h2>El espacio donde el trabajo real encuentra oportunidades reales.</h2>
-          <Link href="/registro" className="tq-button tq-button-light">Crear una cuenta <ArrowUpRight /></Link>
+          <Link href={`${terraqoDomains.portal}/registro`} className="tq-button tq-button-light">Crear una cuenta <ArrowUpRight /></Link>
         </div>
         <div className="tq-footer-bottom">
           <div>
@@ -21,7 +22,7 @@ export function TerraqoPublicFooter() {
           <div className="tq-footer-links">
             <Link href="/#plataforma">Plataforma</Link>
             <Link href="/#red">Red profesional</Link>
-            <Link href="/cuenta">Ingresar</Link>
+            <Link href={terraqoDomains.portal}>Ingresar</Link>
             <Link href="/privacidad">Privacidad</Link>
             <Link href="/terminos">Terminos</Link>
           </div>
