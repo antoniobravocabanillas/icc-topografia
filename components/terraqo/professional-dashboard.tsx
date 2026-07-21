@@ -20,8 +20,6 @@ import { ProfessionalDocumentUploader } from "@/components/portal/professional-d
 import { WorklogCard } from "@/components/terraqo/worklog-card";
 import { FieldVerificationPanel } from "@/components/terraqo/field-verification-panel";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { updateProfessionalUsernameAction } from "@/lib/server/professional-actions";
 import { terraqoDomains } from "@/lib/terraqo-domains";
 import { worklogInclude } from "@/lib/terraqo/worklog";
 
@@ -42,6 +40,14 @@ const statusCopy = {
   OPEN_TO_PROJECTS: "Abierto a proyectos",
   NOT_AVAILABLE: "No disponible"
 } as const;
+
+const applicationStatusCopy: Record<string, string> = {
+  SUBMITTED: "Recibida",
+  REVIEWING: "En revision",
+  SHORTLISTED: "Preseleccionada",
+  ACCEPTED: "Aceptada",
+  REJECTED: "No seleccionada"
+};
 
 function completion(profile: ProfessionalDashboardProfile) {
   const values = [
@@ -134,7 +140,7 @@ export function ProfessionalDashboard({ profile, workspaceId }: { profile: Profe
                 <section id="actividad" className="scroll-mt-28 rounded-lg border bg-white p-6 shadow-[0_14px_36px_rgba(1,45,56,0.05)]">
                   <h2 className="font-display text-xl font-bold">Actividad reciente</h2>
                   <div className="mt-3">
-                    {profile.applications.slice(0, 2).map((application) => <ActivityRow key={application.id} icon={BriefcaseBusiness} title={application.jobPost?.title || "Postulacion enviada"} detail={`${application.workspace.name} | ${application.status.toLowerCase()}`} />)}
+                    {profile.applications.slice(0, 2).map((application) => <ActivityRow key={application.id} icon={BriefcaseBusiness} title={application.jobPost?.title || "Postulacion enviada"} detail={`${application.workspace.name} | ${applicationStatusCopy[application.status] ?? "Por revisar"}`} />)}
                     {profile.worklogs.slice(0, 2).map((worklog) => <ActivityRow key={worklog.id} icon={NotebookPen} title={worklog.title} detail="Evidencia agregada al CV vivo" />)}
                     {!profile.applications.length && !profile.worklogs.length ? <p className="py-8 text-center text-sm text-muted-foreground">Tu actividad aparecera aqui.</p> : null}
                   </div>
@@ -143,7 +149,7 @@ export function ProfessionalDashboard({ profile, workspaceId }: { profile: Profe
 
               {profile.worklogs.length ? <section><div className="mb-4 flex items-end justify-between"><div><p className="font-mono text-xs font-bold uppercase tracking-[0.16em] text-primary">CV vivo</p><h2 className="mt-1 font-display text-2xl font-bold">Trabajo documentado</h2></div><Link href="/portal/bitacora" className="text-sm font-semibold text-primary">Ver bitacora</Link></div><div className="grid gap-5 lg:grid-cols-2">{profile.worklogs.map((worklog) => <WorklogCard key={worklog.id} worklog={worklog} viewerId={profile.userId} />)}</div></section> : null}
 
-              <section id="postulaciones" className="rounded-lg border bg-white p-6"><h2 className="font-display text-xl font-bold">Postulaciones</h2><div className="mt-4 grid gap-3">{profile.applications.map((application) => <div key={application.id} className="flex flex-col justify-between gap-3 rounded-md border p-4 sm:flex-row sm:items-center"><div><p className="font-semibold">{application.jobPost?.title || "Bolsa de talento general"}</p><p className="text-sm text-muted-foreground">{application.workspace.name}</p></div><span className="w-fit rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">{application.status}</span></div>)}{!profile.applications.length ? <p className="text-sm text-muted-foreground">Aun no tienes postulaciones.</p> : null}</div></section>
+              <section id="postulaciones" className="rounded-lg border bg-white p-6"><h2 className="font-display text-xl font-bold">Postulaciones</h2><div className="mt-4 grid gap-3">{profile.applications.map((application) => <div key={application.id} className="flex flex-col justify-between gap-3 rounded-md border p-4 sm:flex-row sm:items-center"><div><p className="font-semibold">{application.jobPost?.title || "Bolsa de talento general"}</p><p className="text-sm text-muted-foreground">{application.workspace.name}</p></div><span className="w-fit rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">{applicationStatusCopy[application.status] ?? "Por revisar"}</span></div>)}{!profile.applications.length ? <p className="text-sm text-muted-foreground">Aun no tienes postulaciones.</p> : null}</div></section>
             </div>
 
             <aside className="space-y-6">
@@ -153,16 +159,15 @@ export function ProfessionalDashboard({ profile, workspaceId }: { profile: Profe
 
               <section className="rounded-lg border bg-white p-6"><h2 className="font-display text-lg font-bold">Atajos rapidos</h2><div className="mt-4 divide-y">{[["/portal/oportunidades", "Explorar oportunidades"], ["#postulaciones", "Mis postulaciones"], ["/portal/bitacora", "Actualizar CV vivo"], ["#documentos", "Ver validaciones"]].map(([href, label]) => <Link key={label} href={href} className="flex items-center justify-between py-3 text-sm font-semibold text-[#304752] hover:text-primary">{label}<ChevronRight className="h-4 w-4" /></Link>)}</div></section>
 
-              <section id="configuracion" className="rounded-lg border bg-white p-6">
-                <p className="font-mono text-xs font-bold uppercase tracking-[0.16em] text-primary">Configuracion publica</p>
-                <h2 className="mt-2 font-display text-lg font-bold">Enlace del CV vivo</h2>
+              <section className="rounded-lg border bg-white p-6">
+                <p className="font-mono text-xs font-bold uppercase tracking-[0.16em] text-primary">Configuracion</p>
+                <h2 className="mt-2 font-display text-lg font-bold">Perfil, mensajes y pagos</h2>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  Crea un usuario para compartir tu perfil publico. Solo se muestra informacion profesional marcada como publica.
+                  Administra tu usuario publico, permisos de mensajes, red de contactos y datos privados de cobro.
                 </p>
-                <form action={updateProfessionalUsernameAction} className="mt-4 grid gap-3">
-                  <Input name="username" defaultValue={profile.username || ""} placeholder="ej. francisco-villa" />
-                  <Button type="submit" variant="outline">Guardar enlace</Button>
-                </form>
+                <Button asChild variant="outline" className="mt-4 w-full justify-between">
+                  <Link href="/portal/configuracion">Abrir configuracion <ChevronRight className="h-4 w-4" /></Link>
+                </Button>
                 {publicCvHref ? (
                   <Link href={publicCvHref} target="_blank" className="mt-4 flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/10">
                     {publicCvHref.replace(/^https?:\/\//, "")}

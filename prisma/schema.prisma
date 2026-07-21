@@ -318,6 +318,13 @@ enum TerraqoVisibility {
   PRIVATE
 }
 
+enum TerraqoMessagePrivacy {
+  EVERYONE
+  WORKSPACE
+  FRIENDS
+  NOBODY
+}
+
 enum TerraqoWorklogType {
   FIELD_UPDATE
   DELIVERABLE
@@ -1961,6 +1968,15 @@ model TerraqoProfessionalProfile {
   cvUrl                      String?
   liveCvEnabled              Boolean                           @default(false)
   liveCvVisibility           TerraqoVisibility                 @default(PRIVATE)
+  messagePrivacy             TerraqoMessagePrivacy             @default(WORKSPACE)
+  friendDiscoveryEnabled     Boolean                           @default(true)
+  bankAccountHolder          String?
+  bankName                   String?
+  bankAccountNumber          String?
+  bankCci                    String?
+  yapePhone                  String?
+  plinPhone                  String?
+  paymentNotes               String?
   termsAcceptedAt            DateTime?
   termsVersion               String?
   privacyAcceptedAt          DateTime?

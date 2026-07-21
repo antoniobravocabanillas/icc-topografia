@@ -8,11 +8,12 @@ type CommerceShellProps = {
   header: ReactNode;
   footer: ReactNode;
   chat?: ReactNode;
+  forceBare?: boolean;
 };
 
-export function CommerceShell({ children, header, footer, chat }: CommerceShellProps) {
+export function CommerceShell({ children, header, footer, chat, forceBare = false }: CommerceShellProps) {
   const pathname = usePathname();
-  const isPortal = pathname.startsWith("/portal");
+  const isPortal = forceBare || pathname.startsWith("/portal");
 
   if (isPortal) return <>{children}</>;
 

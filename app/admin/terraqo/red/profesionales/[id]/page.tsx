@@ -9,6 +9,7 @@ import { ProfessionalDocumentPreview } from "@/components/terraqo/professional-d
 import { UserAvatar } from "@/components/terraqo/user-avatar";
 import { prisma } from "@/lib/prisma";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
+import { attendanceStatusLabels, attendanceTypeLabels, evidenceStatusLabels, identityStatusLabels, professionalStatusLabels } from "@/lib/terraqo/labels";
 import { getSessionTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 
 type AdminProfessionalPageProps = {
@@ -58,7 +59,7 @@ export default async function AdminProfessionalPage({ params }: AdminProfessiona
             <div>
               <div className="flex flex-wrap items-center gap-3">
                 <h1 className="font-display text-4xl font-bold">{name}</h1>
-                <Badge className="bg-white/12 text-white hover:bg-white/12">{profile.status.replaceAll("_", " ")}</Badge>
+                <Badge className="bg-white/12 text-white hover:bg-white/12">{professionalStatusLabels[profile.status] ?? "Por revisar"}</Badge>
               </div>
               <p className="mt-2 text-lg font-semibold text-[#73e9df]">{profile.headline || profile.specialties[0] || "Perfil profesional"}</p>
               <p className="mt-2 text-white/70">{profile.city || "Ciudad por confirmar"} | {profile.yearsExperience ?? 0} anos de experiencia</p>
@@ -67,7 +68,7 @@ export default async function AdminProfessionalPage({ params }: AdminProfessiona
           </div>
           <div className="rounded-lg border border-white/15 bg-white/8 p-5">
             <p className="font-mono text-xs uppercase tracking-[0.16em] text-[#73e9df]">Expediente</p>
-            <p className="mt-3 font-display text-3xl font-bold">{profile.identityVerificationStatus.replaceAll("_", " ")}</p>
+            <p className="mt-3 font-display text-3xl font-bold">{identityStatusLabels[profile.identityVerificationStatus] ?? "Por revisar"}</p>
             <p className="mt-2 text-sm text-white/68">CV vivo: {profile.liveCvEnabled ? "activo" : "pendiente"}</p>
           </div>
         </CardContent>
@@ -114,7 +115,7 @@ export default async function AdminProfessionalPage({ params }: AdminProfessiona
                   <p className="font-mono text-xs uppercase tracking-[0.14em] text-primary">{new Intl.DateTimeFormat("es-PE", { dateStyle: "medium", timeStyle: "short" }).format(worklog.occurredAt)}</p>
                   <h2 className="mt-2 font-semibold">{worklog.title}</h2>
                   <p className="mt-1 text-sm text-muted-foreground">{worklog.summary}</p>
-                  <p className="mt-2 text-xs text-muted-foreground">{worklog.project?.title || "Sin proyecto"} | {worklog.evidenceStatus}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">{worklog.project?.title || "Sin proyecto"} | {evidenceStatusLabels[worklog.evidenceStatus] ?? "Por revisar"}</p>
                 </article>
               ))}
               {!profile.worklogs.length ? <p className="text-sm text-muted-foreground">Aun no hay bitacoras en este workspace.</p> : null}
@@ -132,8 +133,8 @@ export default async function AdminProfessionalPage({ params }: AdminProfessiona
               {profile.attendanceEvents.map((event) => (
                 <div key={event.id} className="rounded-md border p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <Badge variant={event.status === "ACCEPTED" ? "default" : "outline"}>{event.type.replace("_", " ")}</Badge>
-                    <span className="text-xs text-muted-foreground">{event.status}</span>
+                    <Badge variant={event.status === "ACCEPTED" ? "default" : "outline"}>{attendanceTypeLabels[event.type] ?? "Registro"}</Badge>
+                    <span className="text-xs text-muted-foreground">{attendanceStatusLabels[event.status] ?? "Por revisar"}</span>
                   </div>
                   <p className="mt-2 font-semibold">{event.project?.title || "Sin proyecto asignado"}</p>
                   <p className="mt-1 text-sm text-muted-foreground">{new Intl.DateTimeFormat("es-PE", { dateStyle: "medium", timeStyle: "short" }).format(event.capturedAt)}</p>
@@ -151,7 +152,7 @@ export default async function AdminProfessionalPage({ params }: AdminProfessiona
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
               {profile.documents.map((document) => (
-                <ProfessionalDocumentPreview key={document.id} href={`/api/terraqo/professional-documents/${document.id}`} title={document.type.replaceAll("_", " ")} fileName={document.fileName} contentType={document.contentType} />
+                <ProfessionalDocumentPreview key={document.id} href={`/api/terraqo/professional-documents/${document.id}`} title={document.fileName} fileName={document.fileName} contentType={document.contentType} />
               ))}
               {!profile.documents.length ? <p className="text-sm text-muted-foreground">No hay documentos cargados para este workspace.</p> : null}
             </CardContent>

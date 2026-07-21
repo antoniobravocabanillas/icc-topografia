@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Prisma } from "@prisma/client";
 import { CheckCircle2, ExternalLink } from "lucide-react";
 import { FormSubmitButton } from "@/components/admin/form-submit-button";
+import { ProjectCoordinateFields } from "@/components/admin/project-coordinate-fields";
 import { ProjectImageUploader } from "@/components/admin/project-image-uploader";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { Button } from "@/components/ui/button";
@@ -216,15 +217,7 @@ function ProjectForm({
       <Input name="slug" placeholder="slug-url" defaultValue={defaults?.slug} />
       <Input name="clientName" placeholder="Cliente" defaultValue={defaults?.clientName} />
       <Input name="location" placeholder="Ubicacion" defaultValue={defaults?.location} />
-      <div className="grid gap-3 rounded-md border bg-muted/20 p-4 md:col-span-2 md:grid-cols-3">
-        <div className="md:col-span-3">
-          <p className="font-semibold">Ubicacion para control de asistencia</p>
-          <p className="mt-1 text-sm text-muted-foreground">Coordenadas del puesto laboral. Solo las personas asignadas a este proyecto podran registrar entrada y salida dentro del radio indicado.</p>
-        </div>
-        <Input name="latitude" type="number" step="any" min="-90" max="90" placeholder="Latitud, ej. -12.0464" defaultValue={defaults?.latitude} />
-        <Input name="longitude" type="number" step="any" min="-180" max="180" placeholder="Longitud, ej. -77.0428" defaultValue={defaults?.longitude} />
-        <Input name="geofenceRadiusMeters" type="number" min="25" max="5000" step="1" placeholder="Radio en metros" defaultValue={defaults?.geofenceRadiusMeters || "250"} />
-      </div>
+      <ProjectCoordinateFields latitude={defaults?.latitude} longitude={defaults?.longitude} radius={defaults?.geofenceRadiusMeters} />
       <Input name="category" placeholder="Rubro: habilitacion urbana, edificacion, vial, saneamiento..." defaultValue={defaults?.category} />
       <select name="status" defaultValue={defaults?.status || "PLANNING"} className="h-11 rounded-md border bg-background px-3 text-sm">
         {projectStatusOptions.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}

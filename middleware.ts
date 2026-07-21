@@ -8,8 +8,13 @@ const HOSTS = {
   admin: "admin.terraqoglobal.com"
 } as const;
 
-function secure(response: NextResponse) {
-  response.headers.set("X-Frame-Options", "DENY");
+function secure(response: NextResponse, request?: NextRequest) {
+  const pathname = request?.nextUrl.pathname ?? "";
+  const allowsSameOriginPreview =
+    pathname.startsWith("/api/terraqo/professional-documents/") ||
+    pathname.startsWith("/api/public/workspaces/");
+
+  response.headers.set("X-Frame-Options", allowsSameOriginPreview ? "SAMEORIGIN" : "DENY");
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   return response;
@@ -37,7 +42,7 @@ function isSharedRoute(pathname: string) {
 function redirect(request: NextRequest, pathname: string) {
   const url = request.nextUrl.clone();
   url.pathname = pathname;
-  return secure(NextResponse.redirect(url, 308));
+  return secure(NextResponse.redirect(url, 308), request);
 }
 
 function redirectToHost(request: NextRequest, host: string, pathname: string) {
@@ -46,15 +51,17 @@ function redirectToHost(request: NextRequest, host: string, pathname: string) {
   url.hostname = host;
   url.port = "";
   url.pathname = pathname;
-  return secure(NextResponse.redirect(url, 308));
+  return secure(NextResponse.redirect(url, 308), request);
 }
 
 function rewrite(request: NextRequest, pathname: string, surface: string) {
   const url = request.nextUrl.clone();
   url.pathname = pathname;
-  const response = NextResponse.rewrite(url);
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-terraqo-surface", surface);
+  const response = NextResponse.rewrite(url, { request: { headers: requestHeaders } });
   response.headers.set("X-Terraqo-Surface", surface);
-  return secure(response);
+  return secure(response, request);
 }
 
 export function middleware(request: NextRequest) {
@@ -109,7 +116,7 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  return secure(NextResponse.next());
+  return secure(NextResponse.next(), request);
 }
 
 export const config = {

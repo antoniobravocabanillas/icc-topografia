@@ -47,8 +47,20 @@ export function ProfessionalDocumentPreview({ href, title, fileName, contentType
               </button>
             </div>
             <div className="min-h-0 flex-1 bg-slate-100 p-3">
-              {canPreview ? (
-                <iframe title={fileName} src={`${href}?inline=1`} className="h-full w-full rounded-md bg-white" />
+              {contentType.startsWith("image/") ? (
+                <img src={`${href}?inline=1`} alt={fileName} className="h-full w-full rounded-md bg-white object-contain" />
+              ) : contentType === "application/pdf" ? (
+                <object data={`${href}?inline=1`} type="application/pdf" className="h-full w-full rounded-md bg-white">
+                  <div className="grid h-full place-items-center p-8 text-center text-slate-800">
+                    <div>
+                      <FileText className="mx-auto h-12 w-12 text-primary" />
+                      <p className="mt-4 font-semibold">Tu navegador no pudo mostrar el PDF dentro del panel.</p>
+                      <a href={href} className="mt-4 inline-flex h-10 items-center rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground">Descargar archivo protegido</a>
+                    </div>
+                  </div>
+                </object>
+              ) : canPreview ? (
+                <object data={`${href}?inline=1`} className="h-full w-full rounded-md bg-white" />
               ) : (
                 <div className="grid h-full place-items-center p-8 text-center text-slate-800">
                   <div>

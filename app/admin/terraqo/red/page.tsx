@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ProfessionalDocumentPreview } from "@/components/terraqo/professional-document-preview";
+import { LinkProfessionalProjectForm } from "@/components/admin/terraqo/link-professional-project-form";
 import { UserAvatar } from "@/components/terraqo/user-avatar";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/server/api";
@@ -36,6 +37,46 @@ const documentTypeLabels: Record<string, string> = {
   MEDICAL_EXAM: "Examen medico",
   BANK_CERTIFICATE: "Constancia bancaria",
   OTHER: "Otro documento",
+};
+
+const attendanceTypeLabels: Record<string, string> = {
+  CHECK_IN: "Entrada",
+  CHECK_OUT: "Salida"
+};
+
+const attendanceStatusLabels: Record<string, string> = {
+  ACCEPTED: "Aceptada",
+  OUTSIDE_GEOFENCE: "Fuera del area del proyecto",
+  LOCATION_UNAVAILABLE: "Ubicacion no disponible",
+  REJECTED: "Rechazada"
+};
+
+const profileStatusLabels: Record<string, string> = {
+  AVAILABLE: "Disponible",
+  WORKING: "Trabajando",
+  OPEN_TO_PROJECTS: "Disponible para proyectos",
+  NOT_AVAILABLE: "No disponible"
+};
+
+const identityStatusLabels: Record<string, string> = {
+  PENDING_DOCUMENTS: "Documentos pendientes",
+  UNDER_REVIEW: "En revision",
+  VERIFIED: "Verificada",
+  REJECTED: "Rechazada"
+};
+
+const evidenceStatusLabels: Record<string, string> = {
+  DECLARED: "Declarada",
+  LINKED: "Vinculada",
+  CONFIRMED: "Confirmada por workspace",
+  VERIFIED: "Verificada por Terraqo"
+};
+
+const jobStatusLabels: Record<string, string> = {
+  OPEN: "Abierta",
+  PAUSED: "Pausada",
+  CLOSED: "Cerrada",
+  FILLED: "Cubierta"
 };
 
 async function createJobPostAction(formData: FormData) {
@@ -163,11 +204,12 @@ async function linkProfessionalProjectAction(formData: FormData) {
   await requireWorkspaceModule("LIVE_CV", workspaceId);
 
   const professionalProfileId = textValue(formData, "professionalProfileId");
-  const projectId = textValue(formData, "projectId");
+  const selectedProjectIds = formData.getAll("projectIds").filter((value): value is string => typeof value === "string" && Boolean(value));
+  const linkAllProjects = formData.get("allProjects") === "on";
   const title = textValue(formData, "title");
-  if (!professionalProfileId || !projectId || !title) return;
+  if (!professionalProfileId || !title) return;
 
-  const [profile, project] = await Promise.all([
+  const [profile, projects] = await Promise.all([
     prisma.terraqoProfessionalProfile.findFirst({
       where: {
         id: professionalProfileId,
@@ -175,27 +217,33 @@ async function linkProfessionalProjectAction(formData: FormData) {
       },
       select: { id: true }
     }),
-    prisma.project.findFirst({
-      where: { id: projectId, terraqoWorkspaceId: workspaceId, deletedAt: null },
+    prisma.project.findMany({
+      where: {
+        terraqoWorkspaceId: workspaceId,
+        deletedAt: null,
+        ...(linkAllProjects ? {} : { id: { in: selectedProjectIds } })
+      },
       select: { id: true, title: true, clientName: true, location: true }
     })
   ]);
-  if (!profile || !project) return;
+  if (!profile || !projects.length) return;
 
   await prisma.$transaction([
-    prisma.terraqoProfessionalExperience.create({
-      data: {
-        professionalProfileId: profile.id,
-        projectId: project.id,
-        title,
-        companyName: textValue(formData, "companyName") || project.clientName,
-        role: textValue(formData, "role"),
-        location: textValue(formData, "location") || project.location,
-        verifiedByTerraqo: true,
-        verificationNote: `Experiencia vinculada al proyecto ${project.title} por el workspace.`,
-        visibility: "WORKSPACE"
-      }
-    }),
+    ...projects.map((project) =>
+      prisma.terraqoProfessionalExperience.create({
+        data: {
+          professionalProfileId: profile.id,
+          projectId: project.id,
+          title,
+          companyName: linkAllProjects ? project.clientName : textValue(formData, "companyName") || project.clientName,
+          role: textValue(formData, "role"),
+          location: linkAllProjects ? project.location : textValue(formData, "location") || project.location,
+          verifiedByTerraqo: true,
+          verificationNote: `Experiencia vinculada al proyecto ${project.title} por el workspace.`,
+          visibility: "WORKSPACE"
+        }
+      })
+    ),
     prisma.terraqoProfessionalProfile.update({
       where: { id: profile.id },
       data: { liveCvEnabled: true }
@@ -203,6 +251,7 @@ async function linkProfessionalProjectAction(formData: FormData) {
   ]);
 
   revalidatePath("/admin/terraqo/red");
+  redirect("/admin/terraqo/red?status=experiencia-vinculada");
 }
 
 async function reviewWorklogAction(formData: FormData) {
@@ -277,7 +326,7 @@ export default async function TerraqoNetworkPage({ searchParams }: TerraqoNetwor
     prisma.project.findMany({
       where: { terraqoWorkspaceId: workspaceId, deletedAt: null },
       orderBy: { updatedAt: "desc" },
-      select: { id: true, title: true, location: true },
+      select: { id: true, title: true, clientName: true, location: true },
       take: 80
     }),
     prisma.terraqoProjectApplication.findMany({
@@ -375,7 +424,9 @@ export default async function TerraqoNetworkPage({ searchParams }: TerraqoNetwor
                   </div>
                 </div>
                 <div>
-                  <Badge variant={event.status === "ACCEPTED" ? "default" : "outline"}>{event.type.replace("_", " ")} - {event.status}</Badge>
+                  <Badge variant={event.status === "ACCEPTED" ? "default" : "outline"}>
+                    {attendanceTypeLabels[event.type] ?? event.type} - {attendanceStatusLabels[event.status] ?? "Por revisar"}
+                  </Badge>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {event.distanceMeters !== null ? `${Math.round(Number(event.distanceMeters))} m del punto` : "Sin distancia calculada"}
                   </p>
@@ -396,23 +447,11 @@ export default async function TerraqoNetworkPage({ searchParams }: TerraqoNetwor
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={linkProfessionalProjectAction} className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
-            <select name="professionalProfileId" className="h-11 rounded-md border bg-background px-3 text-sm" required>
-              <option value="">Seleccionar profesional</option>
-              {profiles.map((profile) => (
-                <option key={profile.id} value={profile.id}>{profile.user.name || profile.user.email}</option>
-              ))}
-            </select>
-            <select name="projectId" className="h-11 rounded-md border bg-background px-3 text-sm" required>
-              <option value="">Seleccionar proyecto</option>
-              {projects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}
-            </select>
-            <Input name="title" placeholder="Experiencia que aparecera en el CV" required />
-            <Input name="role" placeholder="Rol desempenado" />
-            <Input name="companyName" placeholder="Empresa o cliente" />
-            <Input name="location" placeholder="Ubicacion" />
-            <Button type="submit" className="lg:col-span-2 xl:col-span-3">Validar y vincular al CV vivo</Button>
-          </form>
+          <LinkProfessionalProjectForm
+            action={linkProfessionalProjectAction}
+            profiles={profiles.map((profile) => ({ id: profile.id, label: profile.user.name || profile.user.email || "Profesional" }))}
+            projects={projects}
+          />
         </CardContent>
       </Card>
 
@@ -468,7 +507,7 @@ export default async function TerraqoNetworkPage({ searchParams }: TerraqoNetwor
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Badge>{job.status}</Badge>
+                    <Badge>{jobStatusLabels[job.status] ?? job.status}</Badge>
                     <Badge variant="outline">{job._count.applications} postulaciones</Badge>
                   </div>
                 </div>
@@ -492,7 +531,7 @@ export default async function TerraqoNetworkPage({ searchParams }: TerraqoNetwor
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="font-semibold">{worklog.title}</p>
-                  <Badge variant="outline">{worklog.evidenceStatus}</Badge>
+                  <Badge variant="outline">{evidenceStatusLabels[worklog.evidenceStatus] ?? worklog.evidenceStatus}</Badge>
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">{worklog.summary}</p>
                 <p className="mt-2 text-xs text-muted-foreground">
@@ -590,13 +629,13 @@ export default async function TerraqoNetworkPage({ searchParams }: TerraqoNetwor
                         <Link href={`/admin/terraqo/red/profesionales/${profile.id}`}>Ver perfil completo</Link>
                       </Button>
                     </td>
-                    <td className="p-3"><Badge variant="outline">{profile.status}</Badge></td>
+                    <td className="p-3"><Badge variant="outline">{profileStatusLabels[profile.status] ?? profile.status}</Badge></td>
                     <td className="p-3">{profile.specialties.slice(0, 3).join(", ") || "Sin especialidad"}</td>
                     <td className="p-3">{[...profile.equipment, ...profile.software].slice(0, 4).join(", ") || "Por completar"}</td>
                     <td className="p-3">
                       <div className="space-y-2">
                         <Badge variant={profile.identityVerificationStatus === "VERIFIED" ? "default" : "outline"}>
-                          {profile.identityVerificationStatus.replaceAll("_", " ")}
+                          {identityStatusLabels[profile.identityVerificationStatus] ?? profile.identityVerificationStatus}
                         </Badge>
                         <div className="flex flex-wrap gap-2">
                           {profile.documents.filter((document) => ["DNI_FRONT", "DNI_BACK"].includes(document.type)).slice(0, 2).map((document) => (

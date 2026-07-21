@@ -56,7 +56,7 @@ const professionalItems: PortalNavItem[] = [
   { href: "/portal/bitacora", label: "Bitacora", icon: NotebookPen },
   { href: "/portal/commons", label: "Commons", icon: UsersRound },
   { href: "/portal/equipos", label: "Equipos", icon: Building2 },
-  { href: "/portal#perfil", label: "Configuracion", icon: Settings }
+  { href: "/portal/configuracion", label: "Configuracion", icon: Settings }
 ];
 
 const clientItems: PortalNavItem[] = [

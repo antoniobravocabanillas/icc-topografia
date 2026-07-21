@@ -1,5 +1,6 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import type { TerraqoMessagePrivacy } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -49,4 +50,64 @@ export async function updateProfessionalUsernameAction(formData: FormData) {
   revalidatePath("/portal");
   revalidatePath(`/cv/${username}`);
   redirect("/portal?success=username");
+}
+
+function cleanText(formData: FormData, key: string, max = 180) {
+  const value = formData.get(key);
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed.slice(0, max) : null;
+}
+
+export async function updateProfessionalSettingsAction(formData: FormData) {
+  "use server";
+
+  const session = await auth();
+  if (!session?.user?.id) redirect("/cuenta");
+
+  const profile = await prisma.terraqoProfessionalProfile.findUnique({
+    where: { userId: session.user.id },
+    select: { id: true, username: true }
+  });
+  if (!profile) redirect("/portal?status=profile-required");
+
+  const allowedPrivacy = new Set<TerraqoMessagePrivacy>(["EVERYONE", "WORKSPACE", "FRIENDS", "NOBODY"]);
+  const rawPrivacy = String(formData.get("messagePrivacy") || "WORKSPACE") as TerraqoMessagePrivacy;
+  const messagePrivacy = allowedPrivacy.has(rawPrivacy) ? rawPrivacy : "WORKSPACE";
+
+  const rawUsername = String(formData.get("username") || "").trim().toLowerCase().replace(/^@+/, "");
+  let username: string | null | undefined = profile.username;
+  if (rawUsername) {
+    if (!USERNAME_PATTERN.test(rawUsername) || RESERVED_USERNAMES.has(rawUsername)) {
+      redirect("/portal/configuracion?status=username-invalid");
+    }
+    const taken = await prisma.terraqoProfessionalProfile.findFirst({
+      where: { username: rawUsername, NOT: { id: profile.id } },
+      select: { id: true }
+    });
+    if (taken) redirect("/portal/configuracion?status=username-taken");
+    username = rawUsername;
+  }
+
+  await prisma.terraqoProfessionalProfile.update({
+    where: { id: profile.id },
+    data: {
+      username,
+      liveCvEnabled: Boolean(username),
+      messagePrivacy,
+      friendDiscoveryEnabled: formData.get("friendDiscoveryEnabled") === "on",
+      bankAccountHolder: cleanText(formData, "bankAccountHolder", 120),
+      bankName: cleanText(formData, "bankName", 80),
+      bankAccountNumber: cleanText(formData, "bankAccountNumber", 80),
+      bankCci: cleanText(formData, "bankCci", 80),
+      yapePhone: cleanText(formData, "yapePhone", 40),
+      plinPhone: cleanText(formData, "plinPhone", 40),
+      paymentNotes: cleanText(formData, "paymentNotes", 320)
+    }
+  });
+
+  revalidatePath("/portal");
+  revalidatePath("/portal/configuracion");
+  if (username) revalidatePath(`/cv/${username}`);
+  redirect("/portal/configuracion?success=settings");
 }

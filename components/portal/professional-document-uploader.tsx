@@ -92,7 +92,6 @@ export function ProfessionalDocumentUploader({ identityStatus, identityNote, doc
     OTHER: "Otro documento",
   };
   const privateDocuments = documents.filter((document) => !["CV", "DNI_FRONT", "DNI_BACK"].includes(document.type));
-  const canPreview = (document: ProfessionalDocument) => document.contentType === "application/pdf" || document.contentType.startsWith("image/");
 
   return (
     <div id="documentos-datos" className="grid scroll-mt-24 gap-6 xl:grid-cols-2">
@@ -219,7 +218,29 @@ export function ProfessionalDocumentUploader({ identityStatus, identityNote, doc
           <div className="flex h-[min(860px,92vh)] w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl">
             <div className="flex items-center justify-between gap-4 border-b px-5 py-4"><div className="min-w-0"><p className="text-xs font-bold uppercase text-primary">{labels[preview.type]}</p><p className="truncate font-semibold">{preview.fileName}</p></div><button type="button" onClick={() => setPreview(null)} className="grid h-10 w-10 shrink-0 place-items-center rounded-md border" aria-label="Cerrar vista previa"><X className="h-5 w-5" /></button></div>
             <div className="min-h-0 flex-1 bg-slate-100 p-3">
-              {canPreview(preview) ? <iframe title={preview.fileName} src={`/api/terraqo/professional-documents/${preview.id}?inline=1`} className="h-full w-full rounded-md bg-white" /> : <div className="grid h-full place-items-center p-8 text-center"><div><FileText className="mx-auto h-12 w-12 text-primary" /><p className="mt-4 font-semibold">Este formato no puede representarse directamente en el navegador.</p><Button asChild className="mt-4"><a href={`/api/terraqo/professional-documents/${preview.id}`}>Descargar archivo protegido</a></Button></div></div>}
+              {preview.contentType.startsWith("image/") ? (
+                <img
+                  src={`/api/terraqo/professional-documents/${preview.id}?inline=1`}
+                  alt={preview.fileName}
+                  className="h-full w-full rounded-md bg-white object-contain"
+                />
+              ) : preview.contentType === "application/pdf" ? (
+                <object
+                  data={`/api/terraqo/professional-documents/${preview.id}?inline=1`}
+                  type="application/pdf"
+                  className="h-full w-full rounded-md bg-white"
+                >
+                  <div className="grid h-full place-items-center p-8 text-center">
+                    <div>
+                      <FileText className="mx-auto h-12 w-12 text-primary" />
+                      <p className="mt-4 font-semibold">Tu navegador no pudo mostrar el PDF dentro del portal.</p>
+                      <Button asChild className="mt-4"><a href={`/api/terraqo/professional-documents/${preview.id}`}>Descargar archivo protegido</a></Button>
+                    </div>
+                  </div>
+                </object>
+              ) : (
+                <div className="grid h-full place-items-center p-8 text-center"><div><FileText className="mx-auto h-12 w-12 text-primary" /><p className="mt-4 font-semibold">Este formato no puede representarse directamente en el navegador.</p><Button asChild className="mt-4"><a href={`/api/terraqo/professional-documents/${preview.id}`}>Descargar archivo protegido</a></Button></div></div>
+              )}
             </div>
           </div>
         </div>
