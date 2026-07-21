@@ -6,6 +6,7 @@ import {
   BriefcaseBusiness,
   CalendarDays,
   ChevronRight,
+  ExternalLink,
   FileText,
   MapPin,
   NotebookPen,
@@ -19,6 +20,9 @@ import { ProfessionalDocumentUploader } from "@/components/portal/professional-d
 import { WorklogCard } from "@/components/terraqo/worklog-card";
 import { FieldVerificationPanel } from "@/components/terraqo/field-verification-panel";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { updateProfessionalUsernameAction } from "@/lib/server/professional-actions";
+import { terraqoDomains } from "@/lib/terraqo-domains";
 import { worklogInclude } from "@/lib/terraqo/worklog";
 
 export type ProfessionalDashboardProfile = Prisma.TerraqoProfessionalProfileGetPayload<{
@@ -80,6 +84,7 @@ export function ProfessionalDashboard({ profile, workspaceId }: { profile: Profe
   const verifiedExperiences = profile.experiences.filter((experience) => experience.verifiedByTerraqo).length;
   const hasCv = profile.documents.some((document) => document.type === "CV");
   const identityComplete = profile.identityVerificationStatus === "VERIFIED";
+  const publicCvHref = profile.username ? `${terraqoDomains.public}/cv/${profile.username}` : null;
 
   return (
     <div className="min-w-0 space-y-6 py-6 lg:py-8">
@@ -147,6 +152,24 @@ export function ProfessionalDashboard({ profile, workspaceId }: { profile: Profe
               <section className="rounded-lg border bg-white p-6 shadow-[0_14px_36px_rgba(1,45,56,0.05)]"><div className="flex items-center justify-between"><h2 className="font-display text-lg font-bold">Documentos pendientes</h2><span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">{Number(!hasCv) + Number(!identityComplete)} pendientes</span></div><div className="mt-4 divide-y">{!hasCv ? <Link href="#documentos" className="flex items-center justify-between gap-3 py-3 text-sm"><span><b>CV profesional</b><small className="mt-1 block text-muted-foreground">Completa tus postulaciones</small></span><span className="font-semibold text-primary">Subir</span></Link> : null}{!identityComplete ? <Link href="#documentos" className="flex items-center justify-between gap-3 py-3 text-sm"><span><b>Verificacion de identidad</b><small className="mt-1 block text-muted-foreground">DNI por delante y detras</small></span><span className="font-semibold text-primary">Revisar</span></Link> : null}{hasCv && identityComplete ? <p className="py-4 text-sm text-emerald-700">Tus documentos principales estan completos.</p> : null}</div></section>
 
               <section className="rounded-lg border bg-white p-6"><h2 className="font-display text-lg font-bold">Atajos rapidos</h2><div className="mt-4 divide-y">{[["/portal/oportunidades", "Explorar oportunidades"], ["#postulaciones", "Mis postulaciones"], ["/portal/bitacora", "Actualizar CV vivo"], ["#documentos", "Ver validaciones"]].map(([href, label]) => <Link key={label} href={href} className="flex items-center justify-between py-3 text-sm font-semibold text-[#304752] hover:text-primary">{label}<ChevronRight className="h-4 w-4" /></Link>)}</div></section>
+
+              <section id="configuracion" className="rounded-lg border bg-white p-6">
+                <p className="font-mono text-xs font-bold uppercase tracking-[0.16em] text-primary">Configuracion publica</p>
+                <h2 className="mt-2 font-display text-lg font-bold">Enlace del CV vivo</h2>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  Crea un usuario para compartir tu perfil publico. Solo se muestra informacion profesional marcada como publica.
+                </p>
+                <form action={updateProfessionalUsernameAction} className="mt-4 grid gap-3">
+                  <Input name="username" defaultValue={profile.username || ""} placeholder="ej. francisco-villa" />
+                  <Button type="submit" variant="outline">Guardar enlace</Button>
+                </form>
+                {publicCvHref ? (
+                  <Link href={publicCvHref} target="_blank" className="mt-4 flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/10">
+                    {publicCvHref.replace(/^https?:\/\//, "")}
+                    <ExternalLink className="h-4 w-4" />
+                  </Link>
+                ) : null}
+              </section>
             </aside>
           </div>
 

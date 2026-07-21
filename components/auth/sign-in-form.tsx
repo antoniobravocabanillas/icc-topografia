@@ -2,16 +2,28 @@
 
 import { useState, useTransition } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { ArrowRight, LockKeyhole } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { terraqoDomains } from "@/lib/terraqo-domains";
+
+function safeRelativeCallback(value: string | null) {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return null;
+  return value;
+}
+
+function destinationForRole(role: string | undefined, callbackUrl: string | null) {
+  if (role === "SUPER_ADMIN") return `${terraqoDomains.admin}/admin/terraqo`;
+  if (role === "ADMIN" || role === "COMMERCIAL_ADMIN" || role === "EDITOR") return `${terraqoDomains.admin}${callbackUrl?.startsWith("/admin") ? callbackUrl : "/admin"}`;
+  if (callbackUrl?.startsWith("/portal")) return `${terraqoDomains.portal}${callbackUrl}`;
+  return `${terraqoDomains.portal}/portal`;
+}
 
 export function SignInForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const explicitCallbackUrl = searchParams.get("callbackUrl");
-  const callbackUrl = explicitCallbackUrl || "/admin";
+  const callbackUrl = safeRelativeCallback(explicitCallbackUrl);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -31,13 +43,7 @@ export function SignInForm() {
 
       const session = await fetch("/api/auth/session").then((res) => res.json()).catch(() => null);
       const role = session?.user?.role;
-      const destination = role === "SUPER_ADMIN"
-        ? "/admin/terraqo"
-        : !explicitCallbackUrl && role === "CUSTOMER"
-          ? "/portal"
-          : callbackUrl;
-      router.push(destination);
-      router.refresh();
+      window.location.assign(destinationForRole(role, callbackUrl));
     });
   }
 

@@ -17,7 +17,7 @@ async function main() {
       domain: "icctopografia.com",
       settings: {
         publicUrl: "https://icctopografia.com",
-        workspaceUrl: "https://iridescent-fenglisu-d6595c.netlify.app",
+        workspaceUrl: "https://terraqoglobal.com",
         provider: "terraqo"
       }
     },
@@ -30,7 +30,7 @@ async function main() {
       domain: "icctopografia.com",
       settings: {
         publicUrl: "https://icctopografia.com",
-        workspaceUrl: "https://iridescent-fenglisu-d6595c.netlify.app",
+        workspaceUrl: "https://portal.terraqoglobal.com",
         provider: "terraqo"
       }
     }

@@ -1,10 +1,13 @@
 import { revalidatePath } from "next/cache";
+import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ProfessionalDocumentPreview } from "@/components/terraqo/professional-document-preview";
+import { UserAvatar } from "@/components/terraqo/user-avatar";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/server/api";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
@@ -86,6 +89,7 @@ async function updateApplicationStatusAction(formData: FormData) {
   });
 
   revalidatePath("/admin/terraqo/red");
+  redirect("/admin/terraqo/red?status=postulacion-guardada");
 }
 
 async function reviewIdentityAction(formData: FormData) {
@@ -148,6 +152,7 @@ async function reviewIdentityAction(formData: FormData) {
   ]);
 
   revalidatePath("/admin/terraqo/red");
+  redirect("/admin/terraqo/red?status=experiencia-vinculada");
 }
 
 async function linkProfessionalProjectAction(formData: FormData) {
@@ -222,13 +227,25 @@ async function reviewWorklogAction(formData: FormData) {
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export default async function TerraqoNetworkPage() {
+type TerraqoNetworkPageProps = {
+  searchParams: Promise<{ status?: string }>;
+};
+
+const adminStatusMessages: Record<string, string> = {
+  "postulacion-guardada": "Estado de postulacion guardado correctamente.",
+  "experiencia-vinculada": "Profesional vinculado al proyecto. Ya puede registrar evidencia y asistencia asociada."
+};
+
+export default async function TerraqoNetworkPage({ searchParams }: TerraqoNetworkPageProps) {
+  const params = await searchParams;
   await requireAdminPage(["ADMIN", "SUPER_ADMIN"]);
   const workspaceId = await getSessionTerraqoWorkspaceId();
   if (!workspaceId) throw new Error("Workspace Terraqo no configurado.");
   await requireWorkspaceModule("PROFESSIONAL_NETWORK", workspaceId);
 
-  const [workspace, profiles, jobs, projects, applications, worklogs] = await Promise.all([
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const [workspace, profiles, jobs, projects, applications, worklogs, attendanceEvents] = await Promise.all([
     prisma.terraqoWorkspace.findUnique({
       where: { id: workspaceId },
       include: { subscriptions: { orderBy: { createdAt: "desc" }, take: 1 } }
@@ -260,7 +277,7 @@ export default async function TerraqoNetworkPage() {
     prisma.project.findMany({
       where: { terraqoWorkspaceId: workspaceId, deletedAt: null },
       orderBy: { updatedAt: "desc" },
-      select: { id: true, title: true },
+      select: { id: true, title: true, location: true },
       take: 80
     }),
     prisma.terraqoProjectApplication.findMany({
@@ -281,11 +298,25 @@ export default async function TerraqoNetworkPage() {
       },
       orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
       take: 60
+    }),
+    prisma.terraqoAttendanceEvent.findMany({
+      where: { workspaceId },
+      include: {
+        user: { select: { name: true, email: true, image: true } },
+        professionalProfile: { select: { id: true, headline: true, username: true } },
+        project: { select: { title: true, location: true } }
+      },
+      orderBy: [{ capturedAt: "desc" }, { createdAt: "desc" }],
+      take: 80
     })
   ]);
 
   const available = profiles.filter((profile) => ["AVAILABLE", "OPEN_TO_PROJECTS"].includes(profile.status)).length;
   const verifiedExperiences = profiles.reduce((total, profile) => total + profile.experiences.filter((item) => item.verifiedByTerraqo).length, 0);
+  const attendanceToday = attendanceEvents.filter((event) => event.capturedAt >= startOfToday);
+  const acceptedAttendanceToday = attendanceToday.filter((event) => event.status === "ACCEPTED").length;
+  const rejectedAttendanceToday = attendanceToday.filter((event) => event.status === "REJECTED").length;
+  const uniqueProfessionalsToday = new Set(attendanceToday.map((event) => event.userId)).size;
 
   return (
     <section className="space-y-8">
@@ -301,12 +332,61 @@ export default async function TerraqoNetworkPage() {
         <Badge variant="secondary">{workspace?.subscriptions[0]?.tier ?? "Sin plan"}</Badge>
       </div>
 
+      {params.status && adminStatusMessages[params.status] ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
+          {adminStatusMessages[params.status]}
+        </div>
+      ) : null}
+
       <div className="grid gap-5 md:grid-cols-4">
         <Metric title={profiles.length} label="Profesionales registrados" />
         <Metric title={available} label="Disponibles o abiertos" />
         <Metric title={jobs.length} label="Convocatorias activas" />
         <Metric title={verifiedExperiences} label="Experiencias validadas" />
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Control de entrada y salida</CardTitle>
+          <CardDescription>
+            Registro operativo capturado con hora del servidor, ubicacion del dispositivo y validacion disponible en el telefono del profesional.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="grid gap-4 md:grid-cols-3">
+            <Metric title={uniqueProfessionalsToday} label="Profesionales con marca hoy" />
+            <Metric title={acceptedAttendanceToday} label="Marcas aceptadas hoy" />
+            <Metric title={rejectedAttendanceToday} label="Intentos fuera de zona o rechazados" />
+          </div>
+          <div className="grid gap-3">
+            {attendanceEvents.slice(0, 8).map((event) => (
+              <div key={event.id} className="grid gap-3 rounded-md border p-4 lg:grid-cols-[1fr_180px_180px] lg:items-center">
+                <div className="flex min-w-0 items-center gap-3">
+                  <UserAvatar name={event.user.name || event.user.email} image={event.user.image} />
+                  <div className="min-w-0">
+                    {event.professionalProfileId ? (
+                      <Link href={`/admin/terraqo/red/profesionales/${event.professionalProfileId}`} className="font-semibold hover:text-primary">
+                        {event.user.name || event.user.email || "Profesional"}
+                      </Link>
+                    ) : (
+                      <p className="font-semibold">{event.user.name || event.user.email || "Profesional"}</p>
+                    )}
+                    <p className="truncate text-sm text-muted-foreground">{event.project?.title || "Sin proyecto"} | {event.project?.location || "Ubicacion por revisar"}</p>
+                  </div>
+                </div>
+                <div>
+                  <Badge variant={event.status === "ACCEPTED" ? "default" : "outline"}>{event.type.replace("_", " ")} - {event.status}</Badge>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {event.distanceMeters !== null ? `${Math.round(Number(event.distanceMeters))} m del punto` : "Sin distancia calculada"}
+                  </p>
+                </div>
+                <p className="text-sm text-muted-foreground">{new Intl.DateTimeFormat("es-PE", { dateStyle: "medium", timeStyle: "short" }).format(event.capturedAt)}</p>
+              </div>
+            ))}
+            {!attendanceEvents.length ? <p className="text-sm text-muted-foreground">Aun no hay registros de entrada o salida en este workspace.</p> : null}
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -498,8 +578,17 @@ export default async function TerraqoNetworkPage() {
                 {profiles.map((profile) => (
                   <tr key={profile.id} className="border-t align-top">
                     <td className="p-3">
-                      <div className="font-semibold">{profile.user.name || profile.user.email}</div>
+                      <div className="flex items-center gap-3">
+                        <UserAvatar name={profile.user.name || profile.user.email} image={profile.user.image} />
+                        <div>
+                          <Link href={`/admin/terraqo/red/profesionales/${profile.id}`} className="font-semibold hover:text-primary">{profile.user.name || profile.user.email}</Link>
+                          <div className="mt-1 text-xs text-muted-foreground">{profile.user.email}</div>
+                        </div>
+                      </div>
                       <div className="text-xs text-muted-foreground">{profile.city || "Ciudad por definir"} | {profile.yearsExperience ?? 0} anos</div>
+                      <Button asChild variant="outline" size="sm" className="mt-3">
+                        <Link href={`/admin/terraqo/red/profesionales/${profile.id}`}>Ver perfil completo</Link>
+                      </Button>
                     </td>
                     <td className="p-3"><Badge variant="outline">{profile.status}</Badge></td>
                     <td className="p-3">{profile.specialties.slice(0, 3).join(", ") || "Sin especialidad"}</td>

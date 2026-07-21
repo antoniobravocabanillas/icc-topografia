@@ -43,16 +43,23 @@ const ticketCategories = [
 
 const successMessages: Record<string, string> = {
   profile: "Datos actualizados correctamente.",
+  username: "Enlace publico del CV actualizado correctamente.",
   ticket: "Ticket creado. El equipo ICC lo revisara y respondera desde soporte.",
   reply: "Respuesta enviada al ticket.",
   quote_accepted: "Cotizacion aceptada. El equipo comercial fue notificado.",
   quote_rejected: "Cotizacion rechazada. El equipo comercial fue notificado."
 };
 
+const statusMessages: Record<string, string> = {
+  "username-invalid": "El usuario debe tener 3 a 30 caracteres: letras minusculas, numeros, punto, guion o guion bajo.",
+  "username-taken": "Ese usuario ya esta en uso. Elige otra variante.",
+  "profile-required": "Completa tu perfil profesional antes de crear un enlace publico."
+};
+
 export default async function ClientPortalPage({ searchParams }: ClientPortalPageProps) {
   const params = await searchParams;
   const session = await auth();
-  if (!session?.user?.email) redirect("/cuenta?callbackUrl=/portal");
+  if (!session?.user?.email) redirect("/cuenta");
   const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
 
   const account = await prisma.clientAccount.findFirst({
@@ -117,7 +124,21 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
 
   if (!account || !["active", "approved"].includes(account.status) || !account.client || account.client.terraqoWorkspaceId !== terraqoWorkspaceId) {
     if (professionalProfile) {
-      return <ProfessionalDashboard profile={professionalProfile} workspaceId={terraqoWorkspaceId} />;
+      return (
+        <div className="min-w-0 space-y-4">
+          {params.success && successMessages[params.success] ? (
+            <div className="mt-6 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+              {successMessages[params.success]}
+            </div>
+          ) : null}
+          {params.status && statusMessages[params.status] ? (
+            <div className="mt-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
+              {statusMessages[params.status]}
+            </div>
+          ) : null}
+          <ProfessionalDashboard profile={professionalProfile} workspaceId={terraqoWorkspaceId} />
+        </div>
+      );
     }
 
     return (
@@ -150,6 +171,11 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
         {params.success && successMessages[params.success] ? (
           <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
             {successMessages[params.success]}
+          </div>
+        ) : null}
+        {params.status && statusMessages[params.status] ? (
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
+            {statusMessages[params.status]}
           </div>
         ) : null}
 

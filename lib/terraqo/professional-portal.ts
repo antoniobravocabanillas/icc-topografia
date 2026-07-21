@@ -5,7 +5,7 @@ import { getProfessionalNetworkContext } from "@/lib/terraqo/worklog";
 
 export async function requireProfessionalPortal() {
   const session = await auth();
-  if (!session?.user?.id) redirect("/cuenta?callbackUrl=/portal");
+  if (!session?.user?.id) redirect("/cuenta");
 
   const context = await getProfessionalNetworkContext(session.user.id);
   if (!context.profile) redirect("/portal");

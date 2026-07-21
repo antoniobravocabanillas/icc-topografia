@@ -122,7 +122,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     if (existingUser) {
       return fail("Ya existe una cuenta con este correo. Ingresa a Portal Terraqo para continuar tu postulacion.", 409, {
         action: "sign_in",
-        href: "/cuenta?callbackUrl=/portal"
+        href: "/cuenta"
       });
     }
 
@@ -299,7 +299,7 @@ export async function POST(request: Request, { params }: RouteContext) {
       cvDocumentId,
       status: "SUBMITTED",
       message: "Cuenta, perfil profesional y postulacion creados correctamente.",
-      portalPath: "/cuenta?callbackUrl=/portal",
+      portalPath: "/cuenta",
       identityVerificationRequired: true
     });
   } catch (error) {

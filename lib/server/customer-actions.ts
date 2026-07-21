@@ -21,7 +21,7 @@ function listFromTextarea(formData: FormData, key: string) {
 
 async function requireClient() {
   const session = await auth();
-  if (!session?.user?.email) redirect("/cuenta?callbackUrl=/portal");
+  if (!session?.user?.email) redirect("/cuenta");
   const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
 
   const account = await prisma.clientAccount.findFirst({
