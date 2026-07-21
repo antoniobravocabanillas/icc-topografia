@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BadgeCheck, BriefcaseBusiness, ExternalLink, MapPin, NotebookPen, ShieldCheck, Wrench } from "lucide-react";
-import { TerraqoPublicFooter } from "@/components/terraqo/terraqo-public-footer";
-import { TerraqoPublicHeader } from "@/components/terraqo/terraqo-public-header";
+import { BadgeCheck, BriefcaseBusiness, Download, ExternalLink, MapPin, NotebookPen, Radio, ShieldCheck, Wrench } from "lucide-react";
 import { UserAvatar } from "@/components/terraqo/user-avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +10,23 @@ import { createMetadata } from "@/lib/seo";
 type PublicCvPageProps = {
   params: Promise<{ username: string }>;
 };
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const evidenceLabels: Record<string, string> = {
+  DECLARED: "Declarado por el profesional",
+  LINKED: "Vinculado a proyecto",
+  CONFIRMED: "Confirmado por la empresa",
+  VERIFIED: "Verificado por Terraqo"
+};
+
+function verificationBadges(input: { linked?: boolean; supervisorApproved?: boolean }) {
+  const badges = [];
+  if (input.linked) badges.push("Evidencia de campo");
+  if (input.supervisorApproved) badges.push("Responsable validado");
+  return badges;
+}
 
 export async function generateMetadata({ params }: PublicCvPageProps) {
   const { username } = await params;
@@ -41,7 +56,11 @@ export default async function PublicCvPage({ params }: PublicCvPageProps) {
       },
       worklogs: {
         where: { visibility: "PUBLIC", deletedAt: null },
-        include: { project: { select: { title: true } }, workspace: { select: { brandName: true, name: true } } },
+        include: {
+          project: { select: { title: true } },
+          workspace: { select: { brandName: true, name: true } },
+          validations: { where: { status: "APPROVED" }, select: { id: true }, take: 1 }
+        },
         orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
         take: 8
       }
@@ -54,8 +73,7 @@ export default async function PublicCvPage({ params }: PublicCvPageProps) {
   const skills = [...profile.specialties, ...profile.equipment, ...profile.software].slice(0, 14);
 
   return (
-    <>
-      <TerraqoPublicHeader />
+    <div className="cv-live-page">
       <main className="min-h-screen bg-[#f7faf7] text-[#11252c]">
         <section className="relative isolate overflow-hidden border-b bg-[#12100d] text-white">
           <div className="absolute inset-0 opacity-35 [background-image:radial-gradient(circle_at_20%_25%,rgba(30,184,171,0.35),transparent_30%),radial-gradient(circle_at_75%_10%,rgba(179,91,52,0.34),transparent_28%)]" />
@@ -69,6 +87,14 @@ export default async function PublicCvPage({ params }: PublicCvPageProps) {
                 </div>
                 <p className="mt-3 text-xl font-semibold text-[#72e7dd]">{profile.headline || "Profesional Terraqo"}</p>
                 <p className="mt-4 flex flex-wrap gap-3 text-white/68"><span className="inline-flex items-center gap-1"><MapPin className="h-4 w-4" />{profile.city || "Ubicacion por completar"}</span><span>{profile.yearsExperience ?? 0} anos de experiencia</span></p>
+                <div className="mt-7 flex flex-wrap gap-3">
+                  <Link href={`/api/terraqo/cv/${profile.username}/pdf`} target="_blank" className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-3 text-sm font-bold text-white hover:bg-primary/90">
+                    <Download className="h-4 w-4" /> Descargar CV PDF
+                  </Link>
+                  <span className="inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/10 px-4 py-3 text-sm font-bold text-[#8bf2e9]">
+                    <Radio className="h-4 w-4 animate-pulse" /> Se alimenta con evidencia en vivo
+                  </span>
+                </div>
               </div>
             </div>
             <Card className="border-white/15 bg-white/8 text-white backdrop-blur">
@@ -115,9 +141,10 @@ export default async function PublicCvPage({ params }: PublicCvPageProps) {
                         <p className="mt-1 text-sm text-muted-foreground">{experience.companyName || "Empresa no publica"} | {experience.role || "Rol profesional"}</p>
                         {experience.project ? <p className="mt-2 text-sm font-semibold text-primary">Proyecto: {experience.project.title}</p> : null}
                       </div>
-                      {experience.verifiedByTerraqo ? <Badge><BadgeCheck className="mr-1 h-4 w-4" /> Validada</Badge> : null}
+                      {experience.verifiedByTerraqo ? <Badge><BadgeCheck className="mr-1 h-4 w-4" /> 1 check</Badge> : null}
                     </div>
                     {experience.verificationNote ? <p className="mt-4 text-sm leading-7 text-muted-foreground">{experience.verificationNote}</p> : null}
+                    {experience.verifiedByTerraqo ? <p className="mt-3 text-xs font-semibold text-emerald-700">Validacion por responsable o workspace autorizado.</p> : null}
                   </article>
                 ))}
                 {!profile.experiences.length ? <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">Este CV aun no tiene experiencias publicas.</p> : null}
@@ -134,7 +161,15 @@ export default async function PublicCvPage({ params }: PublicCvPageProps) {
                     <p className="mt-2 text-sm leading-7 text-muted-foreground">{worklog.summary}</p>
                     <div className="mt-4 flex flex-wrap gap-2 text-xs">
                       {worklog.project ? <span className="rounded-md bg-primary/10 px-2.5 py-1 font-semibold text-primary"><BriefcaseBusiness className="mr-1 inline h-3.5 w-3.5" />{worklog.project.title}</span> : null}
-                      <span className="rounded-md bg-muted px-2.5 py-1 font-semibold"><NotebookPen className="mr-1 inline h-3.5 w-3.5" />{worklog.evidenceStatus}</span>
+                      <span className="rounded-md bg-muted px-2.5 py-1 font-semibold"><NotebookPen className="mr-1 inline h-3.5 w-3.5" />{evidenceLabels[worklog.evidenceStatus] || "Evidencia registrada"}</span>
+                      {(() => {
+                        const badges = verificationBadges({ linked: worklog.evidenceStatus !== "DECLARED", supervisorApproved: Boolean(worklog.validations.length) });
+                        return badges.length ? (
+                          <span className="rounded-md bg-emerald-50 px-2.5 py-1 font-bold text-emerald-700">
+                            {badges.length} check{badges.length > 1 ? "s" : ""}: {badges.join(" + ")}
+                          </span>
+                        ) : null;
+                      })()}
                     </div>
                   </article>
                 ))}
@@ -148,7 +183,6 @@ export default async function PublicCvPage({ params }: PublicCvPageProps) {
           <Link href="/" className="inline-flex items-center gap-2 rounded-lg border bg-white px-4 py-3 text-sm font-bold text-primary hover:bg-primary/10">Conocer Terraqo <ExternalLink className="h-4 w-4" /></Link>
         </section>
       </main>
-      <TerraqoPublicFooter />
-    </>
+    </div>
   );
 }

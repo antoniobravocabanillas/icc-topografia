@@ -59,6 +59,65 @@ function cleanText(formData: FormData, key: string, max = 180) {
   return trimmed ? trimmed.slice(0, max) : null;
 }
 
+function optionalDate(formData: FormData, key: string) {
+  const value = formData.get(key);
+  if (typeof value !== "string" || !value.trim()) return null;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function listFromText(formData: FormData, key: string) {
+  const value = formData.get(key);
+  if (typeof value !== "string") return [];
+  return value
+    .split(/\r?\n|,/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 12);
+}
+
+export async function createHistoricalExperienceAction(formData: FormData) {
+  "use server";
+
+  const session = await auth();
+  if (!session?.user?.id) redirect("/cuenta");
+
+  const profile = await prisma.terraqoProfessionalProfile.findUnique({
+    where: { userId: session.user.id },
+    select: { id: true, username: true }
+  });
+  if (!profile) redirect("/portal?status=profile-required");
+
+  const title = cleanText(formData, "title", 140);
+  const companyName = cleanText(formData, "companyName", 140);
+  const role = cleanText(formData, "role", 120);
+  const location = cleanText(formData, "location", 120);
+  const supervisor = cleanText(formData, "supervisor", 180);
+  if (!title || !companyName) redirect("/portal/experiencias?status=missing");
+
+  await prisma.terraqoProfessionalExperience.create({
+    data: {
+      professionalProfileId: profile.id,
+      title,
+      companyName,
+      role,
+      location,
+      startedAt: optionalDate(formData, "startedAt"),
+      endedAt: optionalDate(formData, "endedAt"),
+      visibility: "PRIVATE",
+      evidence: listFromText(formData, "evidence"),
+      verificationNote: supervisor
+        ? `Solicitud de verificacion historica pendiente para ${supervisor}.`
+        : "Experiencia historica cargada por el profesional. Pendiente de verificacion por responsable."
+    }
+  });
+
+  revalidatePath("/portal");
+  revalidatePath("/portal/experiencias");
+  if (profile.username) revalidatePath(`/cv/${profile.username}`);
+  redirect("/portal/experiencias?success=experience");
+}
+
 export async function updateProfessionalSettingsAction(formData: FormData) {
   "use server";
 

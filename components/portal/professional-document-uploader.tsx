@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import { BadgeCheck, Eye, FileBadge2, FileText, IdCard, Loader2, LockKeyhole, Upload, X } from "lucide-react";
+import { BadgeCheck, Download, Eye, FileBadge2, FileText, IdCard, Loader2, LockKeyhole, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -107,14 +107,11 @@ export function ProfessionalDocumentUploader({ identityStatus, identityNote, doc
         </CardHeader>
         <CardContent className="space-y-4">
           {latestCv ? (
-            <button
-              type="button"
-              onClick={() => setPreview(latestCv)}
-              className="flex items-center justify-between rounded-md border bg-muted/35 p-3 text-sm font-semibold hover:border-primary"
-            >
+            <div className="grid gap-2 rounded-md border bg-muted/35 p-3 text-sm font-semibold sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
               <span className="truncate">{latestCv.fileName}</span>
-              <span className="inline-flex items-center gap-1 text-primary"><Eye className="h-4 w-4" /> Previsualizar</span>
-            </button>
+              <button type="button" onClick={() => setPreview(latestCv)} className="inline-flex items-center gap-1 text-primary"><Eye className="h-4 w-4" /> Previsualizar</button>
+              <a href={`/api/terraqo/professional-documents/${latestCv.id}`} className="inline-flex items-center gap-1 text-primary"><Download className="h-4 w-4" /> Descargar</a>
+            </div>
           ) : null}
           <form ref={cvFormRef} className="grid gap-3" onSubmit={(event) => { event.preventDefault(); void upload(event.currentTarget, "cv"); }}>
             <label className="grid gap-2 text-sm font-semibold">
@@ -198,7 +195,10 @@ export function ProfessionalDocumentUploader({ identityStatus, identityNote, doc
               {privateDocuments.map((document) => (
                 <article key={document.id} className="flex min-h-28 flex-col justify-between rounded-lg border bg-background p-4">
                   <div><p className="text-xs font-bold uppercase text-primary">{labels[document.type]}</p><p className="mt-2 truncate text-sm font-semibold">{document.fileName}</p><p className="mt-1 text-xs text-muted-foreground">{document.reviewStatus === "VERIFIED" ? "Verificado" : document.reviewStatus === "REJECTED" ? "Requiere correccion" : "Pendiente de revision"}</p></div>
-                  <button type="button" onClick={() => setPreview(document)} className="mt-4 inline-flex items-center gap-2 self-start text-sm font-bold text-primary"><Eye className="h-4 w-4" /> Ver dentro del portal</button>
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <button type="button" onClick={() => setPreview(document)} className="inline-flex items-center gap-2 text-sm font-bold text-primary"><Eye className="h-4 w-4" /> Ver dentro del portal</button>
+                    <a href={`/api/terraqo/professional-documents/${document.id}`} className="inline-flex items-center gap-2 text-sm font-bold text-primary"><Download className="h-4 w-4" /> Descargar</a>
+                  </div>
                 </article>
               ))}
             </div>

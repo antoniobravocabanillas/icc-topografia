@@ -44,11 +44,11 @@ type PortalNavItem = {
 
 const professionalItems: PortalNavItem[] = [
   { href: "/portal", label: "Resumen", icon: LayoutDashboard },
-  { href: "/portal#perfil", label: "Mi perfil", icon: UserRound },
-  { href: "/portal#experiencias", label: "Experiencias", icon: BriefcaseBusiness },
-  { href: "/portal#postulaciones", label: "Postulaciones", icon: FileText },
-  { href: "/portal#documentos", label: "Validaciones", icon: ShieldCheck },
-  { href: "/portal#documentos-datos", label: "Documentos y datos", icon: Files },
+  { href: "/portal/perfil", label: "Mi perfil", icon: UserRound },
+  { href: "/portal/experiencias", label: "Experiencias", icon: BriefcaseBusiness },
+  { href: "/portal/postulaciones", label: "Postulaciones", icon: FileText },
+  { href: "/portal/validaciones", label: "Validaciones", icon: ShieldCheck },
+  { href: "/portal/documentos", label: "Documentos y datos", icon: Files },
   { href: "/portal/notas", label: "Notas", icon: StickyNote },
   { href: "/portal/archivos", label: "Archivos", icon: FolderOpen },
   { href: "/portal/oportunidades", label: "Oportunidades", icon: Compass },

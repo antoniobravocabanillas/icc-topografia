@@ -20,6 +20,13 @@ const evidenceLabels: Record<string, string> = {
   VERIFIED: "Verificada por Terraqo"
 };
 
+const visibilityLabels: Record<string, string> = {
+  PRIVATE: "Privada",
+  WORKSPACE: "Workspace",
+  COMMUNITY: "Comunidad",
+  PUBLIC: "Publica"
+};
+
 export function WorklogCard({ worklog, viewerId }: { worklog: WorklogWithContext; viewerId: string }) {
   const ownReaction = worklog.reactions.find((reaction) => reaction.userId === viewerId)?.type;
   return (
@@ -36,7 +43,7 @@ export function WorklogCard({ worklog, viewerId }: { worklog: WorklogWithContext
         </div>
         <div className="flex flex-wrap gap-2 text-xs font-semibold text-muted-foreground">
           <span className="inline-flex items-center gap-1 rounded-md border px-2 py-1"><CalendarDays className="h-3.5 w-3.5" />{new Intl.DateTimeFormat("es-PE", { dateStyle: "medium" }).format(worklog.occurredAt)}</span>
-          <span className="inline-flex items-center gap-1 rounded-md border px-2 py-1"><LockKeyhole className="h-3.5 w-3.5" />{worklog.visibility}</span>
+          <span className="inline-flex items-center gap-1 rounded-md border px-2 py-1"><LockKeyhole className="h-3.5 w-3.5" />{visibilityLabels[worklog.visibility] || "Privada"}</span>
         </div>
       </header>
 

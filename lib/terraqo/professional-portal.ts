@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { getProfessionalNetworkContext } from "@/lib/terraqo/worklog";
+import { getProfessionalNetworkContext, worklogInclude } from "@/lib/terraqo/worklog";
 
 export async function requireProfessionalPortal() {
   const session = await auth();
@@ -9,7 +9,35 @@ export async function requireProfessionalPortal() {
 
   const context = await getProfessionalNetworkContext(session.user.id);
   if (!context.profile) redirect("/portal");
-  const profile = context.profile;
+  const profile = await prisma.terraqoProfessionalProfile.findUnique({
+    where: { id: context.profile.id },
+    include: {
+      user: { select: { id: true, name: true, email: true, image: true } },
+      experiences: {
+        include: { project: { select: { id: true, title: true, slug: true, location: true } } },
+        orderBy: [{ verifiedByTerraqo: "desc" }, { createdAt: "desc" }]
+      },
+      affiliations: { orderBy: [{ current: "desc" }, { updatedAt: "desc" }] },
+      applications: {
+        include: {
+          workspace: { select: { id: true, name: true, brandName: true } },
+          jobPost: { select: { id: true, title: true, project: { select: { id: true, title: true } } } }
+        },
+        orderBy: { createdAt: "desc" }
+      },
+      documents: {
+        orderBy: { uploadedAt: "desc" },
+        select: { id: true, type: true, fileName: true, contentType: true, size: true, reviewStatus: true, reviewNote: true, uploadedAt: true }
+      },
+      worklogs: {
+        where: { deletedAt: null },
+        include: worklogInclude,
+        orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
+        take: 12
+      }
+    }
+  });
+  if (!profile) redirect("/portal");
 
   return { session, memberships: context.memberships, profile };
 }
