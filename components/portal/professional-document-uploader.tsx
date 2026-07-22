@@ -84,10 +84,10 @@ export function ProfessionalDocumentUploader({ identityStatus, identityNote, doc
     CV: "CV profesional",
     DNI_FRONT: "DNI por delante",
     DNI_BACK: "DNI por detras",
-    CERTIFICATE: "Certificado o constancia",
-    PROFESSIONAL_LICENSE: "Colegiatura o licencia profesional",
+    CERTIFICATE: "Antecedentes policiales",
+    PROFESSIONAL_LICENSE: "Certiadulto",
     CRIMINAL_RECORD: "Antecedentes penales",
-    MEDICAL_EXAM: "Examen medico ocupacional",
+    MEDICAL_EXAM: "SCTR",
     BANK_CERTIFICATE: "Constancia bancaria",
     OTHER: "Otro documento",
   };
@@ -169,18 +169,16 @@ export function ProfessionalDocumentUploader({ identityStatus, identityNote, doc
       <Card className="xl:col-span-2">
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><FileBadge2 className="h-5 w-5 text-primary" /> Documentos y datos profesionales</CardTitle>
-          <CardDescription className="mt-2 max-w-3xl">Organiza certificados, colegiatura, antecedentes, examen medico y constancias bancarias. El expediente es privado y solo puede verlo tu cuenta y la empresa vinculada a este workspace.</CardDescription>
+          <CardDescription className="mt-2 max-w-3xl">Organiza antecedentes penales, antecedentes policiales, Certiadulto y SCTR. El expediente es privado y solo puede verlo tu cuenta y la empresa vinculada a este workspace.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
           <form ref={privateFormRef} className="grid content-start gap-3 rounded-lg border bg-muted/20 p-4" onSubmit={(event) => { event.preventDefault(); void upload(event.currentTarget, "document"); }}>
             <label className="grid gap-2 text-sm font-semibold">Categoria
               <select name="documentType" required className="h-11 rounded-md border bg-background px-3 font-normal">
-                <option value="CERTIFICATE">Certificado o constancia</option>
-                <option value="PROFESSIONAL_LICENSE">Colegiatura o licencia</option>
                 <option value="CRIMINAL_RECORD">Antecedentes penales</option>
-                <option value="MEDICAL_EXAM">Examen medico ocupacional</option>
-                <option value="BANK_CERTIFICATE">Constancia bancaria</option>
-                <option value="OTHER">Otro documento</option>
+                <option value="CERTIFICATE">Antecedentes policiales</option>
+                <option value="PROFESSIONAL_LICENSE">Certiadulto</option>
+                <option value="MEDICAL_EXAM">SCTR</option>
               </select>
             </label>
             <label className="grid gap-2 text-sm font-semibold">Archivo para expediente

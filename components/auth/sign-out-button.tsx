@@ -3,7 +3,6 @@
 import { LogOut } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
-import { terraqoDomains } from "@/lib/terraqo-domains";
 
 type SignOutButtonProps = {
   className?: string;
@@ -17,7 +16,7 @@ export function SignOutButton({ className }: SignOutButtonProps) {
       className={className}
       onClick={async () => {
         await signOut({ redirect: false });
-        window.location.assign(`${terraqoDomains.portal}/cuenta`);
+        window.location.assign("/cuenta");
       }}
     >
       <LogOut className="h-4 w-4" />

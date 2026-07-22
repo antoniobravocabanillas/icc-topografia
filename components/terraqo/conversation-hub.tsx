@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Building2, MessageSquareText, Send, Video } from "lucide-react";
+import { Building2, Download, MessageSquareText, MoreVertical, Paperclip, Phone, Search, Send, Smile, UserPlus, Video } from "lucide-react";
 import type { ConversationHubData } from "@/lib/terraqo/messaging";
 import { sendMessageAction, startConversationAction } from "@/lib/terraqo/messaging-actions";
 import { createMeetingAction } from "@/lib/terraqo/meet-actions";
@@ -15,132 +15,212 @@ type ConversationHubProps = {
   projects?: Array<{ id: string; title: string; terraqoWorkspaceId: string | null }>;
 };
 
+function otherParticipant(conversation: ConversationHubData["conversations"][number], currentUserId: string) {
+  return conversation.participants.find((participant) => participant.userId !== currentUserId)?.user;
+}
+
 function participantLabel(conversation: ConversationHubData["conversations"][number], currentUserId: string) {
   const others = conversation.participants.filter((participant) => participant.userId !== currentUserId);
   return conversation.title || others.map((participant) => participant.user.name || participant.user.email).join(", ") || "Conversacion";
 }
 
 function conversationAvatar(conversation: ConversationHubData["conversations"][number], currentUserId: string) {
-  const other = conversation.participants.find((participant) => participant.userId !== currentUserId)?.user;
+  const other = otherParticipant(conversation, currentUserId);
   return { name: other?.name || participantLabel(conversation, currentUserId), image: other?.image };
+}
+
+function formatTime(value?: Date | string | null) {
+  if (!value) return "";
+  return new Intl.DateTimeFormat("es-PE", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+}
+
+function unreadCount(conversation: ConversationHubData["conversations"][number], currentUserId: string) {
+  const ownParticipant = conversation.participants.find((participant) => participant.userId === currentUserId);
+  const lastReadAt = ownParticipant?.lastReadAt ? new Date(ownParticipant.lastReadAt).getTime() : 0;
+  return conversation.messages.filter((message) => message.senderId !== currentUserId && new Date(message.createdAt).getTime() > lastReadAt).length;
 }
 
 export function ConversationHub({ data, currentUserId, basePath, compactIntro, projects = [] }: ConversationHubProps) {
   const startAction = startConversationAction.bind(null, basePath);
   const replyAction = sendMessageAction.bind(null, basePath);
   const meetingAction = createMeetingAction.bind(null, basePath);
+  const selected = data.selected;
+  const selectedOther = selected ? otherParticipant(selected, currentUserId) : null;
+  const selectedWorkspace = selected?.workspace?.name || "Terraqo";
+  const selectedHeadline = selectedOther?.terraqoProfessionalProfile?.headline || selectedWorkspace;
+  const selectedAvatar = selected ? conversationAvatar(selected, currentUserId) : { name: "Terraqo", image: null };
 
   return (
     <div className="space-y-6">
       {!compactIntro ? (
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-lg border bg-white p-5 md:col-span-2">
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Mensajeria Terraqo</p>
-            <h2 className="mt-2 font-display text-2xl font-bold">Conversaciones vinculadas al trabajo real</h2>
-            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">Conversa con profesionales y equipos de empresa dentro del contexto autorizado. Las conversaciones permanecen separadas por workspace.</p>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="font-mono text-xs font-bold uppercase tracking-[0.16em] text-primary">Red profesional</p>
+            <h2 className="mt-2 font-display text-3xl font-bold text-[#0b202b]">Mensajes</h2>
+            <p className="mt-2 max-w-2xl text-sm text-[#496471]">Conversa con profesionales y empresas dentro de espacios de trabajo autorizados.</p>
           </div>
-          <div className="rounded-lg border bg-[#082f32] p-5 text-white">
-            <p className="text-3xl font-bold">{data.conversations.length}</p>
-            <p className="mt-1 text-sm text-white/70">conversaciones activas</p>
+          <div className="flex flex-wrap gap-3">
+            <button type="button" className="inline-flex h-11 items-center gap-2 rounded-lg border bg-white px-4 text-sm font-bold text-[#314b57] shadow-[0_12px_24px_rgba(15,59,67,0.06)]">
+              <Search className="h-4 w-4" /> Buscar
+            </button>
+            <Link href="/portal/red" className="inline-flex h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-white shadow-[0_16px_30px_rgba(0,143,135,0.2)]">
+              <UserPlus className="h-4 w-4" /> Nueva conexion
+            </Link>
           </div>
         </div>
       ) : null}
 
-      <div className="grid w-full min-w-0 min-h-[620px] overflow-hidden rounded-lg border bg-white shadow-technical lg:grid-cols-[320px_minmax(0,1fr)]">
-        <aside className="w-full min-w-0 border-b bg-[#f7fbfb] lg:border-b-0 lg:border-r">
-          <div className="border-b p-4">
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">Nueva conversacion</p>
+      <div className="grid min-h-[690px] overflow-hidden rounded-xl border border-[#d4e4e2] bg-white shadow-[0_24px_70px_rgba(10,45,52,0.08)] xl:grid-cols-[390px_minmax(0,1fr)_360px]">
+        <aside className="min-w-0 border-b border-[#d4e4e2] bg-white xl:border-b-0 xl:border-r">
+          <div className="border-b border-[#d4e4e2] p-5">
+            <div className="flex flex-wrap gap-2">
+              {["Todos", "No leidos", "Grupos", "Empresas"].map((tab, index) => (
+                <button
+                  key={tab}
+                  type="button"
+                  className={`h-10 rounded-lg border px-4 text-sm font-semibold transition ${index === 0 ? "border-primary bg-primary text-white" : "border-[#d4e4e2] bg-white text-[#506773] hover:bg-[#edf8f6]"}`}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
             {data.recipients.length ? (
-              <div className="mt-3 max-h-48 space-y-2 overflow-y-auto pr-1">
-                {data.recipients.map((recipient) => (
-                  <form key={recipient.userId} action={startAction} className="min-w-0">
-                    <input type="hidden" name="recipientUserId" value={recipient.userId} />
-                    <input type="hidden" name="workspaceId" value={recipient.workspaceId} />
-                    <button className="flex w-full items-center gap-3 rounded-md border bg-white p-3 text-left transition hover:border-primary/50 hover:bg-primary/5">
-                      {recipient.professional ? <UserAvatar name={recipient.name} image={recipient.image} size="md" /> : <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"><Building2 className="h-4 w-4" /></span>}
-                      <span className="min-w-0">
-                        <span className="block truncate text-sm font-semibold">{recipient.name}</span>
-                        <span className="block truncate text-xs text-muted-foreground">{recipient.headline}</span>
-                      </span>
-                    </button>
-                    {projects.some((project) => project.terraqoWorkspaceId === recipient.workspaceId) ? (
-                      <select name="projectId" aria-label={`Proyecto para conversar con ${recipient.name}`} className="mt-1 h-9 w-full rounded-md border bg-white px-2 text-xs text-muted-foreground">
-                        <option value="">Conversacion general</option>
-                        {projects.filter((project) => project.terraqoWorkspaceId === recipient.workspaceId).map((project) => (
-                          <option key={project.id} value={project.id}>{project.title}</option>
-                        ))}
-                      </select>
-                    ) : null}
-                  </form>
-                ))}
-              </div>
-            ) : <p className="mt-3 text-sm text-muted-foreground">No hay participantes habilitados en este workspace.</p>}
+              <details className="mt-4 rounded-lg border border-[#d4e4e2] bg-[#f7fbfb]">
+                <summary className="cursor-pointer list-none px-4 py-3 text-sm font-bold text-[#0b202b]">Nueva conversacion</summary>
+                <div className="max-h-72 space-y-2 overflow-y-auto border-t border-[#d4e4e2] p-3">
+                  {data.recipients.map((recipient) => (
+                    <form key={recipient.userId} action={startAction} className="min-w-0">
+                      <input type="hidden" name="recipientUserId" value={recipient.userId} />
+                      <input type="hidden" name="workspaceId" value={recipient.workspaceId} />
+                      <button className="flex w-full items-center gap-3 rounded-lg border border-transparent bg-white p-3 text-left transition hover:border-primary/40 hover:bg-primary/5">
+                        {recipient.professional ? (
+                          <UserAvatar name={recipient.name} image={recipient.image} size="md" />
+                        ) : (
+                          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"><Building2 className="h-4 w-4" /></span>
+                        )}
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-bold">{recipient.name}</span>
+                          <span className="block truncate text-xs text-[#637b86]">{recipient.headline}</span>
+                        </span>
+                      </button>
+                      {projects.some((project) => project.terraqoWorkspaceId === recipient.workspaceId) ? (
+                        <select name="projectId" aria-label={`Proyecto para conversar con ${recipient.name}`} className="mt-1 h-9 w-full rounded-md border bg-white px-2 text-xs text-[#637b86]">
+                          <option value="">Conversacion general</option>
+                          {projects.filter((project) => project.terraqoWorkspaceId === recipient.workspaceId).map((project) => (
+                            <option key={project.id} value={project.id}>{project.title}</option>
+                          ))}
+                        </select>
+                      ) : null}
+                    </form>
+                  ))}
+                </div>
+              </details>
+            ) : null}
           </div>
 
-          <nav aria-label="Conversaciones" className="max-h-[360px] overflow-y-auto p-2">
+          <nav aria-label="Conversaciones" className="max-h-[560px] overflow-y-auto p-3">
             {data.conversations.map((conversation) => {
-              const active = data.selected?.id === conversation.id;
+              const active = selected?.id === conversation.id;
               const lastMessage = conversation.messages.at(-1);
               const avatar = conversationAvatar(conversation, currentUserId);
+              const count = unreadCount(conversation, currentUserId);
+              const other = otherParticipant(conversation, currentUserId);
               return (
-                <Link key={conversation.id} href={`${basePath}?conversation=${conversation.id}`} className={`block rounded-md p-3 transition ${active ? "bg-[#063D63] text-white" : "hover:bg-white"}`}>
-                  <div className="flex items-center gap-3">
-                    <UserAvatar name={avatar.name} image={avatar.image} size="md" className={active ? "border-white/30 bg-white/10 text-white" : ""} />
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-semibold">{participantLabel(conversation, currentUserId)}</span>
-                      <span className={`mt-1 block truncate text-xs ${active ? "text-white/70" : "text-muted-foreground"}`}>{lastMessage?.body || conversation.workspace?.name || "Conversacion iniciada"}</span>
+                <Link
+                  key={conversation.id}
+                  href={`${basePath}?conversation=${conversation.id}`}
+                  className={`block rounded-xl border p-4 transition ${active ? "border-primary bg-[#e6f6f4] shadow-[0_12px_30px_rgba(0,143,135,0.12)]" : "border-transparent hover:border-[#d4e4e2] hover:bg-[#f7fbfb]"}`}
+                >
+                  <div className="flex gap-3">
+                    <UserAvatar name={avatar.name} image={avatar.image} size="lg" />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-start justify-between gap-2">
+                        <span className="block truncate text-sm font-bold text-[#0b202b]">{participantLabel(conversation, currentUserId)}</span>
+                        <span className="shrink-0 text-xs text-[#7b9099]">{formatTime(lastMessage?.createdAt || conversation.updatedAt)}</span>
+                      </span>
+                      <span className="mt-1 block truncate text-xs text-primary">{other?.terraqoProfessionalProfile?.headline || conversation.workspace?.name || "Terraqo"}</span>
+                      <span className="mt-1 flex items-center justify-between gap-2">
+                        <span className="block truncate text-xs text-[#637b86]">{lastMessage?.body || conversation.project?.title || "Conversacion iniciada"}</span>
+                        {count ? <span className="grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1 text-[11px] font-bold text-white">{count}</span> : null}
+                      </span>
                     </span>
                   </div>
                 </Link>
               );
             })}
+            {!data.conversations.length ? (
+              <div className="rounded-xl border border-dashed border-[#d4e4e2] p-6 text-center text-sm text-[#637b86]">Aun no tienes conversaciones activas.</div>
+            ) : null}
           </nav>
         </aside>
 
-        <section className="flex w-full min-w-0 min-h-[620px] flex-col">
-          {data.selected ? (
+        <section className="flex min-h-[690px] min-w-0 flex-col border-b border-[#d4e4e2] xl:border-b-0">
+          {selected ? (
             <>
-              <header className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4">
+              <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#d4e4e2] bg-white px-6 py-5">
                 <div className="flex min-w-0 items-center gap-3">
-                  <UserAvatar {...conversationAvatar(data.selected, currentUserId)} size="md" />
+                  <UserAvatar {...selectedAvatar} size="lg" />
                   <div className="min-w-0">
-                    <h3 className="truncate font-display text-lg font-bold">{participantLabel(data.selected, currentUserId)}</h3>
-                    <p className="text-xs text-muted-foreground">{data.selected.project?.title || data.selected.workspace?.name} | {data.selected.type.toLowerCase()}</p>
+                    <h3 className="truncate font-display text-lg font-bold text-[#0b202b]">{participantLabel(selected, currentUserId)}</h3>
+                    <p className="text-xs text-[#637b86]">{selectedWorkspace} <span className="text-primary">• Conectado</span></p>
                   </div>
                 </div>
-                {data.selected.workspaceId && data.meetWorkspaceIds.includes(data.selected.workspaceId) ? (
-                  data.selected.meetings[0] ? (
-                    <Button asChild className="gap-2 bg-[#008f87] hover:bg-[#00766f]">
-                      <Link href={`/reuniones/${data.selected.meetings[0].id}?volver=${encodeURIComponent(basePath)}`}><Video className="h-4 w-4" /> Entrar a reunion</Link>
-                    </Button>
-                  ) : (
-                    <form action={meetingAction}>
-                      <input type="hidden" name="conversationId" value={data.selected.id} />
-                      <Button type="submit" variant="outline" className="gap-2"><Video className="h-4 w-4" /> Iniciar reunion</Button>
-                    </form>
-                  )
-                ) : null}
+                <div className="flex gap-2">
+                  {selected.workspaceId && data.meetWorkspaceIds.includes(selected.workspaceId) ? (
+                    selected.meetings[0] ? (
+                      <Button asChild variant="outline" size="icon" title="Entrar a reunion">
+                        <Link href={`/reuniones/${selected.meetings[0].id}?volver=${encodeURIComponent(basePath)}`}><Video className="h-4 w-4" /></Link>
+                      </Button>
+                    ) : (
+                      <form action={meetingAction}>
+                        <input type="hidden" name="conversationId" value={selected.id} />
+                        <Button type="submit" variant="outline" size="icon" title="Iniciar reunion"><Video className="h-4 w-4" /></Button>
+                      </form>
+                    )
+                  ) : null}
+                  <Button type="button" variant="outline" size="icon" title="Llamada"><Phone className="h-4 w-4" /></Button>
+                  <Button type="button" variant="outline" size="icon" title="Mas opciones"><MoreVertical className="h-4 w-4" /></Button>
+                </div>
               </header>
-              <div className="flex-1 space-y-3 overflow-y-auto bg-[#fbfdfd] p-5">
-                {data.selected.messages.length ? data.selected.messages.map((message) => {
-                  const mine = message.senderId === currentUserId;
-                  return (
-                    <article key={message.id} className={`flex items-end gap-2 ${mine ? "justify-end" : "justify-start"}`}>
-                      {!mine ? <UserAvatar name={message.sender.name} image={message.sender.image} size="sm" /> : null}
-                      <div className={`max-w-[82%] rounded-lg px-4 py-3 ${mine ? "bg-[#063D63] text-white" : "border bg-white"}`}>
-                        {!mine ? <p className="mb-1 text-xs font-semibold text-primary">{message.sender.name || "Participante"}</p> : null}
-                        <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.body}</p>
-                        <time className={`mt-2 block text-[11px] ${mine ? "text-white/60" : "text-muted-foreground"}`}>{new Intl.DateTimeFormat("es-PE", { dateStyle: "short", timeStyle: "short" }).format(message.createdAt)}</time>
-                      </div>
-                    </article>
-                  );
-                }) : <div className="grid h-full place-items-center text-center"><div><MessageSquareText className="mx-auto h-8 w-8 text-primary" /><p className="mt-3 font-semibold">Inicia la conversacion</p><p className="mt-1 text-sm text-muted-foreground">Escribe el primer mensaje dentro de este espacio seguro.</p></div></div>}
+
+              <div className="min-h-0 flex-1 space-y-5 overflow-y-auto bg-[#fbfdfd] px-6 py-7">
+                {selected.messages.length ? (
+                  <>
+                    <div className="text-center text-xs font-semibold text-[#7b9099]">Hoy</div>
+                    {selected.messages.map((message) => {
+                      const mine = message.senderId === currentUserId;
+                      return (
+                        <article key={message.id} className={`flex items-end gap-3 ${mine ? "justify-end" : "justify-start"}`}>
+                          {!mine ? <UserAvatar name={message.sender.name} image={message.sender.image} size="sm" /> : null}
+                          <div className={`max-w-[78%] rounded-xl border px-4 py-3 shadow-[0_10px_28px_rgba(10,45,52,0.05)] ${mine ? "border-primary/20 bg-[#e8f6f5]" : "border-[#d4e4e2] bg-white"}`}>
+                            <div className="mb-1 flex items-center gap-2 text-xs">
+                              <span className="font-bold text-primary">{mine ? "Tu" : message.sender.name || "Participante"}</span>
+                              <time className="text-[#7b9099]">{formatTime(message.createdAt)}</time>
+                            </div>
+                            <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#1b3540]">{message.body}</p>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </>
+                ) : (
+                  <div className="grid h-full place-items-center text-center">
+                    <div>
+                      <MessageSquareText className="mx-auto h-9 w-9 text-primary" />
+                      <p className="mt-3 font-display text-xl font-bold text-[#0b202b]">Inicia la conversacion</p>
+                      <p className="mt-1 text-sm text-[#637b86]">Escribe el primer mensaje dentro de este espacio seguro.</p>
+                    </div>
+                  </div>
+                )}
               </div>
-              <form action={replyAction} className="min-w-0 border-t bg-white p-4">
-                <input type="hidden" name="conversationId" value={data.selected.id} />
-                <div className="flex min-w-0 gap-3">
-                  <Textarea name="body" required maxLength={4000} rows={2} placeholder="Escribe un mensaje relacionado con el trabajo o proyecto..." className="min-h-14 resize-none" />
-                  <Button type="submit" className="h-auto min-w-14 px-4" title="Enviar mensaje"><Send className="h-5 w-5" /></Button>
+
+              <form action={replyAction} className="border-t border-[#d4e4e2] bg-white p-5">
+                <input type="hidden" name="conversationId" value={selected.id} />
+                <div className="flex min-w-0 items-end gap-3">
+                  <button type="button" className="grid h-12 w-12 shrink-0 place-items-center rounded-lg border border-[#d4e4e2] text-[#496471]" title="Adjuntar archivo"><Paperclip className="h-5 w-5" /></button>
+                  <Textarea name="body" required maxLength={4000} rows={1} placeholder="Escribe un mensaje..." className="min-h-12 resize-none rounded-lg" />
+                  <button type="button" className="grid h-12 w-12 shrink-0 place-items-center rounded-lg border border-[#d4e4e2] text-[#496471]" title="Reaccion"><Smile className="h-5 w-5" /></button>
+                  <Button type="submit" className="h-12 w-14 rounded-lg bg-primary" title="Enviar mensaje"><Send className="h-5 w-5" /></Button>
                 </div>
               </form>
             </>
@@ -150,6 +230,47 @@ export function ConversationHub({ data, currentUserId, basePath, compactIntro, p
             </div>
           )}
         </section>
+
+        <aside className="min-w-0 bg-white p-6">
+          {selected ? (
+            <div className="space-y-7">
+              <div>
+                <p className="font-display text-lg font-bold text-[#0b202b]">Informacion del contacto</p>
+                <div className="mt-5 flex items-center gap-4">
+                  <UserAvatar {...selectedAvatar} size="lg" />
+                  <div className="min-w-0">
+                    <p className="truncate font-bold text-[#0b202b]">{participantLabel(selected, currentUserId)}</p>
+                    <p className="truncate text-sm text-[#637b86]">{selectedWorkspace}</p>
+                    <p className="mt-1 text-xs text-primary">Conectado</p>
+                  </div>
+                </div>
+                <p className="mt-4 text-sm leading-6 text-[#496471]">{selectedHeadline || "Contacto autorizado dentro del espacio profesional Terraqo."}</p>
+              </div>
+              <div className="border-t border-[#d4e4e2] pt-6">
+                <p className="mb-3 font-bold text-[#0b202b]">Datos de contacto</p>
+                <p className="text-sm text-[#496471]">{selectedOther?.email || "Correo no visible"}</p>
+                <p className="mt-2 text-sm text-[#496471]">{selected.project?.title || selectedWorkspace}</p>
+              </div>
+              <div className="border-t border-[#d4e4e2] pt-6">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <p className="font-bold text-[#0b202b]">Archivos compartidos</p>
+                  <button type="button" className="text-sm font-bold text-primary">Ver todos</button>
+                </div>
+                {["Levantamiento_sector_A.dwg", "Plano_referencia.pdf", "Informe_topografico.docx"].map((file, index) => (
+                  <div key={file} className="flex items-center justify-between gap-3 border-b border-[#edf3f2] py-3 last:border-b-0">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-[#1b3540]">{file}</p>
+                      <p className="text-xs text-[#7b9099]">{index + 1}.{index + 8} MB</p>
+                    </div>
+                    <Download className="h-4 w-4 shrink-0 text-primary" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-[#d4e4e2] p-6 text-sm text-[#637b86]">Selecciona una conversacion para ver el contexto del contacto, archivos y proyectos en comun.</div>
+          )}
+        </aside>
       </div>
     </div>
   );

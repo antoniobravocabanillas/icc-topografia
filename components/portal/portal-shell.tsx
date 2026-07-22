@@ -18,6 +18,7 @@ import {
   MessagesSquare,
   NotebookPen,
   FolderOpen,
+  Search,
   StickyNote,
   Settings,
   ShieldCheck,
@@ -45,6 +46,7 @@ type PortalNavItem = {
 const professionalItems: PortalNavItem[] = [
   { href: "/portal", label: "Resumen", icon: LayoutDashboard },
   { href: "/portal/perfil", label: "Mi perfil", icon: UserRound },
+  { href: "/portal/red", label: "Red profesional", icon: Search },
   { href: "/portal/experiencias", label: "Experiencias", icon: BriefcaseBusiness },
   { href: "/portal/postulaciones", label: "Postulaciones", icon: FileText },
   { href: "/portal/validaciones", label: "Validaciones", icon: ShieldCheck },
@@ -69,9 +71,17 @@ const clientItems: PortalNavItem[] = [
 
 function isActive(pathname: string, href: string) {
   if (href.includes("#")) return false;
-  const path = href.split("#")[0];
-  if (path === "/portal") return pathname === "/portal";
-  return pathname === path || pathname.startsWith(`${path}/`);
+  const navPath = normalizePortalPath(href);
+  const currentPath = normalizePortalPath(pathname);
+  if (navPath === "/") return currentPath === "/";
+  return currentPath === navPath || currentPath.startsWith(`${navPath}/`);
+}
+
+function normalizePortalPath(path: string) {
+  const clean = path.split("#")[0] || "/";
+  if (clean === "/portal") return "/";
+  if (clean.startsWith("/portal/")) return clean.slice("/portal".length) || "/";
+  return clean;
 }
 
 function PortalNavigation({ items, pathname }: { items: PortalNavItem[]; pathname: string }) {
