@@ -23,7 +23,7 @@ export const publicCvProfileInclude = {
       }
     },
     orderBy: [{ verifiedByTerraqo: "desc" }, { startedAt: "desc" }],
-    take: 10
+    take: 50
   },
   documents: {
     select: {
@@ -67,7 +67,7 @@ export const publicCvProfileInclude = {
       }
     },
     orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
-    take: 12
+    take: 80
   }
 } satisfies Prisma.TerraqoProfessionalProfileInclude;
 
