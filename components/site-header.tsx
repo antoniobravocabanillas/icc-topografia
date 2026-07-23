@@ -11,12 +11,13 @@ import { Button } from "@/components/ui/button";
 import { brand } from "@/lib/brand";
 
 const navItems = [
+  ["Inicio", "/"],
   ["Nosotros", "/nosotros"],
   ["Servicios", "/servicios"],
   ["Proyectos", "/proyectos"],
   ["Sectores", "/sectores"],
   ["Tienda", "/tienda"],
-  ["Blog", "/blog"],
+  ["Trabaja con nosotros", "/trabaja-con-nosotros"],
   ["Contacto", "/contacto"]
 ];
 
@@ -74,9 +75,9 @@ export function SiteHeader() {
         </div>
         <div className="grid gap-2 border-t p-4 sm:grid-cols-3">
           <Button asChild>
-            <Link href="/registro" onClick={() => setMenuOpen(false)}>
+            <Link href="/cuenta" onClick={() => setMenuOpen(false)}>
               <UserRound className="h-4 w-4" />
-              Cuenta / registro
+              Cuenta
             </Link>
           </Button>
           <Button asChild variant="outline">
@@ -107,7 +108,7 @@ export function SiteHeader() {
             <span className="block text-xs font-medium text-muted-foreground">{brand.tagline}</span> */}
           </span>
         </Link>
-        <nav className="hidden items-center gap-5 text-sm font-medium lg:flex">
+        <nav className="hidden items-center gap-4 text-sm font-medium xl:gap-5 lg:flex">
           {navItems.map(([label, href]) => (
             <Link key={href} href={href} className="text-muted-foreground hover:text-foreground">
               {label}
@@ -117,11 +118,11 @@ export function SiteHeader() {
         <div className="flex items-center gap-2">
           <CartNavButton />
           <Link
-            href="/registro"
+            href="/cuenta"
             className="hidden items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-muted/70 hover:text-foreground lg:inline-flex"
           >
             <UserRound className="h-4 w-4" />
-            Acceso / registro
+            Cuenta
           </Link>
           <Button asChild className="hidden sm:inline-flex">
             <Link href="/cotizacion">

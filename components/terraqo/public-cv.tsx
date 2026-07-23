@@ -16,7 +16,6 @@ import {
   LockKeyhole,
   MapPin,
   MessageSquare,
-  MoreVertical,
   ShieldCheck,
   Sparkles,
   UserRoundCheck,
@@ -314,9 +313,17 @@ export function PublicCVSectionPage({ profile, section }: { profile: PublicCvPro
 }
 
 function PublicCVHeader({ username }: { username: string }) {
+  const mobileLinks = [
+    { label: "CV Vivo", href: publicCvPath(username) },
+    { label: "Experiencias", href: publicCvPath(username, "experiencias") },
+    { label: "Proyectos", href: publicCvPath(username, "proyectos") },
+    { label: "Evidencias", href: publicCvPath(username, "evidencias") },
+    { label: "Documentos", href: publicCvPath(username, "documentos") }
+  ];
+
   return (
     <header className="sticky top-0 z-30 border-b border-[#dceaec] bg-white/92 backdrop-blur-xl">
-      <div className="mx-auto flex min-h-[76px] w-[min(100%-32px,1240px)] items-center justify-between gap-5">
+      <div className="mx-auto flex min-h-[68px] w-[min(100%-28px,1240px)] items-center justify-between gap-3 sm:min-h-[76px] sm:w-[min(100%-32px,1240px)]">
         <Link href="/" className="flex items-center gap-3" aria-label="Terraqo CV Vivo">
           <span className="grid h-10 w-10 place-items-center rounded-[10px] bg-[#008c83] font-mono text-sm font-black text-white">TQ</span>
           <span className="leading-none">
@@ -334,19 +341,28 @@ function PublicCVHeader({ username }: { username: string }) {
           <Link href={publicCvCallback(username)} className="hidden rounded-[8px] bg-[#008c83] px-5 py-3 text-sm font-black text-white shadow-[0_14px_30px_rgba(0,140,131,0.18)] transition hover:bg-[#006c66] sm:inline-flex">
             Contactar
           </Link>
-          <button className="grid h-10 w-10 place-items-center rounded-[8px] border border-[#dceaec] text-[#0b1f2a]" type="button" aria-label="Mas opciones">
-            <MoreVertical className="h-5 w-5" />
-          </button>
+          <Link href={publicCvCallback(username)} className="grid h-10 w-10 place-items-center rounded-[8px] border border-[#dceaec] text-[#0b1f2a] transition hover:border-[#9bdad4] hover:text-[#008c83] sm:hidden" aria-label="Contactar este perfil">
+            <MessageSquare className="h-5 w-5" />
+          </Link>
         </div>
       </div>
+      <nav className="border-t border-[#edf3f2] lg:hidden" aria-label="Secciones del CV Vivo">
+        <div className="mx-auto flex w-[min(100%-28px,1240px)] gap-2 overflow-x-auto py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {mobileLinks.map((item) => (
+            <Link key={item.href} href={item.href} className="shrink-0 rounded-[8px] border border-[#dceaec] bg-white px-3.5 py-2 text-xs font-black text-[#344955] transition hover:border-[#9bdad4] hover:text-[#008c83]">
+              {item.label}
+            </Link>
+          ))}
+        </div>
+      </nav>
     </header>
   );
 }
 
 function ProfileHero({ profile, name, username, specialties, isPublicCv }: { profile: PublicCvProfile; name: string; username: string; specialties: string[]; isPublicCv: boolean }) {
   return (
-    <div id="cv-vivo" className="grid gap-7 rounded-[18px] bg-white/40 p-1 lg:grid-cols-[170px_1fr]">
-      <div className="relative mx-auto h-[170px] w-[170px] overflow-hidden rounded-full border-[6px] border-white bg-[#e7f8f5] shadow-[0_18px_45px_rgba(11,31,42,0.12)] lg:mx-0">
+    <div id="cv-vivo" className="grid gap-5 rounded-[18px] bg-white/40 p-1 text-center lg:grid-cols-[170px_1fr] lg:text-left">
+      <div className="relative mx-auto h-28 w-28 overflow-hidden rounded-full border-[6px] border-white bg-[#e7f8f5] shadow-[0_18px_45px_rgba(11,31,42,0.12)] sm:h-36 sm:w-36 lg:mx-0 lg:h-[170px] lg:w-[170px]">
         {profile.user.image ? (
           <img src={profile.user.image} alt={name} className="h-full w-full object-cover" />
         ) : (
@@ -356,23 +372,23 @@ function ProfileHero({ profile, name, username, specialties, isPublicCv }: { pro
       </div>
 
       <div className="flex flex-col justify-center">
-        <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="mb-4 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
           <TrustBadge icon={Sparkles} label={isPublicCv ? "CV vivo activo" : "Visibilidad limitada"} />
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="max-w-[760px] font-display text-4xl font-black leading-[0.98] md:text-5xl">{name}</h1>
+        <div className="flex flex-wrap items-center justify-center gap-3 lg:justify-start">
+          <h1 className="max-w-[760px] font-display text-3xl font-black leading-[0.98] sm:text-4xl md:text-5xl">{name}</h1>
           {profile.identityVerificationStatus === "VERIFIED" ? (
             <span title="Identidad verificada por Terraqo" className="text-[#2087e8]"><BadgeCheck className="h-7 w-7 fill-[#2087e8] text-white" /></span>
           ) : null}
         </div>
         <p className="mt-3 font-display text-xl font-black text-[#008c83]">{profile.headline || "Profesional Terraqo"}</p>
-        <div className="mt-4 flex flex-wrap gap-5 text-sm font-semibold text-[#435a66]">
+        <div className="mt-4 flex flex-wrap justify-center gap-4 text-sm font-semibold text-[#435a66] lg:justify-start">
           <span className="inline-flex items-center gap-2"><MapPin className="h-4 w-4 text-[#008c83]" />{profile.city || "Ubicacion por completar"}</span>
           <span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-[#1dbf96]" />{STATUS_COPY[profile.status] || "Estado profesional activo"}</span>
           <span className="font-mono text-xs uppercase tracking-[0.12em] text-[#5f7280]">@{username}</span>
         </div>
         <p className="mt-5 max-w-3xl text-[15px] leading-7 text-[#425865]">{profile.bio || "Perfil en construccion. La experiencia publica se actualiza con proyectos, bitacoras y validaciones autorizadas."}</p>
-        <div className="mt-6 flex flex-wrap gap-2">
+        <div className="mt-6 flex flex-wrap justify-center gap-2 lg:justify-start">
           {specialties.length ? specialties.map((item) => <ToolChip key={item} label={item} />) : <ToolChip label="Perfil en actualizacion" />}
         </div>
       </div>
@@ -420,14 +436,14 @@ function MetricStrip({ years, projects, validation, evidence, lastActivity }: { 
     { label: "Evidencias publicas", value: evidence, icon: ClipboardCheck }
   ];
   return (
-    <div className="grid overflow-hidden rounded-[12px] border border-[#dceaec] bg-white shadow-[0_20px_55px_rgba(12,43,49,0.08)] md:grid-cols-[repeat(4,1fr)_190px]">
+    <div className="grid grid-cols-2 overflow-hidden rounded-[12px] border border-[#dceaec] bg-white shadow-[0_20px_55px_rgba(12,43,49,0.08)] md:grid-cols-[repeat(4,1fr)_190px]">
       {metrics.map((metric) => (
-        <div key={metric.label} className="flex min-h-[78px] items-center gap-4 border-b border-[#dceaec] px-6 md:border-b-0 md:border-r">
+        <div key={metric.label} className="flex min-h-[78px] items-center gap-3 border-b border-r border-[#dceaec] px-4 even:border-r-0 md:border-b-0 md:border-r md:px-6 md:even:border-r">
           <span className="grid h-10 w-10 place-items-center rounded-[10px] bg-[#e7f8f5] text-[#008c83]"><metric.icon className="h-5 w-5" /></span>
-          <span><strong className="block font-display text-3xl font-black">{metric.value}</strong><small className="font-semibold text-[#5f7280]">{metric.label}</small></span>
+          <span><strong className="block font-display text-2xl font-black sm:text-3xl">{metric.value}</strong><small className="font-semibold text-[#5f7280]">{metric.label}</small></span>
         </div>
       ))}
-      <div className="flex min-h-[78px] items-center gap-3 px-6">
+      <div className="col-span-2 flex min-h-[78px] items-center gap-3 px-4 md:col-span-1 md:px-6">
         <span className="h-2 w-2 rounded-full bg-[#1dbf96]" />
         <span><small className="block text-xs text-[#5f7280]">Ultima actividad</small><strong className="text-sm">{formatDate(lastActivity, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</strong></span>
       </div>

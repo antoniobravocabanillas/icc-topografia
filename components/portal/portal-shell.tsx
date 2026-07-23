@@ -7,14 +7,12 @@ import {
   Bell,
   BriefcaseBusiness,
   Building2,
-  ChevronDown,
   Compass,
   FileCheck2,
   Files,
   FileText,
   Headphones,
   LayoutDashboard,
-  Menu,
   MessagesSquare,
   NotebookPen,
   FolderOpen,
@@ -84,9 +82,14 @@ function normalizePortalPath(path: string) {
   return clean;
 }
 
-function PortalNavigation({ items, pathname }: { items: PortalNavItem[]; pathname: string }) {
+function PortalNavigation({ items, pathname, variant = "stack" }: { items: PortalNavItem[]; pathname: string; variant?: "stack" | "mobile" }) {
+  const navClass =
+    variant === "mobile"
+      ? "flex w-max min-w-full gap-2"
+      : "grid grid-cols-2 gap-1.5 sm:grid-cols-3 xl:grid-cols-1";
+
   return (
-    <nav className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 xl:grid-cols-1" aria-label="Navegacion del portal">
+    <nav className={navClass} aria-label="Navegacion del portal">
       {items.map((item) => {
         const Icon = item.icon;
         const active = isActive(pathname, item.href);
@@ -99,7 +102,7 @@ function PortalNavigation({ items, pathname }: { items: PortalNavItem[]; pathnam
               active
                 ? "bg-[#e8f6f5] text-[#008f87]"
                 : "text-[#314b57] hover:bg-[#f1f6f5] hover:text-[#07323a]"
-            }`}
+            } ${variant === "mobile" ? "shrink-0 border border-[#dce7e5] bg-white/82 shadow-[0_10px_25px_rgba(15,59,67,0.04)]" : ""}`}
           >
             <Icon className="h-[18px] w-[18px] shrink-0" />
             <span>{item.label}</span>
@@ -116,7 +119,7 @@ export function PortalShell({ children, name, image, headline, portalType = "pro
   const portalLabel = portalType === "professional" ? "Portal profesional" : "Portal del cliente";
 
   return (
-    <div className="min-h-screen bg-[#f7faf9] text-[#0b202b]">
+    <div className="min-h-screen overflow-x-hidden bg-[#f7faf9] text-[#0b202b]">
       <header className="sticky top-0 z-50 border-b border-[#dce7e5] bg-white/95 backdrop-blur-xl">
         <div className="mx-auto flex h-[76px] max-w-[1720px] items-center gap-4 px-4 sm:px-6 xl:px-8">
           <Link href="/portal" className="flex min-w-0 items-center gap-3" aria-label="Ir al resumen del portal">
@@ -149,15 +152,15 @@ export function PortalShell({ children, name, image, headline, portalType = "pro
       </header>
 
       <div className="mx-auto max-w-[1720px] px-4 sm:px-6 xl:px-8">
-        <details className="group mt-4 rounded-lg border border-[#dce7e5] bg-white p-2 shadow-[0_10px_30px_rgba(15,59,67,0.05)] xl:hidden">
-          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-md px-3 font-semibold text-[#183640]">
-            <span className="flex items-center gap-2"><Menu className="h-4 w-4" />Navegacion</span>
-            <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
-          </summary>
-          <div className="border-t px-1 pt-2">
-            <PortalNavigation items={items} pathname={pathname} />
+        <div className="sticky top-[76px] z-40 -mx-4 border-b border-[#dce7e5] bg-[#f7faf9]/96 px-4 py-3 shadow-[0_14px_28px_rgba(15,59,67,0.06)] backdrop-blur-xl sm:-mx-6 sm:px-6 xl:hidden">
+          <div className="mb-2 flex items-center justify-between gap-4">
+            <p className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-[#008f87]">Navegacion</p>
+            <span className="truncate text-xs font-semibold text-[#6b818a]">{portalLabel}</span>
           </div>
-        </details>
+          <div className="-mx-4 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:-mx-6 sm:px-6 [&::-webkit-scrollbar]:hidden">
+            <PortalNavigation items={items} pathname={pathname} variant="mobile" />
+          </div>
+        </div>
 
         <div className="grid min-h-[calc(100vh-76px)] gap-7 xl:grid-cols-[250px_minmax(0,1fr)] xl:gap-9">
           <aside className="hidden border-r border-[#dce7e5] pr-6 pt-8 xl:block">
