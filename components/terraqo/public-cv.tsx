@@ -130,6 +130,18 @@ function publicCvCallback(username: string, section?: PublicCvSection) {
   return `/cuenta?callbackUrl=${encodeURIComponent(path)}`;
 }
 
+function projectHref(project: ProjectSnapshot) {
+  const slug = project.slug?.trim();
+  if (!slug || slug === "#") return null;
+  if (/^https?:\/\//i.test(slug)) return slug;
+  if (slug.startsWith("/")) return slug;
+  return `/proyectos/${slug}`;
+}
+
+function isExternalHref(href: string) {
+  return /^https?:\/\//i.test(href);
+}
+
 function uniqueProjects(profile: PublicCvProfile, limit: number | null = 4): ProjectSnapshot[] {
   const map = new Map<string, ProjectSnapshot>();
   for (const experience of profile.experiences) {
@@ -479,15 +491,40 @@ function ProjectsSection({ projects, profile, username, extended = false }: { pr
 }
 
 function ProjectCard({ project }: { project: ProjectSnapshot }) {
-  return (
-    <article className="overflow-hidden rounded-[12px] border border-[#dceaec] bg-white transition duration-200 hover:-translate-y-1 hover:shadow-[0_18px_42px_rgba(12,43,49,0.11)]">
+  const href = projectHref(project);
+  const className =
+    "group block overflow-hidden rounded-[12px] border border-[#dceaec] bg-white transition duration-200 hover:-translate-y-1 hover:border-[#9bdad4] hover:shadow-[0_18px_42px_rgba(12,43,49,0.11)]";
+  const content = (
+    <>
       <VisualFrame src={project.image} label={project.title} />
       <div className="p-4">
         <span className="inline-flex rounded-[7px] bg-[#e7f8f5] px-2 py-1 text-xs font-black text-[#006c66]">{PROJECT_STATUS_COPY[project.status] || "Proyecto"}</span>
         <h3 className="mt-3 min-h-[48px] font-display text-base font-black leading-tight">{project.title}</h3>
         <p className="mt-2 text-xs font-semibold text-[#008c83]">{project.clientName || project.location || project.category || "Proyecto Terraqo"}</p>
+        <span className="mt-4 inline-flex items-center gap-2 text-xs font-black text-[#006c66] transition group-hover:translate-x-1">
+          {href ? "Ver proyecto" : "Proyecto no publicado"}
+          {href ? <ArrowRight className="h-3.5 w-3.5" /> : null}
+        </span>
       </div>
-    </article>
+    </>
+  );
+
+  if (!href) {
+    return <article className={className}>{content}</article>;
+  }
+
+  if (isExternalHref(href)) {
+    return (
+      <a href={href} target="_blank" rel="noreferrer" className={className} aria-label={`Ver proyecto ${project.title}`}>
+        {content}
+      </a>
+    );
+  }
+
+  return (
+    <Link href={href} className={className} aria-label={`Ver proyecto ${project.title}`}>
+      {content}
+    </Link>
   );
 }
 
