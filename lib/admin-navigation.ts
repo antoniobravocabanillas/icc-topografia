@@ -66,6 +66,7 @@ export const adminNavigation: AdminNavItem[] = [
   { group: "Gestion", label: "Notificaciones", href: "/admin/notificaciones", icon: "bell", roles: allRoles },
   { group: "Gestion", label: "Equipo", href: "/admin/equipo", icon: "users", roles: ["ADMIN", "SUPER_ADMIN"] },
   { group: "Talento", label: "Profesionales", href: "/admin/terraqo/red", icon: "community", roles: ["ADMIN", "SUPER_ADMIN"], module: "PROFESSIONAL_NETWORK" },
+  { group: "Talento", label: "Formulario publico", href: "/admin/terraqo/red/formulario", icon: "clipboard", roles: ["ADMIN", "SUPER_ADMIN"], module: "PROFESSIONAL_NETWORK" },
   { group: "Talento", label: "Mensajes profesionales", href: "/admin/terraqo/mensajes", icon: "messages", roles: ["ADMIN", "SUPER_ADMIN"], module: "PROFESSIONAL_MESSAGING" },
   { group: "Talento", label: "Comunidad", href: "/admin/terraqo/comunidad", icon: "store", roles: ["ADMIN", "SUPER_ADMIN"], module: "FORUMS" },
   { group: "Plataforma", label: "Control Terraqo", href: "/admin/terraqo", icon: "workspace", roles: ["SUPER_ADMIN"] },
