@@ -487,6 +487,8 @@ model Company {
   address                  String?
   city                     String?
   industry                 String?
+  website                  String?
+  logoUrl                  String?
   status                   String                           @default("prospecto")
   contacts                 Contact[]
   accounts                 ClientAccount[]

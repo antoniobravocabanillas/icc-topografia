@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/server/api";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
+import { getTerraqoIndustryLabel, terraqoIndustries } from "@/lib/terraqo/industries";
 import { createTerraqoWorkspace } from "@/lib/terraqo/workspace-repository";
 import { setWorkspaceModuleState, type WorkspaceProvisioningMode } from "@/lib/terraqo/workspace-modules";
 import { terraqoModules } from "@/lib/workspace";
@@ -22,16 +23,38 @@ async function createWorkspaceAction(formData: FormData) {
   const name = textField(formData, "name");
   const slug = slugify(textField(formData, "slug") || name);
   const plan = textField(formData, "plan") as "FREE" | "BASIC" | "PROFESSIONAL" | "PREMIUM" | "ENTERPRISE";
+  const companyId = textField(formData, "companyId");
+  const newCompanyName = textField(formData, "newCompanyName");
+  const industry = textField(formData, "industry");
   if (!name || !slug || !["FREE", "BASIC", "PROFESSIONAL", "PREMIUM", "ENTERPRISE"].includes(plan)) return;
-  await createTerraqoWorkspace({
+  const workspace = await createTerraqoWorkspace({
     name,
     slug,
-    industry: textField(formData, "industry") || undefined,
+    companyId: companyId || undefined,
+    industry: industry || undefined,
     domain: textField(formData, "domain") || undefined,
     brandName: textField(formData, "brandName") || name,
     description: textField(formData, "description") || undefined,
     plan
   });
+  if (!companyId && newCompanyName) {
+    const company = await prisma.company.create({
+      data: {
+        legalName: newCompanyName,
+        tradeName: textField(formData, "newCompanyTradeName") || newCompanyName,
+        document: textField(formData, "newCompanyDocument") || null,
+        website: textField(formData, "newCompanyWebsite") || textField(formData, "domain") || null,
+        logoUrl: textField(formData, "newCompanyLogoUrl") || null,
+        industry: industry || null,
+        status: "cliente",
+        terraqoWorkspaceId: workspace.id
+      }
+    });
+    await prisma.terraqoWorkspace.update({
+      where: { id: workspace.id },
+      data: { companyId: company.id }
+    });
+  }
   revalidatePath("/admin/terraqo");
 }
 
@@ -42,16 +65,37 @@ async function updateWorkspaceAction(formData: FormData) {
   const tier = textField(formData, "tier") as "FREE" | "BASIC" | "PROFESSIONAL" | "PREMIUM" | "ENTERPRISE";
   const status = textField(formData, "subscriptionStatus") as "TRIALING" | "ACTIVE" | "PAST_DUE" | "SUSPENDED" | "CANCELLED";
   const seats = Math.max(1, Number(textField(formData, "seats") || 1));
+  const selectedCompanyId = textField(formData, "companyId");
+  const newCompanyName = textField(formData, "newCompanyName");
+  const industry = textField(formData, "industry");
   if (!workspaceId) return;
   const latestSubscription = await prisma.terraqoSubscription.findFirst({ where: { workspaceId }, orderBy: { createdAt: "desc" }, select: { id: true } });
   await prisma.$transaction(async (tx) => {
+    let companyId = selectedCompanyId === "__none" ? null : selectedCompanyId || null;
+    if (newCompanyName) {
+      const company = await tx.company.create({
+        data: {
+          legalName: newCompanyName,
+          tradeName: textField(formData, "newCompanyTradeName") || newCompanyName,
+          document: textField(formData, "newCompanyDocument") || null,
+          website: textField(formData, "newCompanyWebsite") || null,
+          logoUrl: textField(formData, "newCompanyLogoUrl") || null,
+          industry: industry || null,
+          status: "cliente",
+          terraqoWorkspaceId: workspaceId
+        },
+        select: { id: true }
+      });
+      companyId = company.id;
+    }
     await tx.terraqoWorkspace.update({
       where: { id: workspaceId },
       data: {
         name: textField(formData, "name"),
         brandName: textField(formData, "brandName") || null,
         domain: textField(formData, "domain") || null,
-        industry: textField(formData, "industry") || null,
+        industry: industry || null,
+        companyId,
         active: textField(formData, "active") === "true"
       }
     });
@@ -106,6 +150,20 @@ export default async function TerraqoAdminPage() {
       }
     },
     orderBy: [{ active: "desc" }, { createdAt: "desc" }]
+  });
+
+  const registeredCompanies = await prisma.company.findMany({
+    where: { deletedAt: null },
+    select: {
+      id: true,
+      legalName: true,
+      tradeName: true,
+      document: true,
+      industry: true,
+      website: true,
+      logoUrl: true
+    },
+    orderBy: [{ legalName: "asc" }]
   });
 
   const activeWorkspaces = workspaces.filter((item) => item.active).length;
@@ -164,11 +222,33 @@ export default async function TerraqoAdminPage() {
             <Input name="slug" placeholder="slug-del-workspace" />
             <Input name="brandName" placeholder="Marca visible" />
             <Input name="domain" placeholder="empresa.com" />
-            <Input name="industry" placeholder="Industria o rubro" />
+            <select name="industry" defaultValue="" className="h-10 rounded-md border bg-background px-3 text-sm">
+              <option value="">Seleccionar industria</option>
+              {terraqoIndustries.map((industry) => <option key={industry.value} value={industry.value}>{industry.label}</option>)}
+            </select>
+            <select name="companyId" defaultValue="" className="h-10 rounded-md border bg-background px-3 text-sm">
+              <option value="">Sin empresa registrada</option>
+              {registeredCompanies.map((company) => (
+                <option key={company.id} value={company.id}>
+                  {company.tradeName || company.legalName}{company.document ? ` - ${company.document}` : ""}
+                </option>
+              ))}
+            </select>
             <select name="plan" defaultValue="BASIC" className="h-10 rounded-md border bg-background px-3 text-sm">
               {['FREE', 'BASIC', 'PROFESSIONAL', 'PREMIUM', 'ENTERPRISE'].map((tier) => <option key={tier}>{tier}</option>)}
             </select>
-            <Input name="description" placeholder="Descripcion interna" className="xl:col-span-2" />
+            <Input name="description" placeholder="Descripcion interna" />
+            <div className="rounded-md border bg-background/70 p-3 md:col-span-2 xl:col-span-4">
+              <p className="text-sm font-semibold">Crear empresa registrada si no existe</p>
+              <p className="mt-1 text-xs text-muted-foreground">Opcional. Si completas el nombre, quedara vinculada automaticamente a este workspace.</p>
+              <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                <Input name="newCompanyName" placeholder="Razon social" />
+                <Input name="newCompanyTradeName" placeholder="Nombre comercial" />
+                <Input name="newCompanyDocument" placeholder="RUC / documento" />
+                <Input name="newCompanyWebsite" placeholder="Web de la empresa" />
+                <Input name="newCompanyLogoUrl" placeholder="URL del logo" />
+              </div>
+            </div>
             <Button type="submit" className="md:col-span-2 xl:col-span-4">Crear workspace aislado</Button>
           </form>
         </CardContent>
@@ -213,7 +293,7 @@ export default async function TerraqoAdminPage() {
                       <Badge variant="secondary">{subscription?.tier ?? "Sin plan"}</Badge>
                     </div>
                     <CardDescription className="mt-2">
-                      {item.company?.tradeName ?? item.company?.legalName ?? "Sin empresa vinculada"} | {item.domain ?? item.slug}
+                      {item.company?.tradeName ?? item.company?.legalName ?? "Sin empresa vinculada"} | {item.domain ?? item.slug} | {getTerraqoIndustryLabel(item.industry)}
                     </CardDescription>
                   </div>
                   <div className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-3 lg:text-right">
@@ -229,7 +309,10 @@ export default async function TerraqoAdminPage() {
                   <Input name="name" defaultValue={item.name} aria-label="Nombre del workspace" required />
                   <Input name="brandName" defaultValue={item.brandName || ""} placeholder="Marca" />
                   <Input name="domain" defaultValue={item.domain || ""} placeholder="Dominio" />
-                  <Input name="industry" defaultValue={item.industry || ""} placeholder="Industria" />
+                  <select name="industry" defaultValue={item.industry || ""} className="h-10 rounded-md border bg-background px-3 text-sm">
+                    <option value="">Seleccionar industria</option>
+                    {terraqoIndustries.map((industry) => <option key={industry.value} value={industry.value}>{industry.label}</option>)}
+                  </select>
                   <select name="tier" defaultValue={subscription?.tier || "BASIC"} className="h-10 rounded-md border bg-background px-3 text-sm">
                     {['FREE', 'BASIC', 'PROFESSIONAL', 'PREMIUM', 'ENTERPRISE'].map((tier) => <option key={tier}>{tier}</option>)}
                   </select>
@@ -238,6 +321,25 @@ export default async function TerraqoAdminPage() {
                   </select>
                   <Input name="seats" type="number" min={1} defaultValue={subscription?.seats || 1} aria-label="Cantidad de usuarios" />
                   <select name="active" defaultValue={String(item.active)} className="h-10 rounded-md border bg-background px-3 text-sm"><option value="true">Workspace activo</option><option value="false">Workspace suspendido</option></select>
+                  <select name="companyId" defaultValue={item.companyId || "__none"} className="h-10 rounded-md border bg-background px-3 text-sm md:col-span-2">
+                    <option value="__none">Sin empresa vinculada</option>
+                    {registeredCompanies.map((company) => (
+                      <option key={company.id} value={company.id}>
+                        {company.tradeName || company.legalName}{company.document ? ` - ${company.document}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="rounded-md border bg-background/70 p-3 md:col-span-2 xl:col-span-4">
+                    <p className="text-sm font-semibold">Crear y vincular empresa registrada</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Usalo cuando el cliente aun no existe en Terraqo. Si completas el nombre, reemplaza la vinculacion seleccionada.</p>
+                    <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                      <Input name="newCompanyName" placeholder="Razon social" />
+                      <Input name="newCompanyTradeName" placeholder="Nombre comercial" />
+                      <Input name="newCompanyDocument" placeholder="RUC / documento" />
+                      <Input name="newCompanyWebsite" placeholder="Web de la empresa" />
+                      <Input name="newCompanyLogoUrl" placeholder="URL del logo" />
+                    </div>
+                  </div>
                   <Button type="submit" variant="outline" className="md:col-span-2 xl:col-span-4">Guardar configuracion del cliente</Button>
                 </form>
                 <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
