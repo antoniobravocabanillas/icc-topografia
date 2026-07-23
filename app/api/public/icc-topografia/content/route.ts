@@ -85,24 +85,32 @@ export async function GET(request: Request) {
           relatedProjects: service.relatedProjects
         };
       }),
-      projects: projects.map((project) => ({
-        slug: project.slug,
-        title: project.title,
-        sector: project.category || "",
-        location: project.location || "",
-        status: project.status,
-        clientName: project.clientName || "",
-        image: normalizeImage(project.images[0]?.url, origin) || "/images/hero-topografia.jpg",
-        gallery: project.images.map((image) => normalizeImage(image.url, origin)),
-        summary: project.summary,
-        description: project.description,
-        challenge: project.challenge || "",
-        solution: project.solution || "",
-        result: project.results || "",
-        results: project.results || "",
-        services: project.servicesApplied,
-        featured: project.isFeatured
-      })),
+      projects: projects.map((project) => {
+        const hasCoordinates = project.latitude !== null && project.longitude !== null;
+
+        return {
+          slug: project.slug,
+          title: project.title,
+          sector: project.category || "",
+          location: project.location || "",
+          status: project.status,
+          clientName: project.clientName || "",
+          latitude: project.latitude,
+          longitude: project.longitude,
+          geofenceRadiusMeters: project.geofenceRadiusMeters,
+          mapUrl: hasCoordinates ? `https://www.google.com/maps?q=${project.latitude},${project.longitude}` : "",
+          image: normalizeImage(project.images[0]?.url, origin) || "/images/hero-topografia.jpg",
+          gallery: project.images.map((image) => normalizeImage(image.url, origin)),
+          summary: project.summary,
+          description: project.description,
+          challenge: project.challenge || "",
+          solution: project.solution || "",
+          result: project.results || "",
+          results: project.results || "",
+          services: project.servicesApplied,
+          featured: project.isFeatured
+        };
+      }),
       products: products.map((product) => {
         const serialized = serializeProduct(product);
         return {

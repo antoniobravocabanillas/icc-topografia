@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Prisma } from "@prisma/client";
 import { CheckCircle2, ExternalLink } from "lucide-react";
 import { FormSubmitButton } from "@/components/admin/form-submit-button";
+import { ProjectClientFields, type ProjectClientOption } from "@/components/admin/project-client-fields";
 import { ProjectCoordinateFields } from "@/components/admin/project-coordinate-fields";
 import { ProjectImageUploader } from "@/components/admin/project-image-uploader";
 import { StatusBadge } from "@/components/admin/status-badge";
@@ -25,6 +26,20 @@ const projectStatusMessages: Record<string, string> = {
   error: "No se pudo completar la accion."
 };
 
+const defaultProjectCategories = [
+  "Edificacion multifamiliar",
+  "Habilitacion urbana",
+  "Infraestructura vial",
+  "Saneamiento",
+  "Industrial",
+  "Agroindustrial",
+  "Mineria",
+  "Catastro y saneamiento",
+  "Aeroportuario",
+  "Obra publica",
+  "Residencial"
+];
+
 type AdminProjectsPageProps = {
   searchParams?: Promise<{
     projectStatus?: string;
@@ -34,6 +49,7 @@ type AdminProjectsPageProps = {
 
 type ProjectWithAdminDetails = Prisma.ProjectGetPayload<{
   include: {
+    client: true;
     images: true;
     progress: {
       include: {
@@ -51,16 +67,31 @@ export default async function AdminProjectsPage({ searchParams }: AdminProjectsP
   const projectStatus = resolvedSearchParams?.projectStatus;
   const projectStatusMessage = projectStatus ? projectStatusMessages[projectStatus] : null;
   let projects: ProjectWithAdminDetails[];
+  let clients: ProjectClientOption[];
   try {
-    projects = await prisma.project.findMany({
-      where: { terraqoWorkspaceId },
-      include: {
-        images: { orderBy: { position: "asc" } },
-        progress: { include: { staffProfile: true }, orderBy: { createdAt: "desc" }, take: 5 }
-      },
-      orderBy: { updatedAt: "desc" },
-      take: 100
-    });
+    const [projectRows, clientRows] = await Promise.all([
+      prisma.project.findMany({
+        where: { terraqoWorkspaceId },
+        include: {
+          client: true,
+          images: { orderBy: { position: "asc" } },
+          progress: { include: { staffProfile: true }, orderBy: { createdAt: "desc" }, take: 5 }
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 100
+      }),
+      prisma.client.findMany({
+        where: { terraqoWorkspaceId, deletedAt: null },
+        orderBy: [{ company: "asc" }, { name: "asc" }],
+        take: 300
+      })
+    ]);
+    projects = projectRows;
+    clients = clientRows.map((client) => ({
+      id: client.id,
+      label: client.company || client.name,
+      email: client.email
+    }));
   } catch (error) {
     console.error("Admin projects load failed", error);
     return (
@@ -80,6 +111,9 @@ export default async function AdminProjectsPage({ searchParams }: AdminProjectsP
       </section>
     );
   }
+
+  const dynamicProjectCategories = projects.map((project) => project.category).filter(Boolean) as string[];
+  const projectCategories = Array.from(new Set([...defaultProjectCategories, ...dynamicProjectCategories])).sort((a, b) => a.localeCompare(b, "es"));
 
   return (
     <section className="space-y-8">
@@ -105,7 +139,7 @@ export default async function AdminProjectsPage({ searchParams }: AdminProjectsP
           <CardDescription>Registra el alcance topografico, rubro, estado de campo/gabinete y evidencia para clientes.</CardDescription>
         </CardHeader>
         <CardContent>
-          <ProjectForm action={createProjectAction} submitLabel="Crear proyecto" />
+          <ProjectForm action={createProjectAction} submitLabel="Crear proyecto" clients={clients} categories={projectCategories} />
         </CardContent>
       </Card>
 
@@ -134,6 +168,7 @@ export default async function AdminProjectsPage({ searchParams }: AdminProjectsP
                 defaults={{
                   title: project.title,
                   slug: project.slug,
+                  clientId: project.clientId || "",
                   clientName: project.clientName || "",
                   location: project.location || "",
                   latitude: project.latitude?.toString() || "",
@@ -151,6 +186,8 @@ export default async function AdminProjectsPage({ searchParams }: AdminProjectsP
                   isFeatured: project.isFeatured,
                   images: project.images.map((image) => image.url).join("\n")
                 }}
+                clients={clients}
+                categories={projectCategories}
               />
               <form action={deleteProjectAction.bind(null, project.id)}>
                 <Button type="submit" variant="destructive">Eliminar proyecto</Button>
@@ -186,13 +223,18 @@ export default async function AdminProjectsPage({ searchParams }: AdminProjectsP
 function ProjectForm({
   action,
   submitLabel,
-  defaults
+  defaults,
+  clients,
+  categories
 }: {
   action: (formData: FormData) => Promise<void>;
   submitLabel: string;
+  clients: ProjectClientOption[];
+  categories: string[];
   defaults?: {
     title: string;
     slug: string;
+    clientId: string;
     clientName: string;
     location: string;
     latitude: string;
@@ -215,10 +257,15 @@ function ProjectForm({
     <form action={action} className="grid gap-3 md:grid-cols-2">
       <Input name="title" placeholder="Titulo" defaultValue={defaults?.title} required />
       <Input name="slug" placeholder="slug-url" defaultValue={defaults?.slug} />
-      <Input name="clientName" placeholder="Cliente" defaultValue={defaults?.clientName} />
+      <ProjectClientFields clients={clients} defaultClientId={defaults?.clientId} defaultClientName={defaults?.clientName} />
       <Input name="location" placeholder="Ubicacion" defaultValue={defaults?.location} />
       <ProjectCoordinateFields latitude={defaults?.latitude} longitude={defaults?.longitude} radius={defaults?.geofenceRadiusMeters} />
-      <Input name="category" placeholder="Rubro: habilitacion urbana, edificacion, vial, saneamiento..." defaultValue={defaults?.category} />
+      <select name="category" defaultValue={defaults?.category || ""} className="h-11 rounded-md border bg-background px-3 text-sm">
+        <option value="">Seleccionar rubro</option>
+        {categories.map((category) => (
+          <option key={category} value={category}>{category}</option>
+        ))}
+      </select>
       <select name="status" defaultValue={defaults?.status || "PLANNING"} className="h-11 rounded-md border bg-background px-3 text-sm">
         {projectStatusOptions.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
       </select>

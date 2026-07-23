@@ -1572,32 +1572,166 @@ export async function updateSellerCommercialAction(id: string, formData: FormDat
   revalidatePath("/admin/equipo");
 }
 
+const createProjectClientValue = "__new_client__";
+
+function generatedClientEmail(name: string, terraqoWorkspaceId: string) {
+  const base = slugify(name).slice(0, 48) || "cliente";
+  return `cliente+${base}-${terraqoWorkspaceId.slice(-8)}@terraqo.local`;
+}
+
+async function syncProjectClientLogo({
+  terraqoWorkspaceId,
+  name,
+  logoUrl,
+  website,
+  sector
+}: {
+  terraqoWorkspaceId: string;
+  name: string;
+  logoUrl?: string;
+  website?: string;
+  sector?: string;
+}) {
+  if (!name || (!logoUrl && !website && !sector)) return;
+
+  const existing = await prisma.clientLogo.findFirst({
+    where: { terraqoWorkspaceId, name }
+  });
+
+  if (existing) {
+    await prisma.clientLogo.update({
+      where: { id: existing.id },
+      data: {
+        logoUrl: logoUrl || existing.logoUrl,
+        website: website || existing.website,
+        sector: sector || existing.sector,
+        active: true
+      }
+    });
+    return;
+  }
+
+  if (!logoUrl) return;
+
+  const lastLogo = await prisma.clientLogo.findFirst({
+    where: { terraqoWorkspaceId },
+    orderBy: { position: "desc" },
+    select: { position: true }
+  });
+
+  await prisma.clientLogo.create({
+    data: {
+      name,
+      logoUrl,
+      website,
+      sector,
+      active: true,
+      position: (lastLogo?.position || 0) + 1,
+      terraqoWorkspaceId
+    }
+  });
+}
+
+async function resolveProjectClient(formData: FormData, terraqoWorkspaceId: string) {
+  const rawClientId = value(formData, "clientId");
+
+  if (rawClientId && rawClientId !== createProjectClientValue) {
+    const client = await prisma.client.findFirst({
+      where: { id: rawClientId, terraqoWorkspaceId, deletedAt: null }
+    });
+    if (!client) throw new Error("Cliente no pertenece al workspace activo.");
+
+    return {
+      clientId: client.id,
+      companyId: client.companyId,
+      clientName: client.company || client.name
+    };
+  }
+
+  const newClientName = value(formData, "newClientName");
+  if (rawClientId === createProjectClientValue || newClientName) {
+    const clientName = newClientName || value(formData, "clientName") || "Cliente sin nombre";
+    const clientEmail = value(formData, "newClientEmail") || generatedClientEmail(clientName, terraqoWorkspaceId);
+    const existingClient = await prisma.client.findFirst({
+      where: {
+        terraqoWorkspaceId,
+        deletedAt: null,
+        OR: [
+          { email: clientEmail },
+          { name: clientName },
+          { company: clientName }
+        ]
+      }
+    });
+
+    const client = existingClient
+      ? await prisma.client.update({
+          where: { id: existingClient.id },
+          data: {
+            name: existingClient.name || clientName,
+            company: existingClient.company || clientName,
+            email: existingClient.email || clientEmail,
+            status: existingClient.status || "activo"
+          }
+        })
+      : await prisma.client.create({
+          data: {
+            name: clientName,
+            company: clientName,
+            email: clientEmail,
+            status: "activo",
+            terraqoWorkspaceId
+          }
+        });
+
+    await syncProjectClientLogo({
+      terraqoWorkspaceId,
+      name: clientName,
+      logoUrl: value(formData, "newClientLogoUrl"),
+      website: value(formData, "newClientWebsite"),
+      sector: value(formData, "newClientSector")
+    });
+
+    return {
+      clientId: client.id,
+      companyId: client.companyId,
+      clientName: client.company || client.name
+    };
+  }
+
+  return {
+    clientId: null,
+    companyId: null,
+    clientName: value(formData, "clientName") || null
+  };
+}
+
 export async function createProjectAction(formData: FormData) {
   const { workspaceId: terraqoWorkspaceId } = await requireActionRole(projectAdminRoles);
   await requireWorkspaceModule("PROJECTS", terraqoWorkspaceId);
   const title = value(formData, "title") || "";
-  const clientId = nullableValue(formData, "clientId");
-  const client = clientId ? await prisma.client.findFirst({ where: { id: clientId, terraqoWorkspaceId } }) : null;
-  if (clientId && !client) throw new Error("Cliente no pertenece al workspace activo.");
-  const companyId = nullableValue(formData, "companyId") || client?.companyId;
   const opportunityId = nullableValue(formData, "opportunityId");
   const saleId = nullableValue(formData, "saleId");
-  await Promise.all([
-    companyId ? requireOwnedEntity("Empresa", prisma.company.findFirst({ where: { id: companyId, terraqoWorkspaceId }, select: { id: true } })) : null,
-    opportunityId ? requireOwnedEntity("Oportunidad", prisma.opportunity.findFirst({ where: { id: opportunityId, terraqoWorkspaceId }, select: { id: true } })) : null,
-    saleId ? requireOwnedEntity("Venta", prisma.sale.findFirst({ where: { id: saleId, terraqoWorkspaceId }, select: { id: true } })) : null
-  ]);
   try {
+    const projectClient = await resolveProjectClient(formData, terraqoWorkspaceId);
+    const companyId = nullableValue(formData, "companyId") || projectClient.companyId;
+
+    await Promise.all([
+      companyId ? requireOwnedEntity("Empresa", prisma.company.findFirst({ where: { id: companyId, terraqoWorkspaceId }, select: { id: true } })) : null,
+      opportunityId ? requireOwnedEntity("Oportunidad", prisma.opportunity.findFirst({ where: { id: opportunityId, terraqoWorkspaceId }, select: { id: true } })) : null,
+      saleId ? requireOwnedEntity("Venta", prisma.sale.findFirst({ where: { id: saleId, terraqoWorkspaceId }, select: { id: true } })) : null
+    ]);
+
     await prisma.project.create({
       data: {
         title,
         slug: value(formData, "slug") || slugify(title),
-        clientId,
+        clientId: projectClient.clientId,
         companyId,
         opportunityId,
         saleId,
         terraqoWorkspaceId,
-        clientName: value(formData, "clientName"),
+        clientName: projectClient.clientName,
         location: value(formData, "location"),
         latitude: nullableNumberValue(formData, "latitude"),
         longitude: nullableNumberValue(formData, "longitude"),
@@ -1624,7 +1758,9 @@ export async function createProjectAction(formData: FormData) {
     adminErrorRedirect("No se pudo crear el proyecto. Revisa los datos e intenta nuevamente.");
   }
   revalidatePath("/admin/proyectos");
+  revalidatePath("/");
   revalidatePath("/proyectos");
+  revalidatePath("/api/public/icc-topografia/content");
   redirect(`/admin/proyectos?projectStatus=created&item=${encodeURIComponent(title)}`);
 }
 
@@ -1691,12 +1827,21 @@ export async function updateProjectAction(id: string, formData: FormData) {
   const title = value(formData, "title") || "";
   const images = listFromTextarea(formData, "images");
   try {
+    const projectClient = await resolveProjectClient(formData, workspaceId);
+    const companyId = nullableValue(formData, "companyId") || projectClient.companyId;
+
+    if (companyId) {
+      await requireOwnedEntity("Empresa", prisma.company.findFirst({ where: { id: companyId, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
+    }
+
     await prisma.project.update({
       where: { id },
       data: {
         title,
         slug: value(formData, "slug") || slugify(title),
-        clientName: value(formData, "clientName"),
+        clientId: projectClient.clientId,
+        companyId,
+        clientName: projectClient.clientName,
         location: value(formData, "location"),
         latitude: nullableNumberValue(formData, "latitude"),
         longitude: nullableNumberValue(formData, "longitude"),
@@ -1724,7 +1869,9 @@ export async function updateProjectAction(id: string, formData: FormData) {
     adminErrorRedirect("No se pudo actualizar el proyecto. Revisa los datos e intenta nuevamente.");
   }
   revalidatePath("/admin/proyectos");
+  revalidatePath("/");
   revalidatePath("/proyectos");
+  revalidatePath("/api/public/icc-topografia/content");
   redirect(`/admin/proyectos?projectStatus=updated&item=${encodeURIComponent(title)}`);
 }
 

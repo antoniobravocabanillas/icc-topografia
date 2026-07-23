@@ -192,6 +192,13 @@ export default async function ProjectDetailPage({ params }: ProjectPageProps) {
               <FactRow label="Estado" value={statusLabel} />
             </div>
           </div>
+          <ProjectLocationViewer
+            title={project.title}
+            location={project.location}
+            latitude={project.latitude}
+            longitude={project.longitude}
+            radius={project.geofenceRadiusMeters}
+          />
           <div className="icc-glass rounded-sm border p-6 text-white">
               <p className="text-xs font-semibold uppercase text-[#7DE4FF]">Siguiente paso</p>
               <h2 className="mt-2 font-display text-2xl font-bold">Replica este nivel de control en tu obra</h2>
@@ -268,6 +275,52 @@ function FactRow({ label, value }: { label: string; value: string }) {
     <div className="border-b border-white/[0.08] pb-3 last:border-b-0 last:pb-0">
       <p className="text-xs font-semibold uppercase text-white/45">{label}</p>
       <p className="mt-1 font-semibold text-white">{value}</p>
+    </div>
+  );
+}
+
+function ProjectLocationViewer({
+  title,
+  location,
+  latitude,
+  longitude,
+  radius
+}: {
+  title: string;
+  location?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  radius?: number | null;
+}) {
+  if (latitude === null || latitude === undefined || longitude === null || longitude === undefined) return null;
+
+  const lat = Number(latitude);
+  const lng = Number(longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+  const mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+  const embedUrl = `https://maps.google.com/maps?q=${lat},${lng}&z=17&output=embed`;
+
+  return (
+    <div className="icc-glass overflow-hidden rounded-sm border">
+      <div className="p-5">
+        <p className="text-xs font-semibold uppercase text-[#7DE4FF]">Ubicacion verificada</p>
+        <h2 className="mt-2 font-display text-2xl font-bold text-white">Plano de referencia</h2>
+        <p className="mt-2 text-sm leading-6 text-white/64">{location || "Punto de trabajo configurado en Terraqo."}</p>
+      </div>
+      <iframe
+        src={embedUrl}
+        title={`Mapa de ${title}`}
+        className="h-64 w-full border-0"
+        loading="lazy"
+        referrerPolicy="no-referrer-when-downgrade"
+      />
+      <div className="flex items-center justify-between gap-3 border-t border-white/[0.08] p-4 text-sm">
+        <span className="text-white/58">Radio de control: {radius || 250} m</span>
+        <Link href={mapsUrl} target="_blank" rel="noreferrer" className="font-semibold text-[#7DE4FF]">
+          Abrir mapa
+        </Link>
+      </div>
     </div>
   );
 }
