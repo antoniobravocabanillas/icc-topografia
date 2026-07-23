@@ -120,9 +120,11 @@ export const terraqoTeamInvitationSchema = z.object({
 });
 
 const optionalUrl = z.union([z.string().url(), z.literal("")]).optional();
+const customCareerAnswer = z.union([z.string(), z.number(), z.boolean(), z.array(z.string())]);
 
 export const publicCareerApplicationSchema = z.object({
   jobPostId: z.string().min(1).optional(),
+  formConfigVersion: z.string().trim().max(120).optional(),
   name: z.string().trim().min(3).max(160),
   email: z.string().trim().email().transform((value) => value.toLowerCase()),
   phone: z.string().trim().min(7).max(40),
@@ -140,6 +142,7 @@ export const publicCareerApplicationSchema = z.object({
   software: z.array(z.string().trim().min(1).max(120)).max(40).default([]),
   coverNote: z.string().trim().min(20).max(3000),
   availabilityNote: z.string().trim().max(600).optional(),
+  customAnswers: z.record(customCareerAnswer).default({}),
   termsAccepted: z.literal(true),
   privacyAccepted: z.literal(true)
 });

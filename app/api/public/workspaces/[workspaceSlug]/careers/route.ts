@@ -13,6 +13,7 @@ import {
   professionalTaxonomies,
   professionalTermsVersion
 } from "@/lib/terraqo/professional-categories";
+import { resolveCareerFormConfig } from "@/lib/terraqo/career-form-config";
 import { hasWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 import { publicCareerApplicationSchema } from "@/lib/validations/terraqo";
 
@@ -23,7 +24,7 @@ type RouteContext = {
 async function getPublicWorkspace(workspaceSlug: string) {
   return prisma.terraqoWorkspace.findFirst({
     where: { slug: workspaceSlug, active: true, deletedAt: null },
-    select: { id: true, slug: true, name: true, brandName: true }
+    select: { id: true, slug: true, name: true, brandName: true, industry: true, logoUrl: true }
   });
 }
 
@@ -33,8 +34,11 @@ export async function GET(_: Request, { params }: RouteContext) {
     const workspace = await getPublicWorkspace(workspaceSlug);
     if (!workspace) return fail("Workspace no encontrado.", 404);
 
-    const professionalNetworkEnabled = await hasWorkspaceModule("PROFESSIONAL_NETWORK", workspace.id);
-    if (!professionalNetworkEnabled) return fail("La red profesional no esta activa para este workspace.", 404);
+    const professionalNetworkModule = await prisma.terraqoWorkspaceModule.findUnique({
+      where: { workspaceId_code: { workspaceId: workspace.id, code: "PROFESSIONAL_NETWORK" } },
+      select: { active: true, config: true }
+    });
+    if (!professionalNetworkModule?.active) return fail("La red profesional no esta activa para este workspace.", 404);
 
     const marketplaceEnabled = await hasWorkspaceModule("JOB_MARKETPLACE", workspace.id);
     const jobs = marketplaceEnabled
@@ -65,6 +69,7 @@ export async function GET(_: Request, { params }: RouteContext) {
 
     return ok({
       workspace,
+      formConfig: resolveCareerFormConfig(workspace, professionalNetworkModule.config),
       categories: professionalCategories,
       taxonomies: professionalTaxonomies,
       acceptsGeneralApplications: true,
@@ -231,6 +236,8 @@ export async function POST(request: Request, { params }: RouteContext) {
           coverNote: payload.coverNote,
           availabilityNote: payload.availabilityNote,
           professionalCategory: payload.category,
+          formConfigVersion: payload.formConfigVersion,
+          customAnswers: payload.customAnswers,
           termsAcceptedAt: acceptedAt,
           termsVersion: professionalTermsVersion,
           privacyAcceptedAt: acceptedAt,

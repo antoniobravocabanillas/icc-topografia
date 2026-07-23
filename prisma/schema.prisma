@@ -2315,6 +2315,8 @@ model TerraqoProjectApplication {
   proposedRate          String?
   availabilityNote      String?
   professionalCategory  String?
+  formConfigVersion     String?
+  customAnswers         Json?
   termsAcceptedAt       DateTime?
   termsVersion          String?
   privacyAcceptedAt     DateTime?
