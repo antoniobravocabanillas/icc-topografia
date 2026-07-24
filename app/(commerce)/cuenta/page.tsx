@@ -12,10 +12,32 @@ import { terraqoDomains } from "@/lib/terraqo-domains";
 
 export const metadata = createMetadata({ title: "Portal Terraqo", description: "Acceso a clientes, profesionales y equipo operativo de Terraqo.", path: "/cuenta" });
 
+const workspaceAdminRoles = new Set(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"]);
+
+function resolveAccessDestination(role?: string | null) {
+  if (role === "SUPER_ADMIN") {
+    return {
+      href: `${terraqoDomains.admin}/admin/terraqo`,
+      label: "Ir al control Terraqo"
+    };
+  }
+
+  if (role && workspaceAdminRoles.has(role)) {
+    return {
+      href: `${terraqoDomains.admin}/admin`,
+      label: "Ir al panel operativo"
+    };
+  }
+
+  return {
+    href: terraqoDomains.portal,
+    label: "Ir al Portal Terraqo"
+  };
+}
+
 export default async function AccountPage() {
   const session = await auth();
-  const portalHref = session?.user?.role === "CUSTOMER" ? terraqoDomains.portal : terraqoDomains.admin;
-  const portalLabel = session?.user?.role === "CUSTOMER" ? "Ir al Portal Terraqo" : "Ir al panel operativo";
+  const accessDestination = resolveAccessDestination(session?.user?.role);
 
   return (
     <section className="tq-auth-surface relative isolate overflow-hidden bg-[#171510] text-white">
@@ -70,8 +92,8 @@ export default async function AccountPage() {
                   </div>
                   <div className="grid gap-3">
                   <Button asChild size="lg">
-                    <Link href={portalHref}>
-                      {portalLabel}
+                    <Link href={accessDestination.href}>
+                      {accessDestination.label}
                       <ArrowRight className="h-4 w-4" />
                     </Link>
                   </Button>
