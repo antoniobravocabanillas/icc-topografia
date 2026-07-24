@@ -18,11 +18,11 @@ export default async function StorePage() {
   const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
   const [categories, products] = await Promise.all([
     prisma.category.findMany({
-      include: { _count: { select: { products: { where: { isActive: true, terraqoWorkspaceId } } } } },
+      include: { _count: { select: { products: { where: { isActive: true, isVisible: true, terraqoWorkspaceId } } } } },
       orderBy: { name: "asc" }
     }),
     prisma.product.findMany({
-      where: { isActive: true, terraqoWorkspaceId },
+      where: { isActive: true, isVisible: true, terraqoWorkspaceId },
       include: { category: true, variants: true },
       orderBy: { updatedAt: "desc" }
     })

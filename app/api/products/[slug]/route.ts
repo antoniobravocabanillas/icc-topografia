@@ -14,7 +14,7 @@ export async function GET(_request: Request, { params }: ProductRouteProps) {
     const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
     await requireWorkspaceModule("TECHNICAL_STORE", terraqoWorkspaceId);
     const product = await prisma.product.findFirst({
-      where: { slug, isActive: true, terraqoWorkspaceId },
+      where: { slug, isActive: true, isVisible: true, terraqoWorkspaceId },
       include: { category: true, variants: true }
     });
 

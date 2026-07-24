@@ -14,7 +14,7 @@ export async function GET(request: Request) {
 
     const where = {
       AND: [
-        { isActive: true },
+        { isActive: true, isVisible: true },
         terraqoWorkspaceId ? { terraqoWorkspaceId } : {},
         q
           ? {

@@ -20,7 +20,7 @@ export const revalidate = 0;
 export async function generateMetadata({ params }: ProductPageProps) {
   const { slug } = await params;
   const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
-  const product = await prisma.product.findFirst({ where: { slug, isActive: true, terraqoWorkspaceId } });
+  const product = await prisma.product.findFirst({ where: { slug, isActive: true, isVisible: true, terraqoWorkspaceId } });
   if (!product) return {};
   return createMetadata({ title: product.name, description: product.summary, path: `/tienda/${product.slug}` });
 }
@@ -29,14 +29,14 @@ export default async function ProductPage({ params }: ProductPageProps) {
   const { slug } = await params;
   const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
   const dbProduct = await prisma.product.findFirst({
-    where: { slug, isActive: true, terraqoWorkspaceId },
+    where: { slug, isActive: true, isVisible: true, terraqoWorkspaceId },
     include: { category: true, variants: true }
   });
   if (!dbProduct) notFound();
 
   const product = serializeProduct(dbProduct);
   const related = (await prisma.product.findMany({
-    where: { categoryId: dbProduct.categoryId, id: { not: dbProduct.id }, isActive: true, terraqoWorkspaceId },
+    where: { categoryId: dbProduct.categoryId, id: { not: dbProduct.id }, isActive: true, isVisible: true, terraqoWorkspaceId },
     include: { category: true, variants: true },
     take: 3
   })).map(serializeProduct);
