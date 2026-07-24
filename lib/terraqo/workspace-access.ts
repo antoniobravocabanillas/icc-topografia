@@ -13,38 +13,41 @@ async function preferredWorkspaceFromRequest() {
   }
 }
 
-export async function getActiveWorkspaceMembership(userId: string, preferredWorkspaceId?: string | null) {
+function workspaceMembershipWhere(userId: string, workspaceId?: string | null) {
+  return {
+    userId,
+    active: true,
+    role: { in: workspaceAdminMemberRoles },
+    ...(workspaceId ? { workspaceId } : {}),
+    workspace: { active: true, deletedAt: null }
+  };
+}
+
+async function findAdminWorkspaceMembership(userId: string, workspaceId?: string | null) {
   return prisma.terraqoWorkspaceMember.findFirst({
-    where: {
-      userId,
-      active: true,
-      ...(preferredWorkspaceId ? { workspaceId: preferredWorkspaceId } : {}),
-      workspace: {
-        active: true
-      }
-    },
+    where: workspaceMembershipWhere(userId, workspaceId),
     orderBy: { createdAt: "asc" },
     select: {
       role: true,
       workspaceId: true,
       workspace: {
-        select: { slug: true, name: true }
+        select: { slug: true, name: true, active: true }
       }
     }
   });
 }
 
+export async function getActiveWorkspaceMembership(userId: string, preferredWorkspaceId?: string | null) {
+  const preferredMembership = preferredWorkspaceId
+    ? await findAdminWorkspaceMembership(userId, preferredWorkspaceId)
+    : null;
+
+  return preferredMembership ?? findAdminWorkspaceMembership(userId);
+}
+
 export async function hasWorkspaceAdminAccess(userId: string, role?: Role | null) {
   if (role === "SUPER_ADMIN") return true;
-  return Boolean(await prisma.terraqoWorkspaceMember.findFirst({
-    where: {
-      userId,
-      active: true,
-      role: { in: workspaceAdminMemberRoles },
-      workspace: { active: true, deletedAt: null }
-    },
-    select: { id: true }
-  }));
+  return Boolean(await findAdminWorkspaceMembership(userId));
 }
 
 export async function getWorkspaceForUser(userId: string, role?: Role | null, preferredWorkspaceId?: string | null) {
@@ -66,26 +69,17 @@ export async function getWorkspaceForUser(userId: string, role?: Role | null, pr
     });
   }
 
-  const membership = await prisma.terraqoWorkspaceMember.findFirst({
-    where: {
-      userId,
-      active: true,
-      role: { in: workspaceAdminMemberRoles },
-      ...(selectedWorkspaceId ? { workspaceId: selectedWorkspaceId } : {}),
-      workspace: { active: true, deletedAt: null }
-    },
-    orderBy: { createdAt: "asc" },
-    select: {
-      workspaceId: true,
-      workspace: { select: { slug: true, name: true } }
-    }
-  });
+  const preferredMembership = selectedWorkspaceId
+    ? await findAdminWorkspaceMembership(userId, selectedWorkspaceId)
+    : null;
+  const membership = preferredMembership ?? await findAdminWorkspaceMembership(userId);
+
   return membership?.workspace
     ? {
         id: membership.workspaceId,
         slug: membership.workspace.slug,
         name: membership.workspace.name,
-        active: true
+        active: membership.workspace.active
       }
     : null;
 }
