@@ -6,6 +6,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  schemas  = ["icc"]
 }
 
 enum Role {
@@ -20,6 +21,8 @@ enum Role {
   ENGINEER
   ARCHITECT
   SUPPORT
+
+  @@schema("icc")
 }
 
 enum OrderStatus {
@@ -30,6 +33,8 @@ enum OrderStatus {
   SHIPPED
   COMPLETED
   CANCELLED
+
+  @@schema("icc")
 }
 
 enum LeadStatus {
@@ -42,6 +47,8 @@ enum LeadStatus {
   WON
   LOST
   REQUIRES_TECH_SUPPORT
+
+  @@schema("icc")
 }
 
 enum LeadPriority {
@@ -49,6 +56,8 @@ enum LeadPriority {
   MEDIUM
   HIGH
   URGENT
+
+  @@schema("icc")
 }
 
 enum OpportunityStatus {
@@ -59,6 +68,8 @@ enum OpportunityStatus {
   WON
   LOST
   ARCHIVED
+
+  @@schema("icc")
 }
 
 enum SaleStatus {
@@ -68,6 +79,8 @@ enum SaleStatus {
   PARTIALLY_PAID
   PAID
   CANCELLED
+
+  @@schema("icc")
 }
 
 enum CommissionType {
@@ -75,6 +88,8 @@ enum CommissionType {
   MARGIN_PERCENTAGE
   FIXED_AMOUNT
   CATEGORY_PERCENTAGE
+
+  @@schema("icc")
 }
 
 enum QuoteStatus {
@@ -85,6 +100,8 @@ enum QuoteStatus {
   REJECTED
   EXPIRED
   CONVERTED
+
+  @@schema("icc")
 }
 
 enum CommissionStatus {
@@ -92,6 +109,8 @@ enum CommissionStatus {
   APPROVED
   PAID
   CANCELLED
+
+  @@schema("icc")
 }
 
 enum ProjectStatus {
@@ -100,6 +119,8 @@ enum ProjectStatus {
   FINISHED
   PUBLISHED
   ARCHIVED
+
+  @@schema("icc")
 }
 
 enum TaskStatus {
@@ -108,6 +129,8 @@ enum TaskStatus {
   BLOCKED
   DONE
   CANCELLED
+
+  @@schema("icc")
 }
 
 enum MilestoneStatus {
@@ -115,6 +138,8 @@ enum MilestoneStatus {
   IN_PROGRESS
   COMPLETED
   DELAYED
+
+  @@schema("icc")
 }
 
 enum ProjectRole {
@@ -124,6 +149,8 @@ enum ProjectRole {
   SELLER
   SUPPORT
   MANAGER
+
+  @@schema("icc")
 }
 
 enum TechnicalAvailability {
@@ -131,6 +158,8 @@ enum TechnicalAvailability {
   FIELD
   BUSY
   OFFLINE
+
+  @@schema("icc")
 }
 
 enum TicketCategory {
@@ -141,6 +170,8 @@ enum TicketCategory {
   WARRANTY
   TECHNICAL_QUERY
   OTHER
+
+  @@schema("icc")
 }
 
 enum TicketPriority {
@@ -148,6 +179,8 @@ enum TicketPriority {
   MEDIUM
   HIGH
   URGENT
+
+  @@schema("icc")
 }
 
 enum TicketStatus {
@@ -157,6 +190,8 @@ enum TicketStatus {
   IN_PROGRESS
   RESOLVED
   CLOSED
+
+  @@schema("icc")
 }
 
 enum BotProvider {
@@ -166,12 +201,16 @@ enum BotProvider {
   GROQ
   HUGGINGFACE
   OLLAMA
+
+  @@schema("icc")
 }
 
 enum BotQuestionStatus {
   PENDING
   APPROVED
   REJECTED
+
+  @@schema("icc")
 }
 
 enum NotificationType {
@@ -183,6 +222,8 @@ enum NotificationType {
   COMMISSION
   FAQ
   SYSTEM
+
+  @@schema("icc")
 }
 
 enum ActivityAction {
@@ -196,12 +237,16 @@ enum ActivityAction {
   UPLOADED
   APPROVED
   REJECTED
+
+  @@schema("icc")
 }
 
 enum ChatStatus {
   WAITING
   ACTIVE
   CLOSED
+
+  @@schema("icc")
 }
 
 enum StaffDepartment {
@@ -210,12 +255,16 @@ enum StaffDepartment {
   FIELD_ENGINEERING
   RENTAL_SERVICE
   ADMINISTRATION
+
+  @@schema("icc")
 }
 
 enum TerraqoWorkspaceType {
   CLIENT_COMPANY
   INTERNAL_UNIT
   PRODUCT_ADMIN
+
+  @@schema("icc")
 }
 
 enum TerraqoPlanTier {
@@ -224,6 +273,8 @@ enum TerraqoPlanTier {
   PROFESSIONAL
   PREMIUM
   ENTERPRISE
+
+  @@schema("icc")
 }
 
 enum TerraqoSubscriptionStatus {
@@ -232,6 +283,8 @@ enum TerraqoSubscriptionStatus {
   PAST_DUE
   SUSPENDED
   CANCELLED
+
+  @@schema("icc")
 }
 
 enum TerraqoModuleCode {
@@ -250,17 +303,23 @@ enum TerraqoModuleCode {
   ANALYTICS
   AUTOMATIONS
   DOCUMENTS
+
+  @@schema("icc")
 }
 
 enum TerraqoMeetingStatus {
   LIVE
   ENDED
   CANCELLED
+
+  @@schema("icc")
 }
 
 enum TerraqoMeetingProvider {
   JITSI
   CUSTOM_JITSI
+
+  @@schema("icc")
 }
 
 enum TerraqoConversationType {
@@ -268,23 +327,31 @@ enum TerraqoConversationType {
   COMPANY
   PROJECT
   GROUP
+
+  @@schema("icc")
 }
 
 enum TerraqoConversationParticipantRole {
   OWNER
   MODERATOR
   MEMBER
+
+  @@schema("icc")
 }
 
 enum TerraqoTeamStatus {
   ACTIVE
   ARCHIVED
+
+  @@schema("icc")
 }
 
 enum TerraqoTeamRole {
   OWNER
   LEAD
   MEMBER
+
+  @@schema("icc")
 }
 
 enum TerraqoTeamMemberStatus {
@@ -292,6 +359,8 @@ enum TerraqoTeamMemberStatus {
   ACTIVE
   DECLINED
   REMOVED
+
+  @@schema("icc")
 }
 
 enum TerraqoMemberRole {
@@ -302,6 +371,8 @@ enum TerraqoMemberRole {
   VIEWER
   CLIENT
   PROFESSIONAL
+
+  @@schema("icc")
 }
 
 enum TerraqoProfessionalStatus {
@@ -309,6 +380,8 @@ enum TerraqoProfessionalStatus {
   WORKING
   OPEN_TO_PROJECTS
   NOT_AVAILABLE
+
+  @@schema("icc")
 }
 
 enum TerraqoVisibility {
@@ -316,6 +389,8 @@ enum TerraqoVisibility {
   COMMUNITY
   WORKSPACE
   PRIVATE
+
+  @@schema("icc")
 }
 
 enum TerraqoMessagePrivacy {
@@ -323,6 +398,8 @@ enum TerraqoMessagePrivacy {
   WORKSPACE
   FRIENDS
   NOBODY
+
+  @@schema("icc")
 }
 
 enum TerraqoWorklogType {
@@ -331,6 +408,8 @@ enum TerraqoWorklogType {
   PROBLEM_SOLVED
   LEARNING
   MILESTONE
+
+  @@schema("icc")
 }
 
 enum TerraqoEvidenceStatus {
@@ -338,6 +417,8 @@ enum TerraqoEvidenceStatus {
   LINKED
   CONFIRMED
   VERIFIED
+
+  @@schema("icc")
 }
 
 enum TerraqoWorklogValidationStatus {
@@ -345,17 +426,23 @@ enum TerraqoWorklogValidationStatus {
   APPROVED
   REJECTED
   CANCELLED
+
+  @@schema("icc")
 }
 
 enum TerraqoWebAuthnPurpose {
   REGISTRATION
   WORKLOG_VALIDATION
   ATTENDANCE
+
+  @@schema("icc")
 }
 
 enum TerraqoAttendanceType {
   CHECK_IN
   CHECK_OUT
+
+  @@schema("icc")
 }
 
 enum TerraqoAttendanceStatus {
@@ -363,12 +450,16 @@ enum TerraqoAttendanceStatus {
   OUTSIDE_GEOFENCE
   LOCATION_UNAVAILABLE
   REJECTED
+
+  @@schema("icc")
 }
 
 enum TerraqoReactionType {
   USEFUL
   INSIGHTFUL
   RESPECT
+
+  @@schema("icc")
 }
 
 enum TerraqoApplicationStatus {
@@ -379,6 +470,8 @@ enum TerraqoApplicationStatus {
   ACCEPTED
   REJECTED
   WITHDRAWN
+
+  @@schema("icc")
 }
 
 enum TerraqoIdentityVerificationStatus {
@@ -386,6 +479,8 @@ enum TerraqoIdentityVerificationStatus {
   UNDER_REVIEW
   VERIFIED
   REJECTED
+
+  @@schema("icc")
 }
 
 enum TerraqoProfessionalDocumentType {
@@ -398,22 +493,30 @@ enum TerraqoProfessionalDocumentType {
   MEDICAL_EXAM
   BANK_CERTIFICATE
   OTHER
+
+  @@schema("icc")
 }
 
 enum TerraqoDocumentReviewStatus {
   SUBMITTED
   VERIFIED
   REJECTED
+
+  @@schema("icc")
 }
 
 enum TerraqoNoteKind {
   SIMPLE
   SECURE
+
+  @@schema("icc")
 }
 
 enum TerraqoFileVisibility {
   PRIVATE
   WORKSPACE
+
+  @@schema("icc")
 }
 
 enum TerraqoFileCategory {
@@ -426,6 +529,8 @@ enum TerraqoFileCategory {
   CONTRACT
   TEMPLATE
   OTHER
+
+  @@schema("icc")
 }
 
 model User {
@@ -475,6 +580,8 @@ model User {
   terraqoAttendanceEvents     TerraqoAttendanceEvent[]
   createdAt                   DateTime                         @default(now())
   updatedAt                   DateTime                         @updatedAt
+
+  @@schema("icc")
 }
 
 model Company {
@@ -513,6 +620,7 @@ model Company {
   @@index([status])
   @@index([terraqoWorkspaceId])
   @@index([deletedAt])
+  @@schema("icc")
 }
 
 model Contact {
@@ -543,6 +651,7 @@ model Contact {
   @@index([email])
   @@index([terraqoWorkspaceId])
   @@index([deletedAt])
+  @@schema("icc")
 }
 
 model ClientAccount {
@@ -569,6 +678,7 @@ model ClientAccount {
   @@index([contactId])
   @@index([status])
   @@index([terraqoWorkspaceId])
+  @@schema("icc")
 }
 
 model Client {
@@ -605,6 +715,7 @@ model Client {
   @@index([companyId])
   @@index([terraqoWorkspaceId])
   @@index([deletedAt])
+  @@schema("icc")
 }
 
 model Account {
@@ -623,6 +734,7 @@ model Account {
   user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
+  @@schema("icc")
 }
 
 model Session {
@@ -631,6 +743,8 @@ model Session {
   userId       String
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@schema("icc")
 }
 
 model VerificationToken {
@@ -639,6 +753,7 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+  @@schema("icc")
 }
 
 model Category {
@@ -657,6 +772,7 @@ model Category {
 
   @@unique([terraqoWorkspaceId, slug])
   @@index([terraqoWorkspaceId])
+  @@schema("icc")
 }
 
 model Product {
@@ -705,6 +821,7 @@ model Product {
   @@index([stock])
   @@index([isActive])
   @@index([terraqoWorkspaceId])
+  @@schema("icc")
 }
 
 model ProductVariant {
@@ -719,6 +836,7 @@ model ProductVariant {
 
   @@unique([productId, sku])
   @@index([productId])
+  @@schema("icc")
 }
 
 model Order {
@@ -743,6 +861,7 @@ model Order {
   @@index([status, createdAt])
   @@index([customerEmail])
   @@index([terraqoWorkspaceId])
+  @@schema("icc")
 }
 
 model OrderItem {
@@ -757,6 +876,7 @@ model OrderItem {
 
   @@index([orderId])
   @@index([productId])
+  @@schema("icc")
 }
 
 model Address {
@@ -771,6 +891,8 @@ model Address {
   country    String  @default("PE")
   postalCode String?
   orders     Order[]
+
+  @@schema("icc")
 }
 
 model Favorite {
@@ -781,6 +903,7 @@ model Favorite {
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@unique([userId, productId])
+  @@schema("icc")
 }
 
 model Service {
@@ -828,6 +951,7 @@ model Service {
   @@index([subcategoryId])
   @@index([status])
   @@index([terraqoWorkspaceId])
+  @@schema("icc")
 }
 
 model Sector {
@@ -850,6 +974,7 @@ model Sector {
   @@index([active])
   @@index([position])
   @@index([terraqoWorkspaceId])
+  @@schema("icc")
 }
 
 model ServiceCategory {
@@ -877,6 +1002,7 @@ model ServiceCategory {
   @@index([active])
   @@index([position])
   @@index([terraqoWorkspaceId])
+  @@schema("icc")
 }
 
 model CmsPage {
@@ -894,6 +1020,7 @@ model CmsPage {
 
   @@unique([terraqoWorkspaceId, slug])
   @@index([terraqoWorkspaceId])
+  @@schema("icc")
 }
 
 model Banner {
@@ -910,6 +1037,7 @@ model Banner {
   createdAt          DateTime         @default(now())
 
   @@index([terraqoWorkspaceId])
+  @@schema("icc")
 }
 
 model Testimonial {
@@ -924,6 +1052,7 @@ model Testimonial {
   createdAt          DateTime         @default(now())
 
   @@index([terraqoWorkspaceId])
+  @@schema("icc")
 }
 
 model ClientLogo {
@@ -941,6 +1070,7 @@ model ClientLogo {
 
   @@index([active, position])
   @@index([terraqoWorkspaceId])
+  @@schema("icc")
 }
 
 model Faq {
@@ -959,6 +1089,7 @@ model Faq {
 
   @@index([active, approved, position])
   @@index([terraqoWorkspaceId])
+  @@schema("icc")
 }
 
 model BlogPost {
@@ -981,6 +1112,7 @@ model BlogPost {
   @@index([publishedAt])
   @@index([category])
   @@index([terraqoWorkspaceId])
+  @@schema("icc")
 }
 
 model Lead {
@@ -1022,6 +1154,7 @@ model Lead {
   @@index([contactId])
   @@index([terraqoWorkspaceId])
   @@index([deletedAt])
+  @@schema("icc")
 }
 
 model LeadNote {
@@ -1033,6 +1166,7 @@ model LeadNote {
   createdAt DateTime @default(now())
 
   @@index([leadId, createdAt])
+  @@schema("icc")
 }
 
 model Quote {
@@ -1085,6 +1219,7 @@ model Quote {
   @@index([opportunityId])
   @@index([terraqoWorkspaceId])
   @@index([deletedAt])
+  @@schema("icc")
 }
 
 model QuoteItem {
@@ -1102,6 +1237,7 @@ model QuoteItem {
 
   @@index([quoteId])
   @@index([productId])
+  @@schema("icc")
 }
 
 model Commission {
@@ -1125,6 +1261,7 @@ model Commission {
   @@index([sellerProfileId, status])
   @@index([quoteId])
   @@index([terraqoWorkspaceId])
+  @@schema("icc")
 }
 
 model Opportunity {
@@ -1163,6 +1300,7 @@ model Opportunity {
   @@index([status, createdAt])
   @@index([terraqoWorkspaceId])
   @@index([deletedAt])
+  @@schema("icc")
 }
 
 model Sale {
@@ -1199,6 +1337,7 @@ model Sale {
   @@index([sellerProfileId])
   @@index([terraqoWorkspaceId])
   @@index([deletedAt])
+  @@schema("icc")
 }
 
 model ContactMessage {
@@ -1217,6 +1356,7 @@ model ContactMessage {
   @@index([createdAt])
   @@index([email])
   @@index([terraqoWorkspaceId])
+  @@schema("icc")
 }
 
 model ChatConversation {
@@ -1240,6 +1380,7 @@ model ChatConversation {
   @@index([assignedToId])
   @@index([assignedProfileId])
   @@index([terraqoWorkspaceId])
+  @@schema("icc")
 }
 
 model ChatMessage {
@@ -1251,6 +1392,7 @@ model ChatMessage {
   createdAt      DateTime         @default(now())
 
   @@index([conversationId, createdAt])
+  @@schema("icc")
 }
 
 model InternalChatChannel {
@@ -1266,6 +1408,7 @@ model InternalChatChannel {
 
   @@unique([terraqoWorkspaceId, slug])
   @@index([terraqoWorkspaceId])
+  @@schema("icc")
 }
 
 model InternalChatMessage {
@@ -1283,6 +1426,7 @@ model InternalChatMessage {
 
   @@index([channelId, createdAt])
   @@index([userId])
+  @@schema("icc")
 }
 
 model BotConversation {
@@ -1300,6 +1444,7 @@ model BotConversation {
 
   @@index([status, createdAt])
   @@index([terraqoWorkspaceId])
+  @@schema("icc")
 }
 
 model BotMessage {
@@ -1313,6 +1458,7 @@ model BotMessage {
   createdAt      DateTime        @default(now())
 
   @@index([conversationId, createdAt])
+  @@schema("icc")
 }
 
 model BotUnansweredQuestion {
@@ -1331,6 +1477,7 @@ model BotUnansweredQuestion {
   @@unique([terraqoWorkspaceId, question])
   @@index([status, frequency])
   @@index([terraqoWorkspaceId])
+  @@schema("icc")
 }
 
 model Notification {
@@ -1349,6 +1496,7 @@ model Notification {
   @@index([userId, readAt, createdAt])
   @@index([type, createdAt])
   @@index([terraqoWorkspaceId])
+  @@schema("icc")
 }
 
 model StaffProfile {
@@ -1394,6 +1542,7 @@ model StaffProfile {
   @@unique([terraqoWorkspaceId, email])
   @@index([department, active])
   @@index([terraqoWorkspaceId])
+  @@schema("icc")
 }
 
 model Project {
@@ -1452,6 +1601,7 @@ model Project {
   @@index([opportunityId])
   @@index([terraqoWorkspaceId])
   @@index([deletedAt])
+  @@schema("icc")
 }
 
 model ProjectImage {
@@ -1464,6 +1614,7 @@ model ProjectImage {
   createdAt DateTime @default(now())
 
   @@index([projectId, position])
+  @@schema("icc")
 }
 
 model ProjectMember {
@@ -1477,6 +1628,7 @@ model ProjectMember {
 
   @@unique([projectId, staffProfileId, role])
   @@index([staffProfileId])
+  @@schema("icc")
 }
 
 model ProjectProgress {
@@ -1493,6 +1645,7 @@ model ProjectProgress {
 
   @@index([projectId, createdAt])
   @@index([staffProfileId])
+  @@schema("icc")
 }
 
 model Milestone {
@@ -1513,6 +1666,7 @@ model Milestone {
   @@index([projectId, status])
   @@index([dueDate])
   @@index([deletedAt])
+  @@schema("icc")
 }
 
 model Task {
@@ -1539,6 +1693,7 @@ model Task {
   @@index([assignedProfileId])
   @@index([dueDate])
   @@index([deletedAt])
+  @@schema("icc")
 }
 
 model Ticket {
@@ -1579,6 +1734,7 @@ model Ticket {
   @@index([customerEmail])
   @@index([terraqoWorkspaceId])
   @@index([deletedAt])
+  @@schema("icc")
 }
 
 model TicketMessage {
@@ -1594,6 +1750,7 @@ model TicketMessage {
 
   @@index([ticketId, createdAt])
   @@index([authorId])
+  @@schema("icc")
 }
 
 model ClientDocument {
@@ -1606,6 +1763,7 @@ model ClientDocument {
   createdAt DateTime @default(now())
 
   @@index([clientId, createdAt])
+  @@schema("icc")
 }
 
 model Document {
@@ -1638,6 +1796,7 @@ model Document {
   @@index([visibility])
   @@index([terraqoWorkspaceId])
   @@index([deletedAt])
+  @@schema("icc")
 }
 
 model ActivityLog {
@@ -1681,6 +1840,7 @@ model ActivityLog {
   @@index([projectId, createdAt])
   @@index([ticketId, createdAt])
   @@index([terraqoWorkspaceId, createdAt])
+  @@schema("icc")
 }
 
 model TerraqoWorkspace {
@@ -1756,6 +1916,7 @@ model TerraqoWorkspace {
   @@index([companyId])
   @@index([ownerUserId])
   @@index([deletedAt])
+  @@schema("icc")
 }
 
 model TerraqoConversation {
@@ -1781,6 +1942,7 @@ model TerraqoConversation {
   @@index([workspaceId, updatedAt])
   @@index([projectId])
   @@index([type, updatedAt])
+  @@schema("icc")
 }
 
 model TerraqoTeam {
@@ -1803,6 +1965,7 @@ model TerraqoTeam {
   @@index([workspaceId, status, updatedAt])
   @@index([ownerUserId, status])
   @@index([projectId])
+  @@schema("icc")
 }
 
 model TerraqoTeamMember {
@@ -1823,6 +1986,7 @@ model TerraqoTeamMember {
   @@unique([teamId, userId])
   @@index([userId, status, updatedAt])
   @@index([teamId, status])
+  @@schema("icc")
 }
 
 model TerraqoConversationParticipant {
@@ -1839,6 +2003,7 @@ model TerraqoConversationParticipant {
 
   @@unique([conversationId, userId])
   @@index([userId, leftAt])
+  @@schema("icc")
 }
 
 model TerraqoDirectMessage {
@@ -1855,6 +2020,7 @@ model TerraqoDirectMessage {
 
   @@index([conversationId, createdAt])
   @@index([senderId, createdAt])
+  @@schema("icc")
 }
 
 model TerraqoMeeting {
@@ -1880,6 +2046,7 @@ model TerraqoMeeting {
   @@index([workspaceId, status, createdAt])
   @@index([conversationId, status])
   @@index([projectId])
+  @@schema("icc")
 }
 
 model TerraqoMeetingParticipant {
@@ -1894,6 +2061,7 @@ model TerraqoMeetingParticipant {
 
   @@unique([meetingId, userId])
   @@index([userId, createdAt])
+  @@schema("icc")
 }
 
 model TerraqoWorkspaceModule {
@@ -1910,6 +2078,7 @@ model TerraqoWorkspaceModule {
 
   @@unique([workspaceId, code])
   @@index([code, active])
+  @@schema("icc")
 }
 
 model TerraqoSubscription {
@@ -1928,6 +2097,7 @@ model TerraqoSubscription {
 
   @@index([workspaceId, status])
   @@index([tier, status])
+  @@schema("icc")
 }
 
 model TerraqoWorkspaceMember {
@@ -1947,6 +2117,7 @@ model TerraqoWorkspaceMember {
   @@unique([workspaceId, userId])
   @@index([userId, active])
   @@index([workspaceId, role])
+  @@schema("icc")
 }
 
 model TerraqoProfessionalProfile {
@@ -1999,6 +2170,7 @@ model TerraqoProfessionalProfile {
   @@index([status, visibility])
   @@index([city])
   @@index([identityVerificationStatus])
+  @@schema("icc")
 }
 
 model TerraqoProfessionalDocument {
@@ -2020,6 +2192,7 @@ model TerraqoProfessionalDocument {
 
   @@index([professionalProfileId, type, uploadedAt])
   @@index([workspaceId, reviewStatus])
+  @@schema("icc")
 }
 
 model TerraqoPrivateNote {
@@ -2036,6 +2209,7 @@ model TerraqoPrivateNote {
   updatedAt     DateTime         @updatedAt
 
   @@index([userId, workspaceId, updatedAt])
+  @@schema("icc")
 }
 
 model TerraqoWorkspaceFile {
@@ -2058,6 +2232,7 @@ model TerraqoWorkspaceFile {
 
   @@index([userId, workspaceId, createdAt])
   @@index([workspaceId, visibility, createdAt])
+  @@schema("icc")
 }
 
 model TerraqoProfessionalAffiliation {
@@ -2081,6 +2256,7 @@ model TerraqoProfessionalAffiliation {
   @@index([professionalProfileId, current])
   @@index([workspaceId, verificationStatus])
   @@index([companyId])
+  @@schema("icc")
 }
 
 model TerraqoProfessionalExperience {
@@ -2105,6 +2281,7 @@ model TerraqoProfessionalExperience {
   @@index([professionalProfileId, startedAt])
   @@index([projectId])
   @@index([verifiedByTerraqo])
+  @@schema("icc")
 }
 
 model TerraqoWorklogEntry {
@@ -2139,6 +2316,7 @@ model TerraqoWorklogEntry {
   @@index([projectId])
   @@index([evidenceStatus])
   @@index([deletedAt])
+  @@schema("icc")
 }
 
 model TerraqoWebAuthnCredential {
@@ -2157,6 +2335,7 @@ model TerraqoWebAuthnCredential {
 
   @@unique([credentialId, rpId])
   @@index([userId, rpId])
+  @@schema("icc")
 }
 
 model TerraqoWebAuthnChallenge {
@@ -2176,6 +2355,7 @@ model TerraqoWebAuthnChallenge {
 
   @@index([userId, purpose, expiresAt])
   @@index([workspaceId, purpose, expiresAt])
+  @@schema("icc")
 }
 
 model TerraqoWorklogValidation {
@@ -2202,6 +2382,7 @@ model TerraqoWorklogValidation {
   @@index([worklogId, status])
   @@index([workspaceId, status, requestedAt])
   @@index([validatorUserId, status, requestedAt])
+  @@schema("icc")
 }
 
 model TerraqoAttendanceEvent {
@@ -2228,6 +2409,7 @@ model TerraqoAttendanceEvent {
   @@index([userId, workspaceId, capturedAt])
   @@index([professionalProfileId, projectId, capturedAt])
   @@index([workspaceId, status, capturedAt])
+  @@schema("icc")
 }
 
 model TerraqoWorklogMedia {
@@ -2242,6 +2424,7 @@ model TerraqoWorklogMedia {
   createdAt   DateTime            @default(now())
 
   @@index([worklogId, sortOrder])
+  @@schema("icc")
 }
 
 model TerraqoWorklogComment {
@@ -2257,6 +2440,7 @@ model TerraqoWorklogComment {
 
   @@index([worklogId, createdAt])
   @@index([authorId])
+  @@schema("icc")
 }
 
 model TerraqoWorklogReaction {
@@ -2271,6 +2455,7 @@ model TerraqoWorklogReaction {
   @@unique([worklogId, userId])
   @@index([userId])
   @@index([worklogId, type])
+  @@schema("icc")
 }
 
 model TerraqoJobPost {
@@ -2300,6 +2485,7 @@ model TerraqoJobPost {
   @@index([workspaceId, status])
   @@index([projectId])
   @@index([visibility])
+  @@schema("icc")
 }
 
 model TerraqoProjectApplication {
@@ -2330,6 +2516,7 @@ model TerraqoProjectApplication {
   @@index([workspaceId, status, createdAt])
   @@index([status, createdAt])
   @@index([userId])
+  @@schema("icc")
 }
 
 model TerraqoForumChannel {
@@ -2348,6 +2535,7 @@ model TerraqoForumChannel {
   @@unique([workspaceId, slug])
   @@index([workspaceId, active])
   @@index([visibility])
+  @@schema("icc")
 }
 
 model TerraqoForumPost {
@@ -2369,6 +2557,7 @@ model TerraqoForumPost {
   @@index([channelId, createdAt])
   @@index([authorId])
   @@index([visibility])
+  @@schema("icc")
 }
 
 model TerraqoForumReply {
@@ -2384,4 +2573,5 @@ model TerraqoForumReply {
 
   @@index([postId, createdAt])
   @@index([authorId])
+  @@schema("icc")
 }

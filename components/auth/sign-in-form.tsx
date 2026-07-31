@@ -37,7 +37,11 @@ export function SignInForm() {
       });
 
       if (response?.error) {
-        setError("Credenciales invalidas. Revisa el correo y la contrasena.");
+        setError(
+          response.error === "CredentialsSignin"
+            ? "Credenciales invalidas. Revisa el correo y la contrasena."
+            : "El servicio de acceso no esta disponible temporalmente. Tus credenciales no han podido validarse; intenta nuevamente mas tarde."
+        );
         return;
       }
 

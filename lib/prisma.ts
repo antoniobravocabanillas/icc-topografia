@@ -1,9 +1,9 @@
 import { PrismaClient } from "@prisma/client";
+import { withAccelerate } from "@prisma/extension-accelerate";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
-function databaseUrlWithConnectionLimit() {
-  const databaseUrl = process.env.DATABASE_URL;
+function databaseUrlWithConnectionLimit(databaseUrl: string) {
   if (!databaseUrl || !databaseUrl.startsWith("postgres")) return databaseUrl;
 
   try {
@@ -23,19 +23,37 @@ function databaseUrlWithConnectionLimit() {
   }
 }
 
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    ...(process.env.DATABASE_URL
+function createPrismaClient(): PrismaClient {
+  const databaseUrl = process.env.DATABASE_URL;
+
+  if (databaseUrl?.startsWith("prisma+postgres://")) {
+    // Netlify Functions uses Accelerate over HTTPS instead of opening a
+    // PostgreSQL TCP connection, which is unreliable in this runtime.
+    return new PrismaClient({
+      datasources: {
+        db: {
+          url: databaseUrl
+        }
+      }
+    }).$extends(withAccelerate()) as unknown as PrismaClient;
+  }
+
+  return new PrismaClient({
+    ...(databaseUrl
       ? {
           datasources: {
             db: {
-              url: databaseUrlWithConnectionLimit()
+              url: databaseUrlWithConnectionLimit(databaseUrl)
             }
           }
         }
       : {}),
     log: process.env.NODE_ENV === "development" ? ["query", "error", "warn"] : ["error"]
   });
+}
+
+export const prisma =
+  globalForPrisma.prisma ??
+  createPrismaClient();
 
 globalForPrisma.prisma = prisma;
