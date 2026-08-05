@@ -14,6 +14,7 @@ export function serializeProduct(product: ProductWithCategory) {
   return {
     ...product,
     price: product.price ? Number(product.price) : null,
+    rentalPrice: product.rentalPrice ? Number(product.rentalPrice) : null,
     variants: product.variants.map((variant) => ({
       ...variant,
       price: variant.price ? Number(variant.price) : null

@@ -2,106 +2,129 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Heart, Scale } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { ArrowRight, CheckCircle2, Crosshair, Heart, Ruler, ShieldCheck, ShoppingBag, Star } from "lucide-react";
+import { AddToCartButton } from "@/components/cart/add-to-cart-button";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { formatStorePrice, getStorefrontMeta, StorefrontProduct } from "@/lib/storefront";
 
-export type ProductCardProduct = {
-  id?: string;
-  slug: string;
-  name: string;
-  brand: string;
-  model?: string | null;
-  summary: string;
-  availability: string;
-  price?: number | null;
-  currency?: string;
-  badge?: string | null;
-  requiresQuote?: boolean;
-  stock?: number;
-  images?: string[];
-  category?: {
-    name: string;
-    slug?: string;
-  };
-};
+export type ProductCardProduct = StorefrontProduct;
 
 type ProductCardProps = {
   product: ProductCardProduct;
-  compareSelected?: boolean;
-  compareDisabled?: boolean;
-  onToggleCompare?: (product: ProductCardProduct) => void;
+  className?: string;
 };
 
-export function ProductCard({ product, compareSelected = false, compareDisabled = false, onToggleCompare }: ProductCardProps) {
-  const stock = product.stock ?? 0;
-  const coverImage = product.images?.[0];
+export function ProductCard({ product, className }: ProductCardProps) {
+  const meta = getStorefrontMeta(product);
+  const currency = product.currency || "PEN";
+  const price = product.price || 0;
+  const canBuy = Boolean(product.id && price && !product.requiresQuote && (product.stock || 0) > 0);
 
   return (
-    <Card className="group overflow-hidden transition duration-300 hover:-translate-y-1 hover:border-primary/60 motion-reduce:transform-none">
-      <div className="technical-grid bg-muted p-3">
-        <div className="relative flex min-h-[280px] flex-col overflow-hidden rounded-md border bg-white/94">
-          {coverImage ? (
-            <Link href={`/tienda/${product.slug}`} className="relative min-h-0 flex-1 bg-white">
-              <Image
-                src={coverImage}
-                alt={product.name}
-                fill
-                sizes="(min-width: 1280px) 25vw, (min-width: 768px) 45vw, 100vw"
-                className="object-contain p-4 transition-transform duration-300 group-hover:scale-[1.05]"
-              />
-            </Link>
-          ) : (
-            <Link href={`/tienda/${product.slug}`} className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-[#061827] text-white">
-              <div className="absolute inset-0 opacity-35 [background-image:linear-gradient(rgba(36,200,238,0.18)_1px,transparent_1px),linear-gradient(90deg,rgba(36,200,238,0.12)_1px,transparent_1px)] [background-size:22px_22px]" />
-              <div className="relative px-6 text-center">
-                <p className="text-xs font-semibold uppercase text-[#7DE4FF]">{product.brand}</p>
-                <p className="mt-3 font-display text-2xl font-bold leading-tight">{product.model || product.name}</p>
-                <p className="mt-2 text-xs text-white/60">Imagen pendiente de catalogo</p>
-              </div>
-            </Link>
-          )}
-          <div className="flex items-end justify-between gap-3 border-t bg-white/96 p-3">
-            <div className="min-w-0">
-              <Badge variant={product.badge === "Oferta" ? "secondary" : "default"}>{product.badge || (product.requiresQuote ? "Cotizar" : "Disponible")}</Badge>
-              <p className="mt-2 text-xs font-semibold uppercase text-muted-foreground">{product.brand}</p>
-              <Link href={`/tienda/${product.slug}`} className="mt-1 line-clamp-2 block text-base font-bold leading-5 hover:text-primary">{product.name}</Link>
-            </div>
-            <Button variant="outline" size="icon" aria-label="Agregar a favoritos" className="shrink-0">
-              <Heart className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+    <article
+      className={cn(
+        "group overflow-hidden rounded-lg border border-primary/10 bg-white shadow-[0_24px_70px_rgba(4,45,45,0.10)] transition duration-500 hover:-translate-y-1 hover:shadow-[0_34px_90px_rgba(4,45,45,0.18)]",
+        className
+      )}
+    >
+      <div className="flex items-center gap-2 bg-gradient-to-r from-[#073f3b] to-[#0f6f66] px-5 py-3 text-xs font-black uppercase tracking-[0.08em] text-white">
+        <ShoppingBag className="h-4 w-4" />
+        {meta.shippingLabel}
       </div>
-      <CardContent className="space-y-4 pt-5">
-        <p className="line-clamp-2 text-sm leading-6 text-muted-foreground">{product.summary}</p>
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-xs text-muted-foreground">Disponibilidad</p>
-            <p className="text-sm font-semibold">{stock > 0 ? `${stock} disponible(s)` : product.availability}</p>
-          </div>
-          <p className="text-lg font-bold">{product.price ? formatCurrency(product.price, product.currency) : "Cotizar"}</p>
-        </div>
-        {onToggleCompare ? (
-          <Button
-            type="button"
-            variant={compareSelected ? "secondary" : "outline"}
-            className={cn("w-full", compareSelected && "border-primary")}
-            disabled={!compareSelected && compareDisabled}
-            onClick={() => onToggleCompare(product)}
-          >
-            <Scale className="h-4 w-4" />
-            {compareSelected ? "Quitar de comparacion" : "Comparar equipo"}
-          </Button>
+
+      <div className="relative bg-gradient-to-b from-white to-[#f4fbfa] p-6">
+        {meta.discountLabel ? (
+          <span className="absolute left-5 top-5 rounded-r-md rounded-l-sm bg-primary px-4 py-2 text-sm font-black text-primary-foreground">
+            {meta.discountLabel}
+          </span>
         ) : null}
-        <Button asChild className="w-full">
-          <Link href={`/tienda/${product.slug}`}>
-            Ver ficha <ArrowRight className="h-4 w-4" />
-          </Link>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="absolute right-5 top-5 z-10 rounded-full bg-white shadow-[0_12px_35px_rgba(10,31,45,0.12)]"
+          aria-label="Agregar a favoritos"
+        >
+          <Heart className="h-5 w-5" />
         </Button>
-      </CardContent>
-    </Card>
+        <Link href={`/tienda/${product.slug}`} className="relative block aspect-[1.03/1]">
+          <Image
+            src={meta.image}
+            alt={product.name}
+            fill
+            sizes="(min-width: 1280px) 360px, (min-width: 768px) 45vw, 90vw"
+            className="object-contain p-5 transition duration-700 group-hover:scale-[1.04]"
+          />
+        </Link>
+      </div>
+
+      <div className="space-y-5 p-6">
+        <div>
+          <p className="font-mono text-xs font-black uppercase tracking-[0.22em] text-primary">{product.brand}</p>
+          <Link href={`/tienda/${product.slug}`} className="mt-2 block text-2xl font-black leading-tight text-foreground hover:text-primary">
+            {product.name}
+          </Link>
+          <div className="mt-3 flex items-center gap-2 text-sm">
+            <span className="flex text-[#f6b92b]">
+              {Array.from({ length: 5 }).map((_, index) => (
+                <Star key={index} className="h-4 w-4 fill-current" />
+              ))}
+            </span>
+            <strong>{meta.rating}</strong>
+            <span className="text-muted-foreground">({meta.reviews})</span>
+          </div>
+          <p className="mt-3 min-h-[3.5rem] text-sm leading-6 text-muted-foreground">{product.summary}</p>
+        </div>
+
+        <div className="grid grid-cols-3 gap-px overflow-hidden rounded-md border border-primary/10 bg-primary/10">
+          {[
+            { icon: Crosshair, label: "Precision", value: meta.precision },
+            { icon: Ruler, label: "Alcance", value: meta.range },
+            { icon: ShieldCheck, label: "Garantia", value: meta.warranty }
+          ].map((item) => (
+            <div key={item.label} className="bg-[#eef9f8] px-3 py-3">
+              <item.icon className="h-4 w-4 text-primary" />
+              <p className="mt-1 text-[11px] text-muted-foreground">{item.label}</p>
+              <p className="text-sm font-black">{item.value}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="space-y-2">
+          {meta.listPrice ? <p className="text-sm text-muted-foreground">Antes: <span className="line-through">{formatStorePrice(meta.listPrice, currency)}</span></p> : null}
+          <p className="text-3xl font-black text-primary">{formatStorePrice(product.price, currency)}</p>
+          <div className="flex items-center justify-between text-sm">
+            <span className="inline-flex items-center gap-2 font-bold text-primary">
+              <CheckCircle2 className="h-5 w-5" />
+              {meta.stockLabel}
+            </span>
+            <span className="font-mono text-xs text-muted-foreground">{meta.sku}</span>
+          </div>
+        </div>
+
+        <AddToCartButton
+          className="h-12 rounded-md bg-gradient-to-r from-[#0a7c72] to-[#0f6f66] shadow-[0_18px_40px_rgba(0,129,119,0.22)]"
+          disabled={!canBuy}
+          disabledLabel="Solicitar cotizacion"
+          item={{
+            productId: product.id || product.slug,
+            slug: product.slug,
+            name: product.name,
+            brand: product.brand,
+            model: product.model,
+            price,
+            currency,
+            image: meta.image,
+            stock: product.stock || 1
+          }}
+        />
+
+        <Link href={`/tienda/${product.slug}`} className="flex items-center justify-center gap-2 text-sm font-black text-primary hover:text-primary/80">
+          Ver detalles del producto
+          <ArrowRight className="h-4 w-4" />
+        </Link>
+      </div>
+    </article>
   );
 }

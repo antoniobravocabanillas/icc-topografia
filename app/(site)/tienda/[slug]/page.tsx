@@ -4,6 +4,7 @@ import { AddToCartButton } from "@/components/cart/add-to-cart-button";
 import { ContactForm } from "@/components/forms/contact-form";
 import { ProductGallery } from "@/components/product-gallery";
 import { ProductCard } from "@/components/product-card";
+import { ProductDetailTabs } from "@/components/store/product-detail-tabs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
@@ -40,7 +41,6 @@ export default async function ProductPage({ params }: ProductPageProps) {
     include: { category: true, variants: true },
     take: 3
   })).map(serializeProduct);
-  const specs = product.specifications as Record<string, string>;
   const quoteSubject = `${product.name} | ${product.brand} ${product.model || ""} | Categoria: ${product.category.name}`;
   const quoteContext = `Producto: ${product.name} | SKU: ${product.sku} | Marca: ${product.brand} | Modelo: ${product.model || "-"} | Categoria: ${product.category.name} | URL: ${absoluteUrl(`/tienda/${product.slug}`)}`;
 
@@ -56,25 +56,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
             badge={product.badge}
             requiresQuote={product.requiresQuote}
           />
-          <div className="mt-8 grid gap-5 md:grid-cols-2">
-            <Card>
-              <CardHeader><CardTitle>Descripcion comercial</CardTitle></CardHeader>
-              <CardContent className="leading-7 text-muted-foreground">{product.description}</CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle>Especificaciones tecnicas</CardTitle></CardHeader>
-              <CardContent>
-                <dl className="space-y-3 text-sm">
-                  {Object.entries(specs).map(([key, value]) => (
-                    <div key={key} className="flex justify-between gap-4 border-b pb-2">
-                      <dt className="font-medium">{key}</dt>
-                      <dd className="text-right text-muted-foreground">{value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </CardContent>
-            </Card>
-          </div>
+          <ProductDetailTabs product={product} />
         </div>
         <aside className="space-y-5 lg:sticky lg:top-24 lg:self-start">
           <Card>

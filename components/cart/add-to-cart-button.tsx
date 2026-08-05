@@ -5,15 +5,26 @@ import { Check, ShoppingCart } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { CartItem } from "@/lib/cart";
+import { cn } from "@/lib/utils";
 import { addCartItem } from "@/components/cart/cart-store";
 
 type AddToCartButtonProps = {
   item: Omit<CartItem, "quantity">;
   disabled?: boolean;
   disabledLabel?: string;
+  label?: string;
+  addedLabel?: string;
+  className?: string;
 };
 
-export function AddToCartButton({ item, disabled, disabledLabel = "No disponible para compra directa" }: AddToCartButtonProps) {
+export function AddToCartButton({
+  item,
+  disabled,
+  disabledLabel = "No disponible para compra directa",
+  label = "Agregar al carrito",
+  addedLabel = "Ver carrito",
+  className
+}: AddToCartButtonProps) {
   const [added, setAdded] = useState(false);
 
   function handleAdd() {
@@ -23,19 +34,19 @@ export function AddToCartButton({ item, disabled, disabledLabel = "No disponible
 
   if (added) {
     return (
-      <Button asChild className="w-full">
+      <Button asChild className={cn("w-full", className)}>
         <Link href="/checkout">
           <Check className="h-4 w-4" />
-          Ver carrito
+          {addedLabel}
         </Link>
       </Button>
     );
   }
 
   return (
-    <Button type="button" className="w-full" disabled={disabled} onClick={handleAdd}>
+    <Button type="button" className={cn("w-full", className)} disabled={disabled} onClick={handleAdd}>
       <ShoppingCart className="h-4 w-4" />
-      {disabled ? disabledLabel : "Agregar al carrito"}
+      {disabled ? disabledLabel : label}
     </Button>
   );
 }
