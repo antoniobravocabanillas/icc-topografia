@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { ElementType } from "react";
-import { FileText, FolderKanban, LifeBuoy, UserRound } from "lucide-react";
+import { FileText, FolderKanban, LifeBuoy, ShoppingCart, UserRound } from "lucide-react";
 import { auth } from "@/auth";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { SubmitButton } from "@/components/forms/submit-button";
@@ -76,7 +76,17 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
           quotes: { where: { terraqoWorkspaceId }, include: { items: true, sellerProfile: true }, orderBy: { createdAt: "desc" } },
           projects: { where: { terraqoWorkspaceId }, include: { images: { orderBy: { position: "asc" }, take: 1 }, progress: { orderBy: { createdAt: "desc" }, take: 3 } }, orderBy: { updatedAt: "desc" } },
           tickets: { where: { terraqoWorkspaceId }, include: { assignedProfile: true, messages: { orderBy: { createdAt: "asc" } } }, orderBy: { updatedAt: "desc" } },
-          documents: { orderBy: { createdAt: "desc" } }
+          documents: { orderBy: { createdAt: "desc" } },
+          user: {
+            select: {
+              orders: {
+                where: { terraqoWorkspaceId },
+                include: { items: { include: { product: { select: { name: true, slug: true } } } } },
+                orderBy: { createdAt: "desc" },
+                take: 30
+              }
+            }
+          }
         }
       }
     }
@@ -165,6 +175,8 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
   }
 
   const client = account.client;
+  const orders = client.user?.orders || [];
+  const publicOrderCode = (notes?: string | null) => notes?.match(/Codigo publico: ([A-Z0-9-]+)/)?.[1] || null;
 
   return (
     <div className="min-w-0 space-y-8 py-6 lg:py-8">
@@ -186,7 +198,8 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
             <p className="mt-4 max-w-2xl text-white/72">
               Consulta tus cotizaciones, tickets de soporte, proyectos contratados y documentos comerciales en un solo lugar.
             </p>
-            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <Metric icon={ShoppingCart} label="Pedidos" value={orders.length} />
               <Metric icon={FileText} label="Cotizaciones" value={client.quotes.length} />
               <Metric icon={LifeBuoy} label="Tickets" value={client.tickets.length} />
               <Metric icon={FolderKanban} label="Proyectos" value={client.projects.length} />
@@ -211,6 +224,33 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
             </CardContent>
           </Card>
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Pedidos de tienda tecnica</CardTitle>
+            <CardDescription>Historial generado desde la tienda conectada al workspace.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            {orders.map((order) => (
+              <div key={order.id} className="rounded-lg border bg-white p-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <p className="font-display text-lg font-bold">{publicOrderCode(order.notes) || order.id}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {order.items.map((item) => `${item.quantity} x ${item.product.name}`).join(", ")}
+                    </p>
+                    <p className="mt-2 text-xs text-muted-foreground">{order.createdAt.toLocaleDateString("es-PE")}</p>
+                  </div>
+                  <div className="text-left md:text-right">
+                    <StatusBadge status={order.status} />
+                    <p className="mt-2 font-display text-xl font-bold">{formatCurrency(Number(order.total), order.currency)}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {!orders.length ? <p className="text-sm text-muted-foreground">Aun no tienes pedidos registrados.</p> : null}
+          </CardContent>
+        </Card>
 
         <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
           <Card id="soporte" className="scroll-mt-28">

@@ -33,6 +33,8 @@ type PortalShellProps = {
   image?: string | null;
   headline?: string | null;
   portalType?: "professional" | "client";
+  workspaceBrand?: string | null;
+  workspaceLogoUrl?: string | null;
 };
 
 type PortalNavItem = {
@@ -113,19 +115,31 @@ function PortalNavigation({ items, pathname, variant = "stack" }: { items: Porta
   );
 }
 
-export function PortalShell({ children, name, image, headline, portalType = "professional" }: PortalShellProps) {
+export function PortalShell({ children, name, image, headline, portalType = "professional", workspaceBrand, workspaceLogoUrl }: PortalShellProps) {
   const pathname = usePathname();
   const items = portalType === "professional" ? professionalItems : clientItems;
   const portalLabel = portalType === "professional" ? "Portal profesional" : "Portal del cliente";
+  const brandName = workspaceBrand || "Portal Terraqo";
+  const brandInitials = brandName
+    .split(/\s+/)
+    .map((word) => word[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#f7faf9] text-[#0b202b]">
       <header className="sticky top-0 z-50 border-b border-[#dce7e5] bg-white/95 backdrop-blur-xl">
         <div className="mx-auto flex h-[76px] max-w-[1720px] items-center gap-4 px-4 sm:px-6 xl:px-8">
           <Link href="/portal" className="flex min-w-0 items-center gap-3" aria-label="Ir al resumen del portal">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-[#063b3f] font-mono text-sm font-bold text-[#65e3d8]">TQ</span>
+            <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-lg bg-[#063b3f] font-mono text-sm font-bold text-[#65e3d8]">
+              {workspaceLogoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={workspaceLogoUrl} alt={brandName} className="h-full w-full object-contain p-1.5" />
+              ) : brandInitials}
+            </span>
             <span className="hidden min-w-0 sm:block">
-              <b className="block truncate font-display text-base text-[#092b34]">Portal Terraqo</b>
+              <b className="block truncate font-display text-base text-[#092b34]">{brandName}</b>
               <small className="block truncate text-xs text-[#68808a]">{portalLabel}</small>
             </span>
           </Link>

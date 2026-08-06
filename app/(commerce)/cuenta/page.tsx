@@ -7,6 +7,7 @@ import { SignOutButton } from "@/components/auth/sign-out-button";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { prisma } from "@/lib/prisma";
 import { createMetadata } from "@/lib/seo";
 import { terraqoDomains } from "@/lib/terraqo-domains";
 
@@ -35,9 +36,23 @@ function resolveAccessDestination(role?: string | null) {
   };
 }
 
-export default async function AccountPage() {
+type AccountPageProps = {
+  searchParams: Promise<{ workspace?: string }>;
+};
+
+export default async function AccountPage({ searchParams }: AccountPageProps) {
+  const params = await searchParams;
   const session = await auth();
   const accessDestination = resolveAccessDestination(session?.user?.role);
+  const workspaceSlug = params.workspace?.trim();
+  const workspace = workspaceSlug
+    ? await prisma.terraqoWorkspace.findFirst({
+        where: { slug: workspaceSlug, active: true, deletedAt: null },
+        select: { name: true, brandName: true, logoUrl: true },
+      })
+    : null;
+  const brandName = workspace?.brandName || workspace?.name || "Terraqo";
+  const isWorkspacePortal = Boolean(workspace);
 
   return (
     <section className="tq-auth-surface relative isolate overflow-hidden bg-[#171510] text-white">
@@ -45,12 +60,18 @@ export default async function AccountPage() {
 
       <div className="container relative grid min-h-[calc(100vh-4rem)] items-center gap-10 py-16 xl:grid-cols-[0.85fr_1.15fr]">
         <div className="max-w-3xl">
-          <Badge className="bg-[#f0eadf] text-[#171510] hover:bg-[#f0eadf]">Portal Terraqo</Badge>
+          <Badge className="bg-[#f0eadf] text-[#171510] hover:bg-[#f0eadf]">{isWorkspacePortal ? `Portal ${brandName}` : "Portal Terraqo"}</Badge>
+          {workspace?.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={workspace.logoUrl} alt={brandName} className="mt-5 h-14 max-w-[240px] object-contain" />
+          ) : null}
           <h1 className="mt-5 font-display text-4xl font-bold leading-tight md:text-6xl">
-            Un solo acceso para empresas, profesionales y equipos operativos.
+            {isWorkspacePortal ? `Accede a tu espacio asignado en ${brandName}.` : "Un solo acceso para empresas, profesionales y equipos operativos."}
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-white/72">
-            Gestiona cotizaciones, solicitudes, proyectos, perfiles tecnicos y participacion profesional desde un entorno conectado por workspace.
+            {isWorkspacePortal
+              ? "Entras por Portal Terraqo y trabajas dentro del workspace de la empresa que te corresponde, con su marca, permisos y datos aislados."
+              : "Gestiona cotizaciones, solicitudes, proyectos, perfiles tecnicos y participacion profesional desde un entorno conectado por workspace."}
           </p>
 
           <div className="mt-8 grid gap-3 sm:grid-cols-3">
@@ -113,7 +134,10 @@ export default async function AccountPage() {
             </>
           ) : (
             <>
-              <SignInForm />
+              <SignInForm
+                title={isWorkspacePortal ? `Ingresar al portal de ${brandName}` : undefined}
+                description={isWorkspacePortal ? "Usa tus credenciales Terraqo. Al ingresar veras el espacio, documentos, pedidos, soporte y mensajes asociados a este workspace." : undefined}
+              />
               <div id="registro-cliente" className="scroll-mt-24">
                 <ClientRegistrationForm />
               </div>

@@ -63,6 +63,11 @@ function normalizeItems(items: Array<{ productId: string; quantity: number }>) {
     .join("|");
 }
 
+function portalAccountUrl(workspaceSlug: string) {
+  const baseUrl = process.env.TERRAQO_PORTAL_URL || process.env.NEXT_PUBLIC_TERRAQO_PORTAL_URL || "https://portal.terraqoglobal.com";
+  return `${baseUrl.replace(/\/$/, "")}/cuenta?workspace=${encodeURIComponent(workspaceSlug)}`;
+}
+
 export async function POST(request: Request, { params }: RouteContext) {
   try {
     const { workspaceSlug } = await params;
@@ -317,7 +322,7 @@ export async function POST(request: Request, { params }: RouteContext) {
       profile: {
         email: result.user.email,
         temporaryPassword: result.temporaryPassword,
-        accountUrl: "/cuenta/",
+        accountUrl: portalAccountUrl(workspace.slug),
         role: "CUSTOMER",
         status: result.existingUser ? "EXISTING" : "CREATED",
       },
