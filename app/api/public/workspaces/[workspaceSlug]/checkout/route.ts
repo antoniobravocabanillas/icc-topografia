@@ -246,6 +246,7 @@ export async function POST(request: Request, { params }: RouteContext) {
       });
       const reusableOrder = existingOrders.find((order) => normalizeItems(order.items) === canonicalItems);
 
+      const publicOrderCode = reusableOrder?.notes?.match(/Codigo publico: ([A-Z0-9-]+)/)?.[1] || orderCode();
       const address = reusableOrder ? null : await tx.address.create({
         data: {
           userId: user.id,
@@ -270,7 +271,7 @@ export async function POST(request: Request, { params }: RouteContext) {
           currency: orderItems[0]?.unitPrice ? products[0]?.currency || "USD" : "USD",
           addressId: address?.id,
           notes: [
-            `Codigo publico: ${orderCode()}`,
+            `Codigo publico: ${publicOrderCode}`,
             `Metodo de pago: ${payload.paymentMethod}`,
             `Metodo de envio: ${payload.shippingMethod}`,
             payload.customer.reference ? `Referencia: ${payload.customer.reference}` : null,
@@ -296,7 +297,7 @@ export async function POST(request: Request, { params }: RouteContext) {
 
     return ok({
       ok: true,
-      id: result.order.id,
+      id: result.order.notes?.match(/Codigo publico: ([A-Z0-9-]+)/)?.[1] || result.order.id,
       workspaceSlug: workspace.slug,
       status: "PENDING_PAYMENT_INSTRUCTIONS",
       reusedOrder: result.reusedOrder,
