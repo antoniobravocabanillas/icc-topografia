@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowRight, BadgeCheck, BriefcaseBusiness, Building2, LockKeyhole, Network, ShieldCheck, UserRound } from "lucide-react";
 import { auth } from "@/auth";
 import { ClientRegistrationForm } from "@/components/auth/client-registration-form";
@@ -31,7 +32,7 @@ function resolveAccessDestination(role?: string | null) {
   }
 
   return {
-    href: terraqoDomains.portal,
+    href: `${terraqoDomains.portal}/portal`,
     label: "Ir al Portal Terraqo"
   };
 }
@@ -44,6 +45,7 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
   const params = await searchParams;
   const session = await auth();
   const accessDestination = resolveAccessDestination(session?.user?.role);
+  if (session?.user) redirect(accessDestination.href);
   const workspaceSlug = params.workspace?.trim();
   const workspace = workspaceSlug
     ? await prisma.terraqoWorkspace.findFirst({

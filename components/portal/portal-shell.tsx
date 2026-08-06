@@ -66,7 +66,8 @@ const clientItems: PortalNavItem[] = [
   { href: "/portal#cotizaciones", label: "Cotizaciones", icon: FileText },
   { href: "/portal#soporte", label: "Soporte", icon: Headphones },
   { href: "/portal#proyectos", label: "Proyectos", icon: BriefcaseBusiness },
-  { href: "/portal#documentos", label: "Documentos", icon: FileCheck2 }
+  { href: "/portal#documentos", label: "Documentos", icon: FileCheck2 },
+  { href: "/portal/workspace", label: "Marca blanca", icon: Settings }
 ];
 
 function isActive(pathname: string, href: string) {
