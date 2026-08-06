@@ -161,6 +161,31 @@ export async function GET(request: Request, { params }: RouteContext) {
                   take: 20,
                   select: { id: true, title: true, slug: true, status: true, location: true, updatedAt: true },
                 },
+                user: {
+                  select: {
+                    orders: {
+                      where: { terraqoWorkspaceId: token.workspaceId },
+                      orderBy: { createdAt: "desc" },
+                      take: 30,
+                      select: {
+                        id: true,
+                        status: true,
+                        total: true,
+                        currency: true,
+                        notes: true,
+                        createdAt: true,
+                        items: {
+                          select: {
+                            quantity: true,
+                            unitPrice: true,
+                            subtotal: true,
+                            product: { select: { name: true, slug: true, mainImage: true } },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
               },
             },
           },

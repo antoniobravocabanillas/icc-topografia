@@ -109,6 +109,19 @@ export async function POST(request: Request, { params }: RouteContext) {
     const total = new Prisma.Decimal(payload.totals?.total ?? Number(itemSubtotal));
     const recentSince = new Date(Date.now() - 10 * 60 * 1000);
 
+    const documentOwner = await prisma.client.findFirst({
+      where: {
+        terraqoWorkspaceId: workspace.id,
+        document: payload.customer.document,
+        deletedAt: null,
+        NOT: { email: payload.customer.email },
+      },
+      select: { email: true },
+    });
+    if (documentOwner) {
+      return fail("El DNI/RUC ya esta asociado a otro correo en este portal. Ingresa con la cuenta existente o solicita actualizacion de correo.", 409);
+    }
+
     const result = await prisma.$transaction(async (tx) => {
       const existingUser = await tx.user.findUnique({ where: { email: payload.customer.email } });
       const temporaryPassword = existingUser?.passwordHash ? null : createTemporaryPassword();
