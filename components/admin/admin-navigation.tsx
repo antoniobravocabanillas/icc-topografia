@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -32,6 +33,7 @@ import {
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import type { AdminNavIcon, AdminNavItem } from "@/lib/admin-navigation";
 import { selectAdminWorkspace } from "@/lib/server/admin-workspace-actions";
+import type { WorkspaceVisualIdentity } from "@/lib/terraqo/workspace-visual-identity";
 import { cn } from "@/lib/utils";
 
 type AdminNavigationProps = {
@@ -39,6 +41,8 @@ type AdminNavigationProps = {
   workspaceName: string;
   panelName: string;
   brandName: string;
+  logoUrl?: string | null;
+  visualIdentity: WorkspaceVisualIdentity;
   email: string;
   role: string;
   activeWorkspaceId: string;
@@ -79,7 +83,24 @@ function NavIcon({ name, className }: { name: AdminNavIcon; className?: string }
   return <Icon className={className} strokeWidth={1.8} />;
 }
 
-export function AdminNavigation({ items, workspaceName, panelName, brandName, email, role, activeWorkspaceId, workspaceOptions }: AdminNavigationProps) {
+function getInitials(value: string) {
+  const initials = value
+    .replace(/^panel\s+/i, "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+
+  return initials || "TQ";
+}
+
+function withAlpha(hex: string, opacity: string) {
+  return `${hex}${opacity}`;
+}
+
+export function AdminNavigation({ items, workspaceName, panelName, brandName, logoUrl, visualIdentity, email, role, activeWorkspaceId, workspaceOptions }: AdminNavigationProps) {
   const pathname = usePathname();
   const shellRef = useRef<HTMLElement>(null);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
@@ -140,16 +161,27 @@ export function AdminNavigation({ items, workspaceName, panelName, brandName, em
     };
   }, [mobileOpen]);
 
+  const primaryColor = visualIdentity.primaryColor;
+  const accentColor = visualIdentity.accentColor;
+  const logoInitials = getInitials(brandName || panelName);
+
   return (
     <header ref={shellRef} className="sticky top-0 z-40 border-b border-[#0d4d58]/12 bg-[#f7f6f1]/95 shadow-[0_16px_45px_-36px_rgba(3,38,45,0.65)] backdrop-blur-xl">
-      <div className="bg-[#062f38] text-white">
+      <div className="text-white" style={{ background: `linear-gradient(135deg, ${primaryColor} 0%, #062f38 78%)` }}>
         <div className="mx-auto flex min-h-[72px] max-w-[1680px] items-center justify-between gap-5 px-4 sm:px-6 lg:px-8">
           <Link href="/admin" className="group flex min-w-0 items-center gap-3" aria-label={`Ir al inicio de ${panelName}`}>
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-[#61e1d2]/30 bg-[#0a424c] text-xs font-black tracking-[0.08em] text-[#83efe2] transition-colors group-hover:border-[#83efe2]/60">
-              TQ
+            <span
+              className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-md border bg-white/95 text-xs font-black tracking-[0.08em] shadow-[0_16px_34px_-24px_rgba(0,0,0,0.75)] transition-colors"
+              style={{ borderColor: withAlpha(accentColor, "66"), color: primaryColor }}
+            >
+              {logoUrl ? (
+                <Image src={logoUrl} alt={`Logo de ${brandName}`} width={80} height={80} className="max-h-8 max-w-8 object-contain" unoptimized />
+              ) : (
+                logoInitials
+              )}
             </span>
             <span className="min-w-0">
-              <span className="block text-[10px] font-bold uppercase tracking-[0.18em] text-[#83efe2]/72">{workspaceName}</span>
+              <span className="block text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: withAlpha(accentColor, "cc") }}>{workspaceName}</span>
               <span className="mt-0.5 block truncate font-display text-base font-bold sm:text-lg">{panelName}</span>
             </span>
           </Link>
@@ -159,10 +191,10 @@ export function AdminNavigation({ items, workspaceName, panelName, brandName, em
               <form action={selectAdminWorkspace} className="flex items-center gap-2">
                 <input type="hidden" name="returnTo" value={pathname} />
                 <label className="sr-only" htmlFor="admin-workspace">Workspace activo</label>
-                <select id="admin-workspace" name="workspaceId" defaultValue={activeWorkspaceId} className="h-10 max-w-64 rounded-md border border-white/15 bg-[#0a424c] px-3 text-sm font-semibold text-white outline-none focus:border-[#83efe2]/60">
+                <select id="admin-workspace" name="workspaceId" defaultValue={activeWorkspaceId} className="h-10 max-w-64 rounded-md border px-3 text-sm font-semibold text-white outline-none" style={{ borderColor: withAlpha(accentColor, "40"), backgroundColor: withAlpha(primaryColor, "dd") }}>
                   {workspaceOptions.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
                 </select>
-                <button type="submit" className="h-10 rounded-md border border-[#83efe2]/35 px-3 text-xs font-bold text-[#83efe2] transition-colors hover:bg-white/10">Cambiar</button>
+                <button type="submit" className="h-10 rounded-md border px-3 text-xs font-bold transition-colors hover:bg-white/10" style={{ borderColor: withAlpha(accentColor, "55"), color: accentColor }}>Cambiar</button>
               </form>
             ) : null}
             <div className="min-w-0 text-right">
@@ -170,7 +202,7 @@ export function AdminNavigation({ items, workspaceName, panelName, brandName, em
               <p className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/42">{brandName} · {role.replaceAll("_", " ")}</p>
             </div>
             {items.some((item) => item.href === "/admin/notificaciones") ? (
-              <Link href="/admin/notificaciones" className={cn("grid h-10 w-10 place-items-center rounded-md border border-white/15 text-white/70 transition-colors hover:border-[#83efe2]/45 hover:bg-white/8 hover:text-[#83efe2]", isRouteActive(pathname, "/admin/notificaciones") && "border-[#83efe2]/55 bg-[#0a424c] text-[#83efe2]")} aria-label="Ver notificaciones">
+              <Link href="/admin/notificaciones" className={cn("grid h-10 w-10 place-items-center rounded-md border border-white/15 text-white/70 transition-colors hover:bg-white/8", isRouteActive(pathname, "/admin/notificaciones") && "text-white")} style={isRouteActive(pathname, "/admin/notificaciones") ? { borderColor: withAlpha(accentColor, "66"), backgroundColor: withAlpha(primaryColor, "aa"), color: accentColor } : undefined} aria-label="Ver notificaciones">
                 <Bell className="h-4 w-4" />
               </Link>
             ) : null}

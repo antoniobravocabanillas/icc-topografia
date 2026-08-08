@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { auth } from "@/auth";
 import { PortalShell } from "@/components/portal/portal-shell";
 import { prisma } from "@/lib/prisma";
+import { resolveWorkspaceVisualIdentity } from "@/lib/terraqo/workspace-visual-identity";
 import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +24,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
             take: 1,
             select: {
               role: true,
-              workspace: { select: { name: true, brandName: true, logoUrl: true } }
+              workspace: { select: { name: true, brandName: true, logoUrl: true, settings: true } }
             }
           }
         }
@@ -31,6 +32,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
     : null;
   const membership = user?.terraqoMemberships[0];
   const portalType = user?.terraqoProfessionalProfile ? "professional" : membership?.role === "CLIENT" ? "client" : "professional";
+  const visualIdentity = resolveWorkspaceVisualIdentity(membership?.workspace.settings);
 
   return (
     <PortalShell
@@ -40,6 +42,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
       portalType={portalType}
       workspaceBrand={membership?.workspace.brandName || membership?.workspace.name}
       workspaceLogoUrl={membership?.workspace.logoUrl}
+      visualIdentity={visualIdentity}
     >
       {children}
     </PortalShell>

@@ -3,9 +3,9 @@ import type { Role } from "@prisma/client";
 import { auth } from "@/auth";
 import { AdminNavigation } from "@/components/admin/admin-navigation";
 import { AdminNotificationMonitor } from "@/components/admin/admin-notification-monitor";
-import { brand } from "@/lib/brand";
 import { allowedAdminRoles, getAdminNavigation } from "@/lib/admin-navigation";
 import { getAdminWorkspaceOptions, getWorkspaceForUser, hasWorkspaceAdminAccess } from "@/lib/terraqo/workspace-access";
+import { resolveWorkspaceVisualIdentity } from "@/lib/terraqo/workspace-visual-identity";
 import { prisma } from "@/lib/prisma";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -19,19 +19,27 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   }
   const activeWorkspace = await getWorkspaceForUser(session.user.id, role);
   if (!activeWorkspace) redirect("/cuenta?error=workspace-access");
-  const [workspaceOptions, modules] = await Promise.all([
+  const [workspaceOptions, modules, workspaceBranding] = await Promise.all([
     getAdminWorkspaceOptions(session.user.id, role),
-    prisma.terraqoWorkspaceModule.findMany({ where: { workspaceId: activeWorkspace.id, active: true }, select: { code: true } })
+    prisma.terraqoWorkspaceModule.findMany({ where: { workspaceId: activeWorkspace.id, active: true }, select: { code: true } }),
+    prisma.terraqoWorkspace.findUnique({
+      where: { id: activeWorkspace.id },
+      select: { name: true, brandName: true, logoUrl: true, settings: true }
+    })
   ]);
   const navItems = getAdminNavigation(role, modules.map((module) => module.code)).map(({ group, label, href, icon }) => ({ group, label, href, icon }));
+  const workspaceDisplayName = workspaceBranding?.brandName?.trim() || workspaceBranding?.name || activeWorkspace.name;
+  const visualIdentity = resolveWorkspaceVisualIdentity(workspaceBranding?.settings);
 
   return (
-    <div className="min-h-screen bg-[#f7f6f1]">
+    <div className="min-h-screen" style={{ backgroundColor: visualIdentity.backgroundColor }}>
       <AdminNavigation
         items={navItems}
-        workspaceName={role === "SUPER_ADMIN" ? "Terraqo Platform" : "Terraqo Workspace"}
-        panelName={role === "SUPER_ADMIN" ? "Control global Terraqo" : `Panel ${activeWorkspace.name}`}
-        brandName={role === "SUPER_ADMIN" ? activeWorkspace.name : brand.shortName}
+        workspaceName="Terraqo Workspace"
+        panelName={`Panel ${workspaceDisplayName}`}
+        brandName={workspaceDisplayName}
+        logoUrl={workspaceBranding?.logoUrl}
+        visualIdentity={visualIdentity}
         email={session.user.email ?? "Usuario Terraqo"}
         role={role}
         activeWorkspaceId={activeWorkspace.id}
