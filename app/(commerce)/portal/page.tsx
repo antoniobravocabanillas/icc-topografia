@@ -101,7 +101,6 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
         terraqoMemberships: {
           some: {
             workspaceId: terraqoWorkspaceId,
-            role: "PROFESSIONAL",
             active: true
           }
         }
