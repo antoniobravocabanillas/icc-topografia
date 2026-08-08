@@ -34,9 +34,8 @@ export async function sendEmailVerificationCode(email: string, code: string) {
   if (!apiKey || !from) {
     if (process.env.NODE_ENV !== "production") {
       console.info(`[email-verification] Codigo para ${email}: ${code}`);
-      return { delivered: false, reason: "missing_provider" as const };
     }
-    throw new Error("Servicio de correo no configurado. Define RESEND_API_KEY y TERRAQO_EMAIL_FROM.");
+    return { delivered: false, reason: "missing_provider" as const };
   }
 
   const response = await fetch("https://api.resend.com/emails", {
