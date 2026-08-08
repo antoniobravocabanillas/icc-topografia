@@ -15,6 +15,7 @@ import {
   LayoutDashboard,
   MessagesSquare,
   NotebookPen,
+  ReceiptText,
   FolderOpen,
   Search,
   StickyNote,
@@ -47,6 +48,7 @@ const professionalItems: PortalNavItem[] = [
   { href: "/portal", label: "Resumen", icon: LayoutDashboard },
   { href: "/portal/perfil", label: "Mi perfil", icon: UserRound },
   { href: "/portal/red", label: "Red profesional", icon: Search },
+  { href: "/portal/operaciones", label: "Operaciones comerciales", icon: ReceiptText },
   { href: "/portal/experiencias", label: "Experiencias", icon: BriefcaseBusiness },
   { href: "/portal/postulaciones", label: "Postulaciones", icon: FileText },
   { href: "/portal/validaciones", label: "Validaciones", icon: ShieldCheck },
@@ -63,6 +65,7 @@ const professionalItems: PortalNavItem[] = [
 
 const clientItems: PortalNavItem[] = [
   { href: "/portal", label: "Resumen", icon: LayoutDashboard },
+  { href: "/portal/operaciones", label: "Operaciones comerciales", icon: ReceiptText },
   { href: "/portal#cotizaciones", label: "Cotizaciones", icon: FileText },
   { href: "/portal#soporte", label: "Soporte", icon: Headphones },
   { href: "/portal#proyectos", label: "Proyectos", icon: BriefcaseBusiness },
