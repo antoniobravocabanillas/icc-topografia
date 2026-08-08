@@ -267,7 +267,14 @@ function VisualOperationCard({ name, heroImageUrl, visualIdentity, projects, job
   return (
     <aside className="overflow-hidden rounded-[26px] border border-[#dbe8e5] bg-[#071b20] shadow-[0_32px_90px_-52px_rgba(3,52,59,0.7)]">
       <div className="relative h-64 overflow-hidden bg-[#dcebea]" style={patternStyle(visualIdentity.heroPattern, visualIdentity.primaryColor, visualIdentity.accentColor)}>
-        {heroImageUrl ? <Image src={heroImageUrl} alt={`Operación de ${name}`} fill sizes="(min-width: 1024px) 420px, 100vw" className="object-cover" unoptimized /> : <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_25%,rgba(255,255,255,0.9),transparent_0_18%,rgba(255,255,255,0)_34%),linear-gradient(135deg,rgba(255,255,255,0.75),rgba(255,255,255,0.08))]" />}
+        {heroImageUrl ? (
+          <>
+            <Image src={heroImageUrl} alt={`Operación de ${name}`} fill sizes="(min-width: 1024px) 420px, 100vw" className="object-cover" unoptimized />
+            <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,23,34,0.04),rgba(6,23,34,0.22)_46%,rgba(6,23,34,0.9))]" />
+          </>
+        ) : (
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_25%,rgba(255,255,255,0.9),transparent_0_18%,rgba(255,255,255,0)_34%),linear-gradient(135deg,rgba(255,255,255,0.75),rgba(255,255,255,0.08))]" />
+        )}
         <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#071b20] to-transparent" />
       </div>
       <div className="p-6 text-white">

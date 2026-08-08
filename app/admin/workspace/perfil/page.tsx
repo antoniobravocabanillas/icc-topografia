@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { ExternalLink, Globe2, Layers3 } from "lucide-react";
+import { ClientLogoUploader } from "@/components/admin/client-logo-uploader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -76,10 +77,15 @@ export default async function WorkspaceCompanyProfilePage({ searchParams }: Page
                 Extracto empresarial
                 <Textarea name="summary" defaultValue={profile.summary || ""} placeholder="Describe experiencia, enfoque técnico, cobertura, tipo de clientes y forma de trabajo. Debe sentirse propio, no plantilla." />
               </label>
-              <label className="grid gap-2 text-sm font-semibold">
-                Imagen hero / visual principal
-                <Input name="heroImageUrl" defaultValue={profile.heroImageUrl || ""} placeholder="https://... imagen de obra, equipo, operación o marca" />
-              </label>
+              <ClientLogoUploader
+                initialLogoUrl={profile.heroImageUrl}
+                inputName="heroImageUrl"
+                label="Foto de fondo del perfil empresa"
+                description="Sube una imagen horizontal de obra, equipo, operación o marca. Se mostrará con overlay profesional en el bloque visual del perfil público."
+                emptyLabel="Aún no hay foto de fondo cargada."
+                previewClassName="h-28 w-52"
+                previewImageClassName="object-cover"
+              />
               <div className="grid gap-5 md:grid-cols-2">
                 <label className="grid gap-2 text-sm font-semibold">
                   Servicios principales

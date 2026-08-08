@@ -15,13 +15,19 @@ type ClientLogoUploaderProps = {
   inputName?: string;
   label?: string;
   description?: string;
+  emptyLabel?: string;
+  previewClassName?: string;
+  previewImageClassName?: string;
 };
 
 export function ClientLogoUploader({
   initialLogoUrl,
   inputName = "logoUrl",
   label = "Logo del cliente",
-  description = "Sube SVG, JPG, PNG, WebP o AVIF. Máximo 3 MB."
+  description = "Sube SVG, JPG, PNG, WebP o AVIF. Máximo 3 MB.",
+  emptyLabel = "Aún no hay logo cargado.",
+  previewClassName = "h-16 w-36",
+  previewImageClassName = "object-contain"
 }: ClientLogoUploaderProps) {
   const [logoUrl, setLogoUrl] = useState(initialLogoUrl || "");
   const [status, setStatus] = useState<string | null>(null);
@@ -33,7 +39,7 @@ export function ClientLogoUploader({
     if (!file) return;
 
     setIsUploading(true);
-    setStatus("Subiendo logo...");
+    setStatus("Subiendo archivo...");
 
     const formData = new FormData();
     formData.append("files", file);
@@ -46,14 +52,14 @@ export function ClientLogoUploader({
       const payload = await response.json();
 
       if (!response.ok) {
-        throw new Error(payload.error || "No se pudo subir el logo.");
+        throw new Error(payload.error || "No se pudo subir el archivo.");
       }
 
       const [uploadedLogo] = payload.logos as UploadedLogo[];
       setLogoUrl(uploadedLogo.url);
-      setStatus(`Logo subido: ${uploadedLogo.fileName}. Guarda para publicar los cambios.`);
+      setStatus(`Archivo subido: ${uploadedLogo.fileName}. Guarda para publicar los cambios.`);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "No se pudo subir el logo.");
+      setStatus(error instanceof Error ? error.message : "No se pudo subir el archivo.");
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -76,15 +82,15 @@ export function ClientLogoUploader({
 
       {logoUrl ? (
         <div className="flex items-center gap-4 rounded-md border bg-white p-4">
-          <div className="relative h-16 w-36 shrink-0">
-            <Image src={logoUrl} alt="Vista previa del logo" fill sizes="144px" className="object-contain" unoptimized />
+          <div className={`relative shrink-0 overflow-hidden rounded-md bg-muted/35 ${previewClassName}`}>
+            <Image src={logoUrl} alt="Vista previa del archivo" fill sizes="208px" className={previewImageClassName} unoptimized />
           </div>
           <span className="min-w-0 truncate text-xs font-normal text-muted-foreground">{logoUrl}</span>
         </div>
       ) : (
         <div className="flex items-center gap-3 rounded-md border border-dashed bg-muted/45 p-4 text-muted-foreground">
           <ImagePlus className="h-5 w-5" />
-          <p className="text-sm font-normal">Aún no hay logo cargado.</p>
+          <p className="text-sm font-normal">{emptyLabel}</p>
         </div>
       )}
 
