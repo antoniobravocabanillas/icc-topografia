@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { ArrowRight, BriefcaseBusiness, Building2, CheckCircle2, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { LocationSelect } from "@/components/location/location-select";
 
 type AccountType = "client" | "professional";
 
@@ -29,6 +30,7 @@ const accountOptions: Array<{
 
 export function ClientRegistrationForm() {
   const [accountType, setAccountType] = useState<AccountType>("client");
+  const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -50,6 +52,8 @@ export function ClientRegistrationForm() {
           phone: String(formData.get("phone") || ""),
           roleTitle: String(formData.get("roleTitle") || ""),
           specialty: String(formData.get("specialty") || ""),
+          country: String(formData.get("country") || "PE"),
+          subdivision: String(formData.get("subdivision") || ""),
           city: String(formData.get("city") || ""),
           yearsExperience: String(formData.get("yearsExperience") || ""),
           equipment: String(formData.get("equipment") || ""),
@@ -64,11 +68,35 @@ export function ClientRegistrationForm() {
         return;
       }
 
+      setVerificationEmail(String(formData.get("email") || ""));
       setMessage(
-        accountType === "professional"
-          ? "Perfil profesional creado. Ingresa al Portal Terraqo para completar tu CV vivo."
-          : "Solicitud enviada. El equipo validara tus datos antes de activar el portal."
+        payload?.data?.emailDelivery === "sent"
+          ? "Cuenta creada. Te enviamos un codigo al correo para validar el acceso."
+          : "Cuenta creada. Falta configurar el proveedor de correo para enviar codigos automaticamente."
       );
+    });
+  }
+
+  function verify(formData: FormData) {
+    if (!verificationEmail) return;
+    setMessage(null);
+    setError(null);
+    startTransition(async () => {
+      const response = await fetch("/api/auth/verify-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: verificationEmail,
+          code: String(formData.get("code") || "")
+        })
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        setError(payload?.error?.message || "No se pudo validar el correo.");
+        return;
+      }
+      setMessage("Correo validado. Ya puedes ingresar al Portal Terraqo.");
+      setVerificationEmail(null);
     });
   }
 
@@ -87,6 +115,28 @@ export function ClientRegistrationForm() {
           icon: Building2
         };
   const ActiveIcon = activeCopy.icon;
+
+  if (verificationEmail) {
+    return (
+      <form action={verify} className="relative overflow-hidden rounded-lg border bg-card p-6 text-foreground shadow-2xl md:p-8">
+        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-[#24C8EE] to-primary" />
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">Validacion de correo</p>
+        <h2 className="mt-2 font-display text-2xl font-bold">Ingresa el codigo enviado</h2>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          Enviamos un codigo de 6 digitos a <span className="font-semibold text-foreground">{verificationEmail}</span>. La cuenta queda protegida hasta confirmar el correo.
+        </p>
+        <div className="mt-6 grid gap-4">
+          <Input name="code" required inputMode="numeric" pattern="[0-9]{6}" maxLength={6} placeholder="Codigo de 6 digitos" autoComplete="one-time-code" />
+          <Button type="submit" size="lg" disabled={isPending} className="w-full">
+            {isPending ? "Validando..." : "Validar correo"}
+            <ArrowRight className="h-4 w-4" />
+          </Button>
+          {message ? <p className="flex items-center gap-2 text-sm font-medium text-emerald-700"><CheckCircle2 className="h-4 w-4" /> {message}</p> : null}
+          {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
+        </div>
+      </form>
+    );
+  }
 
   return (
     <form action={submit} className="relative overflow-hidden rounded-lg border bg-card p-6 text-foreground shadow-2xl md:p-8">
@@ -132,13 +182,14 @@ export function ClientRegistrationForm() {
           <>
             <Input name="company" required placeholder="Empresa / razon social" autoComplete="organization" />
             <Input name="document" placeholder="RUC / documento" />
+            <LocationSelect required />
           </>
         ) : (
           <>
             <Input name="roleTitle" placeholder="Cargo o perfil profesional" />
             <Input name="specialty" placeholder="Especialidad tecnica" />
+            <LocationSelect required />
             <div className="grid gap-4 sm:grid-cols-2">
-              <Input name="city" placeholder="Ciudad" />
               <Input name="yearsExperience" type="number" min={0} placeholder="Anios de experiencia" />
             </div>
             <Input name="equipment" placeholder="Equipos que maneja, separados por coma" />

@@ -25,10 +25,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       async authorize(credentials) {
         const parsed = credentialsSchema.safeParse(credentials);
         if (!parsed.success) return null;
-        const user = await prisma.user.findUnique({ where: { email: parsed.data.email } });
+        const user = await prisma.user.findUnique({ where: { email: parsed.data.email.toLowerCase() } });
         if (!user?.passwordHash) return null;
         const valid = await bcrypt.compare(parsed.data.password, user.passwordHash);
         if (!valid) return null;
+        if (user.role === "CUSTOMER" && !user.emailVerified) {
+          throw new Error("EMAIL_NOT_VERIFIED");
+        }
         return { id: user.id, email: user.email, name: user.name, role: user.role };
       }
     })

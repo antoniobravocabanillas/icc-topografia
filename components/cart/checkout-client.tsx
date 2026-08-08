@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { CartItem, getCartSubtotal } from "@/lib/cart";
 import { formatCurrency } from "@/lib/utils";
 import { readCart, writeCart } from "@/components/cart/cart-store";
+import { LocationSelect } from "@/components/location/location-select";
 
 type CheckoutStatus = "idle" | "loading" | "success" | "error";
 
@@ -52,12 +53,19 @@ export function CheckoutClient() {
 
     const formData = new FormData(event.currentTarget);
     const company = String(formData.get("company") || "").trim();
+    const country = String(formData.get("country") || "PE").trim();
+    const subdivision = String(formData.get("subdivision") || "").trim();
+    const city = String(formData.get("city") || "").trim();
     const notes = String(formData.get("notes") || "").trim();
     const payload = {
       name: String(formData.get("name") || ""),
       email: String(formData.get("email") || ""),
       phone: String(formData.get("phone") || ""),
-      notes: [company ? `Empresa: ${company}` : "", notes].filter(Boolean).join("\n\n"),
+      notes: [
+        company ? `Empresa: ${company}` : "",
+        [country, subdivision, city].filter(Boolean).length ? `Ubicacion: ${[country, subdivision, city].filter(Boolean).join(" / ")}` : "",
+        notes,
+      ].filter(Boolean).join("\n\n"),
       items: items.map((item) => ({ productId: item.productId, quantity: item.quantity }))
     };
 
@@ -163,6 +171,7 @@ export function CheckoutClient() {
             <Input name="company" placeholder="Empresa" autoComplete="organization" />
             <Input name="phone" placeholder="Telefono / WhatsApp" autoComplete="tel" />
           </div>
+          <LocationSelect required />
           <Textarea name="notes" placeholder="Indica ciudad, plazo, RUC, despacho o condiciones comerciales que necesitas" />
           <Button disabled={status === "loading" || status === "success"} type="submit">
             {status === "loading" ? "Registrando..." : status === "success" ? "Pedido registrado" : "Registrar pedido"}

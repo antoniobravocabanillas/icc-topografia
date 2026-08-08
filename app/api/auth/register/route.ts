@@ -1,6 +1,8 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { created, fail, handleApiError, parseJson } from "@/lib/server/api";
+import { createEmailVerificationToken, sendEmailVerificationCode } from "@/lib/server/email-verification";
+import { getSubdivisionName } from "@/lib/locations";
 import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 import { registerSchema } from "@/lib/validations/crm";
 
@@ -26,6 +28,7 @@ export async function POST(request: Request) {
         },
         select: { id: true, name: true, email: true, role: true, createdAt: true }
       });
+      const verification = await createEmailVerificationToken(tx, payload.email);
 
       if (payload.accountType === "professional") {
         const specialty = payload.specialty?.trim();
@@ -42,6 +45,7 @@ export async function POST(request: Request) {
             headline: payload.roleTitle || specialty || "Profesional tecnico",
             bio: "Perfil profesional creado desde Portal Terraqo. Pendiente de completar y validar experiencia.",
             city: payload.city,
+            country: payload.country,
             yearsExperience: payload.yearsExperience,
             specialties: specialty ? [specialty] : [],
             equipment,
@@ -74,7 +78,7 @@ export async function POST(request: Request) {
           }
         });
 
-        return createdUser;
+        return { ...createdUser, verificationCode: verification.code };
       }
 
       const companyName = payload.company || payload.name;
@@ -86,6 +90,8 @@ export async function POST(request: Request) {
           document: payload.document,
           email: payload.email,
           phone: payload.phone,
+          city: payload.city,
+          address: [getSubdivisionName(payload.country, payload.subdivision), payload.city].filter(Boolean).join(" / ") || undefined,
           status: "pendiente_aprobacion",
           contacts: {
             create: {
@@ -148,12 +154,17 @@ export async function POST(request: Request) {
         }
       });
 
-      return createdUser;
+      return { ...createdUser, verificationCode: verification.code };
     });
+
+    const delivery = await sendEmailVerificationCode(user.email, user.verificationCode);
 
     return created({
       ...user,
+      verificationCode: undefined,
       accountType: payload.accountType,
+      emailVerificationRequired: true,
+      emailDelivery: delivery.delivered ? "sent" : "provider_not_configured",
       status: payload.accountType === "professional" ? "professional_profile_created" : "pending_approval"
     });
   } catch (error) {

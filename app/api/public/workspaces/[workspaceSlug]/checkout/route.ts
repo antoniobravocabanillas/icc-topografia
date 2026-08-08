@@ -3,6 +3,8 @@ import { randomBytes } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { createEmailVerificationToken, sendEmailVerificationCode } from "@/lib/server/email-verification";
+import { getSubdivisionName } from "@/lib/locations";
 import { fail, handleApiError, ok, parseJson } from "@/lib/server/api";
 
 type RouteContext = { params: Promise<{ workspaceSlug: string }> };
@@ -31,6 +33,9 @@ const publicCheckoutSchema = z.object({
     phone: z.string().trim().min(6),
     address: z.string().trim().min(5),
     reference: z.string().trim().optional(),
+    country: z.string().trim().length(2).default("PE"),
+    subdivision: z.string().trim().optional(),
+    city: z.string().trim().optional(),
     department: z.string().trim().default("Lima"),
     province: z.string().trim().default("Lima"),
     district: z.string().trim().default("Lima"),
@@ -131,6 +136,9 @@ export async function POST(request: Request, { params }: RouteContext) {
       const existingUser = await tx.user.findUnique({ where: { email: payload.customer.email } });
       const temporaryPassword = existingUser?.passwordHash ? null : createTemporaryPassword();
       const passwordHash = temporaryPassword ? await bcrypt.hash(temporaryPassword, 12) : undefined;
+      const locationCity = payload.customer.city || payload.customer.district;
+      const locationRegion = getSubdivisionName(payload.customer.country, payload.customer.subdivision)
+        || [payload.customer.department, payload.customer.province].filter(Boolean).join(" / ");
       const user = existingUser
         ? await tx.user.update({
             where: { id: existingUser.id },
@@ -169,7 +177,7 @@ export async function POST(request: Request, { params }: RouteContext) {
           email: payload.customer.email,
           phone: payload.customer.phone,
           address: payload.customer.address,
-          city: payload.customer.district,
+          city: locationCity,
           status: "cliente_activo",
           contacts: {
             create: {
@@ -271,9 +279,9 @@ export async function POST(request: Request, { params }: RouteContext) {
           label: "Entrega tienda tecnica",
           line1: payload.customer.address,
           line2: payload.customer.reference,
-          city: payload.customer.district,
-          region: `${payload.customer.department} / ${payload.customer.province}`,
-          country: "PE",
+          city: locationCity,
+          region: locationRegion,
+          country: payload.customer.country,
         },
       });
 
@@ -310,8 +318,14 @@ export async function POST(request: Request, { params }: RouteContext) {
         });
       }
 
-      return { order, user, temporaryPassword, reusedOrder: Boolean(reusableOrder), existingUser: Boolean(existingUser?.passwordHash) };
+      const verification = temporaryPassword ? await createEmailVerificationToken(tx, payload.customer.email) : null;
+
+      return { order, user, temporaryPassword, verificationCode: verification?.code, reusedOrder: Boolean(reusableOrder), existingUser: Boolean(existingUser?.passwordHash) };
     });
+
+    const emailDelivery = result.verificationCode
+      ? await sendEmailVerificationCode(result.user.email, result.verificationCode)
+      : { delivered: true as const };
 
     return ok({
       ok: true,
@@ -324,6 +338,8 @@ export async function POST(request: Request, { params }: RouteContext) {
         temporaryPassword: result.temporaryPassword,
         accountUrl: portalAccountUrl(workspace.slug),
         role: "CUSTOMER",
+        emailVerificationRequired: Boolean(result.temporaryPassword),
+        emailDelivery: emailDelivery.delivered ? "sent" : "provider_not_configured",
         status: result.existingUser ? "EXISTING" : "CREATED",
       },
       paymentInstructions: paymentInstructions(payload.paymentMethod),
