@@ -46,6 +46,9 @@ export async function POST(request: Request) {
             bio: "Perfil profesional creado desde Portal Terraqo. Pendiente de completar y validar experiencia.",
             city: payload.city,
             country: payload.country,
+            region: getSubdivisionName(payload.country, payload.subdivision) || undefined,
+            locationSubdivisionCode: payload.subdivision || undefined,
+            locationCity: payload.city || undefined,
             yearsExperience: payload.yearsExperience,
             specialties: specialty ? [specialty] : [],
             equipment,
@@ -91,6 +94,10 @@ export async function POST(request: Request) {
           email: payload.email,
           phone: payload.phone,
           city: payload.city,
+          country: payload.country,
+          region: getSubdivisionName(payload.country, payload.subdivision) || undefined,
+          locationSubdivisionCode: payload.subdivision || undefined,
+          locationCity: payload.city || undefined,
           address: [getSubdivisionName(payload.country, payload.subdivision), payload.city].filter(Boolean).join(" / ") || undefined,
           status: "pendiente_aprobacion",
           contacts: {
@@ -116,6 +123,10 @@ export async function POST(request: Request) {
           document: payload.document,
           email: payload.email,
           phone: payload.phone,
+          country: payload.country,
+          region: getSubdivisionName(payload.country, payload.subdivision) || undefined,
+          locationSubdivisionCode: payload.subdivision || undefined,
+          locationCity: payload.city || undefined,
           contactName: payload.name,
           status: "pendiente_aprobacion"
         }

@@ -588,11 +588,16 @@ model Company {
   id                       String                           @id @default(cuid())
   legalName                String
   tradeName                String?
+  publicSlug               String?
   document                 String?
   email                    String?
   phone                    String?
   address                  String?
   city                     String?
+  region                   String?
+  country                  String                           @default("PE")
+  locationSubdivisionCode  String?
+  locationCity             String?
   industry                 String?
   website                  String?
   logoUrl                  String?
@@ -616,7 +621,10 @@ model Company {
   updatedAt                DateTime                         @updatedAt
   deletedAt                DateTime?
 
+  @@index([terraqoWorkspaceId, publicSlug])
+  @@index([terraqoWorkspaceId, document])
   @@index([document])
+  @@index([country, locationSubdivisionCode, locationCity])
   @@index([status])
   @@index([terraqoWorkspaceId])
   @@index([deletedAt])
@@ -694,6 +702,10 @@ model Client {
   email              String
   phone              String?
   address            String?
+  country            String           @default("PE")
+  region             String?
+  locationSubdivisionCode String?
+  locationCity       String?
   contactName        String?
   status             String           @default("prospecto")
   leads              Lead[]
@@ -710,7 +722,9 @@ model Client {
 
   @@unique([terraqoWorkspaceId, userId])
   @@unique([terraqoWorkspaceId, email])
+  @@index([terraqoWorkspaceId, document])
   @@index([email])
+  @@index([country, locationSubdivisionCode, locationCity])
   @@index([status])
   @@index([companyId])
   @@index([terraqoWorkspaceId])
@@ -888,6 +902,7 @@ model Address {
   line2      String?
   city       String
   region     String?
+  subdivisionCode String?
   country    String  @default("PE")
   postalCode String?
   orders     Order[]
@@ -1855,8 +1870,13 @@ model TerraqoWorkspace {
   ownerUserId              String?
   owner                    User?                            @relation("TerraqoWorkspaceOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
   brandName                String?
+  publicSlug               String?
   domain                   String?
   logoUrl                  String?
+  country                  String                           @default("PE")
+  region                   String?
+  locationSubdivisionCode  String?
+  locationCity             String?
   settings                 Json?
   active                   Boolean                          @default(true)
   modules                  TerraqoWorkspaceModule[]
@@ -1912,7 +1932,9 @@ model TerraqoWorkspace {
   updatedAt                DateTime                         @updatedAt
   deletedAt                DateTime?
 
+  @@index([publicSlug])
   @@index([type, active])
+  @@index([country, locationSubdivisionCode, locationCity])
   @@index([companyId])
   @@index([ownerUserId])
   @@index([deletedAt])
@@ -2129,6 +2151,9 @@ model TerraqoProfessionalProfile {
   bio                        String?
   city                       String?
   country                    String                            @default("PE")
+  region                     String?
+  locationSubdivisionCode    String?
+  locationCity               String?
   status                     TerraqoProfessionalStatus         @default(OPEN_TO_PROJECTS)
   visibility                 TerraqoVisibility                 @default(PRIVATE)
   yearsExperience            Int?
@@ -2169,6 +2194,7 @@ model TerraqoProfessionalProfile {
 
   @@index([status, visibility])
   @@index([city])
+  @@index([country, locationSubdivisionCode, locationCity])
   @@index([identityVerificationStatus])
   @@schema("icc")
 }

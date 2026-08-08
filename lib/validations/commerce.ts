@@ -11,6 +11,7 @@ export const checkoutSchema = z.object({
     line2: z.string().trim().optional(),
     city: z.string().trim().min(2),
     region: z.string().trim().optional(),
+    subdivisionCode: z.string().trim().optional(),
     country: z.string().trim().default("PE"),
     postalCode: z.string().trim().optional()
   }).optional()
