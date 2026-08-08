@@ -18,7 +18,17 @@ export default async function ProfessionalProfilePage({ params }: PageProps) {
   const profile = await prisma.terraqoProfessionalProfile.findUnique({
     where: { id },
     include: {
-      user: { select: { id: true, name: true, image: true } },
+      user: {
+        select: {
+          id: true,
+          name: true,
+          image: true,
+          terraqoMemberships: {
+            where: { active: true },
+            select: { workspaceId: true }
+          }
+        }
+      },
       affiliations: { include: { workspace: { select: { slug: true } } }, orderBy: [{ current: "desc" }, { updatedAt: "desc" }] },
       experiences: { include: { project: { select: { title: true, slug: true } } }, orderBy: { startedAt: "desc" } }
     }
@@ -26,7 +36,9 @@ export default async function ProfessionalProfilePage({ params }: PageProps) {
   if (!profile) notFound();
 
   const owner = profile.userId === session.user.id;
-  const sharedWorkspace = profile.affiliations.some((affiliation) => viewerWorkspaceIds.includes(affiliation.workspaceId));
+  const sharedWorkspace =
+    profile.affiliations.some((affiliation) => viewerWorkspaceIds.includes(affiliation.workspaceId)) ||
+    profile.user.terraqoMemberships.some((membership) => viewerWorkspaceIds.includes(membership.workspaceId));
   if (!owner && profile.visibility === "PRIVATE") notFound();
   if (!owner && profile.visibility === "WORKSPACE" && !sharedWorkspace) notFound();
 
