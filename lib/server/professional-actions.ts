@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import type { TerraqoMessagePrivacy, TerraqoVisibility } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { getCountryName, getSubdivisionName } from "@/lib/locations";
+import { monthsBetween, refreshProfessionalGeneratedSummary } from "@/lib/terraqo/profile-summary";
 
 const USERNAME_PATTERN = /^[a-z0-9][a-z0-9._-]{2,29}$/;
 const RESERVED_USERNAMES = new Set([
@@ -76,6 +78,39 @@ function listFromText(formData: FormData, key: string) {
     .slice(0, 12);
 }
 
+function normalizeLocation(formData: FormData, names = { country: "country", subdivision: "subdivision", city: "city" }) {
+  const country = cleanText(formData, names.country, 8) || "PE";
+  const subdivision = cleanText(formData, names.subdivision, 24);
+  const city = cleanText(formData, names.city, 120);
+  const label = [city, getSubdivisionName(country, subdivision), getCountryName(country)].filter(Boolean).join(", ");
+  return { country, subdivision, city, label };
+}
+
+async function resolveValidator(formData: FormData, fallbackKey: string, workspaceIds: string[]) {
+  const validatorUserId = cleanText(formData, "validatorUserId", 80);
+  if (validatorUserId && workspaceIds.length) {
+    const validator = await prisma.user.findFirst({
+      where: {
+        id: validatorUserId,
+        terraqoMemberships: {
+          some: {
+            workspaceId: { in: workspaceIds },
+            active: true,
+            role: { in: ["OWNER", "ADMIN", "MANAGER"] }
+          }
+        }
+      },
+      select: { id: true, name: true, email: true }
+    });
+    if (validator) return { validatorUserId: validator.id, validatorName: validator.name, validatorEmail: validator.email };
+  }
+
+  const fallback = cleanText(formData, fallbackKey, 180);
+  if (!fallback) return { validatorUserId: null, validatorName: null, validatorEmail: null };
+  const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fallback);
+  return { validatorUserId: null, validatorName: isEmail ? null : fallback, validatorEmail: isEmail ? fallback : null };
+}
+
 export async function createHistoricalExperienceAction(formData: FormData) {
   "use server";
 
@@ -84,40 +119,123 @@ export async function createHistoricalExperienceAction(formData: FormData) {
 
   const profile = await prisma.terraqoProfessionalProfile.findUnique({
     where: { userId: session.user.id },
-    select: { id: true, username: true }
+    select: {
+      id: true,
+      username: true,
+      experiences: { select: { startedAt: true, endedAt: true, currentlyWorking: true } },
+      user: { select: { terraqoMemberships: { where: { active: true }, select: { workspaceId: true } } } }
+    }
   });
   if (!profile) redirect("/portal?status=profile-required");
 
   const title = cleanText(formData, "title", 140);
   const companyName = cleanText(formData, "companyName", 140);
   const role = cleanText(formData, "role", 120);
-  const location = cleanText(formData, "location", 120);
-  const supervisor = cleanText(formData, "supervisor", 180);
+  const location = normalizeLocation(formData);
+  const currentlyWorking = formData.get("currentlyWorking") === "on";
+  const startedAt = optionalDate(formData, "startedAt");
+  const endedAt = currentlyWorking ? null : optionalDate(formData, "endedAt");
+  const workspaceIds = profile.user.terraqoMemberships.map((membership) => membership.workspaceId);
+  const validator = await resolveValidator(formData, "validatorFallback", workspaceIds);
   const visibilityValues = new Set<TerraqoVisibility>(["PRIVATE", "WORKSPACE", "COMMUNITY", "PUBLIC"]);
   const visibilityInput = String(formData.get("visibility") || "PRIVATE") as TerraqoVisibility;
   if (!title || !companyName) redirect("/portal/experiencias?status=missing");
 
+  const verificationRequested = Boolean(validator.validatorUserId || validator.validatorEmail || validator.validatorName);
   await prisma.terraqoProfessionalExperience.create({
     data: {
       professionalProfileId: profile.id,
       title,
       companyName,
       role,
-      location,
-      startedAt: optionalDate(formData, "startedAt"),
-      endedAt: optionalDate(formData, "endedAt"),
+      location: location.label || null,
+      country: location.country,
+      locationSubdivisionCode: location.subdivision,
+      locationCity: location.city,
+      startedAt,
+      endedAt,
+      currentlyWorking,
       visibility: visibilityValues.has(visibilityInput) ? visibilityInput : "PRIVATE",
       evidence: listFromText(formData, "evidence"),
-      verificationNote: supervisor
-        ? `Solicitud de verificacion historica pendiente para ${supervisor}.`
-        : "Experiencia historica cargada por el profesional. Pendiente de verificacion por responsable."
+      verificationStatus: verificationRequested ? "REQUESTED" : "NOT_REQUESTED",
+      verificationRequestedAt: verificationRequested ? new Date() : null,
+      validatorUserId: validator.validatorUserId,
+      validatorName: validator.validatorName,
+      validatorEmail: validator.validatorEmail,
+      verificationNote: verificationRequested
+        ? `Solicitud de verificacion enviada a ${validator.validatorName || validator.validatorEmail || "responsable seleccionado"}.`
+        : "Experiencia historica cargada por el profesional. Pendiente de solicitar verificacion."
     }
   });
+
+  const totalMonths = [...profile.experiences, { startedAt, endedAt, currentlyWorking }].reduce((sum, item) => sum + monthsBetween(item.startedAt, item.currentlyWorking ? null : item.endedAt), 0);
+  await prisma.terraqoProfessionalProfile.update({
+    where: { id: profile.id },
+    data: { yearsExperience: Math.floor(totalMonths / 12) }
+  });
+  await refreshProfessionalGeneratedSummary(profile.id);
 
   revalidatePath("/portal");
   revalidatePath("/portal/experiencias");
   if (profile.username) revalidatePath(`/cv/${profile.username}`);
   redirect("/portal/experiencias?success=experience");
+}
+
+export async function createEducationAction(formData: FormData) {
+  "use server";
+
+  const session = await auth();
+  if (!session?.user?.id) redirect("/cuenta");
+
+  const profile = await prisma.terraqoProfessionalProfile.findUnique({
+    where: { userId: session.user.id },
+    select: {
+      id: true,
+      username: true,
+      user: { select: { terraqoMemberships: { where: { active: true }, select: { workspaceId: true } } } }
+    }
+  });
+  if (!profile) redirect("/portal?status=profile-required");
+
+  const institution = cleanText(formData, "institution", 140);
+  const degree = cleanText(formData, "degree", 140);
+  if (!institution || !degree) redirect("/portal/experiencias?status=education-missing");
+
+  const location = normalizeLocation(formData, { country: "educationCountry", subdivision: "educationSubdivision", city: "educationCity" });
+  const currentlyStudying = formData.get("currentlyStudying") === "on";
+  const workspaceIds = profile.user.terraqoMemberships.map((membership) => membership.workspaceId);
+  const validator = await resolveValidator(formData, "educationValidatorFallback", workspaceIds);
+  const verificationRequested = Boolean(validator.validatorUserId || validator.validatorEmail || validator.validatorName);
+  const visibilityValues = new Set<TerraqoVisibility>(["PRIVATE", "WORKSPACE", "COMMUNITY", "PUBLIC"]);
+  const visibilityInput = String(formData.get("visibility") || "PRIVATE") as TerraqoVisibility;
+
+  await prisma.terraqoProfessionalEducation.create({
+    data: {
+      professionalProfileId: profile.id,
+      institution,
+      degree,
+      field: cleanText(formData, "field", 140),
+      country: location.country,
+      locationSubdivisionCode: location.subdivision,
+      locationCity: location.city,
+      startedAt: optionalDate(formData, "educationStartedAt"),
+      endedAt: currentlyStudying ? null : optionalDate(formData, "educationEndedAt"),
+      currentlyStudying,
+      visibility: visibilityValues.has(visibilityInput) ? visibilityInput : "PRIVATE",
+      verificationStatus: verificationRequested ? "REQUESTED" : "NOT_REQUESTED",
+      verificationRequestedAt: verificationRequested ? new Date() : null,
+      validatorUserId: validator.validatorUserId,
+      validatorName: validator.validatorName,
+      validatorEmail: validator.validatorEmail,
+      evidence: listFromText(formData, "educationEvidence")
+    }
+  });
+
+  await refreshProfessionalGeneratedSummary(profile.id);
+  revalidatePath("/portal");
+  revalidatePath("/portal/experiencias");
+  if (profile.username) revalidatePath(`/cv/${profile.username}`);
+  redirect("/portal/experiencias?success=education");
 }
 
 export async function updateProfessionalSettingsAction(formData: FormData) {

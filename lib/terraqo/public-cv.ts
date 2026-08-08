@@ -25,6 +25,11 @@ export const publicCvProfileInclude = {
     orderBy: [{ verifiedByTerraqo: "desc" }, { startedAt: "desc" }],
     take: 50
   },
+  education: {
+    where: { visibility: "PUBLIC" },
+    orderBy: [{ currentlyStudying: "desc" }, { startedAt: "desc" }, { createdAt: "desc" }],
+    take: 30
+  },
   documents: {
     select: {
       id: true,

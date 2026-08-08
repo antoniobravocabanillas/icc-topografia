@@ -22,6 +22,7 @@ import {
   type LucideIcon
 } from "lucide-react";
 import type { PublicCvProfile } from "@/lib/terraqo/public-cv";
+import { formatExperienceDuration, monthsBetween } from "@/lib/terraqo/profile-summary";
 
 type PublicCVPageProps = {
   profile: PublicCvProfile;
@@ -219,6 +220,7 @@ export function PublicCVPage({ profile }: PublicCVPageProps) {
   const evidence = profile.worklogs.slice(0, 6);
   const lastActivity = latestActivity(profile);
   const verifiedDocs = verifiedDocumentCount(profile);
+  const totalExperienceMonths = profile.experiences.reduce((sum, experience) => sum + monthsBetween(experience.startedAt, experience.currentlyWorking ? null : experience.endedAt), 0);
 
   return (
     <div className="min-h-screen bg-[#f7fbfa] text-[#0b1f2a]">
@@ -234,7 +236,7 @@ export function PublicCVPage({ profile }: PublicCVPageProps) {
 
         <section className="mx-auto w-[min(100%-32px,1240px)] -translate-y-5">
           <MetricStrip
-            years={profile.yearsExperience ?? 0}
+            experienceLabel={formatExperienceDuration(totalExperienceMonths)}
             projects={projects.length || profile.experiences.length}
             validation={validationScore(profile)}
             evidence={publicEvidenceCount(profile)}
@@ -244,6 +246,7 @@ export function PublicCVPage({ profile }: PublicCVPageProps) {
 
         <section className="mx-auto grid w-[min(100%-32px,1240px)] gap-5 pb-10">
           <ExperienceTimeline profile={profile} username={username} />
+          <EducationTimeline profile={profile} />
           <FeaturedProjects projects={projects} profile={profile} username={username} />
           <PublicEvidence worklogs={evidence} username={username} />
           <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
@@ -387,7 +390,7 @@ function ProfileHero({ profile, name, username, specialties, isPublicCv }: { pro
           <span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-[#1dbf96]" />{STATUS_COPY[profile.status] || "Estado profesional activo"}</span>
           <span className="font-mono text-xs uppercase tracking-[0.12em] text-[#5f7280]">@{username}</span>
         </div>
-        <p className="mt-5 max-w-3xl text-[15px] leading-7 text-[#425865]">{profile.bio || "Perfil en construccion. La experiencia publica se actualiza con proyectos, bitacoras y validaciones autorizadas."}</p>
+        <p className="mt-5 max-w-3xl text-[15px] leading-7 text-[#425865]">{profile.generatedSummary || profile.bio || "Perfil en construccion. La experiencia publica se actualiza con proyectos, bitacoras y validaciones autorizadas."}</p>
         <div className="mt-6 flex flex-wrap justify-center gap-2 lg:justify-start">
           {specialties.length ? specialties.map((item) => <ToolChip key={item} label={item} />) : <ToolChip label="Perfil en actualizacion" />}
         </div>
@@ -428,9 +431,9 @@ function VerificationPanel({ profile, verifiedDocs, username }: { profile: Publi
   );
 }
 
-function MetricStrip({ years, projects, validation, evidence, lastActivity }: { years: number; projects: number; validation: number; evidence: number; lastActivity: Date }) {
+function MetricStrip({ experienceLabel, projects, validation, evidence, lastActivity }: { experienceLabel: string; projects: number; validation: number; evidence: number; lastActivity: Date }) {
   const metrics = [
-    { label: "Anos de experiencia", value: `${years}+`, icon: UserRoundCheck },
+    { label: "Experiencia acumulada", value: experienceLabel, icon: UserRoundCheck },
     { label: "Proyectos completados", value: projects, icon: FolderKanban },
     { label: "Experiencias validadas", value: `${validation}%`, icon: Grid2X2 },
     { label: "Evidencias publicas", value: evidence, icon: ClipboardCheck }
@@ -462,14 +465,34 @@ function ExperienceTimeline({ profile, username, extended = false }: { profile: 
   );
 }
 
+function EducationTimeline({ profile }: { profile: PublicCvProfile }) {
+  if (!profile.education.length) return null;
+  return (
+    <section className="rounded-[16px] border border-[#dceaec] bg-white p-5 shadow-[0_18px_50px_rgba(12,43,49,0.06)]">
+      <SectionHeader title="Educacion y certificaciones" description="Formacion publica declarada por el profesional." />
+      <div className="mt-6 grid gap-4 md:grid-cols-2">
+        {profile.education.map((education) => (
+          <article key={education.id} className="rounded-[14px] border border-[#dceaec] bg-[#f8fcfb] p-4">
+            <p className="font-display text-lg font-black">{education.degree}</p>
+            <p className="mt-1 text-sm font-black text-[#008c83]">{education.institution}</p>
+            {education.field ? <p className="mt-2 text-sm text-[#435a66]">{education.field}</p> : null}
+            <p className="mt-3 text-xs font-bold uppercase tracking-[0.08em] text-[#5f7280]">{formatPeriod(education.startedAt, education.currentlyStudying ? null : education.endedAt)}{education.locationCity ? ` · ${education.locationCity}` : ""}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function ExperienceCard({ experience }: { experience: PublicCvProfile["experiences"][number] }) {
   const checks = (experience.verifiedByTerraqo ? 1 : 0) + (experience.project ? 1 : 0);
   return (
     <article className="relative grid gap-5 rounded-[14px] border border-[#dceaec] bg-white p-4 md:grid-cols-[120px_130px_1fr_210px]">
       <span className="absolute -left-[27px] top-8 grid h-4 w-4 place-items-center rounded-full bg-[#008c83] ring-4 ring-white" />
       <div className="font-mono text-xs font-black uppercase tracking-[0.08em] text-[#435a66]">
-        <span className="block">{formatPeriod(experience.startedAt, experience.endedAt)}</span>
-        <small className="mt-1 block text-[#7a8d96]">{experience.location || experience.project?.location || "Ubicacion no publica"}</small>
+        <span className="block">{formatPeriod(experience.startedAt, experience.currentlyWorking ? null : experience.endedAt)}</span>
+        <small className="mt-1 block text-[#7a8d96]">{experience.locationCity || experience.location || experience.project?.location || "Ubicacion no publica"}</small>
+        <small className="mt-1 block text-[#008c83]">{formatExperienceDuration(monthsBetween(experience.startedAt, experience.currentlyWorking ? null : experience.endedAt))}</small>
       </div>
       <CompanyTile label={experience.companyName || experience.project?.clientName || "Empresa"} />
       <div>
@@ -639,14 +662,14 @@ function PublicCVFooter({ updatedAt }: { updatedAt: Date }) {
   );
 }
 
-function SectionHeader({ title, description, action, href }: { title: string; description: string; action: string; href: string }) {
+function SectionHeader({ title, description, action, href }: { title: string; description: string; action?: string; href?: string }) {
   return (
     <header className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
       <div>
         <h2 className="font-display text-xl font-black">{title}</h2>
         <p className="mt-1 text-sm text-[#5f7280]">{description}</p>
       </div>
-      <Link href={href} className="inline-flex items-center gap-2 text-sm font-black text-[#006c66]">{action} <ArrowRight className="h-4 w-4" /></Link>
+      {href && action ? <Link href={href} className="inline-flex items-center gap-2 text-sm font-black text-[#006c66]">{action} <ArrowRight className="h-4 w-4" /></Link> : null}
     </header>
   );
 }

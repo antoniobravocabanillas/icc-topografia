@@ -21,6 +21,7 @@ import { WorklogCard } from "@/components/terraqo/worklog-card";
 import { FieldVerificationPanel } from "@/components/terraqo/field-verification-panel";
 import { Button } from "@/components/ui/button";
 import { terraqoDomains } from "@/lib/terraqo-domains";
+import { formatExperienceDuration, monthsBetween } from "@/lib/terraqo/profile-summary";
 import { worklogInclude } from "@/lib/terraqo/worklog";
 
 export type ProfessionalDashboardProfile = Prisma.TerraqoProfessionalProfileGetPayload<{
@@ -91,6 +92,7 @@ export function ProfessionalDashboard({ profile, workspaceId }: { profile: Profe
   const hasCv = profile.documents.some((document) => document.type === "CV");
   const identityComplete = profile.identityVerificationStatus === "VERIFIED";
   const publicCvHref = profile.username ? `${terraqoDomains.public}/cv/${profile.username}` : null;
+  const totalMonths = profile.experiences.reduce((sum, experience) => sum + monthsBetween(experience.startedAt, experience.currentlyWorking ? null : experience.endedAt), 0);
 
   return (
     <div className="min-w-0 space-y-6 py-6 lg:py-8">
@@ -102,7 +104,8 @@ export function ProfessionalDashboard({ profile, workspaceId }: { profile: Profe
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-3"><h1 className="font-display text-3xl font-bold lg:text-4xl">{name}</h1>{identityComplete ? <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-3 py-1 text-xs font-semibold text-[#76ece1]"><BadgeCheck className="h-4 w-4" /> Perfil verificado</span> : null}</div>
                   <p className="mt-2 text-lg font-semibold text-[#62ddd2]">{profile.headline || profile.specialties[0] || "Profesional Terraqo"}</p>
-                  <div className="mt-3 flex flex-wrap gap-3 text-sm text-white/70"><span className="inline-flex items-center gap-1.5"><MapPin className="h-4 w-4 text-[#62ddd2]" />{profile.city || "Ubicacion por completar"}</span><span>|</span><span>{profile.yearsExperience ?? 0} anos de experiencia</span></div>
+                  <div className="mt-3 flex flex-wrap gap-3 text-sm text-white/70"><span className="inline-flex items-center gap-1.5"><MapPin className="h-4 w-4 text-[#62ddd2]" />{profile.locationCity || profile.city || "Ubicacion por completar"}</span><span>|</span><span>{formatExperienceDuration(totalMonths)} de experiencia</span></div>
+                  {profile.generatedSummary ? <p className="mt-4 max-w-3xl text-sm leading-6 text-white/70">{profile.generatedSummary}</p> : null}
                   <div className="mt-6 flex flex-wrap gap-3"><Button asChild className="bg-primary text-white hover:bg-primary/90"><Link href={`/portal/profesionales/${profile.id}`}>Ver perfil <ChevronRight className="ml-2 h-4 w-4" /></Link></Button><Button asChild variant="outline" className="border-white/40 bg-transparent text-white hover:bg-white/10"><Link href="/portal/documentos">Completar perfil</Link></Button></div>
                 </div>
               </div>

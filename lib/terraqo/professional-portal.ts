@@ -17,6 +17,9 @@ export async function requireProfessionalPortal() {
         include: { project: { select: { id: true, title: true, slug: true, location: true } } },
         orderBy: [{ verifiedByTerraqo: "desc" }, { createdAt: "desc" }]
       },
+      education: {
+        orderBy: [{ currentlyStudying: "desc" }, { startedAt: "desc" }, { createdAt: "desc" }]
+      },
       affiliations: { orderBy: [{ current: "desc" }, { updatedAt: "desc" }] },
       applications: {
         include: {

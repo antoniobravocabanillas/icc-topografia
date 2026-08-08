@@ -505,6 +505,15 @@ enum TerraqoDocumentReviewStatus {
   @@schema("icc")
 }
 
+enum TerraqoProfileEntryVerificationStatus {
+  NOT_REQUESTED
+  REQUESTED
+  APPROVED
+  REJECTED
+
+  @@schema("icc")
+}
+
 enum TerraqoNoteKind {
   SIMPLE
   SECURE
@@ -2175,6 +2184,8 @@ model TerraqoProfessionalProfile {
   yapePhone                  String?
   plinPhone                  String?
   paymentNotes               String?
+  generatedSummary           String?
+  generatedSummaryUpdatedAt  DateTime?
   termsAcceptedAt            DateTime?
   termsVersion               String?
   privacyAcceptedAt          DateTime?
@@ -2184,6 +2195,7 @@ model TerraqoProfessionalProfile {
   identityVerifiedAt         DateTime?
   identityVerificationNote   String?
   experiences                TerraqoProfessionalExperience[]
+  education                  TerraqoProfessionalEducation[]
   affiliations               TerraqoProfessionalAffiliation[]
   applications               TerraqoProjectApplication[]
   documents                  TerraqoProfessionalDocument[]
@@ -2295,18 +2307,60 @@ model TerraqoProfessionalExperience {
   companyName           String?
   role                  String?
   location              String?
+  country               String?                    @default("PE")
+  locationSubdivisionCode String?
+  locationCity          String?
   startedAt             DateTime?
   endedAt               DateTime?
+  currentlyWorking      Boolean                    @default(false)
   verifiedByTerraqo     Boolean                    @default(false)
   verificationNote      String?
+  verificationStatus    TerraqoProfileEntryVerificationStatus @default(NOT_REQUESTED)
+  verificationRequestedAt DateTime?
+  validatorUserId       String?
+  validatorName         String?
+  validatorEmail        String?
   visibility            TerraqoVisibility          @default(PRIVATE)
   evidence              String[]                   @default([])
   createdAt             DateTime                   @default(now())
   updatedAt             DateTime                   @updatedAt
 
   @@index([professionalProfileId, startedAt])
+  @@index([professionalProfileId, verificationStatus])
+  @@index([validatorUserId, verificationStatus])
+  @@index([country, locationSubdivisionCode, locationCity])
   @@index([projectId])
   @@index([verifiedByTerraqo])
+  @@schema("icc")
+}
+
+model TerraqoProfessionalEducation {
+  id                    String                     @id @default(cuid())
+  professionalProfileId String
+  professionalProfile   TerraqoProfessionalProfile @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
+  institution           String
+  degree                String
+  field                 String?
+  country               String?                    @default("PE")
+  locationSubdivisionCode String?
+  locationCity          String?
+  startedAt             DateTime?
+  endedAt               DateTime?
+  currentlyStudying     Boolean                    @default(false)
+  visibility            TerraqoVisibility          @default(PRIVATE)
+  verificationStatus    TerraqoProfileEntryVerificationStatus @default(NOT_REQUESTED)
+  verificationRequestedAt DateTime?
+  validatorUserId       String?
+  validatorName         String?
+  validatorEmail        String?
+  evidence              String[]                   @default([])
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+
+  @@index([professionalProfileId, startedAt])
+  @@index([professionalProfileId, verificationStatus])
+  @@index([validatorUserId, verificationStatus])
+  @@index([country, locationSubdivisionCode, locationCity])
   @@schema("icc")
 }
 
