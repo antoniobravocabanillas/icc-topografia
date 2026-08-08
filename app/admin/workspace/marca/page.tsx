@@ -9,6 +9,7 @@ import { ClientLogoUploader } from "@/components/admin/client-logo-uploader";
 import { updateWorkspaceBrandingAction } from "@/lib/server/workspace-branding-actions";
 import { prisma } from "@/lib/prisma";
 import { getSessionTerraqoWorkspace } from "@/lib/terraqo/workspace-scope";
+import { resolveWorkspaceVisualIdentity } from "@/lib/terraqo/workspace-visual-identity";
 
 type PageProps = { searchParams?: Promise<{ success?: string; error?: string }> };
 
@@ -20,11 +21,12 @@ export default async function WorkspaceBrandingPage({ searchParams }: PageProps)
   const sessionWorkspace = await getSessionTerraqoWorkspace();
   const workspace = await prisma.terraqoWorkspace.findUnique({
     where: { id: sessionWorkspace.id },
-    select: { id: true, slug: true, name: true, brandName: true, publicSlug: true, domain: true, logoUrl: true, industry: true, description: true }
+    select: { id: true, slug: true, name: true, brandName: true, publicSlug: true, domain: true, logoUrl: true, industry: true, description: true, settings: true }
   });
   if (!workspace) throw new Error("Workspace no encontrado.");
   const publicSlug = workspace.publicSlug || workspace.slug;
   const publicUrl = `/empresas/${publicSlug}`;
+  const visualIdentity = resolveWorkspaceVisualIdentity(workspace.settings);
 
   return (
     <section className="space-y-7">
@@ -71,6 +73,52 @@ export default async function WorkspaceBrandingPage({ searchParams }: PageProps)
                 <Textarea name="description" defaultValue={workspace.description || ""} placeholder="Describe la empresa en 2 o 3 líneas comerciales, sin sonar genérico." />
               </label>
               <ClientLogoUploader initialLogoUrl={workspace.logoUrl} inputName="logoUrl" label="Logo del workspace" description="Este logo se usará en el portal marca blanca y en el perfil público de empresa." />
+
+              <div className="md:col-span-2 rounded-2xl border border-[#c8dcda] bg-[#fbfdfc] p-5">
+                <div className="flex items-start gap-3">
+                  <Palette className="mt-1 h-5 w-5 text-primary" />
+                  <div>
+                    <h2 className="font-display text-xl font-bold">Sistema visual del workspace</h2>
+                    <p className="mt-1 text-sm leading-6 text-muted-foreground">Tokens de marca blanca para aplicar color, fuente y atmósfera sin tocar cada módulo manualmente.</p>
+                  </div>
+                </div>
+                <div className="mt-5 grid gap-5 md:grid-cols-3">
+                  <label className="grid gap-2 text-sm font-semibold">
+                    Color principal
+                    <Input name="primaryColor" type="color" defaultValue={visualIdentity.primaryColor} className="h-12 p-1" />
+                  </label>
+                  <label className="grid gap-2 text-sm font-semibold">
+                    Color acento
+                    <Input name="accentColor" type="color" defaultValue={visualIdentity.accentColor} className="h-12 p-1" />
+                  </label>
+                  <label className="grid gap-2 text-sm font-semibold">
+                    Fondo base
+                    <Input name="backgroundColor" type="color" defaultValue={visualIdentity.backgroundColor} className="h-12 p-1" />
+                  </label>
+                  <label className="grid gap-2 text-sm font-semibold">
+                    Tipografía
+                    <select name="fontFamily" defaultValue={visualIdentity.fontFamily} className="h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm">
+                      <option value="system">Sistema limpia</option>
+                      <option value="display">Display Terraqo</option>
+                      <option value="serif">Editorial serif</option>
+                    </select>
+                  </label>
+                  <label className="grid gap-2 text-sm font-semibold">
+                    Pieza visual hero
+                    <select name="heroPattern" defaultValue={visualIdentity.heroPattern} className="h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm">
+                      <option value="soft-grid">Grid suave</option>
+                      <option value="topographic">Topográfico</option>
+                      <option value="dark-panel">Panel oscuro</option>
+                      <option value="clean">Limpio</option>
+                    </select>
+                  </label>
+                  <label className="grid gap-2 text-sm font-semibold">
+                    Etiqueta del perfil
+                    <Input name="badgeLabel" defaultValue={visualIdentity.badgeLabel} placeholder="Perfil empresa" />
+                  </label>
+                </div>
+              </div>
+
               <div className="md:col-span-2 flex justify-end">
                 <Button type="submit" className="min-w-52">Guardar marca blanca</Button>
               </div>
@@ -80,8 +128,8 @@ export default async function WorkspaceBrandingPage({ searchParams }: PageProps)
 
         <aside className="space-y-5">
           <Card className="overflow-hidden">
-            <div className="bg-[#062f38] p-5 text-white">
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#83efe2]">Preview</p>
+            <div className="p-5 text-white" style={{ background: `linear-gradient(135deg, ${visualIdentity.primaryColor}, #061722)` }}>
+              <p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: visualIdentity.accentColor }}>Preview</p>
               <div className="mt-5 flex items-center gap-4">
                 <div className="grid h-16 w-16 place-items-center rounded-xl bg-white/95 p-2 text-[#06343b]">
                   {workspace.logoUrl ? <Image src={workspace.logoUrl} alt="Logo del workspace" width={96} height={96} className="max-h-12 w-auto object-contain" unoptimized /> : <span className="font-black">TQ</span>}
@@ -102,8 +150,8 @@ export default async function WorkspaceBrandingPage({ searchParams }: PageProps)
           <Card>
             <CardHeader>
               <Palette className="h-5 w-5 text-primary" />
-              <CardTitle>Próxima capa</CardTitle>
-              <CardDescription>Color principal, tipografía y piezas visuales por workspace pueden entrar aquí sin tocar cada módulo manualmente.</CardDescription>
+              <CardTitle>Capa visual activa</CardTitle>
+              <CardDescription>Estos tokens ya quedan guardados en el workspace y se aplican al perfil público de empresa.</CardDescription>
             </CardHeader>
           </Card>
         </aside>

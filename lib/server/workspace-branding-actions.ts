@@ -6,6 +6,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getSessionTerraqoWorkspace } from "@/lib/terraqo/workspace-scope";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
+import { defaultWorkspaceVisualIdentity, isHexColor } from "@/lib/terraqo/workspace-visual-identity";
 
 function text(formData: FormData, key: string) {
   return String(formData.get(key) || "").trim();
@@ -23,6 +24,10 @@ function slugify(value: string) {
 
 function normalizeDomain(value: string) {
   return value.replace(/^https?:\/\//i, "").replace(/\/.*$/, "").trim().toLowerCase();
+}
+
+function option(value: string, allowed: string[], fallback: string) {
+  return allowed.includes(value) ? value : fallback;
 }
 
 function settingsObject(settings: Prisma.JsonValue | null | undefined) {
@@ -43,6 +48,20 @@ export async function updateWorkspaceBrandingAction(formData: FormData) {
   const publicSlug = slugify(text(formData, "publicSlug") || brandName || workspace.slug);
   const domain = normalizeDomain(text(formData, "domain"));
   const logoUrl = text(formData, "logoUrl");
+  const current = await prisma.terraqoWorkspace.findUnique({
+    where: { id: workspace.id },
+    select: { settings: true }
+  });
+  const settings = settingsObject(current?.settings);
+  settings.visualIdentity = {
+    primaryColor: isHexColor(text(formData, "primaryColor")) ? text(formData, "primaryColor") : defaultWorkspaceVisualIdentity.primaryColor,
+    accentColor: isHexColor(text(formData, "accentColor")) ? text(formData, "accentColor") : defaultWorkspaceVisualIdentity.accentColor,
+    backgroundColor: isHexColor(text(formData, "backgroundColor")) ? text(formData, "backgroundColor") : defaultWorkspaceVisualIdentity.backgroundColor,
+    fontFamily: option(text(formData, "fontFamily"), ["system", "display", "serif"], defaultWorkspaceVisualIdentity.fontFamily),
+    heroPattern: option(text(formData, "heroPattern"), ["soft-grid", "topographic", "clean", "dark-panel"], defaultWorkspaceVisualIdentity.heroPattern),
+    badgeLabel: text(formData, "badgeLabel") || defaultWorkspaceVisualIdentity.badgeLabel,
+    updatedAt: new Date().toISOString()
+  };
 
   const existingSlug = await prisma.terraqoWorkspace.findFirst({
     where: { id: { not: workspace.id }, OR: [{ slug: publicSlug }, { publicSlug }] },
@@ -59,7 +78,8 @@ export async function updateWorkspaceBrandingAction(formData: FormData) {
       domain: domain || null,
       logoUrl: logoUrl || null,
       industry: text(formData, "industry") || null,
-      description: text(formData, "description") || null
+      description: text(formData, "description") || null,
+      settings
     }
   });
 
