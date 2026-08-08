@@ -624,7 +624,7 @@ export default async function TerraqoNetworkPage({ searchParams }: TerraqoNetwor
                           <div className="mt-1 text-xs text-muted-foreground">{profile.user.email}</div>
                         </div>
                       </div>
-                      <div className="text-xs text-muted-foreground">{profile.city || "Ciudad por definir"} | {profile.yearsExperience ?? 0} anos</div>
+                      <div className="text-xs text-muted-foreground">{profile.city || "Ciudad por definir"} | {profile.yearsExperience ?? 0} años</div>
                       <Button asChild variant="outline" size="sm" className="mt-3">
                         <Link href={`/admin/terraqo/red/profesionales/${profile.id}`}>Ver perfil completo</Link>
                       </Button>

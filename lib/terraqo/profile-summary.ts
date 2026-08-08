@@ -34,8 +34,33 @@ export function formatExperienceDuration(months: number) {
   const years = Math.floor(months / 12);
   const rest = months % 12;
   if (!years) return `${months} ${months === 1 ? "mes" : "meses"}`;
-  if (!rest) return `${years} ${years === 1 ? "ano" : "anos"}`;
-  return `${years} ${years === 1 ? "ano" : "anos"} y ${rest} ${rest === 1 ? "mes" : "meses"}`;
+  if (!rest) return `${years} ${years === 1 ? "año" : "años"}`;
+  return `${years} ${years === 1 ? "año" : "años"} y ${rest} ${rest === 1 ? "mes" : "meses"}`;
+}
+
+const SUMMARY_TIMEOUT_MS = Number(process.env.AI_PROFILE_SUMMARY_TIMEOUT_MS || 12_000);
+
+function cleanSummary(text?: string | null) {
+  if (!text) return null;
+  const cleaned = text
+    .replace(/\bEspanol\b/gi, "Español")
+    .replace(/\banos\b/gi, "años")
+    .replace(/\bano\b/gi, "año")
+    .replace(/\bconstruccion\b/gi, "construcción")
+    .replace(/\bFormacion\b/g, "Formación")
+    .replace(/\bformacion\b/g, "formación")
+    .trim();
+  return cleaned ? cleaned.slice(0, 720) : null;
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = SUMMARY_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function deterministicSummary(input: {
@@ -51,19 +76,27 @@ function deterministicSummary(input: {
   const focus = [...input.categories, ...input.specialties].filter(Boolean).slice(0, 4).join(", ");
   const parts = [
     input.headline || latest?.role || "Profesional operativo",
-    totalMonths ? `con ${formatExperienceDuration(totalMonths)} de experiencia declarada` : "con experiencia en construccion de perfil",
+    totalMonths ? `con ${formatExperienceDuration(totalMonths)} de experiencia declarada` : "con experiencia en construcción de perfil",
     focus ? `en ${focus}` : null,
     latest ? `Ha trabajado en ${latest.title}${latest.companyName ? ` para ${latest.companyName}` : ""}${latest.locationCity || latest.location ? ` en ${latest.locationCity || latest.location}` : ""}.` : null,
-    education ? `Formacion: ${education.degree} en ${education.institution}.` : null
+    education ? `Formación: ${education.degree} en ${education.institution}.` : null
   ].filter(Boolean);
-  return parts.join(" ").slice(0, 720);
+  return cleanSummary(parts.join(" ")) || "";
 }
 
-async function aiSummary(input: Parameters<typeof deterministicSummary>[0]) {
+function configuredSummaryProvider() {
+  const explicit = process.env.AI_PROFILE_SUMMARY_PROVIDER || process.env.AI_PROVIDER;
+  if (explicit) return explicit.trim().toLowerCase();
+  if (process.env.OLLAMA_BASE_URL) return "ollama";
+  if (process.env.OPENAI_API_KEY) return "openai";
+  return "none";
+}
+
+async function openAiSummary(input: Parameters<typeof deterministicSummary>[0]) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
 
-  const response = await fetch("https://api.openai.com/v1/responses", {
+  const response = await fetchWithTimeout("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
       authorization: `Bearer ${apiKey}`,
@@ -74,7 +107,7 @@ async function aiSummary(input: Parameters<typeof deterministicSummary>[0]) {
       input: [
         {
           role: "system",
-          content: "Redacta un extracto profesional sobrio, verificable y comercial para un CV vivo. No inventes datos. Maximo 75 palabras. Espanol neutro."
+          content: "Redacta un extracto profesional sobrio, verificable y comercial para un CV vivo. No inventes datos. Máximo 75 palabras. Español neutro. Usa correctamente tildes y la letra ñ."
         },
         {
           role: "user",
@@ -86,7 +119,54 @@ async function aiSummary(input: Parameters<typeof deterministicSummary>[0]) {
   if (!response.ok) return null;
   const payload = await response.json().catch(() => null);
   const text = payload?.output_text || payload?.output?.flatMap?.((item: { content?: Array<{ text?: string }> }) => item.content || []).map((item: { text?: string }) => item.text).filter(Boolean).join(" ");
-  return typeof text === "string" && text.trim() ? text.trim().slice(0, 720) : null;
+  return typeof text === "string" ? cleanSummary(text) : null;
+}
+
+async function ollamaSummary(input: Parameters<typeof deterministicSummary>[0]) {
+  const baseUrl = (process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434").replace(/\/+$/, "");
+  const model = process.env.OLLAMA_PROFILE_SUMMARY_MODEL || process.env.OLLAMA_MODEL || "llama3.1:8b";
+
+  const response = await fetchWithTimeout(`${baseUrl}/api/chat`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      model,
+      stream: false,
+      options: {
+        temperature: 0.2,
+        num_predict: 180
+      },
+      messages: [
+        {
+          role: "system",
+          content: "Eres un redactor técnico de Terraqo. Redacta un extracto profesional sobrio, verificable y comercial para un CV vivo. No inventes datos. Máximo 75 palabras. Español neutro. Usa correctamente tildes y la letra ñ. Devuelve solo el extracto."
+        },
+        {
+          role: "user",
+          content: JSON.stringify(input)
+        }
+      ]
+    })
+  });
+  if (!response.ok) return null;
+  const payload = await response.json().catch(() => null);
+  const text = payload?.message?.content || payload?.response;
+  return typeof text === "string" ? cleanSummary(text) : null;
+}
+
+async function aiSummary(input: Parameters<typeof deterministicSummary>[0]) {
+  const provider = configuredSummaryProvider();
+  try {
+    if (provider === "ollama" || provider === "local") return await ollamaSummary(input);
+    if (provider === "openai") return await openAiSummary(input);
+    if (provider === "none" || provider === "off" || provider === "false") return null;
+  } catch {
+    return null;
+  }
+
+  const ollamaResult = await ollamaSummary(input).catch(() => null);
+  if (ollamaResult) return ollamaResult;
+  return openAiSummary(input).catch(() => null);
 }
 
 export async function refreshProfessionalGeneratedSummary(professionalProfileId: string) {

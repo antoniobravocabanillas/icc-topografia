@@ -117,7 +117,7 @@ export default async function AboutPage() {
 
             <ScrollReveal delay={100}>
               <div className="icc-glass grid overflow-hidden rounded-sm border">
-                <Metric value="12+" label="anos de trayectoria tecnica" />
+                <Metric value="12+" label="años de trayectoria técnica" />
                 <Metric value={String(serviceCount)} label="servicios tecnicos especializados" />
                 <Metric value={String(sectors.length)} label="sectores estrategicos atendidos" />
                 <Metric value={`${projectCount}+`} label="referencias y casos publicados" />

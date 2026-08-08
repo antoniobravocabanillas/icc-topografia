@@ -62,7 +62,7 @@ export default async function AdminProfessionalPage({ params }: AdminProfessiona
                 <Badge className="bg-white/12 text-white hover:bg-white/12">{professionalStatusLabels[profile.status] ?? "Por revisar"}</Badge>
               </div>
               <p className="mt-2 text-lg font-semibold text-[#73e9df]">{profile.headline || profile.specialties[0] || "Perfil profesional"}</p>
-              <p className="mt-2 text-white/70">{profile.city || "Ciudad por confirmar"} | {profile.yearsExperience ?? 0} anos de experiencia</p>
+              <p className="mt-2 text-white/70">{profile.city || "Ciudad por confirmar"} | {profile.yearsExperience ?? 0} años de experiencia</p>
               <p className="mt-4 text-sm text-white/70">{profile.bio || "El profesional aun no completo su presentacion."}</p>
             </div>
           </div>

@@ -85,7 +85,7 @@ function buildCvLines(profile: PublicCvProfile) {
     `Usuario publico: terraqoglobal.com/cv/${username}`,
     profile.city ? `Ubicacion: ${profile.city}` : "Ubicacion: por completar",
     `Estado: ${statusLabels[profile.status] || "Perfil activo"}`,
-    `Experiencia declarada: ${profile.yearsExperience ?? 0} anos`,
+    `Experiencia declarada: ${profile.yearsExperience ?? 0} años`,
     "",
     "Resumen profesional",
     profile.bio || "Perfil profesional en actualizacion.",

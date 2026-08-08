@@ -43,7 +43,7 @@ export default async function ProfilePage() {
                 {profile.identityVerificationStatus === "VERIFIED" ? <span className="inline-flex items-center gap-1 rounded-full bg-primary/20 px-3 py-1 text-xs font-bold text-[#8bf2e9]"><BadgeCheck className="h-4 w-4" /> Verificado</span> : null}
               </div>
               <p className="mt-2 text-lg font-semibold text-[#7df0e6]">{profile.headline || "Perfil profesional por completar"}</p>
-              <p className="mt-3 flex flex-wrap gap-3 text-sm text-white/72"><span className="inline-flex items-center gap-1"><MapPin className="h-4 w-4" />{profile.city || "Ubicacion pendiente"}</span><span>{profile.yearsExperience ?? 0} anos de experiencia</span></p>
+              <p className="mt-3 flex flex-wrap gap-3 text-sm text-white/72"><span className="inline-flex items-center gap-1"><MapPin className="h-4 w-4" />{profile.city || "Ubicación pendiente"}</span><span>{profile.yearsExperience ?? 0} años de experiencia</span></p>
               <div className="mt-5 flex flex-wrap gap-3">
                 <Button asChild className="bg-primary text-white hover:bg-primary/90"><Link href="/portal/configuracion">Editar perfil</Link></Button>
                 <Button asChild variant="outline" className="border-white/35 bg-transparent text-white hover:bg-white/10"><Link href="/portal/documentos">Completar documentos</Link></Button>
