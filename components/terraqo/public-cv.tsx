@@ -475,7 +475,7 @@ function ExperienceCard({ experience }: { experience: PublicCvProfile["experienc
       <div>
         <h3 className="font-display text-xl font-black">{experience.title}</h3>
         <p className="mt-1 text-sm font-black text-[#008c83]">{experience.companyName || experience.project?.clientName || "Empresa no publica"}</p>
-        <p className="mt-3 text-sm leading-6 text-[#435a66]">{experience.verificationNote || experience.role || "Experiencia profesional declarada para validacion."}</p>
+        <p className="mt-3 text-sm leading-6 text-[#435a66]">{experience.role || "Experiencia profesional declarada por el profesional."}</p>
       </div>
       <div className="flex flex-col items-start justify-between gap-4 md:items-end">
         <ValidationBadge checks={checks} verified={experience.verifiedByTerraqo} />

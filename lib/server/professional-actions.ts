@@ -1,6 +1,6 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import type { TerraqoMessagePrivacy } from "@prisma/client";
+import type { TerraqoMessagePrivacy, TerraqoVisibility } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -93,6 +93,8 @@ export async function createHistoricalExperienceAction(formData: FormData) {
   const role = cleanText(formData, "role", 120);
   const location = cleanText(formData, "location", 120);
   const supervisor = cleanText(formData, "supervisor", 180);
+  const visibilityValues = new Set<TerraqoVisibility>(["PRIVATE", "WORKSPACE", "COMMUNITY", "PUBLIC"]);
+  const visibilityInput = String(formData.get("visibility") || "PRIVATE") as TerraqoVisibility;
   if (!title || !companyName) redirect("/portal/experiencias?status=missing");
 
   await prisma.terraqoProfessionalExperience.create({
@@ -104,7 +106,7 @@ export async function createHistoricalExperienceAction(formData: FormData) {
       location,
       startedAt: optionalDate(formData, "startedAt"),
       endedAt: optionalDate(formData, "endedAt"),
-      visibility: "PRIVATE",
+      visibility: visibilityValues.has(visibilityInput) ? visibilityInput : "PRIVATE",
       evidence: listFromText(formData, "evidence"),
       verificationNote: supervisor
         ? `Solicitud de verificacion historica pendiente para ${supervisor}.`

@@ -1,4 +1,4 @@
-import { BadgeCheck, CircleCheck, History, ShieldCheck } from "lucide-react";
+import { BadgeCheck, CircleCheck, Eye, History, ShieldCheck } from "lucide-react";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { PortalPageHeading } from "@/components/terraqo/portal-page-heading";
 import { Badge } from "@/components/ui/badge";
@@ -49,9 +49,18 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
                 <label className="grid gap-1 text-sm font-semibold">Inicio<Input name="startedAt" type="date" /></label>
                 <label className="grid gap-1 text-sm font-semibold">Fin<Input name="endedAt" type="date" /></label>
               </div>
+              <label className="grid gap-1 text-sm font-semibold">
+                Visibilidad en CV vivo
+                <select name="visibility" defaultValue="PRIVATE" className="h-11 rounded-md border bg-background px-3 text-sm">
+                  <option value="PRIVATE">Privada: solo yo y Terraqo</option>
+                  <option value="WORKSPACE">Visible para mis workspaces</option>
+                  <option value="COMMUNITY">Visible en comunidad Terraqo</option>
+                  <option value="PUBLIC">Publica en mi CV compartible</option>
+                </select>
+              </label>
               <Input name="supervisor" placeholder="Correo o nombre del responsable que podria validar" />
               <Textarea name="evidence" placeholder="Evidencias, enlaces o referencias, una por linea" />
-              <SubmitButton pendingText="Registrando...">Guardar y solicitar verificacion</SubmitButton>
+              <SubmitButton pendingText="Registrando...">Guardar experiencia</SubmitButton>
             </form>
           </CardContent>
         </Card>
@@ -63,7 +72,8 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
           </CardHeader>
           <CardContent className="space-y-4">
             {experiences.map((experience) => {
-              const checks = experience.verifiedByTerraqo ? 1 : 0;
+              const checks = (experience.verifiedByTerraqo ? 1 : 0) + (experience.projectId || experience.evidence.length ? 1 : 0);
+              const statusLabel = checks >= 2 ? "2 checks" : experience.verifiedByTerraqo ? "Verificado por Terraqo referencialmente" : "Sin verificar";
               return (
                 <article key={experience.id} className="rounded-lg border bg-white p-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -71,10 +81,12 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
                       <h2 className="font-display text-lg font-bold">{experience.title}</h2>
                       <p className="mt-1 text-sm text-muted-foreground">{experience.companyName || "Empresa por confirmar"} | {experience.role || "Rol por completar"}</p>
                       {experience.project ? <p className="mt-2 text-sm font-semibold text-primary">Proyecto vinculado: {experience.project.title}</p> : null}
+                      <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground"><Eye className="h-3.5 w-3.5" /> {experience.visibility === "PUBLIC" ? "Visible en CV publico" : experience.visibility === "WORKSPACE" ? "Visible para workspaces" : experience.visibility === "COMMUNITY" ? "Visible en comunidad" : "Privada"}</p>
                     </div>
-                    {checks ? <Badge><BadgeCheck className="mr-1 h-4 w-4" /> {checks} check</Badge> : <Badge variant="outline">Pendiente</Badge>}
+                    {checks ? <Badge><BadgeCheck className="mr-1 h-4 w-4" /> {statusLabel}</Badge> : <Badge variant="outline">{statusLabel}</Badge>}
                   </div>
                   {experience.verificationNote ? <p className="mt-3 text-sm leading-6 text-muted-foreground">{experience.verificationNote}</p> : null}
+                  {experience.evidence.length ? <p className="mt-2 text-xs font-semibold text-primary">{experience.evidence.length} referencia(s) o evidencia(s) declarada(s)</p> : null}
                 </article>
               );
             })}
@@ -85,8 +97,9 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
 
       <Card className="border-primary/20 bg-[#eefbf9]">
         <CardContent className="grid gap-4 p-5 md:grid-cols-2">
-          <div className="flex gap-3"><CircleCheck className="mt-1 h-5 w-5 text-primary" /><p className="text-sm leading-6"><b>1 check:</b> validacion por responsable, empresa o workspace autorizado.</p></div>
-          <div className="flex gap-3"><ShieldCheck className="mt-1 h-5 w-5 text-primary" /><p className="text-sm leading-6"><b>2 checks:</b> evidencia de campo diaria mas validacion del responsable.</p></div>
+          <div className="flex gap-3"><CircleCheck className="mt-1 h-5 w-5 text-primary" /><p className="text-sm leading-6"><b>Sin verificar:</b> experiencia declarada por el profesional, puede aparecer en su CV si decide hacerla publica.</p></div>
+          <div className="flex gap-3"><BadgeCheck className="mt-1 h-5 w-5 text-primary" /><p className="text-sm leading-6"><b>1 check:</b> Terraqo valido referencialmente con responsable, empresa o evidencia revisada.</p></div>
+          <div className="flex gap-3"><ShieldCheck className="mt-1 h-5 w-5 text-primary" /><p className="text-sm leading-6"><b>2 checks:</b> validacion Terraqo mas respaldo operativo como proyecto, evidencia o bitacora.</p></div>
         </CardContent>
       </Card>
     </div>

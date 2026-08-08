@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { ElementType } from "react";
-import { FileText, FolderKanban, LifeBuoy, ShoppingCart } from "lucide-react";
+import { FileText, FolderKanban, LifeBuoy, Mail, MessageSquareText, Phone, ShoppingCart } from "lucide-react";
 
 import { auth } from "@/auth";
 import { StatusBadge } from "@/components/admin/status-badge";
@@ -62,6 +62,7 @@ export default async function CommercialOperationsPage() {
   });
 
   const client = account && ["active", "approved"].includes(account.status) ? account.client : null;
+  const company = account?.company;
   const orders = client?.user?.orders || [];
 
   return (
@@ -91,6 +92,26 @@ export default async function CommercialOperationsPage() {
         </Card>
       ) : (
         <>
+          <Card className="border-primary/20 bg-[#f2fbfa]">
+            <CardHeader>
+              <CardTitle>Contacto directo con la empresa</CardTitle>
+              <CardDescription>
+                Canal para consultar pagos, comprobantes, entrega, validacion comercial o seguimiento de la operacion.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="grid gap-2 text-sm text-[#314b57]">
+                <p className="font-display text-xl font-bold text-[#0b202b]">{company?.tradeName || company?.legalName || client.company || "Empresa del workspace"}</p>
+                {company?.email || client.email ? <p className="flex items-center gap-2"><Mail className="h-4 w-4 text-primary" /> {company?.email || client.email}</p> : null}
+                {company?.phone || client.phone ? <p className="flex items-center gap-2"><Phone className="h-4 w-4 text-primary" /> {company?.phone || client.phone}</p> : null}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button asChild><Link href="/portal/mensajes"><MessageSquareText className="h-4 w-4" /> Enviar mensaje</Link></Button>
+                <Button asChild variant="outline"><Link href="/portal/operaciones#tickets"><LifeBuoy className="h-4 w-4" /> Solicitar soporte</Link></Button>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>Pedidos de tienda tecnica</CardTitle>
@@ -117,7 +138,7 @@ export default async function CommercialOperationsPage() {
           </Card>
 
           <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-            <Card>
+            <Card id="tickets">
               <CardHeader>
                 <CardTitle>Cotizaciones recibidas</CardTitle>
                 <CardDescription>Acepta, rechaza o descarga propuestas comerciales.</CardDescription>
