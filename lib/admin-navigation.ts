@@ -16,6 +16,7 @@ export type AdminNavIcon =
   | "package"
   | "receipt"
   | "shopping"
+  | "sparkles"
   | "store"
   | "ticket"
   | "users"
@@ -65,6 +66,8 @@ export const adminNavigation: AdminNavItem[] = [
   { group: "Gestion", label: "Reportes", href: "/admin/reportes", icon: "chart", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"], module: "ANALYTICS" },
   { group: "Gestion", label: "Notificaciones", href: "/admin/notificaciones", icon: "bell", roles: allRoles },
   { group: "Gestion", label: "Equipo", href: "/admin/equipo", icon: "users", roles: ["ADMIN", "SUPER_ADMIN"] },
+  { group: "Gestion", label: "Marca blanca", href: "/admin/workspace/marca", icon: "sparkles", roles: ["ADMIN", "SUPER_ADMIN"] },
+  { group: "Gestion", label: "Perfil de empresa", href: "/admin/workspace/perfil", icon: "building", roles: ["ADMIN", "SUPER_ADMIN"] },
   { group: "Gestion", label: "Ubicaciones", href: "/admin/ubicaciones", icon: "workspace", roles: ["ADMIN", "SUPER_ADMIN"] },
   { group: "Talento", label: "Profesionales", href: "/admin/terraqo/red", icon: "community", roles: ["ADMIN", "SUPER_ADMIN"], module: "PROFESSIONAL_NETWORK" },
   { group: "Talento", label: "Formulario publico", href: "/admin/terraqo/red/formulario", icon: "clipboard", roles: ["ADMIN", "SUPER_ADMIN"], module: "PROFESSIONAL_NETWORK" },

@@ -13,9 +13,16 @@ type UploadedLogo = {
 type ClientLogoUploaderProps = {
   initialLogoUrl?: string | null;
   inputName?: string;
+  label?: string;
+  description?: string;
 };
 
-export function ClientLogoUploader({ initialLogoUrl, inputName = "logoUrl" }: ClientLogoUploaderProps) {
+export function ClientLogoUploader({
+  initialLogoUrl,
+  inputName = "logoUrl",
+  label = "Logo del cliente",
+  description = "Sube SVG, JPG, PNG, WebP o AVIF. Máximo 3 MB."
+}: ClientLogoUploaderProps) {
   const [logoUrl, setLogoUrl] = useState(initialLogoUrl || "");
   const [status, setStatus] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -57,8 +64,8 @@ export function ClientLogoUploader({ initialLogoUrl, inputName = "logoUrl" }: Cl
     <div className="grid gap-3 text-sm font-semibold md:col-span-2">
       <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
         <div>
-          <span>Logo del cliente</span>
-          <p className="mt-1 text-xs font-normal text-muted-foreground">Sube SVG, JPG, PNG, WebP o AVIF. Maximo 3 MB.</p>
+          <span>{label}</span>
+          <p className="mt-1 text-xs font-normal text-muted-foreground">{description}</p>
         </div>
         <input ref={fileInputRef} type="file" accept="image/svg+xml,image/jpeg,image/png,image/webp,image/avif" className="hidden" onChange={(event: ChangeEvent<HTMLInputElement>) => uploadFiles(event.target.files)} />
         <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
@@ -77,7 +84,7 @@ export function ClientLogoUploader({ initialLogoUrl, inputName = "logoUrl" }: Cl
       ) : (
         <div className="flex items-center gap-3 rounded-md border border-dashed bg-muted/45 p-4 text-muted-foreground">
           <ImagePlus className="h-5 w-5" />
-          <p className="text-sm font-normal">Aun no hay logo cargado.</p>
+          <p className="text-sm font-normal">Aún no hay logo cargado.</p>
         </div>
       )}
 
