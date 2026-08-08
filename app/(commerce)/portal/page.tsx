@@ -132,24 +132,116 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
     }
   });
 
-  if (!account || !["active", "approved"].includes(account.status) || !account.client || account.client.terraqoWorkspaceId !== terraqoWorkspaceId) {
-    if (professionalProfile) {
-      return (
-        <div className="min-w-0 space-y-4">
-          {params.success && successMessages[params.success] ? (
-            <div className="mt-6 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
-              {successMessages[params.success]}
+  const activeClientAccount = account && ["active", "approved"].includes(account.status) && account.client?.terraqoWorkspaceId === terraqoWorkspaceId ? account : null;
+  const client = activeClientAccount?.client || null;
+  const orders = client?.user?.orders || [];
+  const publicOrderCode = (notes?: string | null) => notes?.match(/Codigo publico: ([A-Z0-9-]+)/)?.[1] || null;
+
+  if (professionalProfile) {
+    return (
+      <div className="min-w-0 space-y-8">
+        {params.success && successMessages[params.success] ? (
+          <div className="mt-6 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+            {successMessages[params.success]}
+          </div>
+        ) : null}
+        {params.status && statusMessages[params.status] ? (
+          <div className="mt-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
+            {statusMessages[params.status]}
+          </div>
+        ) : null}
+        <ProfessionalDashboard profile={professionalProfile} workspaceId={terraqoWorkspaceId} />
+        {client ? (
+          <section id="operaciones-comerciales" className="scroll-mt-28 space-y-6">
+            <div>
+              <p className="font-mono text-xs font-bold uppercase tracking-[0.16em] text-primary">Operaciones comerciales</p>
+              <h2 className="mt-1 font-display text-2xl font-bold">Compras, cotizaciones y soporte vinculados a tu cuenta</h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+                Esta informacion se agrega a tu portal personal Terraqo sin reemplazar tu perfil profesional ni tus permisos existentes.
+              </p>
             </div>
-          ) : null}
-          {params.status && statusMessages[params.status] ? (
-            <div className="mt-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
-              {statusMessages[params.status]}
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Pedidos de tienda tecnica</CardTitle>
+                <CardDescription>Historial generado desde tiendas conectadas al workspace.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-3">
+                {orders.map((order) => (
+                  <div key={order.id} className="rounded-lg border bg-white p-4">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                      <div>
+                        <p className="font-display text-lg font-bold">{publicOrderCode(order.notes) || order.id}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {order.items.map((item) => `${item.quantity} x ${item.product.name}`).join(", ")}
+                        </p>
+                        <p className="mt-2 text-xs text-muted-foreground">{order.createdAt.toLocaleDateString("es-PE")}</p>
+                      </div>
+                      <div className="text-left md:text-right">
+                        <StatusBadge status={order.status} />
+                        <p className="mt-2 font-display text-xl font-bold">{formatCurrency(Number(order.total), order.currency)}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {!orders.length ? <p className="text-sm text-muted-foreground">Aun no tienes pedidos registrados.</p> : null}
+              </CardContent>
+            </Card>
+
+            <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+              <Card id="cotizaciones" className="scroll-mt-28">
+                <CardHeader>
+                  <CardTitle>Cotizaciones recibidas</CardTitle>
+                  <CardDescription>Acepta, rechaza o descarga propuestas comerciales.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {client.quotes.map((quote) => (
+                    <div key={quote.id} className="rounded-lg border bg-white p-4">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div>
+                          <p className="font-display text-xl font-bold">{quote.number}</p>
+                          <p className="text-sm text-muted-foreground">{quote.items.map((item) => item.description).join(", ")}</p>
+                          <p className="mt-2 text-sm">Asesor: {quote.sellerProfile?.displayName || "Equipo comercial"}</p>
+                        </div>
+                        <div className="text-left md:text-right">
+                          <StatusBadge status={quote.status} />
+                          <p className="mt-2 font-display text-2xl font-bold">{formatCurrency(Number(quote.total), quote.currency)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {!client.quotes.length ? <p className="text-sm text-muted-foreground">Aun no tienes cotizaciones registradas.</p> : null}
+                </CardContent>
+              </Card>
+
+              <Card id="soporte" className="scroll-mt-28">
+                <CardHeader>
+                  <CardTitle>Soporte comercial y tecnico</CardTitle>
+                  <CardDescription>Tickets asociados a tus operaciones con este workspace.</CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-4">
+                  {client.tickets.slice(0, 3).map((ticket) => (
+                    <div key={ticket.id} className="rounded-lg border bg-white p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="font-display text-lg font-bold">{ticket.code}</p>
+                          <p className="text-sm text-muted-foreground">{ticket.subject}</p>
+                        </div>
+                        <StatusBadge status={ticket.status} />
+                      </div>
+                    </div>
+                  ))}
+                  {!client.tickets.length ? <p className="text-sm text-muted-foreground">Todavia no tienes tickets.</p> : null}
+                </CardContent>
+              </Card>
             </div>
-          ) : null}
-          <ProfessionalDashboard profile={professionalProfile} workspaceId={terraqoWorkspaceId} />
-        </div>
-      );
-    }
+          </section>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (!activeClientAccount || !client) {
 
     return (
       <div className="max-w-3xl py-8 lg:py-12">
@@ -173,10 +265,6 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
       </div>
     );
   }
-
-  const client = account.client;
-  const orders = client.user?.orders || [];
-  const publicOrderCode = (notes?: string | null) => notes?.match(/Codigo publico: ([A-Z0-9-]+)/)?.[1] || null;
 
   return (
     <div className="min-w-0 space-y-8 py-6 lg:py-8">

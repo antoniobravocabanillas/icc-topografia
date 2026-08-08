@@ -30,7 +30,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
       })
     : null;
   const membership = user?.terraqoMemberships[0];
-  const portalType = membership?.role === "CLIENT" ? "client" : user?.terraqoProfessionalProfile ? "professional" : "client";
+  const portalType = user?.terraqoProfessionalProfile ? "professional" : membership?.role === "CLIENT" ? "client" : "professional";
 
   return (
     <PortalShell

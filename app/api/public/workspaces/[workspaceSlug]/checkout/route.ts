@@ -246,7 +246,7 @@ export async function POST(request: Request, { params }: RouteContext) {
 
       await tx.terraqoWorkspaceMember.upsert({
         where: { workspaceId_userId: { workspaceId: workspace.id, userId: user.id } },
-        update: { role: "CLIENT", title: companyName, active: true, joinedAt: new Date() },
+        update: { title: companyName, active: true, joinedAt: new Date() },
         create: { workspaceId: workspace.id, userId: user.id, role: "CLIENT", title: companyName, active: true, joinedAt: new Date() },
       });
 
