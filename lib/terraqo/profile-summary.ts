@@ -40,13 +40,21 @@ export function formatExperienceDuration(months: number) {
 
 const SUMMARY_TIMEOUT_MS = Number(process.env.AI_PROFILE_SUMMARY_TIMEOUT_MS || 12_000);
 
-function cleanSummary(text?: string | null) {
+export function normalizeSpanishCopy(text?: string | null) {
   if (!text) return null;
   const cleaned = text
     .replace(/\bEspanol\b/gi, "Español")
     .replace(/\banos\b/gi, "años")
     .replace(/\bano\b/gi, "año")
     .replace(/\bconstruccion\b/gi, "construcción")
+    .replace(/\bpublica\b/gi, "pública")
+    .replace(/\bpublicas\b/gi, "públicas")
+    .replace(/\bbitacora\b/gi, "bitácora")
+    .replace(/\bbitacoras\b/gi, "bitácoras")
+    .replace(/\bvalidacion\b/gi, "validación")
+    .replace(/\bverificacion\b/gi, "verificación")
+    .replace(/\binformacion\b/gi, "información")
+    .replace(/\bubicacion\b/gi, "ubicación")
     .replace(/\bFormacion\b/g, "Formación")
     .replace(/\bformacion\b/g, "formación")
     .trim();
@@ -81,7 +89,7 @@ function deterministicSummary(input: {
     latest ? `Ha trabajado en ${latest.title}${latest.companyName ? ` para ${latest.companyName}` : ""}${latest.locationCity || latest.location ? ` en ${latest.locationCity || latest.location}` : ""}.` : null,
     education ? `Formación: ${education.degree} en ${education.institution}.` : null
   ].filter(Boolean);
-  return cleanSummary(parts.join(" ")) || "";
+  return normalizeSpanishCopy(parts.join(" ")) || "";
 }
 
 function configuredSummaryProvider() {
@@ -119,7 +127,7 @@ async function openAiSummary(input: Parameters<typeof deterministicSummary>[0]) 
   if (!response.ok) return null;
   const payload = await response.json().catch(() => null);
   const text = payload?.output_text || payload?.output?.flatMap?.((item: { content?: Array<{ text?: string }> }) => item.content || []).map((item: { text?: string }) => item.text).filter(Boolean).join(" ");
-  return typeof text === "string" ? cleanSummary(text) : null;
+  return typeof text === "string" ? normalizeSpanishCopy(text) : null;
 }
 
 async function ollamaSummary(input: Parameters<typeof deterministicSummary>[0]) {
@@ -151,7 +159,7 @@ async function ollamaSummary(input: Parameters<typeof deterministicSummary>[0]) 
   if (!response.ok) return null;
   const payload = await response.json().catch(() => null);
   const text = payload?.message?.content || payload?.response;
-  return typeof text === "string" ? cleanSummary(text) : null;
+  return typeof text === "string" ? normalizeSpanishCopy(text) : null;
 }
 
 async function aiSummary(input: Parameters<typeof deterministicSummary>[0]) {
@@ -197,7 +205,7 @@ export async function refreshProfessionalGeneratedSummary(professionalProfileId:
     experiences: profile.experiences,
     education: profile.education
   };
-  const generatedSummary = (await aiSummary(input)) || deterministicSummary(input);
+  const generatedSummary = normalizeSpanishCopy((await aiSummary(input)) || deterministicSummary(input)) || deterministicSummary(input);
   await prisma.terraqoProfessionalProfile.update({
     where: { id: professionalProfileId },
     data: { generatedSummary, generatedSummaryUpdatedAt: new Date() }
