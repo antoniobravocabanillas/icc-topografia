@@ -101,8 +101,10 @@ export async function updateCompanyLiveProfileAction(formData: FormData) {
   settings.companyLiveProfile = {
     headline: text(formData, "headline"),
     summary: text(formData, "summary"),
+    heroImageUrl: text(formData, "heroImageUrl"),
     services: text(formData, "services").split("\n").map((item) => item.trim()).filter(Boolean).slice(0, 12),
     differentiators: text(formData, "differentiators").split("\n").map((item) => item.trim()).filter(Boolean).slice(0, 12),
+    sectors: text(formData, "sectors").split("\n").map((item) => item.trim()).filter(Boolean).slice(0, 18),
     coverage: text(formData, "coverage"),
     contactEmail: text(formData, "contactEmail"),
     contactPhone: text(formData, "contactPhone"),

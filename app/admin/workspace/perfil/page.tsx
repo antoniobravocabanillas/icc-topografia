@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
-import { ExternalLink, Globe2 } from "lucide-react";
+import { ExternalLink, Globe2, Layers3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,8 +14,10 @@ type PageProps = { searchParams?: Promise<{ success?: string }> };
 type CompanyLiveProfile = {
   headline?: string;
   summary?: string;
+  heroImageUrl?: string;
   services?: string[];
   differentiators?: string[];
+  sectors?: string[];
   coverage?: string;
   contactEmail?: string;
   contactPhone?: string;
@@ -50,7 +52,7 @@ export default async function WorkspaceCompanyProfilePage({ searchParams }: Page
           <p className="text-sm font-black uppercase tracking-[0.16em] text-primary">Workspace · Perfil de empresa</p>
           <h1 className="mt-2 font-display text-4xl font-bold text-[#082230]">Perfil vivo de empresa</h1>
           <p className="mt-3 max-w-3xl text-muted-foreground">
-            Crea la página pública empresarial del workspace: propuesta, servicios, diferenciales, cobertura y contacto. Es la versión empresa del CV vivo profesional.
+            Construye una página empresarial con propuesta, sectores, servicios, diferenciales, cobertura y contacto. Es la versión empresa del CV vivo profesional.
           </p>
         </div>
         <Button asChild variant="outline"><Link href={`/empresas/${publicSlug}`} target="_blank">Ver página pública <ExternalLink className="h-4 w-4" /></Link></Button>
@@ -62,36 +64,44 @@ export default async function WorkspaceCompanyProfilePage({ searchParams }: Page
         <Card>
           <CardHeader>
             <CardTitle>Actualizar perfil</CardTitle>
-            <CardDescription>Lo que cargues aquí alimenta el perfil público y las futuras vistas comerciales del workspace.</CardDescription>
+            <CardDescription>Lo que cargues aquí alimenta el perfil público, directorios de empresa y futuras vistas comerciales del workspace.</CardDescription>
           </CardHeader>
           <CardContent>
             <form action={updateCompanyLiveProfileAction} className="grid gap-5">
               <label className="grid gap-2 text-sm font-semibold">
                 Titular comercial
-                <Input name="headline" defaultValue={profile.headline || ""} placeholder="Soluciones topográficas con precisión, tecnología y soporte real" />
+                <Input name="headline" defaultValue={profile.headline || ""} placeholder="Servicios topográficos para levantar, controlar y documentar tu obra" />
               </label>
               <label className="grid gap-2 text-sm font-semibold">
                 Extracto empresarial
-                <Textarea name="summary" defaultValue={profile.summary || ""} placeholder="Resume experiencia, enfoque, cobertura y tipo de clientes. Este texto debe sentirse propio, no plantilla." />
+                <Textarea name="summary" defaultValue={profile.summary || ""} placeholder="Describe experiencia, enfoque técnico, cobertura, tipo de clientes y forma de trabajo. Debe sentirse propio, no plantilla." />
+              </label>
+              <label className="grid gap-2 text-sm font-semibold">
+                Imagen hero / visual principal
+                <Input name="heroImageUrl" defaultValue={profile.heroImageUrl || ""} placeholder="https://... imagen de obra, equipo, operación o marca" />
               </label>
               <div className="grid gap-5 md:grid-cols-2">
                 <label className="grid gap-2 text-sm font-semibold">
                   Servicios principales
-                  <Textarea name="services" defaultValue={(profile.services || []).join("\n")} placeholder={"Levantamientos topográficos\nEscaneo 3D y LiDAR\nControl de obra"} />
+                  <Textarea name="services" defaultValue={(profile.services || []).join("\n")} placeholder={"Levantamientos topográficos y geomática\nEscaneo 3D y tecnología LiDAR\nControl operativo de edificación e infraestructura"} />
                 </label>
                 <label className="grid gap-2 text-sm font-semibold">
                   Diferenciales verificables
-                  <Textarea name="differentiators" defaultValue={(profile.differentiators || []).join("\n")} placeholder={"Equipos calibrados\nReportes trazables\nSoporte técnico especializado"} />
+                  <Textarea name="differentiators" defaultValue={(profile.differentiators || []).join("\n")} placeholder={"Equipos propios y calibrados\nAmplia red de profesionales\nCobertura nacional\nCompromiso con la calidad"} />
                 </label>
               </div>
               <label className="grid gap-2 text-sm font-semibold">
+                Sectores con los que trabaja
+                <Textarea name="sectors" defaultValue={(profile.sectors || []).join("\n")} placeholder={"Infraestructura vial\nMinería y energía\nEdificación\nCatastro y saneamiento\nIndustria"} />
+              </label>
+              <label className="grid gap-2 text-sm font-semibold">
                 Cobertura
-                <Input name="coverage" defaultValue={profile.coverage || ""} placeholder="Lima, regiones del Perú y proyectos bajo coordinación" />
+                <Input name="coverage" defaultValue={profile.coverage || ""} placeholder="A nivel nacional, regiones del Perú y proyectos bajo coordinación" />
               </label>
               <div className="grid gap-5 md:grid-cols-2">
                 <label className="grid gap-2 text-sm font-semibold">
                   Correo comercial
-                  <Input name="contactEmail" type="email" defaultValue={profile.contactEmail || ""} placeholder="ventas@empresa.com" />
+                  <Input name="contactEmail" type="email" defaultValue={profile.contactEmail || ""} placeholder="proyectos@empresa.com" />
                 </label>
                 <label className="grid gap-2 text-sm font-semibold">
                   Teléfono / WhatsApp
@@ -117,17 +127,18 @@ export default async function WorkspaceCompanyProfilePage({ searchParams }: Page
             <CardHeader>
               <Globe2 className="h-5 w-5 text-[#83efe2]" />
               <CardTitle>URL pública</CardTitle>
-              <CardDescription className="text-white/65">Pensado para marca blanca y búsqueda comercial.</CardDescription>
+              <CardDescription className="text-white/65">Pensado para marca blanca, posicionamiento comercial y directorios empresariales.</CardDescription>
             </CardHeader>
             <CardContent>
               <code className="block rounded-md border border-white/10 bg-white/8 p-3 text-sm text-[#83efe2]">terraqoglobal.com/empresas/{publicSlug}</code>
-              <p className="mt-4 text-sm leading-6 text-white/62">Después podemos sumar alias por RUC o username y un dominio propio si el plan lo permite.</p>
+              <p className="mt-4 text-sm leading-6 text-white/62">Luego puede evolucionar a alias por RUC, username empresarial o dominio propio según plan.</p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader>
+              <Layers3 className="h-5 w-5 text-primary" />
               <CardTitle>Perfil tipo CV vivo</CardTitle>
-              <CardDescription>El siguiente paso natural es alimentar esta página automáticamente con proyectos publicados, equipo visible, evidencias y validaciones del workspace.</CardDescription>
+              <CardDescription>La página pública se alimenta con datos declarados, operación del workspace, profesionales vinculados, proyectos y evidencia visible.</CardDescription>
             </CardHeader>
           </Card>
         </aside>
