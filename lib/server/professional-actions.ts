@@ -246,7 +246,16 @@ export async function updateProfessionalSettingsAction(formData: FormData) {
 
   const profile = await prisma.terraqoProfessionalProfile.findUnique({
     where: { userId: session.user.id },
-    select: { id: true, username: true }
+    select: {
+      id: true,
+      username: true,
+      experiences: {
+        where: { currentlyWorking: true },
+        select: { id: true, title: true, companyName: true, role: true },
+        orderBy: [{ startedAt: "desc" }, { createdAt: "desc" }],
+        take: 20
+      }
+    }
   });
   if (!profile) redirect("/portal?status=profile-required");
 
@@ -268,10 +277,25 @@ export async function updateProfessionalSettingsAction(formData: FormData) {
     username = rawUsername;
   }
 
+  const selectedCurrentExperienceId = cleanText(formData, "featuredCurrentExperienceId", 80);
+  const selectedCurrentExperience = selectedCurrentExperienceId
+    ? profile.experiences.find((experience) => experience.id === selectedCurrentExperienceId)
+    : null;
+  const selectedHeadline = selectedCurrentExperience
+    ? `${selectedCurrentExperience.role || selectedCurrentExperience.title}${selectedCurrentExperience.companyName ? ` - ${selectedCurrentExperience.companyName}` : ""} (actualmente)`
+    : null;
+  const manualHeadline = cleanText(formData, "headline", 140);
+
   await prisma.terraqoProfessionalProfile.update({
     where: { id: profile.id },
     data: {
       username,
+      headline: selectedHeadline || manualHeadline,
+      bio: cleanText(formData, "bio", 900),
+      professionalCategories: listFromText(formData, "professionalCategories").slice(0, 10),
+      specialties: listFromText(formData, "specialties").slice(0, 16),
+      equipment: listFromText(formData, "equipment").slice(0, 16),
+      software: listFromText(formData, "software").slice(0, 16),
       liveCvEnabled: Boolean(username),
       messagePrivacy,
       friendDiscoveryEnabled: formData.get("friendDiscoveryEnabled") === "on",
@@ -286,6 +310,7 @@ export async function updateProfessionalSettingsAction(formData: FormData) {
   });
 
   revalidatePath("/portal");
+  revalidatePath("/portal/perfil");
   revalidatePath("/portal/configuracion");
   if (username) revalidatePath(`/cv/${username}`);
   redirect("/portal/configuracion?success=settings");

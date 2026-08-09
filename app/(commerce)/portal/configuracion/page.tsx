@@ -13,7 +13,7 @@ import { terraqoDomains } from "@/lib/terraqo-domains";
 
 export const metadata = createMetadata({
   title: "Configuracion del perfil profesional",
-  description: "Privacidad, perfil publico, mensajes y datos de cobro del Portal Terraqo.",
+  description: "Privacidad, perfil público, mensajes y datos de cobro del Portal Terraqo.",
   path: "/portal/configuracion"
 });
 
@@ -36,7 +36,15 @@ export default async function PortalSettingsPage({ searchParams }: SettingsPageP
 
   const profile = await prisma.terraqoProfessionalProfile.findUnique({
     where: { userId: session.user.id },
-    include: { user: { select: { name: true, email: true, image: true } } }
+    include: {
+      user: { select: { name: true, email: true, image: true } },
+      experiences: {
+        where: { currentlyWorking: true },
+        select: { id: true, title: true, companyName: true, role: true, startedAt: true },
+        orderBy: [{ startedAt: "desc" }, { createdAt: "desc" }],
+        take: 12
+      }
+    }
   });
 
   if (!profile) redirect("/portal?status=profile-required");
@@ -48,10 +56,10 @@ export default async function PortalSettingsPage({ searchParams }: SettingsPageP
       <div className="mx-auto max-w-6xl space-y-7">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-end">
           <div>
-            <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-primary">Configuracion profesional</p>
+            <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-primary">Configuración profesional</p>
             <h1 className="mt-3 font-display text-4xl font-bold tracking-tight text-[#071b28] lg:text-5xl">Tu perfil, tus permisos y tus datos privados.</h1>
             <p className="mt-4 max-w-2xl text-base leading-7 text-[#4a6570]">
-              Controla como te encuentran, quien puede escribirte y que informacion operativa pueden ver las empresas con las que trabajas.
+              Controla como te encuentran, quien puede escribirte y que información operativa pueden ver las empresas con las que trabajas.
             </p>
           </div>
           <Card className="border-primary/20 bg-[#eaf8f6]">
@@ -59,7 +67,7 @@ export default async function PortalSettingsPage({ searchParams }: SettingsPageP
               <div className="flex gap-3">
                 <ShieldCheck className="mt-1 h-5 w-5 shrink-0 text-primary" />
                 <p className="text-sm leading-6 text-[#254751]">
-                  Los datos bancarios y de contacto se usan para operaciones vinculadas a tus proyectos. Terraqo no los muestra en tu CV publico.
+                  Los datos bancarios y de contacto se usan para operaciones vinculadas a tus proyectos. Terraqo no los muestra en tu CV público.
                 </p>
               </div>
             </CardContent>
@@ -81,13 +89,13 @@ export default async function PortalSettingsPage({ searchParams }: SettingsPageP
           <Card>
             <CardHeader className="gap-3 md:flex-row md:items-start md:justify-between">
               <div>
-                <div className="flex items-center gap-2 text-primary"><UserRound className="h-5 w-5" /><span className="font-mono text-xs font-bold uppercase tracking-[0.16em]">Perfil publico</span></div>
+                <div className="flex items-center gap-2 text-primary"><UserRound className="h-5 w-5" /><span className="font-mono text-xs font-bold uppercase tracking-[0.16em]">Perfil público</span></div>
                 <CardTitle className="mt-3">Usuario y CV vivo</CardTitle>
                 <CardDescription>Define un enlace corto para compartir tu perfil profesional validado.</CardDescription>
               </div>
               {publicCvHref ? (
                 <Button asChild variant="outline">
-                  <Link href={publicCvHref} target="_blank">Ver CV publico</Link>
+                  <Link href={publicCvHref} target="_blank">Ver CV público</Link>
                 </Button>
               ) : null}
             </CardHeader>
@@ -100,8 +108,57 @@ export default async function PortalSettingsPage({ searchParams }: SettingsPageP
                 {publicCvHref ? (
                   <span><b className="text-foreground">Enlace activo:</b> {publicCvHref.replace(/^https?:\/\//, "")}</span>
                 ) : (
-                  <span>Crea un usuario para activar tu enlace publico. Tu CV vivo solo muestra informacion profesional permitida.</span>
+                  <span>Crea un usuario para activar tu enlace público. Tu CV vivo solo muestra información profesional permitida.</span>
                 )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2 text-primary"><BadgeCheck className="h-5 w-5" /><span className="font-mono text-xs font-bold uppercase tracking-[0.16em]">Presentación pública</span></div>
+              <CardTitle>Título, resumen y capacidades visibles</CardTitle>
+              <CardDescription>Esto alimenta tu perfil dentro del workspace y también tu CV público. Evita textos genéricos: escribe como quieres que te vea una empresa.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-5">
+              <label className="grid gap-2">
+                <span className="text-sm font-semibold">Usar trabajo actual como título principal</span>
+                <select name="featuredCurrentExperienceId" defaultValue="" className="h-11 rounded-md border bg-background px-3 text-sm">
+                  <option value="">No usar automáticamente; escribir título manual</option>
+                  {profile.experiences.map((experience) => (
+                    <option key={experience.id} value={experience.id}>
+                      {(experience.role || experience.title)}{experience.companyName ? ` - ${experience.companyName}` : ""} (actualmente)
+                    </option>
+                  ))}
+                </select>
+                <small className="text-xs leading-5 text-muted-foreground">Ejemplo: Gerente General - VRILLA SAC (actualmente). Si eliges uno, reemplaza el título manual.</small>
+              </label>
+              <label className="grid gap-2">
+                <span className="text-sm font-semibold">Título profesional manual</span>
+                <Input name="headline" defaultValue={profile.headline || ""} placeholder="Ej. Gerente General - VRILLA SAC / Especialista en control topográfico" maxLength={140} />
+              </label>
+              <label className="grid gap-2">
+                <span className="text-sm font-semibold">Resumen profesional público</span>
+                <Textarea name="bio" defaultValue={profile.bio || ""} placeholder="Describe en primera persona tu enfoque, experiencia clave, tipo de proyectos y valor profesional. Este texto será visible en tu CV público." className="min-h-36" maxLength={900} />
+                <small className="text-xs leading-5 text-muted-foreground">Este texto reemplaza el extracto automático como fuente principal del CV. La IA puede sugerir, pero tú decides qué se publica.</small>
+              </label>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="grid gap-2">
+                  <span className="text-sm font-semibold">Áreas profesionales</span>
+                  <Textarea name="professionalCategories" defaultValue={profile.professionalCategories.join(", ")} placeholder="Topografía, gestión de obra, operaciones, dirección técnica" className="min-h-24" />
+                </label>
+                <label className="grid gap-2">
+                  <span className="text-sm font-semibold">Habilidades principales</span>
+                  <Textarea name="specialties" defaultValue={profile.specialties.join(", ")} placeholder="Control altimétrico, replanteo, GNSS, liderazgo de cuadrillas" className="min-h-24" />
+                </label>
+                <label className="grid gap-2">
+                  <span className="text-sm font-semibold">Equipos dominados</span>
+                  <Textarea name="equipment" defaultValue={profile.equipment.join(", ")} placeholder="Estación total, nivel automático, GNSS RTK, dron" className="min-h-24" />
+                </label>
+                <label className="grid gap-2">
+                  <span className="text-sm font-semibold">Software y herramientas</span>
+                  <Textarea name="software" defaultValue={profile.software.join(", ")} placeholder="Civil 3D, AutoCAD, Excel avanzado, QGIS" className="min-h-24" />
+                </label>
               </div>
             </CardContent>
           </Card>
@@ -141,7 +198,7 @@ export default async function PortalSettingsPage({ searchParams }: SettingsPageP
             <CardHeader>
               <div className="flex items-center gap-2 text-primary"><CreditCard className="h-5 w-5" /><span className="font-mono text-xs font-bold uppercase tracking-[0.16em]">Datos de cobro</span></div>
               <CardTitle>Cuenta bancaria y billeteras</CardTitle>
-              <CardDescription>Informacion privada para pagos, adelantos, reembolsos o liquidaciones operativas con empresas autorizadas.</CardDescription>
+              <CardDescription>Información privada para pagos, adelantos, reembolsos o liquidaciones operativas con empresas autorizadas.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2">
               <Input name="bankAccountHolder" defaultValue={profile.bankAccountHolder || ""} placeholder="Titular de la cuenta" />
@@ -157,9 +214,9 @@ export default async function PortalSettingsPage({ searchParams }: SettingsPageP
           <div className="flex flex-col gap-3 rounded-lg border bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
               <BadgeCheck className="mt-1 h-5 w-5 text-primary" />
-              <p className="text-sm leading-6 text-muted-foreground">Guarda solo informacion vigente. Las empresas veran estos datos unicamente si existe una relacion operativa autorizada.</p>
+              <p className="text-sm leading-6 text-muted-foreground">Guarda solo información vigente. Las empresas verán estos datos únicamente si existe una relación operativa autorizada.</p>
             </div>
-            <Button type="submit" className="min-w-48">Guardar configuracion</Button>
+            <Button type="submit" className="min-w-48">Guardar configuración</Button>
           </div>
         </form>
       </div>

@@ -22,6 +22,8 @@ export default async function ProfilePage() {
   const name = profile.user.name || "Profesional Terraqo";
   const publicCvHref = profile.username ? `${terraqoDomains.public}/cv/${profile.username}` : null;
   const skills = [...profile.specialties, ...profile.equipment, ...profile.software];
+  const currentExperience = profile.experiences.find((experience) => experience.currentlyWorking);
+  const visibleHeadline = profile.headline || (currentExperience ? `${currentExperience.role || currentExperience.title}${currentExperience.companyName ? ` - ${currentExperience.companyName}` : ""} (actualmente)` : "Define tu título profesional visible");
 
   return (
     <div className="min-w-0 space-y-8 py-6 lg:py-8">
@@ -29,7 +31,7 @@ export default async function ProfilePage() {
         eyebrow="Mi perfil"
         title="Tu identidad profesional dentro de Terraqo."
         description="Controla como te presentas ante empresas, equipos de proyecto y otros profesionales de la red."
-        action={publicCvHref ? <Button asChild variant="outline"><Link href={publicCvHref} target="_blank">Ver CV publico <ExternalLink className="ml-2 h-4 w-4" /></Link></Button> : null}
+        action={publicCvHref ? <Button asChild variant="outline"><Link href={publicCvHref} target="_blank">Ver CV público <ExternalLink className="ml-2 h-4 w-4" /></Link></Button> : null}
       />
 
       <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
@@ -42,7 +44,7 @@ export default async function ProfilePage() {
                 <h1 className="font-display text-3xl font-bold lg:text-4xl">{name}</h1>
                 {profile.identityVerificationStatus === "VERIFIED" ? <span className="inline-flex items-center gap-1 rounded-full bg-primary/20 px-3 py-1 text-xs font-bold text-[#8bf2e9]"><BadgeCheck className="h-4 w-4" /> Verificado</span> : null}
               </div>
-              <p className="mt-2 text-lg font-semibold text-[#7df0e6]">{profile.headline || "Perfil profesional por completar"}</p>
+              <p className="mt-2 text-lg font-semibold text-[#7df0e6]">{visibleHeadline}</p>
               <p className="mt-3 flex flex-wrap gap-3 text-sm text-white/72"><span className="inline-flex items-center gap-1"><MapPin className="h-4 w-4" />{profile.city || "Ubicación pendiente"}</span><span>{profile.yearsExperience ?? 0} años de experiencia</span></p>
               <div className="mt-5 flex flex-wrap gap-3">
                 <Button asChild className="bg-primary text-white hover:bg-primary/90"><Link href="/portal/configuracion">Editar perfil</Link></Button>
@@ -60,7 +62,7 @@ export default async function ProfilePage() {
           <CardContent className="space-y-4 text-sm">
             <InfoRow label="Identidad" value={identityCopy[profile.identityVerificationStatus] || profile.identityVerificationStatus} />
             <InfoRow label="CV vivo" value={profile.liveCvEnabled ? "Activo" : "Pendiente de activar"} />
-            <InfoRow label="Usuario publico" value={profile.username ? `@${profile.username}` : "Por configurar"} />
+            <InfoRow label="Usuario público" value={profile.username ? `@${profile.username}` : "Por configurar"} />
             <InfoRow label="Estado laboral" value={profile.status.replaceAll("_", " ").toLowerCase()} />
           </CardContent>
         </Card>
@@ -70,8 +72,8 @@ export default async function ProfilePage() {
         <Card>
           <CardHeader><CardTitle>Resumen profesional</CardTitle></CardHeader>
           <CardContent className="space-y-4">
-            <p className="leading-7 text-muted-foreground">{profile.bio || "Agrega una presentacion breve desde Configuracion para que empresas y equipos entiendan tu enfoque de trabajo."}</p>
-            <div className="flex flex-wrap gap-2">{profile.professionalCategories.map((category) => <span key={category} className="rounded-md bg-primary/10 px-3 py-1 text-xs font-bold uppercase text-primary">{category}</span>)}</div>
+            <p className="leading-7 text-muted-foreground">{profile.bio || "Agrega un resumen profesional manual desde Configuración. Este texto será la base visible de tu perfil dentro del workspace y de tu CV público."}</p>
+            <div className="flex flex-wrap gap-2">{profile.professionalCategories.slice(0, 6).map((category) => <span key={category} className="rounded-md bg-primary/10 px-3 py-1 text-xs font-bold uppercase text-primary">{category}</span>)}</div>
           </CardContent>
         </Card>
         <Card>

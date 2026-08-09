@@ -28,7 +28,7 @@ type PublicCVPageProps = {
   profile: PublicCvProfile;
 };
 
-export type PublicCvSection = "experiencias" | "proyectos" | "evidencias" | "documentos";
+export type PublicCvSection = "experiencias" | "proyectos" | "evidencias" | "capacidades" | "documentos";
 
 type ProjectSnapshot = {
   id: string;
@@ -82,8 +82,13 @@ const PUBLIC_CV_SECTIONS: Record<PublicCvSection, { eyebrow: string; title: stri
   },
   evidencias: {
     eyebrow: "Evidencias públicas",
-    title: "Bitacoras y registros que alimentan el CV en vivo.",
-    description: "El CV no se queda en una declaración: se alimenta con actividad documentada, fechas, proyectos y validaciones autorizadas."
+    title: "Bitácoras y registros que alimentan el CV en vivo.",
+    description: "El CV no se queda en una declaración: se alimenta con actividad documentada, fechas, proyectos y revisiones profesionales."
+  },
+  capacidades: {
+    eyebrow: "Capacidades",
+    title: "Habilidades, equipos y herramientas dominadas.",
+    description: "Una lectura ordenada de capacidades técnicas, software, equipos y áreas de especialidad declaradas por el profesional."
   },
   documentos: {
     eyebrow: "Confianza y documentos",
@@ -93,7 +98,7 @@ const PUBLIC_CV_SECTIONS: Record<PublicCvSection, { eyebrow: string; title: stri
 };
 
 export function isPublicCvSection(value: string): value is PublicCvSection {
-  return value === "experiencias" || value === "proyectos" || value === "evidencias" || value === "documentos";
+  return value === "experiencias" || value === "proyectos" || value === "evidencias" || value === "capacidades" || value === "documentos";
 }
 
 function formatDate(date?: Date | null, options: Intl.DateTimeFormatOptions = { day: "2-digit", month: "short", year: "numeric" }) {
@@ -142,7 +147,7 @@ function isExternalHref(href: string) {
   return /^https?:\/\//i.test(href);
 }
 
-function uniqueProjects(profile: PublicCvProfile, limit: number | null = 4): ProjectSnapshot[] {
+function uniqueProjects(profile: PublicCvProfile, limit: number | null = 3): ProjectSnapshot[] {
   const map = new Map<string, ProjectSnapshot>();
   for (const experience of profile.experiences) {
     if (!experience.project) continue;
@@ -210,14 +215,41 @@ function latestActivity(profile: PublicCvProfile) {
   return latestWorklog || profile.updatedAt;
 }
 
+function currentHeadline(profile: PublicCvProfile) {
+  if (profile.headline?.trim()) return profile.headline.trim();
+  const current = profile.experiences.find((experience) => experience.currentlyWorking);
+  if (current) {
+    return `${current.role || current.title}${current.companyName ? ` - ${current.companyName}` : ""} (actualmente)`;
+  }
+  const latest = profile.experiences[0];
+  if (latest) return latest.role || latest.title;
+  return "Profesional Terraqo";
+}
+
+function profileSummary(profile: PublicCvProfile) {
+  return normalizeSpanishCopy(profile.bio) || "Perfil profesional en actualización. El profesional aún no publicó su resumen principal.";
+}
+
+function profileCapabilities(profile: PublicCvProfile, limit = 6) {
+  const values = [
+    ...profile.specialties,
+    ...profile.professionalCategories,
+    ...profile.equipment,
+    ...profile.software
+  ]
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return Array.from(new Set(values)).slice(0, limit);
+}
+
 export function PublicCVPage({ profile }: PublicCVPageProps) {
   const name = profile.user.name || profile.username || "Profesional Terraqo";
   const username = profile.username || "perfil";
   const isPublicCv = profile.liveCvEnabled && profile.liveCvVisibility === "PUBLIC";
   const completeness = computeCompleteness(profile);
   const projects = uniqueProjects(profile);
-  const specialties = [...profile.specialties, ...profile.professionalCategories].filter(Boolean).slice(0, 6);
-  const evidence = profile.worklogs.slice(0, 6);
+  const specialties = profileCapabilities(profile, 6);
+  const evidence = profile.worklogs.slice(0, 3);
   const lastActivity = latestActivity(profile);
   const verifiedDocs = verifiedDocumentCount(profile);
   const totalExperienceMonths = profile.experiences.reduce((sum, experience) => sum + monthsBetween(experience.startedAt, experience.currentlyWorking ? null : experience.endedAt), 0);
@@ -250,7 +282,7 @@ export function PublicCVPage({ profile }: PublicCVPageProps) {
           <FeaturedProjects projects={projects} profile={profile} username={username} />
           <PublicEvidence worklogs={evidence} username={username} />
           <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
-            <SkillsAndTools profile={profile} />
+            <SkillsAndTools profile={profile} username={username} />
             <DocumentsPanel profile={profile} username={username} />
           </div>
           <PublicCVCTA username={username} isPublicCv={isPublicCv} completeness={completeness} />
@@ -306,6 +338,7 @@ export function PublicCVSectionPage({ profile, section }: { profile: PublicCvPro
           {section === "experiencias" ? <ExperienceTimeline profile={profile} username={username} extended /> : null}
           {section === "proyectos" ? <ProjectsSection projects={projects} profile={profile} username={username} extended /> : null}
           {section === "evidencias" ? <EvidenceSection worklogs={evidence} username={username} extended /> : null}
+          {section === "capacidades" ? <SkillsAndTools profile={profile} username={username} extended /> : null}
           {section === "documentos" ? <DocumentsPanel profile={profile} username={username} extended /> : null}
           <PublicCVCTA username={username} isPublicCv={profile.liveCvEnabled && profile.liveCvVisibility === "PUBLIC"} completeness={computeCompleteness(profile)} />
         </section>
@@ -321,6 +354,7 @@ function PublicCVHeader({ username }: { username: string }) {
     { label: "Experiencias", href: publicCvPath(username, "experiencias") },
     { label: "Proyectos", href: publicCvPath(username, "proyectos") },
     { label: "Evidencias", href: publicCvPath(username, "evidencias") },
+    { label: "Capacidades", href: publicCvPath(username, "capacidades") },
     { label: "Documentos", href: publicCvPath(username, "documentos") }
   ];
 
@@ -378,7 +412,7 @@ function ProfileHero({ profile, name, username, specialties, isPublicCv }: { pro
 
       <div className="mt-5 flex flex-col justify-center lg:mt-0">
         <div className="mb-4 flex flex-wrap items-center justify-center gap-2 lg:justify-start">
-          <TrustBadge icon={Sparkles} label={isPublicCv ? "CV vivo activo" : "Visibilidad limitada"} />
+          <TrustBadge icon={Sparkles} label={isPublicCv ? "CV vivo activo" : "Vista pública"} />
         </div>
         <div className="flex flex-wrap items-center justify-center gap-3 lg:justify-start">
           <h1 className="max-w-[760px] font-display text-[2.15rem] font-black leading-[0.95] tracking-[-0.045em] sm:text-4xl md:text-5xl">{name}</h1>
@@ -386,13 +420,13 @@ function ProfileHero({ profile, name, username, specialties, isPublicCv }: { pro
             <span title="Identidad verificada por Terraqo" className="text-[#2087e8]"><BadgeCheck className="h-7 w-7 fill-[#2087e8] text-white" /></span>
           ) : null}
         </div>
-        <p className="mt-3 font-display text-lg font-black text-[#73e9df] sm:text-xl lg:text-[#008c83]">{profile.headline || "Profesional Terraqo"}</p>
+        <p className="mt-3 font-display text-lg font-black text-[#73e9df] sm:text-xl lg:text-[#008c83]">{currentHeadline(profile)}</p>
         <div className="mt-4 flex flex-wrap justify-center gap-2 text-xs font-semibold text-white/75 sm:text-sm lg:justify-start lg:gap-4 lg:text-[#435a66]">
           <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/8 px-3 py-1.5 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0"><MapPin className="h-4 w-4 text-[#73e9df] lg:text-[#008c83]" />{profile.city || "Ubicación por completar"}</span>
           <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/8 px-3 py-1.5 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0"><span className="h-2 w-2 rounded-full bg-[#1dbf96]" />{STATUS_COPY[profile.status] || "Estado profesional activo"}</span>
           <span className="inline-flex items-center rounded-full border border-white/10 bg-white/8 px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.12em] text-white/70 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0 lg:text-[#5f7280]">@{username}</span>
         </div>
-        <p className="mt-5 max-w-3xl text-sm leading-7 text-white/76 sm:text-[15px] lg:text-[#425865]">{normalizeSpanishCopy(profile.generatedSummary || profile.bio) || "Perfil en construcción. La experiencia pública se actualiza con proyectos, bitácoras y validaciones autorizadas."}</p>
+        <p className="mt-5 max-w-3xl text-sm leading-7 text-white/76 sm:text-[15px] lg:text-[#425865]">{profileSummary(profile)}</p>
         <div className="mt-6 flex flex-wrap justify-center gap-2 lg:justify-start">
           {specialties.length ? specialties.map((item) => <ToolChip key={item} label={item} />) : <ToolChip label="Perfil en actualización" />}
         </div>
@@ -416,7 +450,7 @@ function VerificationPanel({ profile, verifiedDocs, username }: { profile: Publi
     { label: "Identidad verificada", detail: profile.identityVerificationStatus === "VERIFIED" ? "DNI validado" : "Pendiente de validación", done: profile.identityVerificationStatus === "VERIFIED", icon: IdCard },
     { label: "Documentos revisados", detail: `${verifiedDocs} de ${profile.documents.length || 0} documentos`, done: verifiedDocs > 0, icon: FileCheck2 },
     { label: "Experiencia validada", detail: `${verifiedExperiences} experiencias`, done: verifiedExperiences > 0, icon: BriefcaseBusiness },
-    { label: "Actividad comprobada", detail: `${approvedWorklogs} bitácoras y evidencias`, done: approvedWorklogs > 0, icon: ClipboardCheck }
+    { label: "Actividad comprobada", detail: `${approvedWorklogs} registros y evidencias`, done: approvedWorklogs > 0, icon: ClipboardCheck }
   ];
 
   return (
@@ -465,23 +499,25 @@ function MetricStrip({ experienceLabel, projects, validation, evidence, lastActi
 }
 
 function ExperienceTimeline({ profile, username, extended = false }: { profile: PublicCvProfile; username: string; extended?: boolean }) {
+  const experiences = extended ? profile.experiences : profile.experiences.slice(0, 3);
   return (
     <section id="experiencia" className="rounded-[16px] border border-[#dceaec] bg-white p-5 shadow-[0_18px_50px_rgba(12,43,49,0.06)]">
-      <SectionHeader title="Experiencia verificable" description="Historial laboral validado con evidencia y responsables." action={extended ? "Volver al CV vivo" : "Ver todas las experiencias"} href={extended ? publicCvPath(username) : publicCvPath(username, "experiencias")} />
+      <SectionHeader title="Experiencia profesional" description="Trayectoria pública seleccionada por el profesional." action={extended ? "Volver al CV vivo" : "Ver todas las experiencias"} href={extended ? publicCvPath(username) : publicCvPath(username, "experiencias")} />
       <div className="mt-6 space-y-4 border-l border-[#cce4e1] pl-5">
-        {profile.experiences.length ? profile.experiences.map((experience) => <ExperienceCard key={experience.id} experience={experience} />) : <EmptyState title="Sin experiencias públicas" description="Cuando el profesional autorice experiencias, aparecerán aquí con su nivel de verificación." />}
+        {experiences.length ? experiences.map((experience) => <ExperienceCard key={experience.id} experience={experience} />) : <EmptyState title="Sin experiencias públicas" description="Cuando el profesional publique experiencias, aparecerán aquí con su rol, periodo y nivel de revisión." />}
       </div>
     </section>
   );
 }
 
-function EducationTimeline({ profile }: { profile: PublicCvProfile }) {
+function EducationTimeline({ profile, extended = false }: { profile: PublicCvProfile; extended?: boolean }) {
   if (!profile.education.length) return null;
+  const educationItems = extended ? profile.education : profile.education.slice(0, 3);
   return (
     <section className="rounded-[16px] border border-[#dceaec] bg-white p-5 shadow-[0_18px_50px_rgba(12,43,49,0.06)]">
       <SectionHeader title="Educación y certificaciones" description="Formación pública declarada por el profesional." />
       <div className="mt-6 grid gap-4 md:grid-cols-2">
-        {profile.education.map((education) => (
+        {educationItems.map((education) => (
           <article key={education.id} className="rounded-[14px] border border-[#dceaec] bg-[#f8fcfb] p-4">
             <p className="font-display text-lg font-black">{education.degree}</p>
             <p className="mt-1 text-sm font-black text-[#008c83]">{education.institution}</p>
@@ -533,7 +569,7 @@ function ProjectsSection({ projects, profile, username, extended = false }: { pr
       <div className={extended ? "mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" : "mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"}>
         {projects.map((project) => <ProjectCard key={project.id} project={project} />)}
         {!projects.length && fallback.map((worklog) => <ProjectCard key={worklog.id} project={{ id: worklog.id, title: worklog.title, slug: "#", clientName: worklog.workspace?.brandName || worklog.workspace?.name || "Terraqo", location: null, category: worklog.type, status: "PUBLISHED" }} />)}
-        {!projects.length && !fallback.length ? <EmptyState title="Sin proyectos publicos" description="Los proyectos autorizados se mostraran cuando el profesional active su visibilidad." /> : null}
+        {!projects.length && !fallback.length ? <EmptyState title="Sin proyectos públicos" description="Los proyectos seleccionados aparecerán cuando el profesional active su visibilidad pública." /> : null}
       </div>
     </section>
   );
@@ -551,7 +587,7 @@ function ProjectCard({ project }: { project: ProjectSnapshot }) {
         <h3 className="mt-3 min-h-[48px] font-display text-base font-black leading-tight">{project.title}</h3>
         <p className="mt-2 text-xs font-semibold text-[#008c83]">{project.clientName || project.location || project.category || "Proyecto Terraqo"}</p>
         <span className="mt-4 inline-flex items-center gap-2 text-xs font-black text-[#006c66] transition group-hover:translate-x-1">
-          {href ? "Ver proyecto" : "Proyecto no publicado"}
+          {href ? "Ver proyecto" : "Detalle no público"}
           {href ? <ArrowRight className="h-3.5 w-3.5" /> : null}
         </span>
       </div>
@@ -586,7 +622,7 @@ function EvidenceSection({ worklogs, username, extended = false }: { worklogs: P
     <section id="evidencias" className="rounded-[16px] border border-[#dceaec] bg-white p-5 shadow-[0_18px_50px_rgba(12,43,49,0.06)]">
       <SectionHeader title="Evidencias públicas" description="Muestra del trabajo real documentado en campo." action={extended ? "Volver al CV vivo" : "Ver todas las evidencias"} href={extended && username ? publicCvPath(username) : publicCvPath(username || "perfil", "evidencias")} />
       <div className={extended ? "mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" : "mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-6"}>
-        {worklogs.length ? worklogs.map((worklog) => <EvidenceCard key={worklog.id} worklog={worklog} />) : <EmptyState title="Sin evidencias públicas" description="Las bitácoras públicas autorizadas aparecerán en esta sección." />}
+        {worklogs.length ? worklogs.map((worklog) => <EvidenceCard key={worklog.id} worklog={worklog} />) : <EmptyState title="Sin evidencias públicas" description="Las evidencias públicas seleccionadas aparecerán en esta sección." />}
       </div>
     </section>
   );
@@ -605,19 +641,19 @@ function EvidenceCard({ worklog }: { worklog: PublicCvProfile["worklogs"][number
   );
 }
 
-function SkillsAndTools({ profile }: { profile: PublicCvProfile }) {
-  const bars = profile.specialties.slice(0, 4);
-  const tools = [...profile.equipment, ...profile.software].slice(0, 12);
+function SkillsAndTools({ profile, username, extended = false }: { profile: PublicCvProfile; username?: string; extended?: boolean }) {
+  const bars = (extended ? profile.specialties : profile.specialties.slice(0, 3));
+  const tools = (extended ? [...profile.equipment, ...profile.software] : [...profile.equipment, ...profile.software].slice(0, 8));
+  const categories = extended ? profile.professionalCategories : profile.professionalCategories.slice(0, 3);
   return (
     <section className="rounded-[16px] border border-[#dceaec] bg-white p-5 shadow-[0_18px_50px_rgba(12,43,49,0.06)]">
-      <h2 className="font-display text-xl font-black">Habilidades y herramientas</h2>
-      <p className="mt-1 text-sm text-[#5f7280]">Competencias tecnicas y software que domina.</p>
+      <SectionHeader title="Capacidades técnicas" description="Habilidades, equipos y software declarados por el profesional." action={extended ? "Volver al CV vivo" : "Ver todas las capacidades"} href={extended && username ? publicCvPath(username) : username ? publicCvPath(username, "capacidades") : undefined} />
       <div className="mt-5 grid gap-6 md:grid-cols-[0.9fr_1fr]">
         <div className="space-y-4">
-          {bars.length ? bars.map((skill, index) => <SkillBar key={skill} label={skill} value={95 - index * 9} />) : <EmptyState title="Habilidades en revision" description="El profesional aun no publico sus habilidades principales." />}
+          {bars.length ? bars.map((skill, index) => <SkillBar key={skill} label={skill} value={95 - index * 9} />) : <EmptyState title="Habilidades por completar" description="El profesional aún no publicó sus habilidades principales." />}
         </div>
         <div className="flex flex-wrap content-start gap-2">
-          {tools.length ? tools.map((tool) => <ToolChip key={tool} label={tool} />) : <ToolChip label="Herramientas por completar" />}
+          {[...categories, ...tools].length ? [...categories, ...tools].map((tool) => <ToolChip key={tool} label={tool} />) : <ToolChip label="Herramientas por completar" />}
         </div>
       </div>
     </section>
@@ -633,7 +669,7 @@ function DocumentsPanel({ profile, username, extended = false }: { profile: Publ
   return (
     <section id="documentos" className="rounded-[16px] border border-[#dceaec] bg-white p-5 shadow-[0_18px_50px_rgba(12,43,49,0.06)]">
       <h2 className="font-display text-xl font-black">Confianza y documentos</h2>
-      <p className="mt-1 text-sm text-[#5f7280]">Estado publico de documentos verificados. Los archivos privados no se exponen.</p>
+      <p className="mt-1 text-sm text-[#5f7280]">Estado público de documentos revisados. Los archivos privados no se exponen.</p>
       <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {docs.map((document) => <DocumentStatusCard key={`${document.type}-${document.id}`} document={document} />)}
       </div>
@@ -649,7 +685,7 @@ function PublicCVCTA({ username, isPublicCv, completeness }: { username: string;
         <span className="grid h-16 w-16 place-items-center rounded-full bg-[#e7f8f5] text-[#008c83]"><LockKeyhole className="h-7 w-7" /></span>
         <div>
           <h2 className="font-display text-xl font-black">Quieres conocer mas sobre mi experiencia?</h2>
-          <p className="mt-1 text-sm text-[#5f7280]">{isPublicCv ? "Solicita acceso a mi CV completo para ver información detallada, documentos y evidencia adicional." : `Este CV muestra una vista pública limitada. Perfil completo al ${completeness}%.`}</p>
+          <p className="mt-1 text-sm text-[#5f7280]">{isPublicCv ? "Solicita acceso a mi CV completo para ver información detallada, documentos y evidencia adicional." : `Este CV muestra una vista pública resumida. Perfil completo al ${completeness}%.`}</p>
         </div>
       </div>
       <div className="flex flex-wrap gap-3">
@@ -665,7 +701,7 @@ function PublicCVFooter({ updatedAt }: { updatedAt: Date }) {
   return (
     <footer className="border-t border-[#dceaec] bg-[#f7fbfa]">
       <div className="mx-auto flex w-[min(100%-32px,1240px)] flex-col gap-3 py-7 text-xs font-semibold text-[#5f7280] md:flex-row md:items-center md:justify-between">
-        <Link href="/" className="inline-flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-[#008c83]" />Perfil publico creado con Terraqo CV Vivo</Link>
+        <Link href="/" className="inline-flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-[#008c83]" />Perfil público creado con Terraqo CV Vivo</Link>
         <span>Última actualización: {formatDate(updatedAt, { day: "2-digit", month: "long", year: "numeric" })}</span>
       </div>
     </footer>

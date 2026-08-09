@@ -12,6 +12,7 @@ const SECTION_TITLE: Record<string, string> = {
   experiencias: "Experiencias",
   proyectos: "Proyectos",
   evidencias: "Evidencias",
+  capacidades: "Capacidades",
   documentos: "Documentos"
 };
 
@@ -38,7 +39,7 @@ export async function generateMetadata({ params }: PublicCvSectionPageProps) {
 
   return createMetadata({
     title: `${SECTION_TITLE[section]} de ${profile?.user.name || username} | CV Vivo Terraqo`,
-    description: profile?.headline || "Seccion publica extendida del CV vivo Terraqo.",
+    description: profile?.headline || "Sección pública extendida del CV vivo Terraqo.",
     path: `/cv/${username}/${section}`
   });
 }
