@@ -169,6 +169,12 @@ export default async function TerraqoAdminPage() {
   const activeWorkspaces = workspaces.filter((item) => item.active).length;
   const activeModules = workspaces.reduce((total, item) => total + item.modules.filter((module) => module.active).length, 0);
   const premiumWorkspaces = workspaces.filter((item) => ["PREMIUM", "ENTERPRISE"].includes(item.subscriptions[0]?.tier || "")).length;
+  const [pendingDocuments, pendingIdentities, pendingExperiences, totalProfessionals] = await Promise.all([
+    prisma.terraqoProfessionalDocument.count({ where: { reviewStatus: "SUBMITTED" } }),
+    prisma.terraqoProfessionalProfile.count({ where: { identityVerificationStatus: "UNDER_REVIEW" } }),
+    prisma.terraqoProfessionalExperience.count({ where: { verificationStatus: "REQUESTED" } }),
+    prisma.terraqoProfessionalProfile.count()
+  ]);
 
   return (
     <section className="space-y-8">
@@ -182,9 +188,17 @@ export default async function TerraqoAdminPage() {
             CV vivo, marketplace laboral, foros, documentos y analitica.
           </p>
         </div>
-        <Button asChild>
-          <Link href="/admin/terraqo/red">Red profesional</Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline">
+            <Link href="/admin/terraqo/usuarios">Usuarios y accesos</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/admin/terraqo/red">Red profesional</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/admin/terraqo/validaciones">Validaciones Terraqo</Link>
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-5 md:grid-cols-3">
@@ -210,6 +224,37 @@ export default async function TerraqoAdminPage() {
           </CardHeader>
         </Card>
       </div>
+
+      <Card className="border-primary/20 bg-primary/5">
+        <CardHeader>
+          <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary">Gobierno global</p>
+              <CardTitle className="mt-2">Mesa de validaciones Terraqo</CardTitle>
+              <CardDescription className="mt-2 max-w-3xl">
+                Control central para documentos de identidad, experiencias verificables y cuentas profesionales
+                de todos los workspaces. Esto pertenece a Terraqo, no al panel operativo de cada cliente.
+              </CardDescription>
+            </div>
+            <Button asChild>
+              <Link href="/admin/terraqo/validaciones">Abrir mesa de validaciones</Link>
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-4">
+          {[
+            ["Documentos por revisar", pendingDocuments],
+            ["Identidades en revisión", pendingIdentities],
+            ["Experiencias solicitadas", pendingExperiences],
+            ["Profesionales registrados", totalProfessionals]
+          ].map(([label, count]) => (
+            <div key={String(label)} className="rounded-xl border bg-background/80 p-4 shadow-sm">
+              <p className="text-3xl font-bold">{count}</p>
+              <p className="mt-1 text-sm font-semibold text-muted-foreground">{label}</p>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
