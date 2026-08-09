@@ -37,6 +37,8 @@ export function ExperienceForm({ validators, createExperienceAction }: Pick<Prof
       <VisibilitySelect />
       <ValidatorSelect validators={validators} />
       <Input name="validatorFallback" placeholder="Si no aparece en la lista, correo o nombre del responsable" />
+      <Textarea name="summary" placeholder="Detalle destacado visible en la pagina publica de esta experiencia. Ej. alcance, logros, decisiones, responsabilidades e impacto." className="min-h-28" />
+      <Textarea name="highlights" placeholder="Puntos clave, uno por linea. Ej. Analisis de mercado, gestion de riesgos, reportes, ejecucion de operaciones." />
       <Textarea name="evidence" placeholder="Evidencias, enlaces o referencias, una por linea" />
       <SubmitButton pendingText="Registrando...">Guardar experiencia</SubmitButton>
     </form>

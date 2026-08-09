@@ -2306,6 +2306,8 @@ model TerraqoProfessionalExperience {
   title                 String
   companyName           String?
   role                  String?
+  summary               String?
+  highlights            String[]                   @default([])
   location              String?
   country               String?                    @default("PE")
   locationSubdivisionCode String?

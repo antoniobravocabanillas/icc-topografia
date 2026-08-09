@@ -79,6 +79,13 @@ function listFromText(formData: FormData, key: string) {
     .slice(0, 12);
 }
 
+function longText(formData: FormData, key: string, max = 4000) {
+  const value = formData.get(key);
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed.slice(0, max) : null;
+}
+
 function normalizeLocation(formData: FormData, names = { country: "country", subdivision: "subdivision", city: "city" }) {
   const country = cleanText(formData, names.country, 8) || "PE";
   const subdivision = cleanText(formData, names.subdivision, 24);
@@ -158,6 +165,8 @@ export async function createHistoricalExperienceAction(formData: FormData) {
       title,
       companyName,
       role,
+      summary: longText(formData, "summary", 5000),
+      highlights: listFromText(formData, "highlights").slice(0, 16),
       location: location.label || null,
       country: location.country,
       locationSubdivisionCode: location.subdivision,
@@ -382,6 +391,45 @@ export async function updateExperienceReferenceAction(formData: FormData) {
   revalidatePath("/admin/terraqo/validaciones");
   if (profile.username) revalidatePath(`/cv/${profile.username}`);
   redirect("/portal/experiencias?success=verification-requested");
+}
+
+export async function updateExperiencePublicDetailsAction(formData: FormData) {
+  "use server";
+
+  const session = await auth();
+  if (!session?.user?.id) redirect("/cuenta");
+
+  const experienceId = cleanText(formData, "experienceId", 80);
+  if (!experienceId) redirect("/portal/experiencias?status=verification-invalid");
+
+  const profile = await prisma.terraqoProfessionalProfile.findUnique({
+    where: { userId: session.user.id },
+    select: { id: true, username: true }
+  });
+  if (!profile) redirect("/portal?status=profile-required");
+
+  const experience = await prisma.terraqoProfessionalExperience.findFirst({
+    where: { id: experienceId, professionalProfileId: profile.id },
+    select: { id: true }
+  });
+  if (!experience) redirect("/portal/experiencias?status=verification-invalid");
+
+  await prisma.terraqoProfessionalExperience.update({
+    where: { id: experience.id },
+    data: {
+      summary: longText(formData, "summary", 5000),
+      highlights: listFromText(formData, "highlights").slice(0, 16)
+    }
+  });
+
+  await refreshProfessionalGeneratedSummary(profile.id);
+  revalidatePath("/portal/experiencias");
+  if (profile.username) {
+    revalidatePath(`/cv/${profile.username}`);
+    revalidatePath(`/cv/${profile.username}/experiencias`);
+    revalidatePath(`/cv/${profile.username}/experiencias/${experience.id}`);
+  }
+  redirect("/portal/experiencias?success=experience-details");
 }
 
 export async function updateEducationReferenceAction(formData: FormData) {

@@ -1,11 +1,12 @@
 import { BadgeCheck, BookOpenCheck, CircleCheck, Eye, History, ShieldCheck, Sparkles } from "lucide-react";
 import type { TerraqoMemberRole } from "@prisma/client";
 import { EntryReferenceRequest } from "@/components/portal/entry-reference-request";
+import { ExperiencePublicDetailsEditor } from "@/components/portal/experience-public-details-editor";
 import { ExperienceForm, EducationForm } from "@/components/portal/profile-entry-forms";
 import { PortalPageHeading } from "@/components/terraqo/portal-page-heading";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { createEducationAction, createHistoricalExperienceAction, requestEducationVerificationAction, requestExperienceVerificationAction, updateEducationReferenceAction, updateExperienceReferenceAction } from "@/lib/server/professional-actions";
+import { createEducationAction, createHistoricalExperienceAction, requestEducationVerificationAction, requestExperienceVerificationAction, updateEducationReferenceAction, updateExperiencePublicDetailsAction, updateExperienceReferenceAction } from "@/lib/server/professional-actions";
 import { prisma } from "@/lib/prisma";
 import { requireProfessionalPortal } from "@/lib/terraqo/professional-portal";
 import { formatExperienceDuration, monthsBetween } from "@/lib/terraqo/profile-summary";
@@ -60,6 +61,7 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
 
       {params.success === "experience" ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Experiencia cargada. Quedo privada y pendiente de verificacion.</div> : null}
       {params.success === "education" ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Educacion registrada. El extracto del perfil fue actualizado.</div> : null}
+      {params.success === "experience-details" ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Detalle publico de la experiencia actualizado.</div> : null}
       {params.success === "verification-requested" ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Solicitud enviada a Terraqo. El equipo revisara las referencias y evidencias declaradas.</div> : null}
       {params.status === "missing" ? <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">Completa al menos titulo y empresa para registrar la experiencia.</div> : null}
       {params.status === "education-missing" ? <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">Completa institucion y grado para registrar educacion.</div> : null}
@@ -128,6 +130,9 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
                     </div>
                   </div>
                   {experience.verificationNote ? <p className="mt-3 text-sm leading-6 text-muted-foreground">{experience.verificationNote}</p> : null}
+                  <div className="mt-3">
+                    <ExperiencePublicDetailsEditor experienceId={experience.id} summary={experience.summary} highlights={experience.highlights} action={updateExperiencePublicDetailsAction} />
+                  </div>
                   {experience.validatorUserId || experience.validatorEmail || experience.validatorName ? <p className="mt-2 text-xs font-semibold text-primary">Responsable solicitado: {experience.validatorName || experience.validatorEmail || experience.validatorUserId}</p> : null}
                   {experience.evidence.length ? <p className="mt-2 text-xs font-semibold text-primary">{experience.evidence.length} referencia(s) o evidencia(s) declarada(s)</p> : null}
                 </article>

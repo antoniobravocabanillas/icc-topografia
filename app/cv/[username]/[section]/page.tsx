@@ -10,6 +10,7 @@ type PublicCvSectionPageProps = {
 
 const SECTION_TITLE: Record<string, string> = {
   experiencias: "Experiencias",
+  educacion: "Educacion",
   proyectos: "Proyectos",
   evidencias: "Evidencias",
   capacidades: "Capacidades",
