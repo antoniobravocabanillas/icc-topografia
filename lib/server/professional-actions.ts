@@ -323,6 +323,107 @@ export async function requestEducationVerificationAction(formData: FormData) {
   redirect("/portal/experiencias?success=verification-requested");
 }
 
+export async function updateExperienceReferenceAction(formData: FormData) {
+  "use server";
+
+  const session = await auth();
+  if (!session?.user?.id) redirect("/cuenta");
+
+  const experienceId = cleanText(formData, "experienceId", 80);
+  if (!experienceId) redirect("/portal/experiencias?status=verification-invalid");
+
+  const profile = await prisma.terraqoProfessionalProfile.findUnique({
+    where: { userId: session.user.id },
+    select: {
+      id: true,
+      username: true,
+      user: { select: { terraqoMemberships: { where: { active: true }, select: { workspaceId: true } } } }
+    }
+  });
+  if (!profile) redirect("/portal?status=profile-required");
+
+  const experience = await prisma.terraqoProfessionalExperience.findFirst({
+    where: { id: experienceId, professionalProfileId: profile.id },
+    select: { id: true, evidence: true }
+  });
+  if (!experience) redirect("/portal/experiencias?status=verification-invalid");
+
+  const workspaceIds = profile.user.terraqoMemberships.map((membership) => membership.workspaceId);
+  const validator = await resolveValidator(formData, "validatorFallback", workspaceIds);
+  const evidence = [...experience.evidence, ...listFromText(formData, "evidence")].filter(Boolean).slice(0, 12);
+  const hasReference = Boolean(validator.validatorUserId || validator.validatorEmail || validator.validatorName || evidence.length);
+  if (!hasReference) redirect("/portal/experiencias?status=verification-reference-required");
+
+  await prisma.terraqoProfessionalExperience.update({
+    where: { id: experience.id },
+    data: {
+      validatorUserId: validator.validatorUserId,
+      validatorName: validator.validatorName,
+      validatorEmail: validator.validatorEmail,
+      evidence,
+      verificationStatus: "REQUESTED",
+      verificationRequestedAt: new Date(),
+      verificationNote: "Solicitud enviada a Terraqo. El equipo validara la referencia declarada antes de marcarla como verificada."
+    }
+  });
+
+  revalidatePath("/portal/experiencias");
+  revalidatePath("/admin/terraqo");
+  revalidatePath("/admin/terraqo/validaciones");
+  if (profile.username) revalidatePath(`/cv/${profile.username}`);
+  redirect("/portal/experiencias?success=verification-requested");
+}
+
+export async function updateEducationReferenceAction(formData: FormData) {
+  "use server";
+
+  const session = await auth();
+  if (!session?.user?.id) redirect("/cuenta");
+
+  const educationId = cleanText(formData, "educationId", 80);
+  if (!educationId) redirect("/portal/experiencias?status=verification-invalid");
+
+  const profile = await prisma.terraqoProfessionalProfile.findUnique({
+    where: { userId: session.user.id },
+    select: {
+      id: true,
+      username: true,
+      user: { select: { terraqoMemberships: { where: { active: true }, select: { workspaceId: true } } } }
+    }
+  });
+  if (!profile) redirect("/portal?status=profile-required");
+
+  const education = await prisma.terraqoProfessionalEducation.findFirst({
+    where: { id: educationId, professionalProfileId: profile.id },
+    select: { id: true, evidence: true }
+  });
+  if (!education) redirect("/portal/experiencias?status=verification-invalid");
+
+  const workspaceIds = profile.user.terraqoMemberships.map((membership) => membership.workspaceId);
+  const validator = await resolveValidator(formData, "educationValidatorFallback", workspaceIds);
+  const evidence = [...education.evidence, ...listFromText(formData, "educationEvidence")].filter(Boolean).slice(0, 12);
+  const hasReference = Boolean(validator.validatorUserId || validator.validatorEmail || validator.validatorName || evidence.length);
+  if (!hasReference) redirect("/portal/experiencias?status=verification-reference-required");
+
+  await prisma.terraqoProfessionalEducation.update({
+    where: { id: education.id },
+    data: {
+      validatorUserId: validator.validatorUserId,
+      validatorName: validator.validatorName,
+      validatorEmail: validator.validatorEmail,
+      evidence,
+      verificationStatus: "REQUESTED",
+      verificationRequestedAt: new Date()
+    }
+  });
+
+  revalidatePath("/portal/experiencias");
+  revalidatePath("/admin/terraqo");
+  revalidatePath("/admin/terraqo/validaciones");
+  if (profile.username) revalidatePath(`/cv/${profile.username}`);
+  redirect("/portal/experiencias?success=verification-requested");
+}
+
 export async function updateProfessionalSettingsAction(formData: FormData) {
   "use server";
 

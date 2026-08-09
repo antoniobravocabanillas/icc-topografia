@@ -1,9 +1,10 @@
 import { BadgeCheck, BookOpenCheck, CircleCheck, Eye, History, ShieldCheck, Sparkles } from "lucide-react";
+import { EntryReferenceRequest } from "@/components/portal/entry-reference-request";
 import { ExperienceForm, EducationForm } from "@/components/portal/profile-entry-forms";
 import { PortalPageHeading } from "@/components/terraqo/portal-page-heading";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { createEducationAction, createHistoricalExperienceAction, requestEducationVerificationAction, requestExperienceVerificationAction } from "@/lib/server/professional-actions";
+import { createEducationAction, createHistoricalExperienceAction, requestEducationVerificationAction, requestExperienceVerificationAction, updateEducationReferenceAction, updateExperienceReferenceAction } from "@/lib/server/professional-actions";
 import { prisma } from "@/lib/prisma";
 import { requireProfessionalPortal } from "@/lib/terraqo/professional-portal";
 import { formatExperienceDuration, monthsBetween } from "@/lib/terraqo/profile-summary";
@@ -38,6 +39,7 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
       })
     : [];
   const totalMonths = experiences.reduce((sum, experience) => sum + monthsBetween(experience.startedAt, experience.currentlyWorking ? null : experience.endedAt), 0);
+  const validatorOptions = validators.map((validator) => ({ id: validator.id, label: validator.name || "Responsable Terraqo", email: validator.email }));
 
   return (
     <div className="min-w-0 space-y-8 py-6 lg:py-8">
@@ -79,7 +81,7 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
             <CardDescription>Para trabajos anteriores donde quieres solicitar validacion de un encargado o cliente.</CardDescription>
           </CardHeader>
           <CardContent>
-            <ExperienceForm validators={validators.map((validator) => ({ id: validator.id, label: validator.name || "Responsable Terraqo", email: validator.email }))} createExperienceAction={createHistoricalExperienceAction} />
+            <ExperienceForm validators={validatorOptions} createExperienceAction={createHistoricalExperienceAction} />
           </CardContent>
         </Card>
 
@@ -92,6 +94,7 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
             {experiences.map((experience) => {
               const checks = (experience.verifiedByTerraqo ? 1 : 0) + (experience.projectId || experience.evidence.length ? 1 : 0);
               const statusLabel = checks >= 2 ? "2 checks" : experience.verifiedByTerraqo ? "Verificado por Terraqo referencialmente" : "Sin verificar";
+              const hasReference = Boolean(experience.validatorUserId || experience.validatorEmail || experience.validatorName || experience.evidence.length);
               return (
                 <article key={experience.id} className="rounded-lg border bg-white p-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -104,7 +107,7 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
                     </div>
                     <div className="flex flex-col gap-2 sm:items-end">
                       {checks ? <Badge><BadgeCheck className="mr-1 h-4 w-4" /> {statusLabel}</Badge> : experience.verificationStatus === "REQUESTED" ? <Badge variant="outline">Validacion solicitada</Badge> : <Badge variant="outline">{statusLabel}</Badge>}
-                      {["NOT_REQUESTED", "REJECTED"].includes(experience.verificationStatus) ? (
+                      {["NOT_REQUESTED", "REJECTED"].includes(experience.verificationStatus) && hasReference ? (
                         <form action={requestExperienceVerificationAction}>
                           <input type="hidden" name="experienceId" value={experience.id} />
                           <button type="submit" className="rounded-md border border-primary/30 px-3 py-1.5 text-xs font-bold text-primary transition hover:bg-primary hover:text-white">
@@ -112,6 +115,7 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
                           </button>
                         </form>
                       ) : null}
+                      {["NOT_REQUESTED", "REJECTED"].includes(experience.verificationStatus) && !hasReference ? <EntryReferenceRequest entryId={experience.id} entryType="experience" validators={validatorOptions} action={updateExperienceReferenceAction} /> : null}
                     </div>
                   </div>
                   {experience.verificationNote ? <p className="mt-3 text-sm leading-6 text-muted-foreground">{experience.verificationNote}</p> : null}
@@ -132,7 +136,7 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
             <CardDescription>Registra estudios, certificaciones y formacion que deben aparecer en tu perfil y CV vivo.</CardDescription>
           </CardHeader>
           <CardContent>
-            <EducationForm validators={validators.map((validator) => ({ id: validator.id, label: validator.name || "Responsable Terraqo", email: validator.email }))} createEducationAction={createEducationAction} />
+            <EducationForm validators={validatorOptions} createEducationAction={createEducationAction} />
           </CardContent>
         </Card>
 
@@ -142,7 +146,9 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
             <CardDescription>Educacion asociada al perfil profesional.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {education.map((item) => (
+            {education.map((item) => {
+              const hasReference = Boolean(item.validatorUserId || item.validatorEmail || item.validatorName || item.evidence.length);
+              return (
               <article key={item.id} className="rounded-lg border bg-white p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
@@ -153,7 +159,7 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
                   </div>
                   <div className="flex flex-col gap-2 sm:items-end">
                     {item.verificationStatus === "APPROVED" ? <Badge><BadgeCheck className="mr-1 h-4 w-4" /> Verificada</Badge> : item.verificationStatus === "REQUESTED" ? <Badge variant="outline">Validacion solicitada</Badge> : <Badge variant="outline">Sin verificar</Badge>}
-                    {["NOT_REQUESTED", "REJECTED"].includes(item.verificationStatus) ? (
+                    {["NOT_REQUESTED", "REJECTED"].includes(item.verificationStatus) && hasReference ? (
                       <form action={requestEducationVerificationAction}>
                         <input type="hidden" name="educationId" value={item.id} />
                         <button type="submit" className="rounded-md border border-primary/30 px-3 py-1.5 text-xs font-bold text-primary transition hover:bg-primary hover:text-white">
@@ -161,12 +167,13 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
                         </button>
                       </form>
                     ) : null}
+                    {["NOT_REQUESTED", "REJECTED"].includes(item.verificationStatus) && !hasReference ? <EntryReferenceRequest entryId={item.id} entryType="education" validators={validatorOptions} action={updateEducationReferenceAction} /> : null}
                   </div>
                 </div>
                 {item.validatorUserId || item.validatorEmail || item.validatorName ? <p className="mt-2 text-xs font-semibold text-primary">Responsable solicitado: {item.validatorName || item.validatorEmail || item.validatorUserId}</p> : null}
                 {item.evidence.length ? <p className="mt-2 text-xs font-semibold text-primary">{item.evidence.length} referencia(s) o evidencia(s) declarada(s)</p> : null}
               </article>
-            ))}
+            );})}
             {!education.length ? <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">Todavia no registraste educacion.</p> : null}
           </CardContent>
         </Card>
