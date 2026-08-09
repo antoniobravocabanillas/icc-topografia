@@ -238,6 +238,91 @@ export async function createEducationAction(formData: FormData) {
   redirect("/portal/experiencias?success=education");
 }
 
+export async function requestExperienceVerificationAction(formData: FormData) {
+  "use server";
+
+  const session = await auth();
+  if (!session?.user?.id) redirect("/cuenta");
+
+  const experienceId = cleanText(formData, "experienceId", 80);
+  if (!experienceId) redirect("/portal/experiencias?status=verification-invalid");
+
+  const profile = await prisma.terraqoProfessionalProfile.findUnique({
+    where: { userId: session.user.id },
+    select: { id: true, username: true }
+  });
+  if (!profile) redirect("/portal?status=profile-required");
+
+  const experience = await prisma.terraqoProfessionalExperience.findFirst({
+    where: { id: experienceId, professionalProfileId: profile.id },
+    select: { id: true, verificationStatus: true, validatorUserId: true, validatorName: true, validatorEmail: true, evidence: true }
+  });
+  if (!experience) redirect("/portal/experiencias?status=verification-invalid");
+  if (!["NOT_REQUESTED", "REJECTED"].includes(experience.verificationStatus)) {
+    redirect("/portal/experiencias?status=verification-already-requested");
+  }
+
+  const hasReference = Boolean(experience.validatorUserId || experience.validatorName || experience.validatorEmail || experience.evidence.length);
+  if (!hasReference) redirect("/portal/experiencias?status=verification-reference-required");
+
+  await prisma.terraqoProfessionalExperience.update({
+    where: { id: experience.id },
+    data: {
+      verificationStatus: "REQUESTED",
+      verificationRequestedAt: new Date(),
+      verificationNote: "Solicitud enviada a Terraqo. El equipo validara la referencia declarada antes de marcarla como verificada."
+    }
+  });
+
+  revalidatePath("/portal/experiencias");
+  revalidatePath("/admin/terraqo");
+  revalidatePath("/admin/terraqo/validaciones");
+  if (profile.username) revalidatePath(`/cv/${profile.username}`);
+  redirect("/portal/experiencias?success=verification-requested");
+}
+
+export async function requestEducationVerificationAction(formData: FormData) {
+  "use server";
+
+  const session = await auth();
+  if (!session?.user?.id) redirect("/cuenta");
+
+  const educationId = cleanText(formData, "educationId", 80);
+  if (!educationId) redirect("/portal/experiencias?status=verification-invalid");
+
+  const profile = await prisma.terraqoProfessionalProfile.findUnique({
+    where: { userId: session.user.id },
+    select: { id: true, username: true }
+  });
+  if (!profile) redirect("/portal?status=profile-required");
+
+  const education = await prisma.terraqoProfessionalEducation.findFirst({
+    where: { id: educationId, professionalProfileId: profile.id },
+    select: { id: true, verificationStatus: true, validatorUserId: true, validatorName: true, validatorEmail: true, evidence: true }
+  });
+  if (!education) redirect("/portal/experiencias?status=verification-invalid");
+  if (!["NOT_REQUESTED", "REJECTED"].includes(education.verificationStatus)) {
+    redirect("/portal/experiencias?status=verification-already-requested");
+  }
+
+  const hasReference = Boolean(education.validatorUserId || education.validatorName || education.validatorEmail || education.evidence.length);
+  if (!hasReference) redirect("/portal/experiencias?status=verification-reference-required");
+
+  await prisma.terraqoProfessionalEducation.update({
+    where: { id: education.id },
+    data: {
+      verificationStatus: "REQUESTED",
+      verificationRequestedAt: new Date()
+    }
+  });
+
+  revalidatePath("/portal/experiencias");
+  revalidatePath("/admin/terraqo");
+  revalidatePath("/admin/terraqo/validaciones");
+  if (profile.username) revalidatePath(`/cv/${profile.username}`);
+  redirect("/portal/experiencias?success=verification-requested");
+}
+
 export async function updateProfessionalSettingsAction(formData: FormData) {
   "use server";
 

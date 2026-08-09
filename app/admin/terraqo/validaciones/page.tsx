@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
-import { BadgeCheck, BriefcaseBusiness, Building2, FileCheck2, ShieldCheck, UserRoundCheck, XCircle } from "lucide-react";
+import { BadgeCheck, BookOpenCheck, BriefcaseBusiness, Building2, FileCheck2, ShieldCheck, UserRoundCheck, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -93,10 +93,29 @@ async function reviewProfessionalExperienceAction(formData: FormData) {
   revalidatePath("/admin/terraqo/validaciones");
 }
 
+async function reviewProfessionalEducationAction(formData: FormData) {
+  "use server";
+
+  await requireAdminPage(["SUPER_ADMIN"]);
+  const educationId = value(formData, "educationId");
+  const decision = value(formData, "decision");
+  if (!educationId || !["APPROVED", "REJECTED"].includes(decision)) return;
+
+  await prisma.terraqoProfessionalEducation.update({
+    where: { id: educationId },
+    data: {
+      verificationStatus: decision as "APPROVED" | "REJECTED"
+    }
+  });
+
+  revalidatePath("/admin/terraqo");
+  revalidatePath("/admin/terraqo/validaciones");
+}
+
 export default async function TerraqoValidationsPage() {
   await requireAdminPage(["SUPER_ADMIN"]);
 
-  const [documents, identityProfiles, experiences, totals] = await Promise.all([
+  const [documents, identityProfiles, experiences, educationRequests, totals] = await Promise.all([
     prisma.terraqoProfessionalDocument.findMany({
       where: { reviewStatus: "SUBMITTED" },
       include: {
@@ -128,6 +147,14 @@ export default async function TerraqoValidationsPage() {
       orderBy: [{ verificationRequestedAt: "asc" }, { createdAt: "asc" }],
       take: 80
     }),
+    prisma.terraqoProfessionalEducation.findMany({
+      where: { verificationStatus: "REQUESTED" },
+      include: {
+        professionalProfile: { select: { id: true, username: true, user: { select: { name: true, email: true } } } }
+      },
+      orderBy: [{ verificationRequestedAt: "asc" }, { createdAt: "asc" }],
+      take: 80
+    }),
     prisma.$transaction([
       prisma.terraqoWorkspace.count({ where: { deletedAt: null } }),
       prisma.company.count({ where: { deletedAt: null } }),
@@ -139,6 +166,7 @@ export default async function TerraqoValidationsPage() {
   const pendingIdentity = identityProfiles.length;
   const pendingDocs = documents.length;
   const pendingExperiences = experiences.length;
+  const pendingEducation = educationRequests.length;
 
   return (
     <section className="space-y-8">
@@ -161,6 +189,7 @@ export default async function TerraqoValidationsPage() {
         <Metric icon={FileCheck2} value={pendingDocs} label="Documentos por revisar" tone="amber" />
         <Metric icon={ShieldCheck} value={pendingIdentity} label="Identidades en revisión" tone="amber" />
         <Metric icon={BriefcaseBusiness} value={pendingExperiences} label="Experiencias solicitadas" tone="amber" />
+        <Metric icon={BookOpenCheck} value={pendingEducation} label="Estudios solicitados" tone="amber" />
         <Metric icon={Building2} value={totals[0]} label="Workspaces" />
         <Metric icon={Building2} value={totals[1]} label="Empresas" />
         <Metric icon={UserRoundCheck} value={totals[2]} label="Profesionales" />
@@ -243,6 +272,35 @@ export default async function TerraqoValidationsPage() {
           {!experiences.length ? <EmptyState text="No hay experiencias solicitadas para verificación." /> : null}
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Estudios y certificaciones solicitadas para validacion Terraqo</CardTitle>
+          <CardDescription>
+            Validacion academica referencial. Terraqo revisa certificados, constancias o contacta al responsable declarado antes de aprobar.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {educationRequests.map((education) => (
+            <article key={education.id} className="grid gap-4 rounded-lg border bg-white p-4 xl:grid-cols-[1fr_380px] xl:items-center">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline">REQUESTED</Badge>
+                  <Badge variant="secondary">Academico</Badge>
+                </div>
+                <h2 className="mt-2 font-semibold">{education.degree}</h2>
+                <p className="text-sm text-muted-foreground">
+                  {education.professionalProfile.user.name || education.professionalProfile.user.email} · {education.institution}{education.field ? ` · ${education.field}` : ""}
+                </p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{education.evidence.length ? education.evidence.join(" · ") : "Sin evidencias declaradas adicionales."}</p>
+                {education.validatorEmail || education.validatorName ? <p className="mt-2 text-xs text-muted-foreground">Responsable sugerido: {education.validatorName || education.validatorEmail}</p> : null}
+              </div>
+              <ReviewEducationForm educationId={education.id} />
+            </article>
+          ))}
+          {!educationRequests.length ? <EmptyState text="No hay estudios o certificaciones solicitadas para validacion." /> : null}
+        </CardContent>
+      </Card>
     </section>
   );
 }
@@ -279,6 +337,19 @@ function ReviewExperienceForm({ experienceId }: { experienceId: string }) {
     <form action={reviewProfessionalExperienceAction} className="grid gap-2">
       <Textarea name="verificationNote" placeholder="Criterio de validación, llamada realizada, evidencia revisada o motivo de rechazo." className="min-h-24" />
       <input type="hidden" name="experienceId" value={experienceId} />
+      <div className="grid grid-cols-2 gap-2">
+        <Button type="submit" name="decision" value="APPROVED"><BadgeCheck className="mr-2 h-4 w-4" />Validar</Button>
+        <Button type="submit" name="decision" value="REJECTED" variant="outline"><XCircle className="mr-2 h-4 w-4" />Rechazar</Button>
+      </div>
+    </form>
+  );
+}
+
+function ReviewEducationForm({ educationId }: { educationId: string }) {
+  return (
+    <form action={reviewProfessionalEducationAction} className="grid gap-2">
+      <Textarea name="verificationNote" placeholder="Criterio de validacion, llamada realizada, certificado revisado o motivo de rechazo." className="min-h-24" />
+      <input type="hidden" name="educationId" value={educationId} />
       <div className="grid grid-cols-2 gap-2">
         <Button type="submit" name="decision" value="APPROVED"><BadgeCheck className="mr-2 h-4 w-4" />Validar</Button>
         <Button type="submit" name="decision" value="REJECTED" variant="outline"><XCircle className="mr-2 h-4 w-4" />Rechazar</Button>

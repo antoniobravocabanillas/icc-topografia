@@ -3,7 +3,7 @@ import { ExperienceForm, EducationForm } from "@/components/portal/profile-entry
 import { PortalPageHeading } from "@/components/terraqo/portal-page-heading";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { createEducationAction, createHistoricalExperienceAction } from "@/lib/server/professional-actions";
+import { createEducationAction, createHistoricalExperienceAction, requestEducationVerificationAction, requestExperienceVerificationAction } from "@/lib/server/professional-actions";
 import { prisma } from "@/lib/prisma";
 import { requireProfessionalPortal } from "@/lib/terraqo/professional-portal";
 import { formatExperienceDuration, monthsBetween } from "@/lib/terraqo/profile-summary";
@@ -49,8 +49,11 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
 
       {params.success === "experience" ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Experiencia cargada. Quedo privada y pendiente de verificacion.</div> : null}
       {params.success === "education" ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Educacion registrada. El extracto del perfil fue actualizado.</div> : null}
+      {params.success === "verification-requested" ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Solicitud enviada a Terraqo. El equipo revisara las referencias y evidencias declaradas.</div> : null}
       {params.status === "missing" ? <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">Completa al menos titulo y empresa para registrar la experiencia.</div> : null}
       {params.status === "education-missing" ? <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">Completa institucion y grado para registrar educacion.</div> : null}
+      {params.status === "verification-reference-required" ? <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">Para pedir validacion Terraqo, primero carga un responsable, correo de referencia, certificado, constancia o evidencia.</div> : null}
+      {params.status === "verification-already-requested" ? <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-900">Esta entrada ya tiene una validacion en curso o resuelta.</div> : null}
 
       <Card className="border-primary/20 bg-[#eefbf9]">
         <CardContent className="grid gap-4 p-5 lg:grid-cols-[1fr_auto] lg:items-center">
@@ -99,7 +102,17 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
                       {experience.project ? <p className="mt-2 text-sm font-semibold text-primary">Proyecto vinculado: {experience.project.title}</p> : null}
                       <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground"><Eye className="h-3.5 w-3.5" /> {experience.visibility === "PUBLIC" ? "Visible en CV publico" : experience.visibility === "WORKSPACE" ? "Visible para workspaces" : experience.visibility === "COMMUNITY" ? "Visible en comunidad" : "Privada"}</p>
                     </div>
-                    {checks ? <Badge><BadgeCheck className="mr-1 h-4 w-4" /> {statusLabel}</Badge> : <Badge variant="outline">{statusLabel}</Badge>}
+                    <div className="flex flex-col gap-2 sm:items-end">
+                      {checks ? <Badge><BadgeCheck className="mr-1 h-4 w-4" /> {statusLabel}</Badge> : experience.verificationStatus === "REQUESTED" ? <Badge variant="outline">Validacion solicitada</Badge> : <Badge variant="outline">{statusLabel}</Badge>}
+                      {["NOT_REQUESTED", "REJECTED"].includes(experience.verificationStatus) ? (
+                        <form action={requestExperienceVerificationAction}>
+                          <input type="hidden" name="experienceId" value={experience.id} />
+                          <button type="submit" className="rounded-md border border-primary/30 px-3 py-1.5 text-xs font-bold text-primary transition hover:bg-primary hover:text-white">
+                            Pedir validacion Terraqo
+                          </button>
+                        </form>
+                      ) : null}
+                    </div>
                   </div>
                   {experience.verificationNote ? <p className="mt-3 text-sm leading-6 text-muted-foreground">{experience.verificationNote}</p> : null}
                   {experience.validatorUserId || experience.validatorEmail || experience.validatorName ? <p className="mt-2 text-xs font-semibold text-primary">Responsable solicitado: {experience.validatorName || experience.validatorEmail || experience.validatorUserId}</p> : null}
@@ -138,7 +151,17 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
                     <p className="mt-1 text-xs font-semibold text-muted-foreground">{item.currentlyStudying ? "Actualmente" : "Finalizado"}{item.locationCity ? ` · ${item.locationCity}` : ""}</p>
                     <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground"><Eye className="h-3.5 w-3.5" /> {item.visibility === "PUBLIC" ? "Visible en CV publico" : item.visibility === "WORKSPACE" ? "Visible para workspaces" : item.visibility === "COMMUNITY" ? "Visible en comunidad" : "Privada"}</p>
                   </div>
-                  {item.verificationStatus === "APPROVED" ? <Badge><BadgeCheck className="mr-1 h-4 w-4" /> Verificada</Badge> : item.verificationStatus === "REQUESTED" ? <Badge variant="outline">Verificacion solicitada</Badge> : <Badge variant="outline">Sin verificar</Badge>}
+                  <div className="flex flex-col gap-2 sm:items-end">
+                    {item.verificationStatus === "APPROVED" ? <Badge><BadgeCheck className="mr-1 h-4 w-4" /> Verificada</Badge> : item.verificationStatus === "REQUESTED" ? <Badge variant="outline">Validacion solicitada</Badge> : <Badge variant="outline">Sin verificar</Badge>}
+                    {["NOT_REQUESTED", "REJECTED"].includes(item.verificationStatus) ? (
+                      <form action={requestEducationVerificationAction}>
+                        <input type="hidden" name="educationId" value={item.id} />
+                        <button type="submit" className="rounded-md border border-primary/30 px-3 py-1.5 text-xs font-bold text-primary transition hover:bg-primary hover:text-white">
+                          Pedir validacion Terraqo
+                        </button>
+                      </form>
+                    ) : null}
+                  </div>
                 </div>
                 {item.validatorUserId || item.validatorEmail || item.validatorName ? <p className="mt-2 text-xs font-semibold text-primary">Responsable solicitado: {item.validatorName || item.validatorEmail || item.validatorUserId}</p> : null}
                 {item.evidence.length ? <p className="mt-2 text-xs font-semibold text-primary">{item.evidence.length} referencia(s) o evidencia(s) declarada(s)</p> : null}
