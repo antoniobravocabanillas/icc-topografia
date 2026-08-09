@@ -1,4 +1,5 @@
 import { BadgeCheck, BookOpenCheck, CircleCheck, Eye, History, ShieldCheck, Sparkles } from "lucide-react";
+import type { TerraqoMemberRole } from "@prisma/client";
 import { EntryReferenceRequest } from "@/components/portal/entry-reference-request";
 import { ExperienceForm, EducationForm } from "@/components/portal/profile-entry-forms";
 import { PortalPageHeading } from "@/components/terraqo/portal-page-heading";
@@ -22,22 +23,30 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
   const experiences = profile.experiences;
   const education = profile.education;
   const workspaceIds = memberships.map((membership) => membership.workspaceId);
-  const validators = workspaceIds.length
-    ? await prisma.user.findMany({
-        where: {
-          terraqoMemberships: {
-            some: {
-              workspaceId: { in: workspaceIds },
-              active: true,
-              role: { in: ["OWNER", "ADMIN", "MANAGER"] }
-            }
-          }
-        },
-        select: { id: true, name: true, email: true },
-        orderBy: [{ name: "asc" }, { email: "asc" }],
-        take: 60
-      })
-    : [];
+  const workspaceValidatorRoles: TerraqoMemberRole[] = ["OWNER", "ADMIN", "MANAGER"];
+  const validators = await prisma.user.findMany({
+    where: {
+      OR: [
+        { role: "SUPER_ADMIN", email: { endsWith: "@terraqoglobal.com" } },
+        ...(workspaceIds.length
+          ? [
+              {
+                terraqoMemberships: {
+                  some: {
+                    workspaceId: { in: workspaceIds },
+                    active: true,
+                    role: { in: workspaceValidatorRoles }
+                  }
+                }
+              }
+            ]
+          : [])
+      ]
+    },
+    select: { id: true, name: true, email: true, role: true },
+    orderBy: [{ role: "desc" }, { name: "asc" }, { email: "asc" }],
+    take: 80
+  });
   const totalMonths = experiences.reduce((sum, experience) => sum + monthsBetween(experience.startedAt, experience.currentlyWorking ? null : experience.endedAt), 0);
   const validatorOptions = validators.map((validator) => ({ id: validator.id, label: validator.name || "Responsable Terraqo", email: validator.email }));
 

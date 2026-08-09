@@ -1,6 +1,6 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import type { TerraqoMessagePrivacy, TerraqoVisibility } from "@prisma/client";
+import type { TerraqoMemberRole, TerraqoMessagePrivacy, TerraqoVisibility } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getCountryName, getSubdivisionName } from "@/lib/locations";
@@ -19,6 +19,7 @@ const RESERVED_USERNAMES = new Set([
   "terraqoglobal",
   "www"
 ]);
+const WORKSPACE_VALIDATOR_ROLES: TerraqoMemberRole[] = ["OWNER", "ADMIN", "MANAGER"];
 
 export async function updateProfessionalUsernameAction(formData: FormData) {
   "use server";
@@ -88,17 +89,26 @@ function normalizeLocation(formData: FormData, names = { country: "country", sub
 
 async function resolveValidator(formData: FormData, fallbackKey: string, workspaceIds: string[]) {
   const validatorUserId = cleanText(formData, "validatorUserId", 80);
-  if (validatorUserId && workspaceIds.length) {
+  if (validatorUserId) {
     const validator = await prisma.user.findFirst({
       where: {
         id: validatorUserId,
-        terraqoMemberships: {
-          some: {
-            workspaceId: { in: workspaceIds },
-            active: true,
-            role: { in: ["OWNER", "ADMIN", "MANAGER"] }
-          }
-        }
+        OR: [
+          { role: "SUPER_ADMIN", email: { endsWith: "@terraqoglobal.com" } },
+          ...(workspaceIds.length
+            ? [
+                {
+                  terraqoMemberships: {
+                    some: {
+                      workspaceId: { in: workspaceIds },
+                      active: true,
+                      role: { in: WORKSPACE_VALIDATOR_ROLES }
+                    }
+                  }
+                }
+              ]
+            : [])
+        ]
       },
       select: { id: true, name: true, email: true }
     });
