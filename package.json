@@ -10,6 +10,7 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
+    "check:encoding": "tsx scripts/check-encoding.ts",
     "typecheck": "tsc --noEmit",
     "test:worklog-isolation": "tsx scripts/test-worklog-isolation.ts",
     "test:messaging-isolation": "tsx scripts/test-messaging-isolation.ts",
