@@ -94,6 +94,48 @@ function normalizeLocation(formData: FormData, names = { country: "country", sub
   return { country, subdivision, city, label };
 }
 
+function normalizeUrl(value: FormDataEntryValue | null) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const candidate = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    const url = new URL(candidate);
+    if (!["http:", "https:"].includes(url.protocol)) return null;
+    return url.toString().slice(0, 500);
+  } catch {
+    return null;
+  }
+}
+
+const SOCIAL_PLATFORMS = new Set(["WEB", "LINKEDIN", "GITHUB", "INSTAGRAM", "FACEBOOK", "YOUTUBE", "TIKTOK", "X", "BEHANCE", "DRIBBBLE", "WHATSAPP", "OTHER"]);
+
+function parseSocialLinks(formData: FormData) {
+  const platforms = formData.getAll("socialPlatform");
+  const urls = formData.getAll("socialUrl");
+  const visibilities = formData.getAll("socialVisibility");
+  const labels = formData.getAll("socialLabel");
+  const visibilityValues = new Set<TerraqoVisibility>(["PRIVATE", "WORKSPACE", "COMMUNITY", "PUBLIC"]);
+
+  return platforms
+    .map((rawPlatform, index) => {
+      const platform = typeof rawPlatform === "string" ? rawPlatform.trim().toUpperCase() : "";
+      const url = normalizeUrl(urls[index] || null);
+      if (!SOCIAL_PLATFORMS.has(platform) || !url) return null;
+      const rawVisibility = typeof visibilities[index] === "string" ? (visibilities[index] as TerraqoVisibility) : "PUBLIC";
+      const label = typeof labels[index] === "string" && labels[index].trim() ? labels[index].trim().slice(0, 80) : null;
+      return {
+        platform,
+        url,
+        label,
+        visibility: visibilityValues.has(rawVisibility) ? rawVisibility : "PUBLIC",
+        position: index
+      };
+    })
+    .filter((item): item is { platform: string; url: string; label: string | null; visibility: TerraqoVisibility; position: number } => Boolean(item))
+    .slice(0, 8);
+}
+
 async function resolveValidator(formData: FormData, fallbackKey: string, workspaceIds: string[]) {
   const validatorUserId = cleanText(formData, "validatorUserId", 80);
   if (validatorUserId) {
@@ -552,6 +594,18 @@ export async function updateProfessionalSettingsAction(formData: FormData) {
       paymentNotes: cleanText(formData, "paymentNotes", 320)
     }
   });
+
+  const socialLinks = parseSocialLinks(formData);
+  await prisma.$transaction([
+    prisma.terraqoProfessionalSocialLink.deleteMany({ where: { professionalProfileId: profile.id } }),
+    ...(socialLinks.length
+      ? [
+          prisma.terraqoProfessionalSocialLink.createMany({
+            data: socialLinks.map((link) => ({ ...link, professionalProfileId: profile.id }))
+          })
+        ]
+      : [])
+  ]);
 
   revalidatePath("/portal");
   revalidatePath("/portal/perfil");

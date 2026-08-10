@@ -2197,6 +2197,7 @@ model TerraqoProfessionalProfile {
   experiences                TerraqoProfessionalExperience[]
   education                  TerraqoProfessionalEducation[]
   affiliations               TerraqoProfessionalAffiliation[]
+  socialLinks                TerraqoProfessionalSocialLink[]
   applications               TerraqoProjectApplication[]
   documents                  TerraqoProfessionalDocument[]
   worklogs                   TerraqoWorklogEntry[]
@@ -2208,6 +2209,22 @@ model TerraqoProfessionalProfile {
   @@index([city])
   @@index([country, locationSubdivisionCode, locationCity])
   @@index([identityVerificationStatus])
+  @@schema("icc")
+}
+
+model TerraqoProfessionalSocialLink {
+  id                    String                     @id @default(cuid())
+  professionalProfileId String
+  professionalProfile   TerraqoProfessionalProfile @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
+  platform              String
+  label                 String?
+  url                   String
+  visibility            TerraqoVisibility          @default(PUBLIC)
+  position              Int                        @default(0)
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+
+  @@index([professionalProfileId, visibility, position])
   @@schema("icc")
 }
 

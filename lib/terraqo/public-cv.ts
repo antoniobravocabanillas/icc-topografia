@@ -30,6 +30,11 @@ export const publicCvProfileInclude = {
     orderBy: [{ currentlyStudying: "desc" }, { startedAt: "desc" }, { createdAt: "desc" }],
     take: 30
   },
+  socialLinks: {
+    where: { visibility: "PUBLIC" },
+    orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+    take: 12
+  },
   documents: {
     select: {
       id: true,

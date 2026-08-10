@@ -235,6 +235,25 @@ function profileSummary(profile: PublicCvProfile) {
   return normalizeSpanishCopy(profile.bio) || "Perfil profesional en actualizaciÃ³n. El profesional aÃºn no publicÃ³ su resumen principal.";
 }
 
+const SOCIAL_STYLE: Record<string, { label: string; mark: string; className: string }> = {
+  WEB: { label: "Web", mark: "WEB", className: "bg-[#e7f8f5] text-[#006c66]" },
+  LINKEDIN: { label: "LinkedIn", mark: "IN", className: "bg-[#e8f1ff] text-[#0a66c2]" },
+  GITHUB: { label: "GitHub", mark: "GH", className: "bg-[#eef2f5] text-[#1f2937]" },
+  INSTAGRAM: { label: "Instagram", mark: "IG", className: "bg-[#fff0f5] text-[#c13584]" },
+  FACEBOOK: { label: "Facebook", mark: "FB", className: "bg-[#edf4ff] text-[#1877f2]" },
+  YOUTUBE: { label: "YouTube", mark: "YT", className: "bg-[#fff0f0] text-[#ff0000]" },
+  TIKTOK: { label: "TikTok", mark: "TK", className: "bg-[#f2f2f2] text-[#111111]" },
+  X: { label: "X", mark: "X", className: "bg-[#eef2f5] text-[#111111]" },
+  BEHANCE: { label: "Behance", mark: "BE", className: "bg-[#edf4ff] text-[#1769ff]" },
+  DRIBBBLE: { label: "Dribbble", mark: "DR", className: "bg-[#fff0f6] text-[#ea4c89]" },
+  WHATSAPP: { label: "WhatsApp", mark: "WA", className: "bg-[#e9fbef] text-[#128c7e]" },
+  OTHER: { label: "Enlace", mark: "URL", className: "bg-[#eef2f5] text-[#344955]" }
+};
+
+function socialMeta(platform: string) {
+  return SOCIAL_STYLE[platform] || SOCIAL_STYLE.OTHER;
+}
+
 function profileCapabilities(profile: PublicCvProfile, limit = 6) {
   const values = [
     ...profile.specialties,
@@ -282,6 +301,7 @@ export function PublicCVPage({ profile }: PublicCVPageProps) {
         </section>
 
         <section className="mx-auto grid w-[min(100%-32px,1240px)] gap-5 pb-10">
+          <LiveCvPulse profile={profile} username={username} />
           <ExperienceTimeline profile={profile} username={username} />
           <EducationTimeline profile={profile} username={username} />
           <FeaturedProjects projects={projects} profile={profile} username={username} />
@@ -433,6 +453,19 @@ function ProfileHero({ profile, name, username, specialties, isPublicCv }: { pro
           <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/8 px-3 py-1.5 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0"><span className="h-2 w-2 rounded-full bg-[#1dbf96]" />{STATUS_COPY[profile.status] || "Estado profesional activo"}</span>
           <span className="inline-flex items-center rounded-full border border-white/10 bg-white/8 px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.12em] text-white/70 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0 lg:text-[#5f7280]">@{username}</span>
         </div>
+        {profile.socialLinks.length ? (
+          <div className="mt-4 flex flex-wrap justify-center gap-2 lg:justify-start">
+            {profile.socialLinks.slice(0, 6).map((link) => {
+              const meta = socialMeta(link.platform);
+              return (
+                <a key={link.id} href={link.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/10 px-3 py-2 text-xs font-black text-white transition hover:-translate-y-0.5 hover:bg-white/16 lg:border-[#dceaec] lg:bg-white lg:text-[#0b1f2a] lg:hover:border-[#9bdad4]">
+                  <span className={`grid h-6 min-w-6 place-items-center rounded-full px-1.5 font-mono text-[10px] font-black ${meta.className}`}>{meta.mark}</span>
+                  {link.label || meta.label}
+                </a>
+              );
+            })}
+          </div>
+        ) : null}
         <p className="mt-5 max-w-3xl text-sm leading-7 text-white/76 sm:text-[15px] lg:text-[#425865]">{profileSummary(profile)}</p>
         <div className="mt-6 flex flex-wrap justify-center gap-2 lg:justify-start">
           {specialties.length ? specialties.map((item) => <ToolChip key={item} label={item} />) : <ToolChip label="Perfil en actualizaciÃ³n" />}
@@ -567,6 +600,47 @@ function ExperienceCard({ experience, username }: { experience: PublicCvProfile[
 
 function FeaturedProjects({ projects, profile, username }: { projects: ProjectSnapshot[]; profile: PublicCvProfile; username: string }) {
   return <ProjectsSection projects={projects} profile={profile} username={username} />;
+}
+
+function LiveCvPulse({ profile, username }: { profile: PublicCvProfile; username: string }) {
+  const updates = profile.worklogs.slice(0, 3);
+  const last = latestActivity(profile);
+  return (
+    <section className="overflow-hidden rounded-[16px] border border-[#cce4e1] bg-[#071821] text-white shadow-[0_24px_70px_rgba(12,43,49,0.12)]">
+      <div className="grid gap-4 p-5 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
+        <div>
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/8 px-3 py-1.5 text-xs font-black text-[#73e9df]">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#35d0c4] opacity-60" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#35d0c4]" />
+            </span>
+            CV alimentado en vivo
+          </div>
+          <h2 className="mt-4 font-display text-2xl font-black">Actividad profesional reciente</h2>
+          <p className="mt-2 text-sm leading-6 text-white/70">Este perfil se actualiza con experiencias, evidencias, documentos y actividad vinculada al trabajo real.</p>
+          <p className="mt-3 font-mono text-xs font-black uppercase tracking-[0.14em] text-white/50">Ultima actualizacion · {formatDate(last, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
+        </div>
+        <div className="grid gap-3">
+          {updates.length ? updates.map((worklog) => (
+            <article key={worklog.id} className="rounded-[14px] border border-white/10 bg-white/[0.06] p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-black">{worklog.title}</p>
+                  <p className="mt-1 text-xs font-semibold text-white/56">{worklog.project?.title || worklog.workspace?.brandName || worklog.workspace?.name || "Registro profesional"} · {formatDate(worklog.occurredAt, { day: "2-digit", month: "short", year: "numeric" })}</p>
+                </div>
+                <span className="shrink-0 rounded-full bg-[#35d0c4]/12 px-2 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-[#73e9df]">{worklog.evidenceStatus === "VERIFIED" ? "Validado" : "Publicado"}</span>
+              </div>
+            </article>
+          )) : (
+            <article className="rounded-[14px] border border-white/10 bg-white/[0.06] p-4 text-sm leading-6 text-white/70">
+              Cuando el profesional publique bitacoras, evidencias o avances, apareceran aqui como actividad viva del CV.
+            </article>
+          )}
+          <Link href={publicCvPath(username, "evidencias")} className="inline-flex items-center gap-2 text-sm font-black text-[#73e9df]">Ver evidencias y actividad <ArrowRight className="h-4 w-4" /></Link>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function ProjectsSection({ projects, profile, username, extended = false }: { projects: ProjectSnapshot[]; profile: PublicCvProfile; username?: string; extended?: boolean }) {

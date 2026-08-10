@@ -29,6 +29,28 @@ const statusMessages: Record<string, string> = {
   "username-taken": "Ese usuario ya esta en uso. Elige otra variante."
 };
 
+const socialOptions = [
+  ["WEB", "Sitio web"],
+  ["LINKEDIN", "LinkedIn"],
+  ["GITHUB", "GitHub"],
+  ["INSTAGRAM", "Instagram"],
+  ["FACEBOOK", "Facebook"],
+  ["YOUTUBE", "YouTube"],
+  ["TIKTOK", "TikTok"],
+  ["X", "X / Twitter"],
+  ["BEHANCE", "Behance"],
+  ["DRIBBBLE", "Dribbble"],
+  ["WHATSAPP", "WhatsApp"],
+  ["OTHER", "Otro"]
+];
+
+const socialVisibilityOptions = [
+  ["PUBLIC", "Publico"],
+  ["COMMUNITY", "Red Terraqo"],
+  ["WORKSPACE", "Contactos / workspace"],
+  ["PRIVATE", "Privado"]
+];
+
 export default async function PortalSettingsPage({ searchParams }: SettingsPageProps) {
   const params = await searchParams;
   const session = await auth();
@@ -43,7 +65,8 @@ export default async function PortalSettingsPage({ searchParams }: SettingsPageP
         select: { id: true, title: true, companyName: true, role: true, startedAt: true },
         orderBy: [{ startedAt: "desc" }, { createdAt: "desc" }],
         take: 12
-      }
+      },
+      socialLinks: { orderBy: [{ position: "asc" }, { createdAt: "asc" }], take: 8 }
     }
   });
 
@@ -111,6 +134,41 @@ export default async function PortalSettingsPage({ searchParams }: SettingsPageP
                   <span>Crea un usuario para activar tu enlace público. Tu CV vivo solo muestra información profesional permitida.</span>
                 )}
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2 text-primary"><MessageCircle className="h-5 w-5" /><span className="font-mono text-xs font-bold uppercase tracking-[0.16em]">Redes y presencia digital</span></div>
+              <CardTitle>Enlaces visibles en tu CV vivo</CardTitle>
+              <CardDescription>Elige plataforma, pega el enlace y define privacidad. El CV publico solo mostrara los enlaces marcados como publicos.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              {Array.from({ length: 5 }).map((_, index) => {
+                const link = profile.socialLinks[index];
+                return (
+                  <div key={index} className="grid gap-3 rounded-lg border bg-[#f8fcfb] p-3 lg:grid-cols-[190px_1fr_190px]">
+                    <label className="grid gap-1">
+                      <span className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">Canal</span>
+                      <select name="socialPlatform" defaultValue={link?.platform || (index === 0 ? "WEB" : "")} className="h-11 rounded-md border bg-background px-3 text-sm">
+                        <option value="">Sin enlace</option>
+                        {socialOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                      </select>
+                    </label>
+                    <label className="grid gap-1">
+                      <span className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">Enlace</span>
+                      <Input name="socialUrl" defaultValue={link?.url || ""} placeholder="https://linkedin.com/in/usuario" />
+                      <Input name="socialLabel" defaultValue={link?.label || ""} placeholder="Etiqueta opcional. Ej. Portafolio tecnico" className="mt-1" />
+                    </label>
+                    <label className="grid gap-1">
+                      <span className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">Privacidad</span>
+                      <select name="socialVisibility" defaultValue={link?.visibility || "PUBLIC"} className="h-11 rounded-md border bg-background px-3 text-sm">
+                        {socialVisibilityOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                      </select>
+                    </label>
+                  </div>
+                );
+              })}
             </CardContent>
           </Card>
 
