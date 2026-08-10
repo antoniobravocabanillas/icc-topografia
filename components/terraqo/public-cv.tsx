@@ -87,13 +87,13 @@ const PUBLIC_CV_SECTIONS: Record<PublicCvSection, { eyebrow: string; title: stri
   },
   evidencias: {
     eyebrow: "Evidencias públicas",
-    title: "Bit?coras y registros que alimentan el CV en vivo.",
-    description: "El CV no se queda en una declaraci?n: se alimenta con actividad documentada, fechas, proyectos y revisiones profesionales."
+    title: "Bitácoras y registros que alimentan el CV en vivo.",
+    description: "El CV no se queda en una declaración: se alimenta con actividad documentada, fechas, proyectos y revisiones profesionales."
   },
   capacidades: {
     eyebrow: "Capacidades",
     title: "Habilidades, equipos y herramientas dominadas.",
-    description: "Una lectura ordenada de capacidades t?cnicas, software, equipos y ?reas de especialidad declaradas por el profesional."
+    description: "Una lectura ordenada de capacidades técnicas, software, equipos y áreas de especialidad declaradas por el profesional."
   },
   documentos: {
     eyebrow: "Confianza y documentos",
@@ -232,7 +232,7 @@ function currentHeadline(profile: PublicCvProfile) {
 }
 
 function profileSummary(profile: PublicCvProfile) {
-  return normalizeSpanishCopy(profile.bio) || "Perfil profesional en actualizaci?n. El profesional a?n no public? su resumen principal.";
+  return normalizeSpanishCopy(profile.bio) || "Perfil profesional en actualización. El profesional aún no publicó su resumen principal.";
 }
 
 const SOCIAL_STYLE: Record<string, { label: string; mark: string; className: string }> = {
@@ -449,7 +449,7 @@ function ProfileHero({ profile, name, username, specialties, isPublicCv }: { pro
         </div>
         <p className="mt-3 font-display text-lg font-black text-[#73e9df] sm:text-xl lg:text-[#008c83]">{currentHeadline(profile)}</p>
         <div className="mt-4 flex flex-wrap justify-center gap-2 text-xs font-semibold text-white/75 sm:text-sm lg:justify-start lg:gap-4 lg:text-[#435a66]">
-          <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/8 px-3 py-1.5 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0"><MapPin className="h-4 w-4 text-[#73e9df] lg:text-[#008c83]" />{profile.city || "Ubicaci?n por completar"}</span>
+          <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/8 px-3 py-1.5 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0"><MapPin className="h-4 w-4 text-[#73e9df] lg:text-[#008c83]" />{profile.city || "Ubicación por completar"}</span>
           <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/8 px-3 py-1.5 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0"><span className="h-2 w-2 rounded-full bg-[#1dbf96]" />{STATUS_COPY[profile.status] || "Estado profesional activo"}</span>
           <span className="inline-flex items-center rounded-full border border-white/10 bg-white/8 px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.12em] text-white/70 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0 lg:text-[#5f7280]">@{username}</span>
         </div>
@@ -468,7 +468,7 @@ function ProfileHero({ profile, name, username, specialties, isPublicCv }: { pro
         ) : null}
         <p className="mt-5 max-w-3xl text-sm leading-7 text-white/76 sm:text-[15px] lg:text-[#425865]">{profileSummary(profile)}</p>
         <div className="mt-6 flex flex-wrap justify-center gap-2 lg:justify-start">
-          {specialties.length ? specialties.map((item) => <ToolChip key={item} label={item} />) : <ToolChip label="Perfil en actualizaci?n" />}
+          {specialties.length ? specialties.map((item) => <ToolChip key={item} label={item} />) : <ToolChip label="Perfil en actualización" />}
         </div>
         <div className="mt-6 grid grid-cols-2 gap-2 sm:hidden">
           <Link href={publicCvCallback(username)} className="rounded-xl bg-[#00a99b] px-4 py-3 text-sm font-black text-white shadow-[0_18px_40px_rgba(0,169,155,0.22)]">
@@ -495,7 +495,7 @@ function VerificationPanel({ profile, verifiedDocs, username }: { profile: Publi
 
   return (
     <aside className="rounded-[16px] border border-[#dceaec] bg-white p-5 shadow-[0_18px_50px_rgba(12,43,49,0.07)]">
-      <h2 className="flex items-center gap-3 font-display text-lg font-black"><ShieldCheck className="h-6 w-6 text-[#008c83]" />Confianza y verificaci?n</h2>
+      <h2 className="flex items-center gap-3 font-display text-lg font-black"><ShieldCheck className="h-6 w-6 text-[#008c83]" />Confianza y verificación</h2>
       <div className="mt-5 space-y-4">
         {items.map((item) => (
           <div key={item.label} className="grid grid-cols-[34px_1fr_24px] items-center gap-3">
@@ -532,7 +532,7 @@ function MetricStrip({ experienceLabel, projects, validation, evidence, lastActi
       ))}
       <div className="col-span-2 flex min-h-[78px] items-center gap-3 px-4 md:col-span-1 md:px-6">
         <span className="h-2 w-2 rounded-full bg-[#1dbf96]" />
-        <span><small className="block text-xs text-[#5f7280]">?ltima actividad</small><strong className="text-sm">{formatDate(lastActivity, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</strong></span>
+        <span><small className="block text-xs text-[#5f7280]">Última actividad</small><strong className="text-sm">{formatDate(lastActivity, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</strong></span>
       </div>
     </div>
   );
@@ -562,7 +562,7 @@ function EducationTimeline({ profile, username, extended = false }: { profile: P
             <p className="font-display text-lg font-black">{education.degree}</p>
             <p className="mt-1 text-sm font-black text-[#008c83]">{education.institution}</p>
             {education.field ? <p className="mt-2 text-sm text-[#435a66]">{education.field}</p> : null}
-            <p className="mt-3 text-xs font-bold uppercase tracking-[0.08em] text-[#5f7280]">{formatPeriod(education.startedAt, education.currentlyStudying ? null : education.endedAt)}{education.locationCity ? ` ? ${education.locationCity}` : ""}</p>
+            <p className="mt-3 text-xs font-bold uppercase tracking-[0.08em] text-[#5f7280]">{formatPeriod(education.startedAt, education.currentlyStudying ? null : education.endedAt)}{education.locationCity ? ` · ${education.locationCity}` : ""}</p>
           </article>
         ))}
       </div>
@@ -618,7 +618,7 @@ function LiveCvPulse({ profile, username }: { profile: PublicCvProfile; username
           </div>
           <h2 className="mt-4 font-display text-2xl font-black">Actividad profesional reciente</h2>
           <p className="mt-2 text-sm leading-6 text-white/70">Este perfil se actualiza con experiencias, evidencias, documentos y actividad vinculada al trabajo real.</p>
-          <p className="mt-3 font-mono text-xs font-black uppercase tracking-[0.14em] text-white/50">?ltima actualizaci?n · {formatDate(last, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
+          <p className="mt-3 font-mono text-xs font-black uppercase tracking-[0.14em] text-white/50">Última actualización · {formatDate(last, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
         </div>
         <div className="grid gap-3">
           {updates.length ? updates.map((worklog) => (
@@ -729,10 +729,10 @@ function SkillsAndTools({ profile, username, extended = false }: { profile: Publ
   const categories = extended ? profile.professionalCategories : profile.professionalCategories.slice(0, 3);
   return (
     <section className="rounded-[16px] border border-[#dceaec] bg-white p-5 shadow-[0_18px_50px_rgba(12,43,49,0.06)]">
-      <SectionHeader title="Capacidades t?cnicas" description="Habilidades, equipos y software declarados por el profesional." action={extended ? "Volver al CV vivo" : "Ver todas las capacidades"} href={extended && username ? publicCvPath(username) : username ? publicCvPath(username, "capacidades") : undefined} />
+      <SectionHeader title="Capacidades técnicas" description="Habilidades, equipos y software declarados por el profesional." action={extended ? "Volver al CV vivo" : "Ver todas las capacidades"} href={extended && username ? publicCvPath(username) : username ? publicCvPath(username, "capacidades") : undefined} />
       <div className="mt-5 grid gap-6 md:grid-cols-[0.9fr_1fr]">
         <div className="space-y-4">
-          {bars.length ? bars.map((skill, index) => <SkillBar key={skill} label={skill} value={95 - index * 9} />) : <EmptyState title="Habilidades por completar" description="El profesional a?n no public? sus habilidades principales." />}
+          {bars.length ? bars.map((skill, index) => <SkillBar key={skill} label={skill} value={95 - index * 9} />) : <EmptyState title="Habilidades por completar" description="El profesional aún no publicó sus habilidades principales." />}
         </div>
         <div className="flex flex-wrap content-start gap-2">
           {[...categories, ...tools].length ? [...categories, ...tools].map((tool) => <ToolChip key={tool} label={tool} />) : <ToolChip label="Herramientas por completar" />}
@@ -766,7 +766,7 @@ function PublicCVCTA({ username, isPublicCv, completeness }: { username: string;
       <div className="flex items-center gap-5">
         <span className="grid h-16 w-16 place-items-center rounded-full bg-[#e7f8f5] text-[#008c83]"><LockKeyhole className="h-7 w-7" /></span>
         <div>
-          <h2 className="font-display text-xl font-black">?Quieres conocer m?s sobre mi experiencia?</h2>
+          <h2 className="font-display text-xl font-black">¿Quieres conocer más sobre mi experiencia?</h2>
           <p className="mt-1 text-sm text-[#5f7280]">{isPublicCv ? "Solicita acceso a mi CV completo para ver información detallada, documentos y evidencia adicional." : `Este CV muestra una vista pública resumida. Perfil completo al ${completeness}%.`}</p>
         </div>
       </div>
@@ -784,7 +784,7 @@ function PublicCVFooter({ updatedAt }: { updatedAt: Date }) {
     <footer className="border-t border-[#dceaec] bg-[#f7fbfa]">
       <div className="mx-auto flex w-[min(100%-32px,1240px)] flex-col gap-3 py-7 text-xs font-semibold text-[#5f7280] md:flex-row md:items-center md:justify-between">
         <Link href="/" className="inline-flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-[#008c83]" />Perfil público creado con Terraqo CV Vivo</Link>
-        <span>?ltima actualizaci?n: {formatDate(updatedAt, { day: "2-digit", month: "long", year: "numeric" })}</span>
+        <span>Última actualización: {formatDate(updatedAt, { day: "2-digit", month: "long", year: "numeric" })}</span>
       </div>
     </footer>
   );
@@ -852,7 +852,7 @@ function DocumentStatusCard({ document }: { document: { type: string; reviewStat
       <Icon className="mx-auto h-6 w-6 text-[#008c83]" />
       <strong className="mt-2 block text-xs font-black">{item.label}</strong>
       <span className={isVerified ? "mt-1 inline-flex text-[11px] font-black text-[#008c83]" : "mt-1 inline-flex text-[11px] font-black text-[#d58a16]"}>
-        {isVerified ? "Verificado" : "En revision"}
+        {isVerified ? "Verificado" : "En revisión"}
       </span>
       <span className={isVerified ? "absolute bottom-2 right-2 text-[#1dbf96]" : "absolute bottom-2 right-2 text-[#d58a16]"}>
         {isVerified ? <CheckCircle2 className="h-4 w-4" /> : <Clock3 className="h-4 w-4" />}

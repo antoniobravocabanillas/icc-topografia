@@ -14,6 +14,16 @@ const BAD_PATTERNS = [
   /aqu\?/i,
   /educaci\?/i,
   /formaci\?/i,
+  /t\?cn/i,
+  /bit\?cor/i,
+  /\?ltim/i,
+  /\bm\?s\b/i,
+  /\ba\?n\b/i,
+  /public\?/i,
+  /ubicaci\?/i,
+  /verificaci\?/i,
+  /declaraci\?/i,
+  /\?reas/i,
   /\banos\b/i
 ];
 

@@ -94,10 +94,29 @@ function normalizeLocation(formData: FormData, names = { country: "country", sub
   return { country, subdivision, city, label };
 }
 
-function normalizeUrl(value: FormDataEntryValue | null) {
+function socialHandleUrl(platform: string, value: string) {
+  const handle = value.trim().replace(/^@+/, "").replace(/^\/+/, "");
+  if (!handle || handle.includes(" ") || handle.includes(".")) return null;
+  const encoded = encodeURIComponent(handle);
+  const routes: Record<string, string> = {
+    INSTAGRAM: `https://www.instagram.com/${encoded}/`,
+    LINKEDIN: `https://www.linkedin.com/in/${encoded}/`,
+    GITHUB: `https://github.com/${encoded}`,
+    X: `https://x.com/${encoded}`,
+    TIKTOK: `https://www.tiktok.com/@${encoded}`,
+    YOUTUBE: `https://www.youtube.com/@${encoded}`,
+    BEHANCE: `https://www.behance.net/${encoded}`,
+    DRIBBBLE: `https://dribbble.com/${encoded}`
+  };
+  return routes[platform] || null;
+}
+
+function normalizeUrl(value: FormDataEntryValue | null, platform = "WEB") {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   if (!trimmed) return null;
+  const handleUrl = socialHandleUrl(platform, trimmed);
+  if (handleUrl) return handleUrl;
   const candidate = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
   try {
     const url = new URL(candidate);
@@ -120,7 +139,7 @@ function parseSocialLinks(formData: FormData) {
   return platforms
     .map((rawPlatform, index) => {
       const platform = typeof rawPlatform === "string" ? rawPlatform.trim().toUpperCase() : "";
-      const url = normalizeUrl(urls[index] || null);
+      const url = normalizeUrl(urls[index] || null, platform);
       if (!SOCIAL_PLATFORMS.has(platform) || !url) return null;
       const rawVisibility = typeof visibilities[index] === "string" ? (visibilities[index] as TerraqoVisibility) : "PUBLIC";
       const label = typeof labels[index] === "string" && labels[index].trim() ? labels[index].trim().slice(0, 80) : null;

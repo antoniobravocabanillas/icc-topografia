@@ -99,7 +99,7 @@ export default async function PortalSettingsPage({ searchParams }: SettingsPageP
 
         {params.success === "settings" ? (
           <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
-            Configuracion guardada correctamente.
+            Configuración guardada correctamente.
           </div>
         ) : null}
         {params.status && statusMessages[params.status] ? (
