@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { terraqoDomains } from "@/lib/terraqo-domains";
+import { TerraqoLogo } from "@/components/terraqo/terraqo-logo";
 
 export function TerraqoPublicFooter() {
   return (
@@ -13,9 +14,8 @@ export function TerraqoPublicFooter() {
         </div>
         <div className="tq-footer-bottom">
           <div>
-            <Link href="/" className="tq-wordmark tq-wordmark-light">
-              <span className="tq-wordmark-mark" aria-hidden="true"><i /><i /><i /></span>
-              <span>terraqo</span>
+            <Link href="/" className="inline-flex items-center" aria-label="Terraqo, inicio">
+              <TerraqoLogo variant="horizontal" alt="Terraqo" className="tq-footer-logo h-10 w-[155px]" />
             </Link>
             <p>Software modular, red profesional y evidencia de trabajo en un solo ecosistema.</p>
           </div>
@@ -24,7 +24,7 @@ export function TerraqoPublicFooter() {
             <Link href="/#red">Red profesional</Link>
             <Link href={terraqoDomains.portal}>Ingresar</Link>
             <Link href="/privacidad">Privacidad</Link>
-            <Link href="/terminos">Terminos</Link>
+            <Link href="/terminos">Términos</Link>
           </div>
         </div>
         <div className="tq-footer-legal">

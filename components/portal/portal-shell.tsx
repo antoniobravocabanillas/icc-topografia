@@ -27,6 +27,7 @@ import {
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { UserAvatar } from "@/components/terraqo/user-avatar";
+import { TerraqoLogo } from "@/components/terraqo/terraqo-logo";
 import type { WorkspaceVisualIdentity } from "@/lib/terraqo/workspace-visual-identity";
 
 type PortalShellProps = {
@@ -142,13 +143,6 @@ export function PortalShell({ children, name, image, headline, portalType = "pro
   const items = portalType === "professional" ? professionalItems : clientItems;
   const portalLabel = portalType === "professional" ? "Portal profesional" : "Portal del cliente";
   const brandName = workspaceBrand || "Portal Terraqo";
-  const brandInitials = brandName
-    .split(/\s+/)
-    .map((word) => word[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-
   const primaryColor = visualIdentity.primaryColor;
   const accentColor = visualIdentity.accentColor;
 
@@ -157,11 +151,8 @@ export function PortalShell({ children, name, image, headline, portalType = "pro
       <header className="sticky top-0 z-50 border-b border-[#dce7e5] bg-white/95 backdrop-blur-xl">
         <div className="mx-auto flex h-[76px] max-w-[1720px] items-center gap-4 px-4 sm:px-6 xl:px-8">
           <Link href="/portal" className="flex min-w-0 items-center gap-3" aria-label="Ir al resumen del portal">
-            <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-lg border bg-white font-mono text-sm font-bold" style={{ borderColor: withAlpha(accentColor, "55"), color: primaryColor }}>
-              {workspaceLogoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={workspaceLogoUrl} alt={brandName} className="h-full w-full object-contain p-1.5" />
-              ) : brandInitials}
+            <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-lg border bg-white p-1.5" style={{ borderColor: withAlpha(accentColor, "55") }}>
+              <TerraqoLogo src={workspaceLogoUrl} variant="mark" alt={brandName} className="h-full w-full" />
             </span>
             <span className="hidden min-w-0 sm:block">
               <b className="block truncate font-display text-base" style={{ color: primaryColor }}>{brandName}</b>

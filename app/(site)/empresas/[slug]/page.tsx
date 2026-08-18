@@ -25,6 +25,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { fontClassName, resolveWorkspaceVisualIdentity } from "@/lib/terraqo/workspace-visual-identity";
 import { cn } from "@/lib/utils";
+import { TerraqoLogo } from "@/components/terraqo/terraqo-logo";
 
 type PageProps = { params: Promise<{ slug: string }> };
 
@@ -155,7 +156,7 @@ export default async function PublicCompanyProfilePage({ params }: PageProps) {
   const primaryStyle = { "--workspace-primary": visualIdentity.primaryColor, "--workspace-accent": visualIdentity.accentColor } as CSSProperties;
 
   return (
-    <main className={cn("min-h-screen text-[#082230]", fontClassName(visualIdentity.fontFamily))} style={{ backgroundColor: visualIdentity.backgroundColor, ...primaryStyle }}>
+    <main className={cn("terraqo-brand-surface terraqo-company-v3 min-h-screen text-[#082230]", fontClassName(visualIdentity.fontFamily))} style={{ backgroundColor: visualIdentity.backgroundColor, ...primaryStyle }}>
       <Header name={name} logoUrl={workspace.logoUrl} visualIdentity={visualIdentity} />
 
       <section className="mx-auto grid max-w-7xl gap-8 px-5 py-12 lg:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)] lg:py-16">
@@ -234,10 +235,10 @@ function Header({ name, logoUrl, visualIdentity }: { name: string; logoUrl?: str
     <header className="border-b border-[#ded8cc] bg-[#f4efe6]/92 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-5 px-5 py-5">
         <Link href="/" className="flex items-center gap-3">
-          <span className="grid h-9 w-9 place-items-center rounded-md p-1.5 text-xs font-black text-white" style={{ backgroundColor: visualIdentity.primaryColor }}>
-            {logoUrl ? <Image src={logoUrl} alt={name} width={64} height={64} className="max-h-7 w-auto object-contain" unoptimized /> : "TQ"}
+          <span className="grid h-9 w-9 place-items-center overflow-hidden rounded-md bg-white p-1.5" style={{ border: `1px solid ${visualIdentity.primaryColor}55` }}>
+            <TerraqoLogo src={logoUrl} variant="mark" alt={logoUrl ? name : "Terraqo"} className="h-full w-full" />
           </span>
-          <strong className="font-display text-xl font-black">terraqo</strong>
+          <strong className="font-display text-xl font-black">Terraqo</strong>
         </Link>
         <nav className="hidden items-center gap-8 text-sm font-bold text-[#2e3436] md:flex">
           <a href="#servicios">Servicios</a>
@@ -254,7 +255,7 @@ function Header({ name, logoUrl, visualIdentity }: { name: string; logoUrl?: str
 function BrandMark({ name, logoUrl, visualIdentity }: { name: string; logoUrl?: string | null; visualIdentity: VisualIdentity }) {
   return (
     <div className="grid h-28 w-28 shrink-0 place-items-center rounded-[22px] p-4 shadow-[0_30px_80px_-45px_rgba(0,0,0,0.65)]" style={{ background: `linear-gradient(135deg, ${visualIdentity.primaryColor}, #06242a)` }}>
-      {logoUrl ? <Image src={logoUrl} alt={name} width={128} height={128} className="max-h-20 w-auto object-contain" unoptimized /> : <Sparkles className="h-14 w-14 text-white" strokeWidth={1.3} />}
+      <TerraqoLogo src={logoUrl} variant="mark" alt={logoUrl ? name : "Terraqo"} className="h-full w-full" imageClassName="rounded-[14px]" />
     </div>
   );
 }

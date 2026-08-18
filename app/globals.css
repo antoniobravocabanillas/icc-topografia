@@ -35,6 +35,26 @@
 }
 
 :root {
+  /* Terraqo 3.0: confianza, conexión, operación, identidad y escala. */
+  --terraqo-ink-950: #0f172a;
+  --terraqo-ink-900: #1e293b;
+  --terraqo-ink-700: #334155;
+  --terraqo-ink-500: #64748b;
+  --terraqo-blue-600: #2563eb;
+  --terraqo-blue-500: #3b82f6;
+  --terraqo-cyan-500: #06b6d4;
+  --terraqo-cyan-100: #cffafe;
+  --terraqo-paper: #f3f4f6;
+  --terraqo-line: #dbe3e8;
+  --terraqo-success: #059669;
+  --terraqo-warning: #d97706;
+  --terraqo-radius-md: 16px;
+  --terraqo-radius-lg: 24px;
+  --terraqo-shadow-sm: 0 8px 24px rgba(15, 23, 42, .06);
+  --terraqo-shadow-md: 0 18px 48px rgba(15, 23, 42, .10);
+  --terraqo-focus: 0 0 0 3px rgba(37, 99, 235, .24);
+  --terraqo-font-display: "Urbane", "Poppins", "Satoshi", "Aptos Display", sans-serif;
+  --terraqo-font-sans: "Poppins", "Satoshi", "Aptos", "Segoe UI Variable Text", sans-serif;
   --font-sans: "Satoshi", "Aptos", "Segoe UI Variable Text", "Helvetica Neue", Arial, sans-serif;
   --font-display: "Satoshi", "Aptos Display", "Segoe UI Variable Display", "Helvetica Neue", Arial, sans-serif;
   --background: 204 45% 98%;
@@ -90,6 +110,119 @@ h3,
 h1,
 h2 {
   font-weight: 760;
+}
+
+/* Shared visual language for the Terraqo public and white-label surfaces. */
+.terraqo-brand-surface {
+  color: var(--terraqo-ink-950);
+  background:
+    radial-gradient(circle at 92% 4%, rgba(6, 182, 212, .08), transparent 28rem),
+    linear-gradient(180deg, #fff 0%, var(--terraqo-paper) 100%);
+  font-family: var(--terraqo-font-sans);
+}
+
+.terraqo-brand-hero {
+  color: #fff;
+  background:
+    radial-gradient(circle at 76% 18%, rgba(6, 182, 212, .24), transparent 25rem),
+    linear-gradient(135deg, var(--terraqo-ink-950), var(--terraqo-ink-900) 58%, #062d45);
+}
+
+.terraqo-brand-grid {
+  background-image:
+    linear-gradient(rgba(37, 99, 235, .055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(37, 99, 235, .055) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.terraqo-brand-card {
+  border: 1px solid var(--terraqo-line);
+  border-radius: var(--terraqo-radius-md);
+  background: rgba(255, 255, 255, .94);
+  box-shadow: var(--terraqo-shadow-sm);
+}
+
+.terraqo-brand-card:hover {
+  border-color: rgba(37, 99, 235, .32);
+  box-shadow: var(--terraqo-shadow-md);
+  transform: translateY(-2px);
+  transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+
+.terraqo-brand-focus:focus-visible,
+.terraqo-brand-link:focus-visible,
+.terraqo-brand-input:focus-visible {
+  outline: none;
+  box-shadow: var(--terraqo-focus);
+}
+
+.tq-footer-logo {
+  filter: brightness(0) invert(1);
+  opacity: .95;
+}
+
+/* Terraqo 3.0 refinements applied to the existing public surfaces. */
+.tq-cv-v3 {
+  background:
+    radial-gradient(circle at 90% 0%, rgba(6, 182, 212, .08), transparent 26rem),
+    linear-gradient(180deg, #fbfdfd 0%, #f3f6f7 100%);
+}
+
+.tq-cv-v3 > header {
+  border-color: rgba(15, 23, 42, .10) !important;
+  background: rgba(255, 255, 255, .88) !important;
+}
+
+.tq-cv-v3 h1,
+.tq-cv-v3 h2,
+.tq-cv-v3 h3 {
+  letter-spacing: -.035em;
+}
+
+.tq-cv-v3 main > section:first-child {
+  background:
+    radial-gradient(circle at 78% 0%, rgba(6, 182, 212, .14), transparent 28rem),
+    linear-gradient(180deg, rgba(255, 255, 255, .96), rgba(239, 247, 247, .9)) !important;
+}
+
+.tq-cv-v3 main > section:nth-child(2) {
+  filter: drop-shadow(0 14px 28px rgba(15, 23, 42, .06));
+}
+
+.terraqo-company-v3 > header {
+  background: rgba(255, 255, 255, .90) !important;
+  border-color: var(--terraqo-line) !important;
+  backdrop-filter: blur(18px);
+}
+
+.terraqo-company-v3 h1,
+.terraqo-company-v3 h2,
+.terraqo-company-v3 h3 {
+  letter-spacing: -.04em;
+}
+
+.terraqo-company-v3 section article,
+.terraqo-company-v3 section aside {
+  transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+
+.terraqo-company-v3 section article:hover,
+.terraqo-company-v3 section aside:hover {
+  border-color: rgba(37, 99, 235, .24);
+  box-shadow: var(--terraqo-shadow-md);
+}
+
+@media (max-width: 767px) {
+  .tq-public-wrap { width: min(100% - 28px, 1440px); }
+  .tq-desktop-nav, .tq-login-link, .tq-header-cta { display: none; }
+  .tq-menu-button { display: inline-flex; }
+  .tq-header-inner { min-height: 64px; }
+  .tq-mobile-nav { inset: 64px 0 0; }
+  .tq-cv-v3 .tq-public-wrap { width: min(100% - 24px, 1240px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terraqo-brand-card:hover { transform: none; transition: none; }
 }
 
 h1,

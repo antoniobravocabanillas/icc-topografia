@@ -7,7 +7,12 @@ export const metadata: Metadata = {
     default: "Terraqo | El trabajo habla por ti",
     template: "%s | Terraqo"
   },
-  description: "Software modular, red profesional, marketplace y CV vivo para conectar empresas, proyectos y talento con evidencia real."
+  description: "Software modular, red profesional, marketplace y CV vivo para conectar empresas, proyectos y talento con evidencia real.",
+  icons: {
+    icon: "/brand/terraqo-3/favicon.svg",
+    shortcut: "/brand/terraqo-3/favicon.svg",
+    apple: "/brand/terraqo-3/isotipo-icono.svg"
+  }
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

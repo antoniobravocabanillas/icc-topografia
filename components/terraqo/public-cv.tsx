@@ -23,6 +23,8 @@ import {
 } from "lucide-react";
 import type { PublicCvProfile } from "@/lib/terraqo/public-cv";
 import { formatExperienceDuration, monthsBetween, normalizeSpanishCopy } from "@/lib/terraqo/profile-summary";
+import { TerraqoLogo } from "@/components/terraqo/terraqo-logo";
+import { TerraqoAvatar } from "@/components/terraqo/terraqo-avatar";
 
 type PublicCVPageProps = {
   profile: PublicCvProfile;
@@ -115,16 +117,6 @@ function formatPeriod(start?: Date | null, end?: Date | null) {
   const startLabel = start ? formatDate(start, { year: "numeric" }) : "Sin fecha";
   const endLabel = end ? formatDate(end, { year: "numeric" }) : "Actualidad";
   return `${startLabel} - ${endLabel}`;
-}
-
-function initials(name: string) {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
 }
 
 function projectImage(project?: { images?: { url: string }[] } | null) {
@@ -279,7 +271,7 @@ export function PublicCVPage({ profile }: PublicCVPageProps) {
   const totalExperienceMonths = profile.experiences.reduce((sum, experience) => sum + monthsBetween(experience.startedAt, experience.currentlyWorking ? null : experience.endedAt), 0);
 
   return (
-    <div className="min-h-screen bg-[#f7fbfa] text-[#0b1f2a]">
+    <div className="terraqo-brand-surface tq-cv-v3 min-h-screen text-[#0b1f2a]">
       <PublicCVHeader username={username} />
       <main>
         <section className="relative overflow-hidden border-b border-[#dceaec] bg-[radial-gradient(circle_at_50%_0%,rgba(0,140,131,0.16),transparent_34%),linear-gradient(180deg,#f8fcfb,#f1f8f7)]">
@@ -325,7 +317,7 @@ export function PublicCVSectionPage({ profile, section }: { profile: PublicCvPro
   const evidence = profile.worklogs;
 
   return (
-    <div className="min-h-screen bg-[#f7fbfa] text-[#0b1f2a]">
+    <div className="terraqo-brand-surface tq-cv-v3 min-h-screen text-[#0b1f2a]">
       <PublicCVHeader username={username} />
       <main>
         <section className="border-b border-[#dceaec] bg-[radial-gradient(circle_at_12%_8%,#e7f8f5,transparent_34%),linear-gradient(135deg,#ffffff,#f7fbfa)]">
@@ -342,9 +334,7 @@ export function PublicCVSectionPage({ profile, section }: { profile: PublicCvPro
             <div className="rounded-[18px] border border-[#b9e2dd] bg-white/82 p-6 shadow-[0_24px_60px_rgba(12,43,49,0.08)]">
               <span className="font-mono text-xs font-black uppercase tracking-[0.16em] text-[#008c83]">Perfil</span>
               <div className="mt-3 flex items-center gap-4">
-                <div className="grid h-16 w-16 place-items-center overflow-hidden rounded-full bg-[#e7f8f5] font-display text-xl font-black text-[#008c83]">
-                  {profile.user.image ? <img src={profile.user.image} alt={profile.user.name || username} className="h-full w-full object-cover" /> : initials(profile.user.name || username)}
-                </div>
+                <TerraqoAvatar src={profile.user.image} name={profile.user.name || username} className="h-16 w-16 rounded-full text-xl" />
                 <div>
                   <h2 className="font-display text-2xl font-black">{profile.user.name || username}</h2>
                   <p className="mt-1 text-sm font-bold text-[#008c83]">@{username}</p>
@@ -389,9 +379,8 @@ function PublicCVHeader({ username }: { username: string }) {
     <header className="sticky top-0 z-30 border-b border-[#dceaec] bg-white/92 backdrop-blur-xl">
       <div className="mx-auto flex min-h-[68px] w-[min(100%-28px,1240px)] items-center justify-between gap-3 sm:min-h-[76px] sm:w-[min(100%-32px,1240px)]">
         <Link href="/" className="flex items-center gap-3" aria-label="Terraqo CV Vivo">
-          <span className="grid h-10 w-10 place-items-center rounded-[10px] bg-[#008c83] font-mono text-sm font-black text-white">TQ</span>
+          <TerraqoLogo variant="horizontal" alt="Terraqo" className="h-10 w-[150px] sm:h-11 sm:w-[170px]" />
           <span className="leading-none">
-            <strong className="block font-display text-lg font-black">TERRAQO</strong>
             <small className="font-mono text-[10px] font-black uppercase tracking-[0.12em] text-[#008c83]">CV Vivo</small>
           </span>
         </Link>
@@ -428,12 +417,8 @@ function ProfileHero({ profile, name, username, specialties, isPublicCv }: { pro
     <div id="cv-vivo" className="relative isolate overflow-hidden rounded-[24px] border border-white/10 bg-[#071b20] p-5 text-center text-white shadow-[0_26px_80px_rgba(4,23,28,0.22)] sm:p-6 lg:grid lg:grid-cols-[170px_1fr] lg:gap-5 lg:border-0 lg:bg-white/40 lg:p-1 lg:text-left lg:text-[#0b1f2a] lg:shadow-none">
       <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_50%_-12%,rgba(29,191,150,0.38),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.07),transparent_42%)] lg:hidden" />
       <div className="absolute -right-20 top-8 -z-10 h-56 w-56 rounded-full border border-white/10 bg-white/5 blur-[1px] lg:hidden" />
-      <div className="relative mx-auto h-32 w-32 overflow-hidden rounded-[28px] border-[5px] border-white/12 bg-[#e7f8f5] shadow-[0_22px_55px_rgba(0,0,0,0.28)] sm:h-36 sm:w-36 lg:mx-0 lg:h-[170px] lg:w-[170px] lg:rounded-full lg:border-[6px] lg:border-white lg:shadow-[0_18px_45px_rgba(11,31,42,0.12)]">
-        {profile.user.image ? (
-          <img src={profile.user.image} alt={name} className="h-full w-full object-cover" />
-        ) : (
-          <span className="grid h-full w-full place-items-center font-display text-5xl font-black text-[#008c83]">{initials(name)}</span>
-        )}
+      <div className="relative mx-auto h-32 w-32 sm:h-36 sm:w-36 lg:mx-0 lg:h-[170px] lg:w-[170px]">
+        <TerraqoAvatar src={profile.user.image} name={name} className="h-full w-full rounded-[28px] border-[5px] border-white/12 text-5xl shadow-[0_22px_55px_rgba(0,0,0,0.28)] lg:rounded-full lg:border-[6px] lg:border-white lg:shadow-[0_18px_45px_rgba(11,31,42,0.12)]" textClassName="text-[#008c83]" />
         <span className="absolute bottom-3 right-3 grid h-7 w-7 place-items-center rounded-full border-4 border-[#071b20] bg-[#1dbf96] lg:h-6 lg:w-6 lg:border-white" />
       </div>
 
@@ -783,7 +768,10 @@ function PublicCVFooter({ updatedAt }: { updatedAt: Date }) {
   return (
     <footer className="border-t border-[#dceaec] bg-[#f7fbfa]">
       <div className="mx-auto flex w-[min(100%-32px,1240px)] flex-col gap-3 py-7 text-xs font-semibold text-[#5f7280] md:flex-row md:items-center md:justify-between">
-        <Link href="/" className="inline-flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-[#008c83]" />Perfil público creado con Terraqo CV Vivo</Link>
+        <Link href="/" className="inline-flex items-center gap-3" aria-label="Terraqo, inicio">
+          <TerraqoLogo variant="horizontal" alt="Terraqo" className="h-8 w-[125px]" />
+          <span>CV Vivo</span>
+        </Link>
         <span>Última actualización: {formatDate(updatedAt, { day: "2-digit", month: "long", year: "numeric" })}</span>
       </div>
     </footer>
