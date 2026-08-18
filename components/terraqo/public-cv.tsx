@@ -387,8 +387,8 @@ function PublicCVHeader({ username }: { username: string }) {
         <nav className="hidden items-center gap-8 text-sm font-bold text-[#344955] lg:flex" aria-label="Navegacion del CV Vivo">
           <Link className="border-b-2 border-[#008c83] pb-2 text-[#0b1f2a]" href={publicCvPath(username)}>CV Vivo</Link>
           <Link href="/">Sobre Terraqo</Link>
-          <Link href="/cuenta">Para empresas</Link>
-          <Link href="/portal/commons">Comunidad</Link>
+          <Link href="/cuenta" prefetch={false}>Para empresas</Link>
+          <Link href="/portal/commons" prefetch={false}>Comunidad</Link>
         </nav>
         <div className="flex items-center gap-2">
           <Link href={publicCvCallback(username)} className="hidden rounded-[8px] bg-[#008c83] px-5 py-3 text-sm font-black text-white shadow-[0_14px_30px_rgba(0,140,131,0.18)] transition hover:bg-[#006c66] sm:inline-flex">
