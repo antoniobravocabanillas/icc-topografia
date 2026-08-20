@@ -20,7 +20,7 @@ function destinationForRole(role: string | undefined, callbackUrl: string | null
   return `${terraqoDomains.portal}/portal`;
 }
 
-export function SignInForm({ title = "Ingresar al Portal Terraqo", description = "Usa tus credenciales para acceder segun tu perfil: empresa, profesional o equipo operativo." }: { title?: string; description?: string }) {
+export function SignInForm({ title = "Ingresar al Portal Terraqo", description = "Usa tus credenciales para acceder según tu perfil: empresa, profesional o equipo operativo." }: { title?: string; description?: string }) {
   const searchParams = useSearchParams();
   const explicitCallbackUrl = searchParams.get("callbackUrl");
   const callbackUrl = safeRelativeCallback(explicitCallbackUrl);
@@ -39,7 +39,7 @@ export function SignInForm({ title = "Ingresar al Portal Terraqo", description =
       if (response?.error) {
         setError(
           response.error === "CredentialsSignin"
-            ? "Credenciales invalidas. Revisa el correo y la contrasena."
+            ? "Credenciales inválidas. Revisa el correo y la contraseña."
             : "El servicio de acceso no esta disponible temporalmente. Tus credenciales no han podido validarse; intenta nuevamente mas tarde."
         );
         return;
@@ -71,7 +71,7 @@ export function SignInForm({ title = "Ingresar al Portal Terraqo", description =
         <Input id="email" name="email" type="email" autoComplete="email" required placeholder="correo@empresa.com" className="mt-2 bg-muted/40 text-foreground" />
       </div>
       <div>
-        <label className="text-sm font-semibold" htmlFor="password">Contrasena</label>
+        <label className="text-sm font-semibold" htmlFor="password">Contraseña</label>
         <Input id="password" name="password" type="password" autoComplete="current-password" required placeholder="********" className="mt-2 bg-muted/40 text-foreground" />
       </div>
       <Button type="submit" size="lg" disabled={isPending} className="mt-2 w-full">

@@ -92,21 +92,21 @@ export function MeetingRoom({ meetingId, roomName, domain, scriptUrl, displayNam
   }, [displayName, domain, email, meetingId, returnPath, roomName, router, scriptReady]);
 
   return (
-    <div className="relative min-h-[520px] flex-1 overflow-hidden bg-[#061c1f] md:min-h-0">
+    <div className="relative min-h-[520px] flex-1 overflow-hidden bg-[#0e1a26] md:min-h-0">
       <Script src={scriptUrl} strategy="afterInteractive" onLoad={() => setScriptReady(true)} onError={() => setStatus("error")} />
       {status === "loading" ? (
-        <div className="absolute inset-0 z-10 grid place-items-center bg-[#061c1f] text-white">
+        <div className="absolute inset-0 z-10 grid place-items-center bg-[#0e1a26] text-white">
           <div className="text-center">
-            <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-[#58ddd4]" />
+            <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-[#25c0d5]" />
             <p className="mt-4 font-semibold">Preparando Terraqo Meet</p>
             <p className="mt-1 text-sm text-white/60">Conectando la sala privada...</p>
           </div>
         </div>
       ) : null}
       {status === "error" ? (
-        <div className="absolute inset-0 z-10 grid place-items-center bg-[#061c1f] p-8 text-center text-white">
+        <div className="absolute inset-0 z-10 grid place-items-center bg-[#0e1a26] p-8 text-center text-white">
           <div>
-            <Video className="mx-auto h-9 w-9 text-[#58ddd4]" />
+            <Video className="mx-auto h-9 w-9 text-[#25c0d5]" />
             <p className="mt-4 font-semibold">No pudimos cargar la videollamada</p>
             <p className="mt-2 max-w-md text-sm text-white/60">Revisa la conexion o la configuracion del proveedor de Terraqo Meet e intenta nuevamente.</p>
           </div>

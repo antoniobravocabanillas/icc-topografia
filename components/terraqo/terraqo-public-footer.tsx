@@ -15,7 +15,7 @@ export function TerraqoPublicFooter() {
         <div className="tq-footer-bottom">
           <div>
             <Link href="/" className="inline-flex items-center" aria-label="Terraqo, inicio">
-              <TerraqoLogo variant="horizontal" alt="Terraqo" className="tq-footer-logo h-10 w-[155px]" />
+              <TerraqoLogo variant="horizontal" tone="dark" alt="Terraqo" className="tq-footer-logo h-10 w-[155px]" />
             </Link>
             <p>Software modular, red profesional y evidencia de trabajo en un solo ecosistema.</p>
           </div>

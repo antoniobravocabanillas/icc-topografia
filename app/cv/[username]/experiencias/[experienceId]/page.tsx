@@ -111,17 +111,17 @@ export default async function ExperienceDetailPage({ params }: ExperienceDetailP
       ];
 
   return (
-    <div className="min-h-screen bg-[#f7fbfa] text-[#0b1f2a]">
-      <header className="border-b border-[#dceaec] bg-white/94 backdrop-blur-xl">
+    <div className="min-h-screen bg-[#f7fbfa] text-[#0e1a26]">
+      <header className="border-b border-[#d8e0ec] bg-white/94 backdrop-blur-xl">
         <div className="mx-auto flex min-h-[76px] w-[min(100%-32px,1180px)] items-center justify-between gap-4">
           <Link href={publicCvPath(username)} className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-[10px] bg-[#008c83] font-mono text-sm font-black text-white">TQ</span>
+            <span className="grid h-10 w-10 place-items-center rounded-[10px] bg-[#4374ba] font-mono text-sm font-black text-white">TQ</span>
             <span className="leading-none">
               <strong className="block font-display text-lg font-black">TERRAQO</strong>
-              <small className="font-mono text-[10px] font-black uppercase tracking-[0.12em] text-[#008c83]">CV Vivo</small>
+              <small className="font-mono text-[10px] font-black uppercase tracking-[0.12em] text-[#4374ba]">CV Vivo</small>
             </span>
           </Link>
-          <Link href={publicCvPath(username, "experiencias")} className="inline-flex items-center gap-2 rounded-[8px] border border-[#dceaec] px-4 py-2 text-sm font-black text-[#0b1f2a] transition hover:border-[#9bdad4] hover:text-[#008c83]">
+          <Link href={publicCvPath(username, "experiencias")} className="inline-flex items-center gap-2 rounded-[8px] border border-[#d8e0ec] px-4 py-2 text-sm font-black text-[#0e1a26] transition hover:border-[#9bdad4] hover:text-[#4374ba]">
             Volver a experiencias
             <ArrowRight className="h-4 w-4 rotate-180" />
           </Link>
@@ -129,19 +129,19 @@ export default async function ExperienceDetailPage({ params }: ExperienceDetailP
       </header>
 
       <main className="mx-auto grid w-[min(100%-32px,1180px)] gap-6 py-8 lg:grid-cols-[1fr_360px]">
-        <section className="overflow-hidden rounded-[24px] border border-[#dceaec] bg-white shadow-[0_24px_70px_rgba(12,43,49,0.08)]">
+        <section className="overflow-hidden rounded-[24px] border border-[#d8e0ec] bg-white shadow-[0_24px_70px_rgba(12,43,49,0.08)]">
           <div className="bg-[radial-gradient(circle_at_18%_0%,#dff6f2,transparent_34%),linear-gradient(135deg,#ffffff,#f8fcfb)] p-6 md:p-8">
-            <Link href={publicCvPath(username)} className="inline-flex items-center gap-2 text-sm font-black text-[#006c66]">
+            <Link href={publicCvPath(username)} className="inline-flex items-center gap-2 text-sm font-black text-[#4374ba]">
               <ArrowRight className="h-4 w-4 rotate-180" />
               {profile.user.name || username}
             </Link>
-            <p className="mt-8 font-mono text-xs font-black uppercase tracking-[0.28em] text-[#008c83]">Detalle de experiencia</p>
+            <p className="mt-8 font-mono text-xs font-black uppercase tracking-[0.28em] text-[#4374ba]">Detalle de experiencia</p>
             <h1 className="mt-4 max-w-4xl font-display text-4xl font-black leading-[0.98] md:text-6xl">{experience.title}</h1>
-            <p className="mt-3 text-xl font-black text-[#008c83]">{company}</p>
+            <p className="mt-3 text-xl font-black text-[#4374ba]">{company}</p>
             <div className="mt-6 flex flex-wrap gap-3 text-sm font-bold text-[#435a66]">
-              <span className="inline-flex items-center gap-2 rounded-full border border-[#cfe5e2] bg-white px-3 py-2"><BriefcaseBusiness className="h-4 w-4 text-[#008c83]" />{experience.role || "Rol declarado"}</span>
-              <span className="inline-flex items-center gap-2 rounded-full border border-[#cfe5e2] bg-white px-3 py-2"><MapPin className="h-4 w-4 text-[#008c83]" />{location}</span>
-              <span className="inline-flex items-center gap-2 rounded-full border border-[#cfe5e2] bg-white px-3 py-2"><Clock3 className="h-4 w-4 text-[#008c83]" />{formatPeriod(experience.startedAt, experience.endedAt, experience.currentlyWorking)} · {duration}</span>
+              <span className="inline-flex items-center gap-2 rounded-full border border-[#cfe5e2] bg-white px-3 py-2"><BriefcaseBusiness className="h-4 w-4 text-[#4374ba]" />{experience.role || "Rol declarado"}</span>
+              <span className="inline-flex items-center gap-2 rounded-full border border-[#cfe5e2] bg-white px-3 py-2"><MapPin className="h-4 w-4 text-[#4374ba]" />{location}</span>
+              <span className="inline-flex items-center gap-2 rounded-full border border-[#cfe5e2] bg-white px-3 py-2"><Clock3 className="h-4 w-4 text-[#4374ba]" />{formatPeriod(experience.startedAt, experience.endedAt, experience.currentlyWorking)} · {duration}</span>
             </div>
           </div>
 
@@ -153,12 +153,12 @@ export default async function ExperienceDetailPage({ params }: ExperienceDetailP
               </div>
             </article>
 
-            <article className="rounded-[18px] border border-[#dceaec] bg-[#f8fcfb] p-5">
+            <article className="rounded-[18px] border border-[#d8e0ec] bg-[#f8fcfb] p-5">
               <h2 className="font-display text-2xl font-black">Capacidades aplicadas en esta experiencia</h2>
               <div className="mt-5 grid gap-3 md:grid-cols-2">
                 {highlights.map((highlight) => (
-                  <div key={highlight} className="flex gap-3 rounded-[14px] border border-[#dceaec] bg-white p-4">
-                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-[#008c83]" />
+                  <div key={highlight} className="flex gap-3 rounded-[14px] border border-[#d8e0ec] bg-white p-4">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-[#4374ba]" />
                     <p className="text-sm font-semibold leading-6 text-[#344955]">{highlight}</p>
                   </div>
                 ))}
@@ -166,8 +166,8 @@ export default async function ExperienceDetailPage({ params }: ExperienceDetailP
             </article>
 
             {experience.project ? (
-              <article className="rounded-[18px] border border-[#dceaec] bg-white p-5">
-                <p className="font-mono text-xs font-black uppercase tracking-[0.18em] text-[#008c83]">Proyecto vinculado</p>
+              <article className="rounded-[18px] border border-[#d8e0ec] bg-white p-5">
+                <p className="font-mono text-xs font-black uppercase tracking-[0.18em] text-[#4374ba]">Proyecto vinculado</p>
                 <h2 className="mt-3 font-display text-2xl font-black">{experience.project.title}</h2>
                 <p className="mt-2 text-sm font-semibold text-[#435a66]">{experience.project.clientName || experience.project.location || experience.project.category || "Proyecto Terraqo"}</p>
               </article>
@@ -176,35 +176,35 @@ export default async function ExperienceDetailPage({ params }: ExperienceDetailP
         </section>
 
         <aside className="space-y-5">
-          <section className="rounded-[22px] border border-[#dceaec] bg-white p-6 shadow-[0_24px_70px_rgba(12,43,49,0.08)]">
+          <section className="rounded-[22px] border border-[#d8e0ec] bg-white p-6 shadow-[0_24px_70px_rgba(12,43,49,0.08)]">
             <div className="flex items-center gap-4">
-              <div className="grid h-16 w-16 place-items-center overflow-hidden rounded-full bg-[#e7f8f5] font-display text-xl font-black text-[#008c83]">
+              <div className="grid h-16 w-16 place-items-center overflow-hidden rounded-full bg-[#edf1f7] font-display text-xl font-black text-[#4374ba]">
                 {profile.user.image ? <img src={profile.user.image} alt={profile.user.name || username} className="h-full w-full object-cover" /> : initials(profile.user.name || username)}
               </div>
               <div>
                 <p className="font-display text-xl font-black">{profile.user.name || username}</p>
-                <p className="text-sm font-bold text-[#008c83]">{profile.headline || "Perfil profesional"}</p>
+                <p className="text-sm font-bold text-[#4374ba]">{profile.headline || "Perfil profesional"}</p>
               </div>
             </div>
-            <div className="mt-6 rounded-[16px] border border-[#dceaec] bg-[#f8fcfb] p-4">
+            <div className="mt-6 rounded-[16px] border border-[#d8e0ec] bg-[#f8fcfb] p-4">
               <div className="flex items-center gap-3">
-                <ShieldCheck className="h-5 w-5 text-[#008c83]" />
+                <ShieldCheck className="h-5 w-5 text-[#4374ba]" />
                 <p className="font-black">{experience.verifiedByTerraqo ? "Validado por Terraqo" : "Pendiente de validacion"}</p>
               </div>
-              <p className="mt-2 text-sm leading-6 text-[#5f7280]">
+              <p className="mt-2 text-sm leading-6 text-[#607083]">
                 {experience.verifiedByTerraqo
                   ? "Esta experiencia cuenta con validacion referencial interna."
                   : "El estado indica que la experiencia fue declarada por el profesional y puede solicitar validacion referencial."}
               </p>
             </div>
-            <Link href={`/cuenta?callbackUrl=${encodeURIComponent(publicCvPath(username))}`} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-[10px] bg-[#008c83] px-5 py-3 text-sm font-black text-white shadow-[0_18px_38px_rgba(0,140,131,0.18)] transition hover:bg-[#006c66]">
+            <Link href={`/cuenta?callbackUrl=${encodeURIComponent(publicCvPath(username))}`} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-[10px] bg-[#4374ba] px-5 py-3 text-sm font-black text-white shadow-[0_18px_38px_rgba(0,140,131,0.18)] transition hover:bg-[#4374ba]">
               Contactar perfil
               <ArrowRight className="h-4 w-4" />
             </Link>
           </section>
 
-          <section className="rounded-[22px] border border-[#dceaec] bg-[#071821] p-6 text-white shadow-[0_24px_70px_rgba(12,43,49,0.12)]">
-            <BadgeCheck className="h-7 w-7 text-[#35d0c4]" />
+          <section className="rounded-[22px] border border-[#d8e0ec] bg-[#071821] p-6 text-white shadow-[0_24px_70px_rgba(12,43,49,0.12)]">
+            <BadgeCheck className="h-7 w-7 text-[#25c0d5]" />
             <h2 className="mt-4 font-display text-2xl font-black">CV vivo, no estático</h2>
             <p className="mt-3 text-sm leading-6 text-white/76">Cada experiencia puede ampliarse con alcance, evidencias, responsables y validaciones. La lectura pública se mantiene limpia; el detalle queda disponible cuando importa.</p>
           </section>

@@ -51,7 +51,7 @@ export default async function WorkspaceCompanyProfilePage({ searchParams }: Page
       <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
         <div>
           <p className="text-sm font-black uppercase tracking-[0.16em] text-primary">Workspace · Perfil de empresa</p>
-          <h1 className="mt-2 font-display text-4xl font-bold text-[#082230]">Perfil vivo de empresa</h1>
+          <h1 className="mt-2 font-display text-4xl font-bold text-[#0e1a26]">Perfil vivo de empresa</h1>
           <p className="mt-3 max-w-3xl text-muted-foreground">
             Construye una página empresarial con propuesta, sectores, servicios, diferenciales, cobertura y contacto. Es la versión empresa del CV vivo profesional.
           </p>
@@ -129,14 +129,14 @@ export default async function WorkspaceCompanyProfilePage({ searchParams }: Page
         </Card>
 
         <aside className="space-y-5">
-          <Card className="bg-[#061722] text-white">
+          <Card className="bg-[#0e1a26] text-white">
             <CardHeader>
-              <Globe2 className="h-5 w-5 text-[#83efe2]" />
+              <Globe2 className="h-5 w-5 text-[#25c0d5]" />
               <CardTitle>URL pública</CardTitle>
               <CardDescription className="text-white/65">Pensado para marca blanca, posicionamiento comercial y directorios empresariales.</CardDescription>
             </CardHeader>
             <CardContent>
-              <code className="block rounded-md border border-white/10 bg-white/8 p-3 text-sm text-[#83efe2]">terraqoglobal.com/empresas/{publicSlug}</code>
+              <code className="block rounded-md border border-white/10 bg-white/8 p-3 text-sm text-[#25c0d5]">terraqoglobal.com/empresas/{publicSlug}</code>
               <p className="mt-4 text-sm leading-6 text-white/62">Luego puede evolucionar a alias por RUC, username empresarial o dominio propio según plan.</p>
             </CardContent>
           </Card>

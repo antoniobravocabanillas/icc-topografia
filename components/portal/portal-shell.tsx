@@ -120,9 +120,9 @@ function PortalNavigation({
             aria-current={active ? "page" : undefined}
             className={`flex min-h-11 items-center gap-3 rounded-lg px-3.5 text-sm font-semibold transition-colors ${
               active
-                ? "text-[#008f87]"
-                : "text-[#314b57] hover:bg-[#f1f6f5] hover:text-[#07323a]"
-            } ${variant === "mobile" ? "shrink-0 border border-[#dce7e5] bg-white/82 shadow-[0_10px_25px_rgba(15,59,67,0.04)]" : ""}`}
+                ? "text-[#4374ba]"
+                : "text-[#2f4154] hover:bg-[#e8eef7] hover:text-[#0e1a26]"
+            } ${variant === "mobile" ? "shrink-0 border border-[#d8e0ec] bg-white/82 shadow-[0_10px_25px_rgba(15,59,67,0.04)]" : ""}`}
             style={active ? { backgroundColor: withAlpha(accentColor, "22"), color: primaryColor } : undefined}
           >
             <Icon className="h-[18px] w-[18px] shrink-0" />
@@ -147,8 +147,8 @@ export function PortalShell({ children, name, image, headline, portalType = "pro
   const accentColor = visualIdentity.accentColor;
 
   return (
-    <div className="min-h-screen overflow-x-hidden text-[#0b202b]" style={{ backgroundColor: visualIdentity.backgroundColor }}>
-      <header className="sticky top-0 z-50 border-b border-[#dce7e5] bg-white/95 backdrop-blur-xl">
+    <div className="min-h-screen overflow-x-hidden text-[#0e1a26]" style={{ backgroundColor: visualIdentity.backgroundColor }}>
+      <header className="sticky top-0 z-50 border-b border-[#d8e0ec] bg-white/95 backdrop-blur-xl">
         <div className="mx-auto flex h-[76px] max-w-[1720px] items-center gap-4 px-4 sm:px-6 xl:px-8">
           <Link href="/portal" className="flex min-w-0 items-center gap-3" aria-label="Ir al resumen del portal">
             <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-lg border bg-white p-1.5" style={{ borderColor: withAlpha(accentColor, "55") }}>
@@ -156,24 +156,24 @@ export function PortalShell({ children, name, image, headline, portalType = "pro
             </span>
             <span className="hidden min-w-0 sm:block">
               <b className="block truncate font-display text-base" style={{ color: primaryColor }}>{brandName}</b>
-              <small className="block truncate text-xs text-[#68808a]">{portalLabel}</small>
+              <small className="block truncate text-xs text-[#607083]">{portalLabel}</small>
             </span>
           </Link>
 
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
-            <Link href="/portal/mensajes" className="relative grid h-10 w-10 place-items-center rounded-lg border border-[#dce7e5] text-[#38515c] transition hover:bg-[#edf7f6] hover:text-primary" aria-label="Abrir mensajes">
+            <Link href="/portal/mensajes" className="relative grid h-10 w-10 place-items-center rounded-lg border border-[#d8e0ec] text-[#35485b] transition hover:bg-[#e8eef7] hover:text-primary" aria-label="Abrir mensajes">
               <MessagesSquare className="h-[18px] w-[18px]" />
             </Link>
-            <Link href="/portal#actividad" className="relative grid h-10 w-10 place-items-center rounded-lg border border-[#dce7e5] text-[#38515c] transition hover:bg-[#edf7f6] hover:text-primary" aria-label="Ver actividad reciente">
+            <Link href="/portal#actividad" className="relative grid h-10 w-10 place-items-center rounded-lg border border-[#d8e0ec] text-[#35485b] transition hover:bg-[#e8eef7] hover:text-primary" aria-label="Ver actividad reciente">
               <Bell className="h-[18px] w-[18px]" />
               <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full" style={{ backgroundColor: accentColor }} />
             </Link>
-            <div className="hidden h-9 w-px bg-[#dce7e5] sm:block" />
+            <div className="hidden h-9 w-px bg-[#d8e0ec] sm:block" />
             <div className="flex min-w-0 items-center gap-2.5">
               <UserAvatar name={name} image={image} size="md" />
               <span className="hidden max-w-48 min-w-0 lg:block">
                 <b className="block truncate text-sm">{name || "Cuenta Terraqo"}</b>
-                <small className="block truncate text-xs text-[#6b818a]">{headline || portalLabel}</small>
+                <small className="block truncate text-xs text-[#607083]">{headline || portalLabel}</small>
               </span>
             </div>
             <SignOutButton className="hidden xl:inline-flex" />
@@ -182,10 +182,10 @@ export function PortalShell({ children, name, image, headline, portalType = "pro
       </header>
 
       <div className="mx-auto max-w-[1720px] px-4 sm:px-6 xl:px-8">
-        <div className="sticky top-[76px] z-40 -mx-4 border-b border-[#dce7e5] bg-white/88 px-4 py-3 shadow-[0_14px_28px_rgba(15,59,67,0.06)] backdrop-blur-xl sm:-mx-6 sm:px-6 xl:hidden">
+        <div className="sticky top-[76px] z-40 -mx-4 border-b border-[#d8e0ec] bg-white/88 px-4 py-3 shadow-[0_14px_28px_rgba(15,59,67,0.06)] backdrop-blur-xl sm:-mx-6 sm:px-6 xl:hidden">
           <div className="mb-2 flex items-center justify-between gap-4">
-            <p className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-[#008f87]">Navegación</p>
-            <span className="truncate text-xs font-semibold text-[#6b818a]">{portalLabel}</span>
+            <p className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-[#4374ba]">Navegación</p>
+            <span className="truncate text-xs font-semibold text-[#607083]">{portalLabel}</span>
           </div>
           <div className="-mx-4 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:-mx-6 sm:px-6 [&::-webkit-scrollbar]:hidden">
             <PortalNavigation items={items} pathname={pathname} primaryColor={primaryColor} accentColor={accentColor} variant="mobile" />
@@ -193,17 +193,17 @@ export function PortalShell({ children, name, image, headline, portalType = "pro
         </div>
 
         <div className="grid min-h-[calc(100vh-76px)] gap-7 xl:grid-cols-[250px_minmax(0,1fr)] xl:gap-9">
-          <aside className="hidden border-r border-[#dce7e5] pr-6 pt-8 xl:block">
+          <aside className="hidden border-r border-[#d8e0ec] pr-6 pt-8 xl:block">
             <div className="sticky top-[108px]">
-              <p className="mb-4 px-3 font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-[#008f87]">Navegación</p>
+              <p className="mb-4 px-3 font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-[#4374ba]">Navegación</p>
               <PortalNavigation items={items} pathname={pathname} primaryColor={primaryColor} accentColor={accentColor} />
-              <div className="mt-7 border-t border-[#dce7e5] pt-6">
-                <a href="mailto:proyectos@icctopografia.com" className="flex items-center gap-3 rounded-lg px-3.5 py-3 text-sm font-semibold text-[#38515c] hover:bg-white hover:text-primary">
+              <div className="mt-7 border-t border-[#d8e0ec] pt-6">
+                <a href="mailto:proyectos@icctopografia.com" className="flex items-center gap-3 rounded-lg px-3.5 py-3 text-sm font-semibold text-[#35485b] hover:bg-white hover:text-primary">
                   <Headphones className="h-[18px] w-[18px]" /> Ayuda y soporte
                 </a>
-                <SignOutButton className="mt-2 w-full justify-start border-0 bg-transparent px-3.5 text-[#38515c] shadow-none hover:bg-white" />
+                <SignOutButton className="mt-2 w-full justify-start border-0 bg-transparent px-3.5 text-[#35485b] shadow-none hover:bg-white" />
               </div>
-              <div className="mt-8 rounded-lg bg-[#eaf6f4] p-4 text-sm text-[#35525c]">
+              <div className="mt-8 rounded-lg bg-[#eaf6f4] p-4 text-sm text-[#35485b]">
                 <ShieldCheck className="h-5 w-5" style={{ color: primaryColor }} />
                 <p className="mt-3 font-semibold">Tu información está protegida por permisos de Terraqo.</p>
               </div>

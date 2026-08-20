@@ -119,7 +119,7 @@ export default async function AdminContentPage({ searchParams }: AdminContentPag
           <h1 className="mt-2 font-display text-3xl font-bold sm:text-4xl">Contenidos CMS</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Administra por separado los servicios, referencias y contenidos que ICC Topografia publica en su web.</p>
         </div>
-        <div className="rounded-md border border-[#c8dcda] bg-white px-4 py-3 text-sm shadow-technical">
+        <div className="rounded-md border border-[#d8e0ec] bg-white px-4 py-3 text-sm shadow-technical">
           <span className="font-mono font-bold text-primary">{Object.values(counts).reduce((total, count) => total + count, 0)}</span>
           <span className="ml-2 text-muted-foreground">contenidos administrados</span>
         </div>

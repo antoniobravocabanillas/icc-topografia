@@ -115,13 +115,13 @@ async function saveCareerFormAction(formData: FormData) {
 
 function FieldEditor({ field }: { field: CareerFieldConfig }) {
   return (
-    <div className="rounded-md border border-[#c6dce1] bg-white p-4 shadow-sm">
+    <div className="rounded-md border border-[#d8e0ec] bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="font-semibold text-[#092433]">{field.label}</p>
-          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#007f7e]">{fieldTypeLabels[field.type] || field.type}</p>
+          <p className="font-semibold text-[#0e1a26]">{field.label}</p>
+          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#4374ba]">{fieldTypeLabels[field.type] || field.type}</p>
         </div>
-        <div className="flex items-center gap-4 text-sm font-semibold text-[#31515a]">
+        <div className="flex items-center gap-4 text-sm font-semibold text-[#2f4154]">
           <label className="inline-flex items-center gap-2">
             <input name={`field:${field.key}:enabled`} type="checkbox" defaultChecked={field.enabled !== false} />
             Visible
@@ -160,9 +160,9 @@ export default async function CareerFormSettingsPage({ searchParams }: { searchP
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#008f8c]">Talento Terraqo</p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#082230]">Formulario publico por workspace</h1>
-          <p className="mt-2 max-w-3xl text-[#355966]">
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#4374ba]">Talento Terraqo</p>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#0e1a26]">Formulario publico por workspace</h1>
+          <p className="mt-2 max-w-3xl text-[#35485b]">
             Personaliza los campos que vera el postulante en la pagina publica del cliente. Esta configuracion queda aislada para {workspace.name}.
           </p>
         </div>
@@ -173,7 +173,7 @@ export default async function CareerFormSettingsPage({ searchParams }: { searchP
       </div>
 
       {params?.status === "guardado" ? (
-        <div className="rounded-md border border-[#8edbd4] bg-[#e8faf8] px-4 py-3 text-sm font-semibold text-[#006e70]">
+        <div className="rounded-md border border-[#8edbd4] bg-[#e8faf8] px-4 py-3 text-sm font-semibold text-[#4374ba]">
           Configuracion guardada. La web del workspace consumira estos campos automaticamente.
         </div>
       ) : null}
@@ -191,27 +191,27 @@ export default async function CareerFormSettingsPage({ searchParams }: { searchP
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
             <label className="space-y-2">
-              <span className="text-sm font-semibold text-[#092433]">Titulo</span>
+              <span className="text-sm font-semibold text-[#0e1a26]">Titulo</span>
               <Input name="headline" defaultValue={formConfig.headline} />
             </label>
             <label className="space-y-2">
-              <span className="text-sm font-semibold text-[#092433]">Subtitulo</span>
+              <span className="text-sm font-semibold text-[#0e1a26]">Subtitulo</span>
               <Input name="subheadline" defaultValue={formConfig.subheadline} />
             </label>
             <label className="space-y-2 md:col-span-2">
-              <span className="text-sm font-semibold text-[#092433]">Introduccion</span>
+              <span className="text-sm font-semibold text-[#0e1a26]">Introduccion</span>
               <Textarea name="intro" defaultValue={formConfig.intro} />
             </label>
             <label className="space-y-2">
-              <span className="text-sm font-semibold text-[#092433]">Texto del boton</span>
+              <span className="text-sm font-semibold text-[#0e1a26]">Texto del boton</span>
               <Input name="submitLabel" defaultValue={formConfig.submitLabel} />
             </label>
             <label className="space-y-2">
-              <span className="text-sm font-semibold text-[#092433]">Color principal</span>
+              <span className="text-sm font-semibold text-[#0e1a26]">Color principal</span>
               <Input name="primaryColor" defaultValue={formConfig.primaryColor || "#009688"} />
             </label>
             <label className="space-y-2 md:col-span-2">
-              <span className="text-sm font-semibold text-[#092433]">Nota de privacidad</span>
+              <span className="text-sm font-semibold text-[#0e1a26]">Nota de privacidad</span>
               <Textarea name="privacyNote" defaultValue={formConfig.privacyNote} />
             </label>
           </CardContent>
@@ -225,8 +225,8 @@ export default async function CareerFormSettingsPage({ searchParams }: { searchP
           <CardContent className="space-y-6">
             {formConfig.sections.map((section) => (
               <section key={section.id} className="space-y-3">
-                <div className="rounded-md border border-[#d7e7ea] bg-[#f5fbfa] p-4">
-                  <p className="font-semibold text-[#092433]">{section.title}</p>
+                <div className="rounded-md border border-[#d7e7ea] bg-[#f3f3f3] p-4">
+                  <p className="font-semibold text-[#0e1a26]">{section.title}</p>
                   <Input className="mt-3" name={`section:${section.id}:description`} defaultValue={section.description || ""} placeholder="Descripcion de la seccion" />
                 </div>
                 <div className="grid gap-3 lg:grid-cols-2">
@@ -244,10 +244,10 @@ export default async function CareerFormSettingsPage({ searchParams }: { searchP
           </CardHeader>
           <CardContent className="grid gap-3 md:grid-cols-2">
             {documents.map((document) => (
-              <div key={document.key} className="rounded-md border border-[#c6dce1] bg-white p-4">
+              <div key={document.key} className="rounded-md border border-[#d8e0ec] bg-white p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="font-semibold text-[#092433]">{document.label}</p>
-                  <div className="flex items-center gap-4 text-sm font-semibold text-[#31515a]">
+                  <p className="font-semibold text-[#0e1a26]">{document.label}</p>
+                  <div className="flex items-center gap-4 text-sm font-semibold text-[#2f4154]">
                     <label className="inline-flex items-center gap-2">
                       <input name={`document:${document.key}:enabled`} type="checkbox" defaultChecked={enabledDocuments.has(document.key)} />
                       Pedir
@@ -267,7 +267,7 @@ export default async function CareerFormSettingsPage({ searchParams }: { searchP
           </CardContent>
         </Card>
 
-        <div className="sticky bottom-4 z-10 flex justify-end rounded-md border border-[#c6dce1] bg-white/92 p-3 shadow-xl backdrop-blur">
+        <div className="sticky bottom-4 z-10 flex justify-end rounded-md border border-[#d8e0ec] bg-white/92 p-3 shadow-xl backdrop-blur">
           <Button type="submit" size="lg">Guardar configuracion del formulario</Button>
         </div>
       </form>

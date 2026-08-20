@@ -53,7 +53,7 @@ export default async function AdminProfessionalPage({ params }: AdminProfessiona
       </div>
 
       <Card className="overflow-hidden">
-        <CardContent className="grid gap-7 bg-[#05363a] p-7 text-white lg:grid-cols-[1fr_280px] lg:items-center">
+        <CardContent className="grid gap-7 bg-[#0e1a26] p-7 text-white lg:grid-cols-[1fr_280px] lg:items-center">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
             <UserAvatar name={name} image={profile.user.image} size="xl" className="border-white/70 bg-white/15 text-white" />
             <div>
@@ -61,13 +61,13 @@ export default async function AdminProfessionalPage({ params }: AdminProfessiona
                 <h1 className="font-display text-4xl font-bold">{name}</h1>
                 <Badge className="bg-white/12 text-white hover:bg-white/12">{professionalStatusLabels[profile.status] ?? "Por revisar"}</Badge>
               </div>
-              <p className="mt-2 text-lg font-semibold text-[#73e9df]">{profile.headline || profile.specialties[0] || "Perfil profesional"}</p>
+              <p className="mt-2 text-lg font-semibold text-[#25c0d5]">{profile.headline || profile.specialties[0] || "Perfil profesional"}</p>
               <p className="mt-2 text-white/70">{profile.city || "Ciudad por confirmar"} | {profile.yearsExperience ?? 0} años de experiencia</p>
               <p className="mt-4 text-sm text-white/70">{profile.bio || "El profesional aun no completo su presentacion."}</p>
             </div>
           </div>
           <div className="rounded-lg border border-white/15 bg-white/8 p-5">
-            <p className="font-mono text-xs uppercase tracking-[0.16em] text-[#73e9df]">Expediente</p>
+            <p className="font-mono text-xs uppercase tracking-[0.16em] text-[#25c0d5]">Expediente</p>
             <p className="mt-3 font-display text-3xl font-bold">{identityStatusLabels[profile.identityVerificationStatus] ?? "Por revisar"}</p>
             <p className="mt-2 text-sm text-white/68">CV vivo: {profile.liveCvEnabled ? "activo" : "pendiente"}</p>
           </div>

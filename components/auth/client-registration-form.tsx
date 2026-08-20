@@ -23,7 +23,7 @@ const accountOptions: Array<{
   {
     value: "professional",
     title: "Profesionales",
-    description: "Tecnicos, especialistas y profesionales que quieren participar en proyectos.",
+    description: "Técnicos, especialistas y profesionales que quieren participar en proyectos.",
     icon: BriefcaseBusiness
   }
 ];
@@ -105,7 +105,7 @@ export function ClientRegistrationForm() {
       ? {
           eyebrow: "Red profesional",
           title: "Crear cuenta profesional",
-          text: "Tu perfil puede alimentar el CV vivo, postulaciones y participacion privada en proyectos.",
+          text: "Tu perfil puede alimentar el CV vivo, postulaciones y participación privada en proyectos.",
           icon: UserRound
         }
       : {
@@ -175,12 +175,12 @@ export function ClientRegistrationForm() {
 
       <div className="grid gap-4">
         <Input name="name" required placeholder="Nombre y apellido" autoComplete="name" />
-        <Input name="phone" placeholder="Telefono / WhatsApp" autoComplete="tel" />
+        <Input name="phone" placeholder="Teléfono / WhatsApp" autoComplete="tel" />
         <Input name="email" type="email" required placeholder="Correo" autoComplete="email" />
 
         {accountType === "client" ? (
           <>
-            <Input name="company" required placeholder="Empresa / razon social" autoComplete="organization" />
+            <Input name="company" required placeholder="Empresa / razón social" autoComplete="organization" />
             <Input name="document" placeholder="RUC / documento" />
             <LocationSelect required />
           </>
@@ -198,7 +198,7 @@ export function ClientRegistrationForm() {
           </>
         )}
 
-        <Input name="password" type="password" required minLength={8} placeholder="Contrasena" autoComplete="new-password" />
+        <Input name="password" type="password" required minLength={8} placeholder="Contraseña" autoComplete="new-password" />
         <Button type="submit" size="lg" disabled={isPending} className="w-full">
           {isPending ? "Creando cuenta..." : accountType === "professional" ? "Crear cuenta profesional" : "Crear cuenta de cliente"}
           <ArrowRight className="h-4 w-4" />

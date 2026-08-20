@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -31,6 +30,7 @@ import {
   X
 } from "lucide-react";
 import { SignOutButton } from "@/components/auth/sign-out-button";
+import { TerraqoLogo } from "@/components/terraqo/terraqo-logo";
 import type { AdminNavIcon, AdminNavItem } from "@/lib/admin-navigation";
 import { selectAdminWorkspace } from "@/lib/server/admin-workspace-actions";
 import type { WorkspaceVisualIdentity } from "@/lib/terraqo/workspace-visual-identity";
@@ -81,19 +81,6 @@ function isRouteActive(pathname: string, href: string) {
 function NavIcon({ name, className }: { name: AdminNavIcon; className?: string }) {
   const Icon = icons[name];
   return <Icon className={className} strokeWidth={1.8} />;
-}
-
-function getInitials(value: string) {
-  const initials = value
-    .replace(/^panel\s+/i, "")
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
-
-  return initials || "TQ";
 }
 
 function withAlpha(hex: string, opacity: string) {
@@ -163,22 +150,16 @@ export function AdminNavigation({ items, workspaceName, panelName, brandName, lo
 
   const primaryColor = visualIdentity.primaryColor;
   const accentColor = visualIdentity.accentColor;
-  const logoInitials = getInitials(brandName || panelName);
-
   return (
     <header ref={shellRef} className="sticky top-0 z-40 border-b border-[#0d4d58]/12 bg-[#f7f6f1]/95 shadow-[0_16px_45px_-36px_rgba(3,38,45,0.65)] backdrop-blur-xl">
-      <div className="text-white" style={{ background: `linear-gradient(135deg, ${primaryColor} 0%, #062f38 78%)` }}>
+      <div className="bg-[linear-gradient(135deg,#0e1a26_0%,#0e1a26_46%,#4374ba_100%)] text-white">
         <div className="mx-auto flex min-h-[72px] max-w-[1680px] items-center justify-between gap-5 px-4 sm:px-6 lg:px-8">
           <Link href="/admin" className="group flex min-w-0 items-center gap-3" aria-label={`Ir al inicio de ${panelName}`}>
             <span
               className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-md border bg-white/95 text-xs font-black tracking-[0.08em] shadow-[0_16px_34px_-24px_rgba(0,0,0,0.75)] transition-colors"
               style={{ borderColor: withAlpha(accentColor, "66"), color: primaryColor }}
             >
-              {logoUrl ? (
-                <Image src={logoUrl} alt={`Logo de ${brandName}`} width={80} height={80} className="max-h-8 max-w-8 object-contain" unoptimized />
-              ) : (
-                logoInitials
-              )}
+              <TerraqoLogo src={logoUrl} variant="mark" alt={`Logo de ${brandName}`} className="h-full w-full" imageClassName="rounded-[5px]" />
             </span>
             <span className="min-w-0">
               <span className="block text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: withAlpha(accentColor, "cc") }}>{workspaceName}</span>
@@ -223,7 +204,7 @@ export function AdminNavigation({ items, workspaceName, panelName, brandName, lo
               const singleItem = group.items.length === 1 ? group.items[0] : null;
               if (singleItem) {
                 return (
-                  <Link key={group.label} href={singleItem.href} className={cn("flex h-10 items-center gap-2 rounded-md px-3 text-sm font-semibold text-[#31515a] transition-colors hover:bg-[#eaf7f5] hover:text-[#006e70]", groupIsActive && "bg-[#e3f5f2] text-[#006e70]")}>
+                  <Link key={group.label} href={singleItem.href} className={cn("flex h-10 items-center gap-2 rounded-md px-3 text-sm font-semibold text-[#2f4154] transition-colors hover:bg-[#e8eef7] hover:text-[#4374ba]", groupIsActive && "bg-[#e8eef7] text-[#4374ba]")}>
                     <NavIcon name={singleItem.icon} className="h-4 w-4" />
                     {singleItem.label}
                   </Link>
@@ -232,16 +213,16 @@ export function AdminNavigation({ items, workspaceName, panelName, brandName, lo
 
               return (
                 <div key={group.label} className="relative">
-                  <button type="button" className={cn("flex h-10 items-center gap-2 rounded-md px-3 text-sm font-semibold text-[#31515a] transition-colors hover:bg-[#eaf7f5] hover:text-[#006e70]", groupIsActive && "bg-[#e3f5f2] text-[#006e70]")} aria-expanded={openGroup === group.label} onClick={() => setOpenGroup((current) => current === group.label ? null : group.label)}>
+                  <button type="button" className={cn("flex h-10 items-center gap-2 rounded-md px-3 text-sm font-semibold text-[#2f4154] transition-colors hover:bg-[#e8eef7] hover:text-[#4374ba]", groupIsActive && "bg-[#e8eef7] text-[#4374ba]")} aria-expanded={openGroup === group.label} onClick={() => setOpenGroup((current) => current === group.label ? null : group.label)}>
                     {group.label}
                     <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", openGroup === group.label && "rotate-180")} />
                   </button>
                   {openGroup === group.label ? (
-                    <div className="absolute left-0 top-[calc(100%+0.45rem)] w-72 rounded-md border border-[#bcdedc] bg-white p-2 shadow-[0_24px_70px_-32px_rgba(3,52,59,0.5)]">
-                      <p className="px-3 pb-2 pt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[#709097]">Modulo {group.label}</p>
+                    <div className="absolute left-0 top-[calc(100%+0.45rem)] w-72 rounded-md border border-[#d8e0ec] bg-white p-2 shadow-[0_24px_70px_-32px_rgba(3,52,59,0.5)]">
+                      <p className="px-3 pb-2 pt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[#607083]">Modulo {group.label}</p>
                       {group.items.map((item) => (
-                        <Link key={item.href} href={item.href} className={cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-semibold text-[#27464e] transition-colors hover:bg-[#eef8f7] hover:text-[#007f7e]", isRouteActive(pathname, item.href) && "bg-[#e3f5f2] text-[#006e70]")}>
-                          <span className="grid h-8 w-8 place-items-center rounded-md border border-[#c8e5e2] bg-white text-[#008f8b]">
+                        <Link key={item.href} href={item.href} className={cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-semibold text-[#2f4154] transition-colors hover:bg-[#e8eef7] hover:text-[#4374ba]", isRouteActive(pathname, item.href) && "bg-[#e8eef7] text-[#4374ba]")}>
+                          <span className="grid h-8 w-8 place-items-center rounded-md border border-[#d8e0ec] bg-white text-[#4374ba]">
                             <NavIcon name={item.icon} className="h-4 w-4" />
                           </span>
                           {item.label}
@@ -253,9 +234,9 @@ export function AdminNavigation({ items, workspaceName, panelName, brandName, lo
               );
             })}
           </nav>
-          <div className="flex shrink-0 items-center gap-3 border-l border-[#d9e8e6] pl-5">
-            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#789096]">Vista actual</span>
-            <span className="max-w-56 truncate text-sm font-bold text-[#082d35]">{currentItem?.label ?? "Panel"}</span>
+          <div className="flex shrink-0 items-center gap-3 border-l border-[#d8e0ec] pl-5">
+            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#607083]">Vista actual</span>
+            <span className="max-w-56 truncate text-sm font-bold text-[#0e1a26]">{currentItem?.label ?? "Panel"}</span>
           </div>
         </div>
       </div>
@@ -264,19 +245,19 @@ export function AdminNavigation({ items, workspaceName, panelName, brandName, lo
         <div id="admin-mobile-navigation" className="absolute inset-x-0 top-full z-50 h-[calc(100dvh-72px)] overflow-y-auto border-t border-white/10 bg-[#f7f6f1] xl:hidden">
           <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6">
             <label className="relative block">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#66848a]" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#607083]" />
               <span className="sr-only">Buscar una seccion</span>
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar una seccion del panel" className="h-12 w-full rounded-md border border-[#bddbd9] bg-white pl-10 pr-4 text-sm outline-none transition-shadow focus:ring-2 focus:ring-[#009b94]/25" autoFocus />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar una seccion del panel" className="h-12 w-full rounded-md border border-[#d8e0ec] bg-white pl-10 pr-4 text-sm outline-none transition-shadow focus:ring-2 focus:ring-[#4374ba]/25" autoFocus />
             </label>
 
             <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {visibleMobileGroups.map((group) => (
-                <section key={group.label} className="rounded-md border border-[#cfdfdd] bg-white p-3">
-                  <h2 className="px-2 pb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#6e8c92]">{group.label}</h2>
+                <section key={group.label} className="rounded-md border border-[#d8e0ec] bg-white p-3">
+                  <h2 className="px-2 pb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#607083]">{group.label}</h2>
                   <div className="grid gap-1">
                     {group.items.map((item) => (
-                      <Link key={item.href} href={item.href} className={cn("flex min-h-12 items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold text-[#264850] hover:bg-[#eef8f7]", isRouteActive(pathname, item.href) && "bg-[#e3f5f2] text-[#006e70]")}>
-                        <span className="grid h-8 w-8 place-items-center rounded-md border border-[#c9e4e1] text-[#008f8b]">
+                      <Link key={item.href} href={item.href} className={cn("flex min-h-12 items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold text-[#2f4154] hover:bg-[#e8eef7]", isRouteActive(pathname, item.href) && "bg-[#e8eef7] text-[#4374ba]")}>
+                        <span className="grid h-8 w-8 place-items-center rounded-md border border-[#d8e0ec] text-[#4374ba]">
                           <NavIcon name={item.icon} className="h-4 w-4" />
                         </span>
                         {item.label}
@@ -288,22 +269,22 @@ export function AdminNavigation({ items, workspaceName, panelName, brandName, lo
             </div>
 
             {visibleMobileGroups.length === 0 ? (
-              <div className="mt-5 rounded-md border border-dashed border-[#bddbd9] bg-white p-8 text-center text-sm text-[#668087]">No encontramos una seccion con ese nombre.</div>
+              <div className="mt-5 rounded-md border border-dashed border-[#d8e0ec] bg-white p-8 text-center text-sm text-[#607083]">No encontramos una seccion con ese nombre.</div>
             ) : null}
 
-            <div className="mt-5 flex flex-col gap-3 border-t border-[#cfdfdd] pt-5 md:hidden">
+            <div className="mt-5 flex flex-col gap-3 border-t border-[#d8e0ec] pt-5 md:hidden">
               {role === "SUPER_ADMIN" ? (
-                <form action={selectAdminWorkspace} className="grid gap-2 rounded-md border border-[#cfdfdd] bg-white p-3">
+                <form action={selectAdminWorkspace} className="grid gap-2 rounded-md border border-[#d8e0ec] bg-white p-3">
                   <input type="hidden" name="returnTo" value={pathname} />
-                  <label htmlFor="admin-workspace-mobile" className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#668087]">Workspace activo</label>
-                  <select id="admin-workspace-mobile" name="workspaceId" defaultValue={activeWorkspaceId} className="h-11 rounded-md border border-[#bddbd9] bg-white px-3 text-sm font-semibold">
+                  <label htmlFor="admin-workspace-mobile" className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#607083]">Workspace activo</label>
+                  <select id="admin-workspace-mobile" name="workspaceId" defaultValue={activeWorkspaceId} className="h-11 rounded-md border border-[#d8e0ec] bg-white px-3 text-sm font-semibold">
                     {workspaceOptions.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
                   </select>
-                  <button type="submit" className="h-11 rounded-md bg-[#006e70] px-4 text-sm font-bold text-white">Cambiar workspace</button>
+                  <button type="submit" className="h-11 rounded-md bg-[#4374ba] px-4 text-sm font-bold text-white">Cambiar workspace</button>
                 </form>
               ) : null}
-              <p className="truncate text-sm font-semibold text-[#24454d]">{email}</p>
-              <SignOutButton className="h-11 w-full border-[#b9d8d5] bg-white text-[#082d35] hover:bg-[#eaf7f5]" />
+              <p className="truncate text-sm font-semibold text-[#2f4154]">{email}</p>
+              <SignOutButton className="h-11 w-full border-[#d8e0ec] bg-white text-[#0e1a26] hover:bg-[#e8eef7]" />
             </div>
           </div>
         </div>

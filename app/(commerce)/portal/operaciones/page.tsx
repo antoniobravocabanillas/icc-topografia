@@ -100,8 +100,8 @@ export default async function CommercialOperationsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="grid gap-2 text-sm text-[#314b57]">
-                <p className="font-display text-xl font-bold text-[#0b202b]">{company?.tradeName || company?.legalName || client.company || "Empresa del workspace"}</p>
+              <div className="grid gap-2 text-sm text-[#2f4154]">
+                <p className="font-display text-xl font-bold text-[#0e1a26]">{company?.tradeName || company?.legalName || client.company || "Empresa del workspace"}</p>
                 {company?.email || client.email ? <p className="flex items-center gap-2"><Mail className="h-4 w-4 text-primary" /> {company?.email || client.email}</p> : null}
                 {company?.phone || client.phone ? <p className="flex items-center gap-2"><Phone className="h-4 w-4 text-primary" /> {company?.phone || client.phone}</p> : null}
               </div>

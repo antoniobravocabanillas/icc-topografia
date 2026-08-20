@@ -10,9 +10,9 @@ export type WorkspaceVisualIdentity = {
 };
 
 export const defaultWorkspaceVisualIdentity: WorkspaceVisualIdentity = {
-  primaryColor: "#007f7d",
-  accentColor: "#83efe2",
-  backgroundColor: "#f7faf8",
+  primaryColor: "#4374ba",
+  accentColor: "#25c0d5",
+  backgroundColor: "#f3f3f3",
   fontFamily: "system",
   heroPattern: "soft-grid",
   badgeLabel: "Perfil empresa"

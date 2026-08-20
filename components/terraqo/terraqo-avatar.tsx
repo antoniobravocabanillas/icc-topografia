@@ -6,7 +6,7 @@ export function TerraqoAvatar({
   src,
   name,
   className,
-  textClassName = "text-[#008c83]"
+  textClassName = "text-[#4374ba]"
 }: {
   src?: string | null;
   name: string;
@@ -22,9 +22,14 @@ export function TerraqoAvatar({
     .join("") || "TQ";
 
   return (
-    <span className={`relative grid place-items-center overflow-hidden bg-[#e7f8f5] font-display font-black ${textClassName} ${className}`}>
+    <span role="img" aria-label={name} className={`relative grid place-items-center overflow-hidden bg-[#edf1f7] font-display font-black ${textClassName} ${className}`}>
       <span aria-hidden="true">{initials}</span>
-      {src && !failed ? <img src={src} alt={name} onError={() => setFailed(true)} className="absolute inset-0 h-full w-full object-cover" /> : null} {/* eslint-disable-line @next/next/no-img-element -- avatar URLs are workspace-managed and need a resilient fallback. */}
+      {src && !failed ? (
+        // eslint-disable-next-line @next/next/no-img-element -- avatar URLs are workspace-managed and need a resilient fallback.
+        <img src={src} alt="" aria-hidden="true" onLoad={(event) => {
+          if (event.currentTarget.naturalWidth === 0) setFailed(true);
+        }} onError={() => setFailed(true)} className="absolute inset-0 h-full w-full object-cover" />
+      ) : null}
     </span>
   );
 }

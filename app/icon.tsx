@@ -17,7 +17,7 @@ export default function Icon() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#0f172a"
+          background: "#f3f3f3"
         }}
       >
         <div
@@ -28,9 +28,9 @@ export default function Icon() {
             transform: "translateY(-1px)"
           }}
         >
-          <span style={{ width: 30, height: 7, background: "#f3f4f6" }} />
-          <span style={{ width: 22, height: 7, background: "#06b6d4" }} />
-          <span style={{ width: 14, height: 7, background: "#2563eb" }} />
+          <span style={{ width: 30, height: 7, background: "#0e1a26" }} />
+          <span style={{ width: 22, height: 7, background: "#25c0d5" }} />
+          <span style={{ width: 14, height: 7, background: "#4374ba" }} />
         </div>
       </div>
     ),

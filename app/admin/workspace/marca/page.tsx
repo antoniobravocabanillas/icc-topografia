@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import { ExternalLink, Palette, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ClientLogoUploader } from "@/components/admin/client-logo-uploader";
+import { TerraqoLogo } from "@/components/terraqo/terraqo-logo";
 import { updateWorkspaceBrandingAction } from "@/lib/server/workspace-branding-actions";
 import { prisma } from "@/lib/prisma";
 import { getSessionTerraqoWorkspace } from "@/lib/terraqo/workspace-scope";
@@ -33,7 +33,7 @@ export default async function WorkspaceBrandingPage({ searchParams }: PageProps)
       <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
         <div>
           <p className="text-sm font-black uppercase tracking-[0.16em] text-primary">Workspace · Marca blanca</p>
-          <h1 className="mt-2 font-display text-4xl font-bold text-[#082230]">Personalización de marca</h1>
+          <h1 className="mt-2 font-display text-4xl font-bold text-[#0e1a26]">Personalización de marca</h1>
           <p className="mt-3 max-w-3xl text-muted-foreground">
             Define cómo se verá este workspace cuando clientes, profesionales y equipos ingresen por Terraqo. Esta identidad se consume en portal, perfil público y módulos conectados.
           </p>
@@ -74,7 +74,7 @@ export default async function WorkspaceBrandingPage({ searchParams }: PageProps)
               </label>
               <ClientLogoUploader initialLogoUrl={workspace.logoUrl} inputName="logoUrl" label="Logo del workspace" description="Este logo se usará en el portal marca blanca y en el perfil público de empresa." />
 
-              <div className="md:col-span-2 rounded-2xl border border-[#c8dcda] bg-[#fbfdfc] p-5">
+              <div className="md:col-span-2 rounded-2xl border border-[#d8e0ec] bg-[#f3f3f3] p-5">
                 <div className="flex items-start gap-3">
                   <Palette className="mt-1 h-5 w-5 text-primary" />
                   <div>
@@ -128,11 +128,11 @@ export default async function WorkspaceBrandingPage({ searchParams }: PageProps)
 
         <aside className="space-y-5">
           <Card className="overflow-hidden">
-            <div className="p-5 text-white" style={{ background: `linear-gradient(135deg, ${visualIdentity.primaryColor}, #061722)` }}>
+            <div className="p-5 text-white" style={{ background: `linear-gradient(135deg, #0e1a26, ${visualIdentity.primaryColor})` }}>
               <p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: visualIdentity.accentColor }}>Preview</p>
               <div className="mt-5 flex items-center gap-4">
                 <div className="grid h-16 w-16 place-items-center rounded-xl bg-white/95 p-2 text-[#06343b]">
-                  {workspace.logoUrl ? <Image src={workspace.logoUrl} alt="Logo del workspace" width={96} height={96} className="max-h-12 w-auto object-contain" unoptimized /> : <span className="font-black">TQ</span>}
+                  <TerraqoLogo src={workspace.logoUrl} variant="mark" alt={`Logo de ${workspace.brandName || workspace.name}`} className="h-full w-full" imageClassName="rounded-lg" />
                 </div>
                 <div>
                   <h2 className="font-display text-2xl font-bold">{workspace.brandName || workspace.name}</h2>
@@ -141,7 +141,7 @@ export default async function WorkspaceBrandingPage({ searchParams }: PageProps)
               </div>
             </div>
             <CardContent className="pt-5">
-              <div className="flex items-start gap-3 rounded-md bg-[#edf8f6] p-4 text-sm text-[#21484e]">
+              <div className="flex items-start gap-3 rounded-md bg-[#e8eef7] p-4 text-sm text-[#2f4154]">
                 <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
                 <p>La marca blanca debe ser única por workspace. No duplica datos: solo cambia la capa visible del mismo portal Terraqo.</p>
               </div>

@@ -71,7 +71,7 @@ function ProfileMetric({ icon: Icon, value, label, detail }: { icon: ElementType
   return (
     <div className="flex min-h-28 items-center gap-4 rounded-lg border bg-white p-5 shadow-[0_12px_32px_rgba(1,45,56,0.06)]">
       <span className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary"><Icon className="h-5 w-5" /></span>
-      <div><p className="font-display text-3xl font-bold text-[#071b28]">{value}</p><p className="text-sm font-semibold text-[#304752]">{label}</p><p className="text-xs text-muted-foreground">{detail}</p></div>
+      <div><p className="font-display text-3xl font-bold text-[#0e1a26]">{value}</p><p className="text-sm font-semibold text-[#2f4154]">{label}</p><p className="text-xs text-muted-foreground">{detail}</p></div>
     </div>
   );
 }
@@ -80,7 +80,7 @@ function ActivityRow({ icon: Icon, title, detail }: { icon: ElementType; title: 
   return (
     <div className="flex gap-3 border-b py-3 last:border-0">
       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"><Icon className="h-4 w-4" /></span>
-      <div className="min-w-0"><p className="truncate text-sm font-semibold text-[#102733]">{title}</p><p className="mt-0.5 text-xs text-muted-foreground">{detail}</p></div>
+      <div className="min-w-0"><p className="truncate text-sm font-semibold text-[#0e1a26]">{title}</p><p className="mt-0.5 text-xs text-muted-foreground">{detail}</p></div>
     </div>
   );
 }
@@ -96,21 +96,21 @@ export function ProfessionalDashboard({ profile, workspaceId }: { profile: Profe
 
   return (
     <div className="min-w-0 space-y-6 py-6 lg:py-8">
-          <section id="perfil" className="relative overflow-hidden rounded-lg bg-[#052f32] p-6 text-white shadow-[0_24px_70px_rgba(2,47,53,0.18)] lg:p-8">
+          <section id="perfil" className="relative overflow-hidden rounded-lg bg-[#0e1a26] p-6 text-white shadow-[0_24px_70px_rgba(2,47,53,0.18)] lg:p-8">
             <div className="absolute inset-y-0 right-0 w-2/5 opacity-20 [background-image:repeating-radial-gradient(ellipse_at_center,rgba(100,232,219,0.4)_0_1px,transparent_1px_14px)]" />
             <div className="relative grid items-center gap-7 lg:grid-cols-[minmax(0,1fr)_190px]">
               <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
                 <ProfessionalPhotoUploader name={name} image={profile.user.image} />
                 <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-3"><h1 className="font-display text-3xl font-bold lg:text-4xl">{name}</h1>{identityComplete ? <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-3 py-1 text-xs font-semibold text-[#76ece1]"><BadgeCheck className="h-4 w-4" /> Perfil verificado</span> : null}</div>
-                  <p className="mt-2 text-lg font-semibold text-[#62ddd2]">{profile.headline || profile.specialties[0] || "Profesional Terraqo"}</p>
-                  <div className="mt-3 flex flex-wrap gap-3 text-sm text-white/70"><span className="inline-flex items-center gap-1.5"><MapPin className="h-4 w-4 text-[#62ddd2]" />{profile.locationCity || profile.city || "Ubicacion por completar"}</span><span>|</span><span>{formatExperienceDuration(totalMonths)} de experiencia</span></div>
+                  <div className="flex flex-wrap items-center gap-3"><h1 className="font-display text-3xl font-bold lg:text-4xl">{name}</h1>{identityComplete ? <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-3 py-1 text-xs font-semibold text-[#25c0d5]"><BadgeCheck className="h-4 w-4" /> Perfil verificado</span> : null}</div>
+                  <p className="mt-2 text-lg font-semibold text-[#25c0d5]">{profile.headline || profile.specialties[0] || "Profesional Terraqo"}</p>
+                  <div className="mt-3 flex flex-wrap gap-3 text-sm text-white/70"><span className="inline-flex items-center gap-1.5"><MapPin className="h-4 w-4 text-[#25c0d5]" />{profile.locationCity || profile.city || "Ubicacion por completar"}</span><span>|</span><span>{formatExperienceDuration(totalMonths)} de experiencia</span></div>
                   {profile.generatedSummary ? <p className="mt-4 max-w-3xl text-sm leading-6 text-white/70">{profile.generatedSummary}</p> : null}
                   <div className="mt-6 flex flex-wrap gap-3"><Button asChild className="bg-primary text-white hover:bg-primary/90"><Link href={`/portal/profesionales/${profile.id}`}>Ver perfil <ChevronRight className="ml-2 h-4 w-4" /></Link></Button><Button asChild variant="outline" className="border-white/40 bg-transparent text-white hover:bg-white/10"><Link href="/portal/documentos">Completar perfil</Link></Button></div>
                 </div>
               </div>
               <div className="justify-self-center text-center">
-                <div className="grid h-28 w-28 place-items-center rounded-full" style={{ background: `conic-gradient(#19b7aa ${percent * 3.6}deg, rgba(255,255,255,0.13) 0deg)` }}><div className="grid h-[86px] w-[86px] place-items-center rounded-full bg-[#052f32] font-display text-2xl font-bold">{percent}%</div></div>
+                <div className="grid h-28 w-28 place-items-center rounded-full" style={{ background: `conic-gradient(#25c0d5 ${percent * 3.6}deg, rgba(255,255,255,0.13) 0deg)` }}><div className="grid h-[86px] w-[86px] place-items-center rounded-full bg-[#0e1a26] font-display text-2xl font-bold">{percent}%</div></div>
                 <p className="mt-3 text-sm text-white/75">Perfil completo</p>
               </div>
             </div>
@@ -133,7 +133,7 @@ export function ProfessionalDashboard({ profile, workspaceId }: { profile: Profe
                   <div className="mt-4 divide-y">
                     {profile.experiences.slice(0, 3).map((experience) => (
                       <article key={experience.id} className="py-4 first:pt-0">
-                        <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-bold text-[#102733]">{experience.title}</p><p className="mt-1 text-xs text-muted-foreground">{experience.companyName || "Empresa por confirmar"} | {experience.role || "Rol profesional"}</p>{experience.project ? <p className="mt-2 text-xs font-semibold text-primary">Proyecto: {experience.project.title}</p> : null}</div>{experience.verifiedByTerraqo ? <span className="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">Validado</span> : null}</div>
+                        <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-bold text-[#0e1a26]">{experience.title}</p><p className="mt-1 text-xs text-muted-foreground">{experience.companyName || "Empresa por confirmar"} | {experience.role || "Rol profesional"}</p>{experience.project ? <p className="mt-2 text-xs font-semibold text-primary">Proyecto: {experience.project.title}</p> : null}</div>{experience.verifiedByTerraqo ? <span className="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">Validado</span> : null}</div>
                       </article>
                     ))}
                     {!profile.experiences.length ? <p className="py-8 text-center text-sm text-muted-foreground">Registra tu primera experiencia desde una bitacora o proyecto.</p> : null}
@@ -160,7 +160,7 @@ export function ProfessionalDashboard({ profile, workspaceId }: { profile: Profe
 
               <section className="rounded-lg border bg-white p-6 shadow-[0_14px_36px_rgba(1,45,56,0.05)]"><div className="flex items-center justify-between"><h2 className="font-display text-lg font-bold">Documentos pendientes</h2><span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">{Number(!hasCv) + Number(!identityComplete)} pendientes</span></div><div className="mt-4 divide-y">{!hasCv ? <Link href="/portal/documentos" className="flex items-center justify-between gap-3 py-3 text-sm"><span><b>CV profesional</b><small className="mt-1 block text-muted-foreground">Completa tus postulaciones</small></span><span className="font-semibold text-primary">Subir</span></Link> : null}{!identityComplete ? <Link href="/portal/documentos" className="flex items-center justify-between gap-3 py-3 text-sm"><span><b>Verificacion de identidad</b><small className="mt-1 block text-muted-foreground">DNI por delante y detras</small></span><span className="font-semibold text-primary">Revisar</span></Link> : null}{hasCv && identityComplete ? <p className="py-4 text-sm text-emerald-700">Tus documentos principales estan completos.</p> : null}</div></section>
 
-              <section className="rounded-lg border bg-white p-6"><h2 className="font-display text-lg font-bold">Atajos rapidos</h2><div className="mt-4 divide-y">{[["/portal/oportunidades", "Explorar oportunidades"], ["/portal/postulaciones", "Mis postulaciones"], ["/portal/bitacora", "Actualizar CV vivo"], ["/portal/validaciones", "Ver validaciones"]].map(([href, label]) => <Link key={label} href={href} className="flex items-center justify-between py-3 text-sm font-semibold text-[#304752] hover:text-primary">{label}<ChevronRight className="h-4 w-4" /></Link>)}</div></section>
+              <section className="rounded-lg border bg-white p-6"><h2 className="font-display text-lg font-bold">Atajos rapidos</h2><div className="mt-4 divide-y">{[["/portal/oportunidades", "Explorar oportunidades"], ["/portal/postulaciones", "Mis postulaciones"], ["/portal/bitacora", "Actualizar CV vivo"], ["/portal/validaciones", "Ver validaciones"]].map(([href, label]) => <Link key={label} href={href} className="flex items-center justify-between py-3 text-sm font-semibold text-[#2f4154] hover:text-primary">{label}<ChevronRight className="h-4 w-4" /></Link>)}</div></section>
 
               <section className="rounded-lg border bg-white p-6">
                 <p className="font-mono text-xs font-bold uppercase tracking-[0.16em] text-primary">Configuracion</p>

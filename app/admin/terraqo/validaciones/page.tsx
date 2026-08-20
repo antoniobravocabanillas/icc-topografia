@@ -173,7 +173,7 @@ export default async function TerraqoValidationsPage() {
       <div className="grid gap-5 lg:grid-cols-[1fr_360px] lg:items-end">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.14em] text-primary">Gobierno Terraqo</p>
-          <h1 className="mt-2 font-display text-3xl font-bold text-[#071b28]">Validaciones, cuentas y control global</h1>
+          <h1 className="mt-2 font-display text-3xl font-bold text-[#0e1a26]">Validaciones, cuentas y control global</h1>
           <p className="mt-3 max-w-3xl text-muted-foreground">
             Mesa operativa para revisar documentación, identidad, experiencias y localizar cuentas de empresas o profesionales sin depender del workspace seleccionado.
           </p>

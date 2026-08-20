@@ -30,7 +30,7 @@ export function EditablePanel({ title, subtitle, updateAction, deleteAction, chi
           <span className="block truncate text-sm font-bold text-foreground">{title}</span>
           <span className="mt-1 block line-clamp-1 text-xs text-muted-foreground">{subtitle}</span>
         </span>
-        <span className="flex shrink-0 items-center gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#668087]">
+        <span className="flex shrink-0 items-center gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#607083]">
           Editar
           <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
         </span>

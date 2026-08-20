@@ -58,7 +58,7 @@ function patternStyle(pattern: string, primary: string, accent: string): CSSProp
   if (pattern === "clean") return {};
   if (pattern === "dark-panel") {
     return {
-      backgroundImage: `radial-gradient(circle at 18% 20%, ${accent}25, transparent 34%), linear-gradient(135deg, ${primary}, #061722)`
+      backgroundImage: `radial-gradient(circle at 18% 20%, ${accent}25, transparent 34%), linear-gradient(135deg, ${primary}, #0e1a26)`
     };
   }
   if (pattern === "topographic") {
@@ -156,7 +156,7 @@ export default async function PublicCompanyProfilePage({ params }: PageProps) {
   const primaryStyle = { "--workspace-primary": visualIdentity.primaryColor, "--workspace-accent": visualIdentity.accentColor } as CSSProperties;
 
   return (
-    <main className={cn("terraqo-brand-surface terraqo-company-v3 min-h-screen text-[#082230]", fontClassName(visualIdentity.fontFamily))} style={{ backgroundColor: visualIdentity.backgroundColor, ...primaryStyle }}>
+    <main className={cn("terraqo-brand-surface terraqo-company-v3 min-h-screen text-[#0e1a26]", fontClassName(visualIdentity.fontFamily))} style={{ backgroundColor: visualIdentity.backgroundColor, ...primaryStyle }}>
       <Header name={name} logoUrl={workspace.logoUrl} visualIdentity={visualIdentity} />
 
       <section className="mx-auto grid max-w-7xl gap-8 px-5 py-12 lg:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)] lg:py-16">
@@ -164,7 +164,7 @@ export default async function PublicCompanyProfilePage({ params }: PageProps) {
           <div className="flex flex-col gap-6 md:flex-row md:items-center">
             <BrandMark name={name} logoUrl={workspace.logoUrl} visualIdentity={visualIdentity} />
             <div>
-              <span className="inline-flex items-center gap-2 rounded-md border border-[#dbe8e5] bg-white px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] text-[#304b54]">
+              <span className="inline-flex items-center gap-2 rounded-md border border-[#d8e0ec] bg-white px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] text-[#304b54]">
                 <BriefcaseBusiness className="h-3.5 w-3.5" /> {visualIdentity.badgeLabel}
               </span>
               <h1 className="mt-5 flex flex-wrap items-center gap-3 font-display text-5xl font-black leading-none tracking-[-0.045em] md:text-6xl">
@@ -181,7 +181,7 @@ export default async function PublicCompanyProfilePage({ params }: PageProps) {
             <InlineTrust icon={ShieldCheck} label="Perfil verificado por Terraqo" color={visualIdentity.primaryColor} />
           </div>
 
-          <article className="rounded-[26px] border border-[#dbe8e5] bg-white/86 p-7 shadow-[0_28px_90px_-60px_rgba(3,52,59,0.45)] md:p-8">
+          <article className="rounded-[26px] border border-[#d8e0ec] bg-white/86 p-7 shadow-[0_28px_90px_-60px_rgba(3,52,59,0.45)] md:p-8">
             <p className="max-w-4xl text-base leading-8 text-[#314f58]">{summary}</p>
             <div className="mt-8 flex flex-wrap gap-3">
               {domainHref ? <Link href={domainHref} target="_blank" className="inline-flex h-12 items-center gap-2 rounded-md px-5 text-sm font-black text-white shadow-[0_20px_45px_-24px_rgba(0,0,0,0.5)]" style={{ backgroundColor: visualIdentity.primaryColor }}>Visitar sitio web <ArrowRight className="h-4 w-4" /></Link> : null}
@@ -202,16 +202,16 @@ export default async function PublicCompanyProfilePage({ params }: PageProps) {
         />
       </section>
 
-      <section className="mx-auto grid max-w-7xl overflow-hidden rounded-[22px] border border-[#dbe8e5] bg-white/90 px-5 shadow-[0_22px_70px_-55px_rgba(3,52,59,0.5)] md:grid-cols-5 md:px-0">
+      <section className="mx-auto grid max-w-7xl overflow-hidden rounded-[22px] border border-[#d8e0ec] bg-white/90 px-5 shadow-[0_22px_70px_-55px_rgba(3,52,59,0.5)] md:grid-cols-5 md:px-0">
         <MetricStrip icon={CalendarDays} value="5+ años" label="Experiencia acumulada" color={visualIdentity.primaryColor} />
         <MetricStrip icon={Layers3} value={workspace._count.projects} label="Proyectos registrados" color={visualIdentity.primaryColor} />
         <MetricStrip icon={ShieldCheck} value="100%" label="Perfil operativo activo" color={visualIdentity.primaryColor} />
         <MetricStrip icon={FolderKanban} value={workspace._count.worklogs} label="Evidencias internas" color={visualIdentity.primaryColor} />
-        <div className="flex items-center gap-3 px-6 py-5 text-sm text-[#4c6870] md:border-l md:border-[#dbe8e5]">
+        <div className="flex items-center gap-3 px-6 py-5 text-sm text-[#4c6870] md:border-l md:border-[#d8e0ec]">
           <span className="h-2 w-2 rounded-full" style={{ backgroundColor: visualIdentity.primaryColor }} />
           <div>
             <p>Última actividad</p>
-            <strong className="block text-[#082230]">{latestActivity ? latestActivity.toLocaleDateString("es-PE", { day: "2-digit", month: "short", year: "numeric" }) : "Pendiente"}</strong>
+            <strong className="block text-[#0e1a26]">{latestActivity ? latestActivity.toLocaleDateString("es-PE", { day: "2-digit", month: "short", year: "numeric" }) : "Pendiente"}</strong>
           </div>
         </div>
       </section>
@@ -232,15 +232,15 @@ export default async function PublicCompanyProfilePage({ params }: PageProps) {
 
 function Header({ name, logoUrl, visualIdentity }: { name: string; logoUrl?: string | null; visualIdentity: VisualIdentity }) {
   return (
-    <header className="border-b border-[#ded8cc] bg-[#f4efe6]/92 backdrop-blur">
+    <header className="border-b border-[#d6e0eb] bg-[#f3f3f3]/92 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-5 px-5 py-5">
         <Link href="/" className="flex items-center gap-3">
-          <span className="grid h-9 w-9 place-items-center overflow-hidden rounded-md bg-white p-1.5" style={{ border: `1px solid ${visualIdentity.primaryColor}55` }}>
+          <span className="grid h-11 w-11 place-items-center overflow-hidden rounded-lg bg-white p-1" style={{ border: `1px solid ${visualIdentity.primaryColor}55` }}>
             <TerraqoLogo src={logoUrl} variant="mark" alt={logoUrl ? name : "Terraqo"} className="h-full w-full" />
           </span>
-          <strong className="font-display text-xl font-black">Terraqo</strong>
+          <strong className="font-display text-xl font-black">{name}</strong>
         </Link>
-        <nav className="hidden items-center gap-8 text-sm font-bold text-[#2e3436] md:flex">
+        <nav className="hidden items-center gap-8 text-sm font-bold text-[#0e1a26] md:flex">
           <a href="#servicios">Servicios</a>
           <a href="#sectores">Sectores</a>
           <a href="#diferenciales">Diferenciales</a>
@@ -254,7 +254,7 @@ function Header({ name, logoUrl, visualIdentity }: { name: string; logoUrl?: str
 
 function BrandMark({ name, logoUrl, visualIdentity }: { name: string; logoUrl?: string | null; visualIdentity: VisualIdentity }) {
   return (
-    <div className="grid h-28 w-28 shrink-0 place-items-center rounded-[22px] p-4 shadow-[0_30px_80px_-45px_rgba(0,0,0,0.65)]" style={{ background: `linear-gradient(135deg, ${visualIdentity.primaryColor}, #06242a)` }}>
+    <div className="grid h-28 w-28 shrink-0 place-items-center rounded-[22px] p-4 shadow-[0_30px_80px_-45px_rgba(14,26,38,0.65)]" style={{ background: `linear-gradient(135deg, ${visualIdentity.primaryColor}, #0e1a26)` }}>
       <TerraqoLogo src={logoUrl} variant="mark" alt={logoUrl ? name : "Terraqo"} className="h-full w-full" imageClassName="rounded-[14px]" />
     </div>
   );
@@ -266,8 +266,8 @@ function InlineTrust({ icon: Icon, label, color }: { icon: typeof MapPin; label:
 
 function VisualOperationCard({ name, heroImageUrl, visualIdentity, projects, jobs, professionals }: { name: string; heroImageUrl?: string; visualIdentity: VisualIdentity; projects: number; jobs: number; professionals: number }) {
   return (
-    <aside className="overflow-hidden rounded-[26px] border border-[#dbe8e5] bg-[#071b20] shadow-[0_32px_90px_-52px_rgba(3,52,59,0.7)]">
-      <div className="relative h-64 overflow-hidden bg-[#dcebea]" style={patternStyle(visualIdentity.heroPattern, visualIdentity.primaryColor, visualIdentity.accentColor)}>
+    <aside className="overflow-hidden rounded-[26px] border border-[#d8e0ec] bg-[#0e1a26] shadow-[0_32px_90px_-52px_rgba(3,52,59,0.7)]">
+      <div className="relative h-64 overflow-hidden bg-[#e8eef5]" style={patternStyle(visualIdentity.heroPattern, visualIdentity.primaryColor, visualIdentity.accentColor)}>
         {heroImageUrl ? (
           <>
             <Image src={heroImageUrl} alt={`Operación de ${name}`} fill sizes="(min-width: 1024px) 420px, 100vw" className="object-cover" unoptimized />
@@ -276,7 +276,7 @@ function VisualOperationCard({ name, heroImageUrl, visualIdentity, projects, job
         ) : (
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_25%,rgba(255,255,255,0.9),transparent_0_18%,rgba(255,255,255,0)_34%),linear-gradient(135deg,rgba(255,255,255,0.75),rgba(255,255,255,0.08))]" />
         )}
-        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#071b20] to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#0e1a26] to-transparent" />
       </div>
       <div className="p-6 text-white">
         <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: visualIdentity.accentColor }}>Operación viva ·</p>
@@ -301,7 +301,7 @@ function DarkMetric({ icon: Icon, value, label, visualIdentity }: { icon: typeof
 
 function MetricStrip({ icon: Icon, value, label, color }: { icon: typeof CalendarDays; value: string | number; label: string; color: string }) {
   return (
-    <div className="flex items-center gap-4 px-6 py-5 md:border-r md:border-[#dbe8e5]">
+    <div className="flex items-center gap-4 px-6 py-5 md:border-r md:border-[#d8e0ec]">
       <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#eff8f6]" style={{ color }}><Icon className="h-5 w-5" /></span>
       <div><strong className="block font-display text-2xl font-black">{value}</strong><span className="text-sm text-[#516b72]">{label}</span></div>
     </div>
@@ -310,7 +310,7 @@ function MetricStrip({ icon: Icon, value, label, color }: { icon: typeof Calenda
 
 function ServicesPanel({ items, color }: { items: string[]; color: string }) {
   return (
-    <section id="servicios" className="rounded-[24px] border border-[#dbe8e5] bg-white p-7 shadow-[0_28px_90px_-60px_rgba(3,52,59,0.45)]">
+    <section id="servicios" className="rounded-[24px] border border-[#d8e0ec] bg-white p-7 shadow-[0_28px_90px_-60px_rgba(3,52,59,0.45)]">
       <h2 className="font-display text-3xl font-black">Servicios principales</h2>
       <div className="mt-7 space-y-1">
         {items.map((item, index) => {
@@ -334,7 +334,7 @@ function ServicesPanel({ items, color }: { items: string[]; color: string }) {
 function DifferentiatorsPanel({ items, color }: { items: string[]; color: string }) {
   const icons = [ShieldCheck, Target, UsersRound, BadgeCheck, Layers3, Sparkles];
   return (
-    <section id="diferenciales" className="rounded-[24px] border border-[#dbe8e5] bg-white p-7 shadow-[0_28px_90px_-60px_rgba(3,52,59,0.45)]">
+    <section id="diferenciales" className="rounded-[24px] border border-[#d8e0ec] bg-white p-7 shadow-[0_28px_90px_-60px_rgba(3,52,59,0.45)]">
       <h2 className="font-display text-3xl font-black">Diferenciales</h2>
       <div className="mt-6 grid gap-3">
         {items.map((item, index) => {
@@ -357,7 +357,7 @@ function DifferentiatorsPanel({ items, color }: { items: string[]; color: string
 
 function SectorsPanel({ items, color }: { items: string[]; color: string }) {
   return (
-    <section id="sectores" className="rounded-[24px] border border-[#dbe8e5] bg-white p-7 shadow-[0_28px_90px_-60px_rgba(3,52,59,0.45)]">
+    <section id="sectores" className="rounded-[24px] border border-[#d8e0ec] bg-white p-7 shadow-[0_28px_90px_-60px_rgba(3,52,59,0.45)]">
       <div className="flex items-center justify-between gap-4">
         <h2 className="font-display text-3xl font-black">Sectores</h2>
         <Factory className="h-5 w-5" style={{ color }} />
@@ -371,7 +371,7 @@ function SectorsPanel({ items, color }: { items: string[]; color: string }) {
 
 function ContactPanel({ coverage, email, phone, domain, domainHref, color }: { coverage: string; email?: string; phone?: string; domain?: string | null; domainHref?: string | null; color: string }) {
   return (
-    <section id="contacto" className="rounded-[24px] border border-[#dbe8e5] bg-white p-7 shadow-[0_28px_90px_-60px_rgba(3,52,59,0.45)]">
+    <section id="contacto" className="rounded-[24px] border border-[#d8e0ec] bg-white p-7 shadow-[0_28px_90px_-60px_rgba(3,52,59,0.45)]">
       <h2 className="font-display text-3xl font-black">Contacto</h2>
       <div className="mt-6 space-y-4 text-sm font-semibold text-[#4b6870]">
         <ContactRow icon={MapPin} color={color}>{coverage}</ContactRow>
@@ -389,10 +389,10 @@ function ContactRow({ icon: Icon, color, children }: { icon: typeof Mail; color:
 
 function Footer({ visualIdentity }: { visualIdentity: VisualIdentity }) {
   return (
-    <footer className="mt-8 bg-[#071722] text-white">
+    <footer className="mt-8 bg-[#0e1a26] text-white">
       <div className="mx-auto grid max-w-7xl gap-10 px-5 py-12 md:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr]">
         <div>
-          <div className="flex items-center gap-3"><span className="grid h-9 w-9 place-items-center rounded-md text-xs font-black" style={{ backgroundColor: visualIdentity.primaryColor }}>TQ</span><strong className="font-display text-2xl">terraqo</strong></div>
+          <TerraqoLogo variant="horizontal" tone="dark" alt="Terraqo" className="h-10 w-[155px]" />
           <p className="mt-5 max-w-sm text-sm leading-7 text-white/62">Software modular, red profesional y evidencia de trabajo en un solo ecosistema.</p>
         </div>
         <FooterGroup title="Plataforma" items={["Cómo funciona", "Membresías", "Seguridad"]} />

@@ -57,12 +57,12 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
   const isWorkspacePortal = Boolean(workspace);
 
   return (
-    <section className="tq-auth-surface relative isolate overflow-hidden bg-[#171510] text-white">
-      <div className="absolute inset-x-0 bottom-0 h-px bg-[#a85432]" />
+    <section className="tq-auth-surface relative isolate overflow-hidden bg-[#0e1a26] text-white">
+      <div className="absolute inset-x-0 bottom-0 h-px bg-[#25c0d5]" />
 
       <div className="container relative grid min-h-[calc(100vh-4rem)] items-center gap-10 py-16 xl:grid-cols-[0.85fr_1.15fr]">
         <div className="max-w-3xl">
-          <Badge className="bg-[#f0eadf] text-[#171510] hover:bg-[#f0eadf]">{isWorkspacePortal ? `Portal ${brandName}` : "Portal Terraqo"}</Badge>
+          <Badge className="bg-[#f3f3f3] text-[#0e1a26] hover:bg-[#f3f3f3]">{isWorkspacePortal ? `Portal ${brandName}` : "Portal Terraqo"}</Badge>
           {workspace?.logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={workspace.logoUrl} alt={brandName} className="mt-5 h-14 max-w-[240px] object-contain" />
@@ -73,17 +73,17 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
           <p className="mt-6 max-w-2xl text-lg leading-8 text-white/72">
             {isWorkspacePortal
               ? "Entras por Portal Terraqo y trabajas dentro del workspace de la empresa que te corresponde, con su marca, permisos y datos aislados."
-              : "Gestiona cotizaciones, solicitudes, proyectos, perfiles tecnicos y participacion profesional desde un entorno conectado por workspace."}
+              : "Gestiona cotizaciones, solicitudes, proyectos, perfiles técnicos y participación profesional desde un entorno conectado por workspace."}
           </p>
 
           <div className="mt-8 grid gap-3 sm:grid-cols-3">
             {[
               { icon: Building2, title: "Empresa", text: "solicitudes y proyectos" },
               { icon: BriefcaseBusiness, title: "Profesional", text: "perfil y CV vivo" },
-              { icon: Network, title: "Workspace", text: "modulos activables" }
+              { icon: Network, title: "Workspace", text: "módulos activables" }
             ].map((item) => (
               <div key={item.title} className="rounded-lg border border-white/14 bg-white/[0.055] p-4 backdrop-blur">
-                <item.icon className="h-5 w-5 text-[#c89a38]" />
+                <item.icon className="h-5 w-5 text-[#25c0d5]" />
                 <p className="mt-4 font-display text-xl font-bold">{item.title}</p>
                 <p className="mt-1 text-sm text-white/60">{item.text}</p>
               </div>
@@ -91,9 +91,9 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
           </div>
 
           <div className="mt-8 flex flex-wrap gap-3 text-sm text-white/68">
-            <span className="inline-flex items-center gap-2"><BadgeCheck className="h-4 w-4 text-[#c89a38]" /> Acceso por perfil</span>
-            <span className="inline-flex items-center gap-2"><LockKeyhole className="h-4 w-4 text-[#c89a38]" /> Datos privados por workspace</span>
-            <span className="inline-flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-[#c89a38]" /> Modulos segun suscripcion</span>
+            <span className="inline-flex items-center gap-2"><BadgeCheck className="h-4 w-4 text-[#25c0d5]" /> Acceso por perfil</span>
+            <span className="inline-flex items-center gap-2"><LockKeyhole className="h-4 w-4 text-[#25c0d5]" /> Datos privados por workspace</span>
+            <span className="inline-flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-[#25c0d5]" /> Módulos según suscripción</span>
           </div>
         </div>
 
@@ -105,7 +105,7 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
                   <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-md bg-primary/10 text-primary">
                     <UserRound className="h-6 w-6" />
                   </div>
-                  <CardTitle>Sesion activa</CardTitle>
+                  <CardTitle>Sesión activa</CardTitle>
                   <CardDescription>{session.user.name || session.user.email}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-5 p-6">
@@ -138,7 +138,7 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
             <>
               <SignInForm
                 title={isWorkspacePortal ? `Ingresar al portal de ${brandName}` : undefined}
-                description={isWorkspacePortal ? "Usa tus credenciales Terraqo. Al ingresar veras el espacio, documentos, pedidos, soporte y mensajes asociados a este workspace." : undefined}
+                description={isWorkspacePortal ? "Usa tus credenciales Terraqo. Al ingresar verás el espacio, documentos, pedidos, soporte y mensajes asociados a este workspace." : undefined}
               />
               <div id="registro-cliente" className="scroll-mt-24">
                 <ClientRegistrationForm />

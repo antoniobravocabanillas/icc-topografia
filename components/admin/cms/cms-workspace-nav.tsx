@@ -50,7 +50,7 @@ export function CmsWorkspaceNav({ activeSection, counts }: CmsWorkspaceNavProps)
                 className={cn(
                   "group flex min-h-16 items-center gap-2 rounded-md border border-transparent px-2.5 py-2.5 transition-colors sm:gap-3 sm:px-3",
                   active
-                    ? "border-[#a9d7d2] bg-[#e7f6f4] text-[#006e70]"
+                    ? "border-[#a9d7d2] bg-[#e7f6f4] text-[#4374ba]"
                     : "text-[#284a52] hover:border-[#d0e3e0] hover:bg-[#f2f9f8]"
                 )}
                 aria-current={active ? "page" : undefined}
@@ -62,7 +62,7 @@ export function CmsWorkspaceNav({ activeSection, counts }: CmsWorkspaceNavProps)
                   <span className="block line-clamp-2 text-xs font-bold leading-4 sm:text-sm">{section.label}</span>
                   <span className="mt-0.5 hidden truncate text-[11px] text-muted-foreground sm:block">{section.description}</span>
                 </span>
-                <span className={cn("grid h-7 min-w-7 place-items-center rounded-md px-1.5 font-mono text-[11px] font-semibold", active ? "bg-[#007f7d] text-white" : "bg-[#edf3f2] text-[#5c7479]")}>
+                <span className={cn("grid h-7 min-w-7 place-items-center rounded-md px-1.5 font-mono text-[11px] font-semibold", active ? "bg-[#4374ba] text-white" : "bg-[#e8eef7] text-[#526276]")}>
                   {counts[section.id]}
                 </span>
               </Link>

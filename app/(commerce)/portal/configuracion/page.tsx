@@ -80,7 +80,7 @@ export default async function PortalSettingsPage({ searchParams }: SettingsPageP
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-end">
           <div>
             <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-primary">Configuración profesional</p>
-            <h1 className="mt-3 font-display text-4xl font-bold tracking-tight text-[#071b28] lg:text-5xl">Tu perfil, tus permisos y tus datos privados.</h1>
+            <h1 className="mt-3 font-display text-4xl font-bold tracking-tight text-[#0e1a26] lg:text-5xl">Tu perfil, tus permisos y tus datos privados.</h1>
             <p className="mt-4 max-w-2xl text-base leading-7 text-[#4a6570]">
               Controla como te encuentran, quien puede escribirte y que información operativa pueden ver las empresas con las que trabajas.
             </p>

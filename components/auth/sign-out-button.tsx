@@ -20,7 +20,7 @@ export function SignOutButton({ className }: SignOutButtonProps) {
       }}
     >
       <LogOut className="h-4 w-4" />
-      Cerrar sesion
+      Cerrar sesión
     </Button>
   );
 }

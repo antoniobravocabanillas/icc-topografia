@@ -9,9 +9,9 @@ export const metadata: Metadata = {
   },
   description: "Software modular, red profesional, marketplace y CV vivo para conectar empresas, proyectos y talento con evidencia real.",
   icons: {
-    icon: "/brand/terraqo-3/favicon.svg",
-    shortcut: "/brand/terraqo-3/favicon.svg",
-    apple: "/brand/terraqo-3/isotipo-icono.svg"
+    icon: "/brand/terraqo-3/withbackground/icon_bg_white.svg",
+    shortcut: "/brand/terraqo-3/withbackground/icon_bg_white.svg",
+    apple: "/brand/terraqo-3/withbackground/icon_bg_white.svg"
   }
 };
 

@@ -139,7 +139,7 @@ export function WorklogComposer({ workspaces }: { workspaces: WorkspaceOption[] 
         <label className="grid gap-2 text-sm font-semibold">Habilidades, separadas por coma
           <input name="skills" className="h-11 rounded-md border bg-background px-3" placeholder="Topografia, GNSS, AutoCAD" />
         </label>
-        <div className="flex min-h-11 items-center gap-3 rounded-md border bg-[#f2f8f7] px-3 text-sm text-[#35525c]">
+        <div className="flex min-h-11 items-center gap-3 rounded-md border bg-[#f2f8f7] px-3 text-sm text-[#35485b]">
           <CalendarClock className="h-4 w-4 shrink-0 text-primary" />
           <span><b>Fecha y hora automáticas.</b> Se registran al guardar y no podrán modificarse.</span>
         </div>
