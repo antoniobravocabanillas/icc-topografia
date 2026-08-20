@@ -197,7 +197,7 @@ export default async function ExperienceDetailPage({ params }: ExperienceDetailP
                   : "El estado indica que la experiencia fue declarada por el profesional y puede solicitar validacion referencial."}
               </p>
             </div>
-            <Link href={`/cuenta?callbackUrl=${encodeURIComponent(publicCvPath(username))}`} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-[10px] bg-[#4374ba] px-5 py-3 text-sm font-black text-white shadow-[0_18px_38px_rgba(0,140,131,0.18)] transition hover:bg-[#4374ba]">
+            <Link href={`/cuenta?callbackUrl=${encodeURIComponent(publicCvPath(username))}`} prefetch={false} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-[10px] bg-[#4374ba] px-5 py-3 text-sm font-black text-white shadow-[0_18px_38px_rgba(0,140,131,0.18)] transition hover:bg-[#4374ba]">
               Contactar perfil
               <ArrowRight className="h-4 w-4" />
             </Link>

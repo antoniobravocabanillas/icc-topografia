@@ -610,7 +610,7 @@ function ProfileHero({ profile, name, username, specialties, isPublicCv }: { pro
           {remainingSpecialties ? <span className="inline-flex items-center gap-1 rounded-full border border-[#488ac9]/25 bg-[#4374ba]/10 px-3 py-1.5 text-xs font-black text-[#9fc4ff]"><Plus className="h-3.5 w-3.5" />{remainingSpecialties}</span> : null}
         </div>
         <div className="mt-6 grid grid-cols-2 gap-2 sm:hidden">
-          <Link href={publicCvCallback(username)} className="rounded-xl bg-[#4374ba] px-4 py-3 text-sm font-black text-white shadow-[0_18px_40px_rgba(67,116,186,0.28)]">
+          <Link href={publicCvCallback(username)} prefetch={false} className="rounded-xl bg-[#4374ba] px-4 py-3 text-sm font-black text-white shadow-[0_18px_40px_rgba(67,116,186,0.28)]">
             Contactar
           </Link>
           <Link href={publicCvPath(username, "experiencias")} className="rounded-xl border border-white/14 bg-white/8 px-4 py-3 text-sm font-black text-white">
@@ -1160,7 +1160,7 @@ function DocumentsPanel({ profile, username, extended = false }: { profile: Publ
       <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {docs.map((document) => <DocumentStatusCard key={`${document.type}-${document.id}`} document={document} />)}
       </div>
-      <Link href={extended ? publicCvCallback(username, "documentos") : publicCvPath(username, "documentos")} className="mt-5 inline-flex items-center gap-2 text-sm font-black text-[#9fc4ff] transition hover:text-[#25c0d5]">{extended ? "Solicitar acceso al detalle" : "Ver todos los documentos"} <ArrowRight className="h-4 w-4" /></Link>
+      <Link href={extended ? publicCvCallback(username, "documentos") : publicCvPath(username, "documentos")} prefetch={!extended} className="mt-5 inline-flex items-center gap-2 text-sm font-black text-[#9fc4ff] transition hover:text-[#25c0d5]">{extended ? "Solicitar acceso al detalle" : "Ver todos los documentos"} <ArrowRight className="h-4 w-4" /></Link>
     </section>
   );
 }
@@ -1177,8 +1177,8 @@ function PublicCVCTA({ username, isPublicCv, completeness }: { username: string;
         </div>
       </div>
       <div className="flex flex-wrap gap-3">
-        <Link href={publicCvCallback(username)} className="inline-flex items-center justify-center gap-2 rounded-[8px] border border-[#488ac9]/45 bg-transparent px-5 py-3 text-sm font-black text-white transition hover:border-[#25c0d5] hover:text-[#25c0d5]"><MessageSquare className="h-4 w-4" />Contactar</Link>
-        <Link href={publicCvCallback(username)} className="inline-flex items-center justify-center gap-2 rounded-[8px] bg-[#4374ba] px-5 py-3 text-sm font-black text-white"><LockKeyhole className="h-4 w-4" />Solicitar acceso al CV completo</Link>
+        <Link href={publicCvCallback(username)} prefetch={false} className="inline-flex items-center justify-center gap-2 rounded-[8px] border border-[#488ac9]/45 bg-transparent px-5 py-3 text-sm font-black text-white transition hover:border-[#25c0d5] hover:text-[#25c0d5]"><MessageSquare className="h-4 w-4" />Contactar</Link>
+        <Link href={publicCvCallback(username)} prefetch={false} className="inline-flex items-center justify-center gap-2 rounded-[8px] bg-[#4374ba] px-5 py-3 text-sm font-black text-white"><LockKeyhole className="h-4 w-4" />Solicitar acceso al CV completo</Link>
         <Link href={`/api/terraqo/cv/${username}/pdf`} target="_blank" className="inline-flex items-center justify-center gap-2 rounded-[8px] border border-white/15 bg-white/[0.04] px-5 py-3 text-sm font-black text-white"><Download className="h-4 w-4" />Descargar PDF</Link>
       </div>
     </section>

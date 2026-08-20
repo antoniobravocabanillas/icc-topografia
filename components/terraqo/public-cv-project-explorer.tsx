@@ -84,7 +84,7 @@ export function PublicCvProjectExplorer({ projects, username }: { projects: Proj
             <span className="mx-auto grid h-20 w-20 place-items-center rounded-full border border-[#488ac9]/30 bg-[#4374ba]/10 text-[#488ac9]"><EyeOff className="h-8 w-8" /></span>
             <h2 className="mt-5 font-display text-2xl font-black text-white">{projects.length ? "No encontramos coincidencias" : "Sin proyectos públicos"}</h2>
             <p className="mt-3 text-sm leading-6 text-white/50">{projects.length ? "Prueba otra búsqueda o limpia la categoría seleccionada." : "Los proyectos aparecerán cuando el profesional active su visibilidad pública."}</p>
-            {projects.length ? <button type="button" onClick={() => { setQuery(""); setCategory("TODOS"); }} className="mt-5 rounded-[9px] border border-[#488ac9]/40 px-5 py-3 text-sm font-black text-[#9fc4ff]">Limpiar filtros</button> : <Link href={`/cuenta?callbackUrl=${encodeURIComponent(`/cv/${username}/proyectos`)}`} className="mt-5 inline-flex items-center gap-2 rounded-[9px] bg-[#4374ba] px-5 py-3 text-sm font-black text-white">Solicitar acceso <ArrowRight className="h-4 w-4" /></Link>}
+            {projects.length ? <button type="button" onClick={() => { setQuery(""); setCategory("TODOS"); }} className="mt-5 rounded-[9px] border border-[#488ac9]/40 px-5 py-3 text-sm font-black text-[#9fc4ff]">Limpiar filtros</button> : <Link href={`/cuenta?callbackUrl=${encodeURIComponent(`/cv/${username}/proyectos`)}`} prefetch={false} className="mt-5 inline-flex items-center gap-2 rounded-[9px] bg-[#4374ba] px-5 py-3 text-sm font-black text-white">Solicitar acceso <ArrowRight className="h-4 w-4" /></Link>}
           </div>
         </div>
       )}
