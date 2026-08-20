@@ -27,6 +27,7 @@ import { formatExperienceDuration, monthsBetween, normalizeSpanishCopy } from "@
 import { TerraqoLogo } from "@/components/terraqo/terraqo-logo";
 import { TerraqoAvatar } from "@/components/terraqo/terraqo-avatar";
 import { TerraqoPublicHeader } from "@/components/terraqo/terraqo-public-header";
+import { PublicCvActivityExplorer, type PublicCvActivityRecord } from "@/components/terraqo/public-cv-activity-explorer";
 
 type PublicCVPageProps = {
   profile: PublicCvProfile;
@@ -321,6 +322,51 @@ export function PublicCVSectionPage({ profile, section }: { profile: PublicCvPro
   const projects = uniqueProjects(profile, null);
   const evidence = profile.worklogs;
 
+  if (section === "evidencias") {
+    const activityRecords: PublicCvActivityRecord[] = evidence.map((worklog) => ({
+      id: worklog.id,
+      title: normalizeSpanishCopy(worklog.title) || worklog.title,
+      summary: normalizeSpanishCopy(worklog.summary) || worklog.summary,
+      outcome: worklog.outcome ? normalizeSpanishCopy(worklog.outcome) : null,
+      type: worklog.type,
+      evidenceStatus: worklog.evidenceStatus,
+      occurredAt: worklog.occurredAt.toISOString(),
+      createdAt: worklog.createdAt.toISOString(),
+      skills: worklog.skills.map((skill) => normalizeSpanishCopy(skill) || skill),
+      evidenceUrls: worklog.evidenceUrls,
+      project: worklog.project ? {
+        title: normalizeSpanishCopy(worklog.project.title) || worklog.project.title,
+        clientName: worklog.project.clientName ? normalizeSpanishCopy(worklog.project.clientName) || worklog.project.clientName : null,
+        location: worklog.project.location ? normalizeSpanishCopy(worklog.project.location) || worklog.project.location : null,
+        category: worklog.project.category ? normalizeSpanishCopy(worklog.project.category) || worklog.project.category : null,
+        image: worklog.project.images[0]?.url || null
+      } : null,
+      workspace: worklog.workspace ? normalizeSpanishCopy(worklog.workspace.brandName || worklog.workspace.name) || worklog.workspace.brandName || worklog.workspace.name : null,
+      media: worklog.media.map((media) => ({
+        id: media.id,
+        fileName: media.fileName,
+        contentType: media.contentType,
+        href: `/api/public/cv/${encodeURIComponent(username)}/worklogs/${encodeURIComponent(media.id)}`,
+        downloadHref: `/api/public/cv/${encodeURIComponent(username)}/worklogs/${encodeURIComponent(media.id)}?download=1`
+      })),
+      validations: worklog.validations.map((validation) => ({
+        id: validation.id,
+        responseNote: validation.responseNote ? normalizeSpanishCopy(validation.responseNote) : null,
+        resolvedAt: validation.resolvedAt?.toISOString() || null,
+        createdAt: validation.createdAt.toISOString(),
+        validatorName: validation.validator.name ? normalizeSpanishCopy(validation.validator.name) || validation.validator.name : null,
+        validatorImage: validation.validator.image
+      }))
+    }));
+
+    return (
+      <div className="terraqo-brand-surface tq-cv-v3 min-h-screen bg-[#07111f]">
+        <TerraqoPublicHeader tone="dark" />
+        <PublicCvActivityExplorer username={username} profileName={profile.user.name || username} records={activityRecords} />
+      </div>
+    );
+  }
+
   return (
     <div className="terraqo-brand-surface tq-cv-v3 min-h-screen text-[#0e1a26]">
       <TerraqoPublicHeader tone="dark" />
@@ -358,7 +404,6 @@ export function PublicCVSectionPage({ profile, section }: { profile: PublicCvPro
           {section === "experiencias" ? <ExperienceTimeline profile={profile} username={username} extended /> : null}
           {section === "educacion" ? <EducationTimeline profile={profile} username={username} extended /> : null}
           {section === "proyectos" ? <ProjectsSection projects={projects} profile={profile} username={username} extended /> : null}
-          {section === "evidencias" ? <EvidenceSection worklogs={evidence} username={username} extended /> : null}
           {section === "capacidades" ? <SkillsAndTools profile={profile} username={username} extended /> : null}
           {section === "documentos" ? <DocumentsPanel profile={profile} username={username} extended /> : null}
           <PublicCVCTA username={username} isPublicCv={profile.liveCvEnabled && profile.liveCvVisibility === "PUBLIC"} completeness={computeCompleteness(profile)} />

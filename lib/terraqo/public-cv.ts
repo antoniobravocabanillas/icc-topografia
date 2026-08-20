@@ -67,7 +67,13 @@ export const publicCvProfileInclude = {
       workspace: { select: { brandName: true, name: true } },
       validations: {
         where: { status: "APPROVED" },
-        select: { id: true, responseNote: true, createdAt: true },
+        select: {
+          id: true,
+          responseNote: true,
+          createdAt: true,
+          resolvedAt: true,
+          validator: { select: { name: true, image: true } }
+        },
         take: 2
       },
       media: {
