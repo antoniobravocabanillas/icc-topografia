@@ -323,7 +323,7 @@ export function PublicCVSectionPage({ profile, section }: { profile: PublicCvPro
   const evidence = profile.worklogs;
 
   if (section === "evidencias") {
-    const activityRecords: PublicCvActivityRecord[] = evidence.map((worklog) => ({
+    const worklogRecords: PublicCvActivityRecord[] = evidence.map((worklog) => ({
       id: worklog.id,
       title: normalizeSpanishCopy(worklog.title) || worklog.title,
       summary: normalizeSpanishCopy(worklog.summary) || worklog.summary,
@@ -358,6 +358,145 @@ export function PublicCVSectionPage({ profile, section }: { profile: PublicCvPro
         validatorImage: validation.validator.image
       }))
     }));
+
+    const experienceRecords: PublicCvActivityRecord[] = profile.experiences.map((experience) => {
+      const validated = experience.verifiedByTerraqo || experience.verificationStatus === "APPROVED";
+      const occurredAt = experience.updatedAt.toISOString();
+      const company = normalizeSpanishCopy(experience.companyName || "") || experience.companyName || null;
+      const role = normalizeSpanishCopy(experience.role || "") || experience.role || null;
+      const title = normalizeSpanishCopy(experience.title) || experience.title;
+      const location = normalizeSpanishCopy(experience.location || experience.locationCity || "") || experience.location || experience.locationCity || null;
+
+      return {
+        id: `experience-${experience.id}`,
+        title: `${validated ? "Experiencia validada" : "Experiencia incorporada"}: ${title}`,
+        summary: normalizeSpanishCopy(experience.summary || "") || [role, company].filter(Boolean).join(" en ") || "Experiencia profesional declarada por el titular.",
+        outcome: experience.verificationNote
+          ? normalizeSpanishCopy(experience.verificationNote) || experience.verificationNote
+          : experience.highlights.length
+            ? experience.highlights.map((item) => normalizeSpanishCopy(item) || item).join(" · ")
+            : null,
+        type: validated ? "EXPERIENCE_VALIDATION" : "EXPERIENCE_UPDATE",
+        evidenceStatus: validated ? "VERIFIED" : "DECLARED",
+        occurredAt,
+        createdAt: experience.createdAt.toISOString(),
+        skills: [role, experience.project?.category].filter((item): item is string => Boolean(item)),
+        evidenceUrls: experience.evidence.filter((item) => /^(https?:\/\/|\/)/i.test(item)),
+        project: experience.project ? {
+          title: normalizeSpanishCopy(experience.project.title) || experience.project.title,
+          clientName: experience.project.clientName ? normalizeSpanishCopy(experience.project.clientName) || experience.project.clientName : company,
+          location: experience.project.location ? normalizeSpanishCopy(experience.project.location) || experience.project.location : location,
+          category: experience.project.category ? normalizeSpanishCopy(experience.project.category) || experience.project.category : null,
+          image: experience.project.images[0]?.url || null
+        } : null,
+        workspace: company,
+        media: [],
+        validations: validated ? [{
+          id: `experience-validation-${experience.id}`,
+          responseNote: experience.verificationNote ? normalizeSpanishCopy(experience.verificationNote) || experience.verificationNote : null,
+          resolvedAt: occurredAt,
+          createdAt: (experience.verificationRequestedAt || experience.updatedAt).toISOString(),
+          validatorName: experience.validatorName ? normalizeSpanishCopy(experience.validatorName) || experience.validatorName : "Equipo de validaciones Terraqo",
+          validatorImage: null
+        }] : []
+      };
+    });
+
+    const educationRecords: PublicCvActivityRecord[] = profile.education.map((education) => {
+      const validated = education.verificationStatus === "APPROVED";
+      const occurredAt = education.updatedAt.toISOString();
+      const degree = normalizeSpanishCopy(education.degree) || education.degree;
+      const institution = normalizeSpanishCopy(education.institution) || education.institution;
+      const field = education.field ? normalizeSpanishCopy(education.field) || education.field : null;
+
+      return {
+        id: `education-${education.id}`,
+        title: `${validated ? "Formación validada" : "Formación incorporada"}: ${degree}`,
+        summary: `${institution}${field ? ` · ${field}` : ""}`,
+        outcome: validated ? "La formación fue revisada como parte del proceso de confianza de Terraqo." : null,
+        type: validated ? "EDUCATION_VALIDATION" : "EDUCATION_UPDATE",
+        evidenceStatus: validated ? "VERIFIED" : "DECLARED",
+        occurredAt,
+        createdAt: education.createdAt.toISOString(),
+        skills: field ? [field] : [],
+        evidenceUrls: education.evidence.filter((item) => /^(https?:\/\/|\/)/i.test(item)),
+        project: null,
+        workspace: institution,
+        media: [],
+        validations: validated ? [{
+          id: `education-validation-${education.id}`,
+          responseNote: null,
+          resolvedAt: occurredAt,
+          createdAt: (education.verificationRequestedAt || education.updatedAt).toISOString(),
+          validatorName: education.validatorName ? normalizeSpanishCopy(education.validatorName) || education.validatorName : "Equipo de validaciones Terraqo",
+          validatorImage: null
+        }] : []
+      };
+    });
+
+    const documentRecords: PublicCvActivityRecord[] = profile.documents
+      .filter((document) => document.reviewStatus === "VERIFIED")
+      .map((document) => {
+        const reviewedAt = (document.reviewedAt || document.uploadedAt).toISOString();
+        const label = DOCUMENT_COPY[document.type]?.label || DOCUMENT_COPY.OTHER.label;
+        return {
+          id: `document-${document.id}`,
+          title: `Documento revisado: ${label}`,
+          summary: "Terraqo registró la revisión del documento. El archivo y sus datos permanecen privados.",
+          outcome: "Estado de revisión confirmado sin exponer el contenido del documento.",
+          type: "DOCUMENT_VALIDATION",
+          evidenceStatus: "VERIFIED",
+          occurredAt: reviewedAt,
+          createdAt: document.uploadedAt.toISOString(),
+          skills: [],
+          evidenceUrls: [],
+          project: null,
+          workspace: "Terraqo",
+          media: [],
+          validations: [{
+            id: `document-validation-${document.id}`,
+            responseNote: "Documento revisado. El archivo original conserva acceso restringido.",
+            resolvedAt: reviewedAt,
+            createdAt: reviewedAt,
+            validatorName: "Equipo de validaciones Terraqo",
+            validatorImage: null
+          }]
+        };
+      });
+
+    const projectRecords = Array.from(new Map(
+      profile.experiences
+        .filter((experience) => experience.project)
+        .map((experience) => [experience.project!.id, experience] as const)
+    ).values()).map<PublicCvActivityRecord>((experience) => {
+      const project = experience.project!;
+      const occurredAt = experience.updatedAt.toISOString();
+      return {
+        id: `project-${project.id}`,
+        title: `Proyecto vinculado: ${normalizeSpanishCopy(project.title) || project.title}`,
+        summary: [project.clientName, project.category, project.location].filter(Boolean).map((item) => normalizeSpanishCopy(item || "") || item).join(" · ") || "Proyecto asociado a la trayectoria pública del profesional.",
+        outcome: null,
+        type: "PROJECT_ACTIVITY",
+        evidenceStatus: experience.verifiedByTerraqo || experience.verificationStatus === "APPROVED" ? "VERIFIED" : "LINKED",
+        occurredAt,
+        createdAt: experience.createdAt.toISOString(),
+        skills: project.category ? [normalizeSpanishCopy(project.category) || project.category] : [],
+        evidenceUrls: [],
+        project: {
+          title: normalizeSpanishCopy(project.title) || project.title,
+          clientName: project.clientName ? normalizeSpanishCopy(project.clientName) || project.clientName : null,
+          location: project.location ? normalizeSpanishCopy(project.location) || project.location : null,
+          category: project.category ? normalizeSpanishCopy(project.category) || project.category : null,
+          image: project.images[0]?.url || null
+        },
+        workspace: experience.companyName ? normalizeSpanishCopy(experience.companyName) || experience.companyName : null,
+        media: [],
+        validations: []
+      };
+    });
+
+    const activityRecords = [...worklogRecords, ...experienceRecords, ...educationRecords, ...documentRecords, ...projectRecords]
+      .sort((left, right) => new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime());
 
     return (
       <div className="terraqo-brand-surface tq-cv-v3 min-h-screen bg-[#07111f]">

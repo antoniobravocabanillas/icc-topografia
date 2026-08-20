@@ -72,7 +72,7 @@ const FILTERS: Array<{ id: ActivityFilter; label: string }> = [
   { id: "all", label: "Todas" },
   { id: "updates", label: "Actualizaciones" },
   { id: "validations", label: "Validaciones" },
-  { id: "documents", label: "Evidencias" },
+  { id: "documents", label: "Documentos" },
   { id: "projects", label: "Proyectos" }
 ];
 
@@ -81,7 +81,13 @@ const TYPE_COPY: Record<string, { label: string; description: string; icon: Luci
   DELIVERABLE: { label: "Entregable", description: "Resultado o documento entregado", icon: FileCheck2, tone: "text-[#7fa8ff] border-[#4374ba]/45 bg-[#4374ba]/15" },
   PROBLEM_SOLVED: { label: "Solución", description: "Incidencia resuelta y documentada", icon: Wrench, tone: "text-[#f6be62] border-[#f6be62]/35 bg-[#f6be62]/10" },
   LEARNING: { label: "Aprendizaje", description: "Conocimiento incorporado al perfil", icon: Lightbulb, tone: "text-[#b6d56b] border-[#b6d56b]/35 bg-[#b6d56b]/10" },
-  MILESTONE: { label: "Hito", description: "Hito relevante de la trayectoria", icon: Milestone, tone: "text-[#8ba7ff] border-[#488ac9]/45 bg-[#488ac9]/15" }
+  MILESTONE: { label: "Hito", description: "Hito relevante de la trayectoria", icon: Milestone, tone: "text-[#8ba7ff] border-[#488ac9]/45 bg-[#488ac9]/15" },
+  EXPERIENCE_UPDATE: { label: "Experiencia", description: "Trayectoria profesional incorporada", icon: BriefcaseBusiness, tone: "text-[#25c0d5] border-[#25c0d5]/35 bg-[#25c0d5]/10" },
+  EXPERIENCE_VALIDATION: { label: "Validación", description: "Experiencia profesional revisada", icon: BadgeCheck, tone: "text-[#57d9a6] border-[#57d9a6]/35 bg-[#57d9a6]/10" },
+  EDUCATION_UPDATE: { label: "Formación", description: "Formación académica incorporada", icon: Sparkles, tone: "text-[#b6d56b] border-[#b6d56b]/35 bg-[#b6d56b]/10" },
+  EDUCATION_VALIDATION: { label: "Validación", description: "Formación académica revisada", icon: BadgeCheck, tone: "text-[#57d9a6] border-[#57d9a6]/35 bg-[#57d9a6]/10" },
+  DOCUMENT_VALIDATION: { label: "Documento", description: "Documento revisado por Terraqo", icon: FileCheck2, tone: "text-[#7fa8ff] border-[#4374ba]/45 bg-[#4374ba]/15" },
+  PROJECT_ACTIVITY: { label: "Proyecto", description: "Proyecto vinculado a la trayectoria", icon: FolderKanban, tone: "text-[#f6be62] border-[#f6be62]/35 bg-[#f6be62]/10" }
 };
 
 function typeMeta(type: string) {
@@ -106,10 +112,10 @@ function formatTime(value: string) {
 
 function recordMatchesFilter(record: PublicCvActivityRecord, filter: ActivityFilter) {
   if (filter === "all") return true;
-  if (filter === "validations") return record.validations.length > 0 || record.evidenceStatus === "VERIFIED";
-  if (filter === "documents") return record.media.length > 0 || record.evidenceUrls.length > 0 || record.type === "DELIVERABLE";
-  if (filter === "projects") return Boolean(record.project);
-  return record.type === "FIELD_UPDATE" || record.type === "LEARNING" || record.type === "MILESTONE";
+  if (filter === "validations") return record.type.endsWith("_VALIDATION") || record.validations.length > 0 || record.evidenceStatus === "VERIFIED";
+  if (filter === "documents") return record.type === "DOCUMENT_VALIDATION" || record.media.length > 0 || record.evidenceUrls.length > 0 || record.type === "DELIVERABLE";
+  if (filter === "projects") return record.type === "PROJECT_ACTIVITY" || Boolean(record.project);
+  return ["FIELD_UPDATE", "LEARNING", "MILESTONE", "EXPERIENCE_UPDATE", "EDUCATION_UPDATE"].includes(record.type);
 }
 
 function evidenceImage(record: PublicCvActivityRecord) {
