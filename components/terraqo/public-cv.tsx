@@ -1,6 +1,5 @@
 import Link from "next/link";
 import {
-  Activity,
   ArrowRight,
   BadgeCheck,
   BriefcaseBusiness,
@@ -27,6 +26,7 @@ import type { PublicCvProfile } from "@/lib/terraqo/public-cv";
 import { formatExperienceDuration, monthsBetween, normalizeSpanishCopy } from "@/lib/terraqo/profile-summary";
 import { TerraqoLogo } from "@/components/terraqo/terraqo-logo";
 import { TerraqoAvatar } from "@/components/terraqo/terraqo-avatar";
+import { TerraqoPublicHeader } from "@/components/terraqo/terraqo-public-header";
 
 type PublicCVPageProps = {
   profile: PublicCvProfile;
@@ -274,12 +274,11 @@ export function PublicCVPage({ profile }: PublicCVPageProps) {
 
   return (
     <div className="terraqo-brand-surface tq-cv-v3 min-h-screen text-[#0e1a26]">
-      <PublicCVHeader username={username} />
+      <TerraqoPublicHeader tone="dark" />
       <main>
         <section className="relative isolate overflow-hidden border-b border-white/10 bg-[#07111f] text-white">
           <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_15%_10%,rgba(67,116,186,0.28),transparent_30%),radial-gradient(circle_at_86%_28%,rgba(37,192,213,0.13),transparent_28%),linear-gradient(180deg,#07111f_0%,#040b15_100%)]" />
-          <div className="pointer-events-none absolute inset-0 -z-10 opacity-[0.08] [background-image:linear-gradient(rgba(72,138,201,0.5)_1px,transparent_1px),linear-gradient(90deg,rgba(72,138,201,0.5)_1px,transparent_1px)] [background-size:72px_72px]" />
-          <div className="mx-auto grid w-[min(100%-24px,1240px)] gap-6 py-6 sm:w-[min(100%-32px,1240px)] sm:py-9 lg:py-10">
+          <div className="mx-auto grid w-[min(100%-24px,1480px)] gap-6 py-6 sm:w-[min(100%-40px,1480px)] sm:py-9 lg:py-10">
             <div className="overflow-hidden rounded-[24px] border border-[#488ac9]/35 bg-[#0e1a26]/88 p-5 shadow-[0_32px_100px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-7 lg:p-8">
               <div className="grid gap-7 lg:grid-cols-[1fr_290px] lg:gap-9">
                 <ProfileHero profile={profile} name={name} username={username} specialties={specialties} isPublicCv={isPublicCv} />
@@ -299,7 +298,7 @@ export function PublicCVPage({ profile }: PublicCVPageProps) {
           </div>
         </section>
 
-        <section className="mx-auto grid w-[min(100%-32px,1240px)] gap-5 py-8 sm:py-10">
+        <section className="mx-auto grid w-[min(100%-32px,1480px)] gap-5 py-8 sm:py-10">
           <ExperienceTimeline profile={profile} username={username} />
           <EducationTimeline profile={profile} username={username} />
           <FeaturedProjects projects={projects} profile={profile} username={username} />
@@ -324,7 +323,7 @@ export function PublicCVSectionPage({ profile, section }: { profile: PublicCvPro
 
   return (
     <div className="terraqo-brand-surface tq-cv-v3 min-h-screen text-[#0e1a26]">
-      <PublicCVHeader username={username} />
+      <TerraqoPublicHeader tone="dark" />
       <main>
         <section className="border-b border-[#d8e0ec] bg-[radial-gradient(circle_at_12%_8%,#edf1f7,transparent_34%),linear-gradient(135deg,#ffffff,#f7fbfa)]">
           <div className="mx-auto grid w-[min(100%-32px,1240px)] gap-6 py-10 md:grid-cols-[0.9fr_1.1fr] md:items-end">
@@ -367,54 +366,6 @@ export function PublicCVSectionPage({ profile, section }: { profile: PublicCvPro
       </main>
       <PublicCVFooter updatedAt={profile.updatedAt} />
     </div>
-  );
-}
-
-function PublicCVHeader({ username }: { username: string }) {
-  const mobileLinks = [
-    { label: "CV Vivo", href: publicCvPath(username) },
-    { label: "Experiencias", href: publicCvPath(username, "experiencias") },
-    { label: "Educación", href: publicCvPath(username, "educacion") },
-    { label: "Proyectos", href: publicCvPath(username, "proyectos") },
-    { label: "Evidencias", href: publicCvPath(username, "evidencias") },
-    { label: "Capacidades", href: publicCvPath(username, "capacidades") },
-    { label: "Documentos", href: publicCvPath(username, "documentos") }
-  ];
-
-  return (
-    <header className="sticky top-0 z-30 border-b border-[#d8e0ec] bg-white/92 backdrop-blur-xl">
-      <div className="mx-auto flex min-h-[68px] w-[min(100%-28px,1240px)] items-center justify-between gap-3 sm:min-h-[76px] sm:w-[min(100%-32px,1240px)]">
-        <Link href="/" className="flex items-center gap-3" aria-label="Terraqo CV Vivo">
-          <TerraqoLogo variant="horizontal" alt="Terraqo" className="h-10 w-[150px] sm:h-11 sm:w-[170px]" />
-          <span className="leading-none">
-            <small className="font-mono text-[10px] font-black uppercase tracking-[0.12em] text-[#4374ba]">CV Vivo</small>
-          </span>
-        </Link>
-        <nav className="hidden items-center gap-8 text-sm font-bold text-[#344955] lg:flex" aria-label="Navegacion del CV Vivo">
-          <Link className="border-b-2 border-[#4374ba] pb-2 text-[#0e1a26]" href={publicCvPath(username)}>CV Vivo</Link>
-          <Link href="/">Sobre Terraqo</Link>
-          <Link href="/cuenta" prefetch={false}>Para empresas</Link>
-          <Link href="/portal/commons" prefetch={false}>Comunidad</Link>
-        </nav>
-        <div className="flex items-center gap-2">
-          <Link href={publicCvCallback(username)} className="hidden rounded-[8px] bg-[#4374ba] px-5 py-3 text-sm font-black text-white shadow-[0_14px_30px_rgba(0,140,131,0.18)] transition hover:bg-[#4374ba] sm:inline-flex">
-            Contactar
-          </Link>
-          <Link href={publicCvCallback(username)} className="grid h-10 w-10 place-items-center rounded-[8px] border border-[#d8e0ec] text-[#0e1a26] transition hover:border-[#9bdad4] hover:text-[#4374ba] sm:hidden" aria-label="Contactar este perfil">
-            <MessageSquare className="h-5 w-5" />
-          </Link>
-        </div>
-      </div>
-      <nav className="border-t border-[#edf3f2] lg:hidden" aria-label="Secciones del CV Vivo">
-        <div className="mx-auto flex w-[min(100%-28px,1240px)] gap-2 overflow-x-auto py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {mobileLinks.map((item) => (
-            <Link key={item.href} href={item.href} className="shrink-0 rounded-[8px] border border-[#d8e0ec] bg-white px-3.5 py-2 text-xs font-black text-[#344955] transition hover:border-[#9bdad4] hover:text-[#4374ba]">
-              {item.label}
-            </Link>
-          ))}
-        </div>
-      </nav>
-    </header>
   );
 }
 
@@ -610,10 +561,14 @@ function LiveCvPulse({ profile, username }: { profile: PublicCvProfile; username
   const updates = profile.worklogs.slice(0, 3);
   const last = latestActivity(profile);
   return (
-    <section className="relative isolate overflow-hidden rounded-[22px] border border-[#488ac9]/30 bg-[#0e1a26]/82 text-white shadow-[0_24px_70px_rgba(0,0,0,0.24)]">
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_84%_50%,rgba(67,116,186,0.18),transparent_34%)]" />
-      <div className="grid min-h-[240px] gap-5 p-6 sm:p-7 lg:grid-cols-[0.78fr_1.22fr] lg:items-center lg:p-8">
-        <div className="relative z-10">
+    <section className="relative isolate min-h-[270px] overflow-hidden rounded-[22px] border border-[#488ac9]/30 bg-[#0e1a26]/82 text-white shadow-[0_24px_70px_rgba(0,0,0,0.24)]">
+      <div className="absolute inset-0 -z-20 bg-[radial-gradient(circle_at_78%_48%,rgba(67,116,186,0.24),transparent_38%),linear-gradient(115deg,#0e1a26_0%,#07111f_58%,#08182a_100%)]" />
+      <div className="pointer-events-none absolute inset-y-0 right-[-8%] -z-10 w-[92%] opacity-40 [mask-image:linear-gradient(90deg,transparent_0%,#000_30%,#000_100%)] sm:right-[-4%] sm:w-[76%] sm:opacity-70 lg:w-[66%] lg:opacity-100">
+        <LiveNetworkGraphic />
+      </div>
+      <div className="pointer-events-none absolute inset-y-0 left-0 -z-10 w-[62%] bg-gradient-to-r from-[#0e1a26] via-[#0e1a26]/95 to-transparent" />
+      <div className="grid min-h-[270px] gap-8 p-6 sm:p-8 lg:grid-cols-[0.72fr_1.28fr] lg:items-center lg:px-10 lg:py-9">
+        <div className="relative z-10 max-w-xl">
           <div className="inline-flex items-center gap-2 rounded-full border border-[#25c0d5]/30 bg-[#25c0d5]/[0.08] px-3 py-1.5 text-xs font-black text-[#25c0d5]">
             <span className="relative flex h-2.5 w-2.5">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#25c0d5] opacity-60" />
@@ -626,18 +581,13 @@ function LiveCvPulse({ profile, username }: { profile: PublicCvProfile; username
           <p className="mt-4 font-mono text-[11px] font-black uppercase tracking-[0.14em] text-white/42">Última actualización · {formatDate(last, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
           <Link href={publicCvPath(username, "evidencias")} className="mt-6 inline-flex items-center gap-2 text-sm font-black text-[#9fc4ff] transition hover:text-[#25c0d5]">Ver toda la actividad <ArrowRight className="h-4 w-4" /></Link>
         </div>
-        <div className="relative min-h-[190px] overflow-hidden rounded-[18px] border border-white/[0.06] bg-[#07111f]/50">
-          <LiveNetworkGraphic />
+        <div className="relative hidden min-h-[190px] sm:block">
           {updates[0] ? (
-            <article className="absolute bottom-4 left-4 right-4 z-10 rounded-[12px] border border-[#488ac9]/25 bg-[#07111f]/80 p-3 backdrop-blur-md sm:left-auto sm:max-w-[310px]">
-              <div className="flex items-start gap-3">
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#4374ba]/15 text-[#25c0d5]"><Activity className="h-4 w-4" /></span>
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-black text-white/88">{updates[0].title}</p>
-                  <p className="mt-1 truncate text-[11px] font-semibold text-white/42">{updates[0].project?.title || updates[0].workspace?.brandName || updates[0].workspace?.name || "Registro profesional"}</p>
-                </div>
-              </div>
-            </article>
+            <div className="absolute bottom-0 right-0 max-w-[330px] text-right">
+              <p className="font-mono text-[10px] font-black uppercase tracking-[0.18em] text-[#25c0d5]">Último registro incorporado</p>
+              <p className="mt-2 truncate text-sm font-black text-white/88">{updates[0].title}</p>
+              <p className="mt-1 truncate text-xs font-semibold text-white/42">{updates[0].project?.title || updates[0].workspace?.brandName || updates[0].workspace?.name || "Actividad profesional"}</p>
+            </div>
           ) : null}
         </div>
       </div>
@@ -647,7 +597,7 @@ function LiveCvPulse({ profile, username }: { profile: PublicCvProfile; username
 
 function LiveNetworkGraphic() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 620 250" className="absolute inset-0 h-full w-full" preserveAspectRatio="xMidYMid slice">
+    <svg aria-hidden="true" viewBox="0 0 760 300" className="absolute inset-0 h-full w-full" preserveAspectRatio="xMidYMid slice">
       <defs>
         <radialGradient id="cv-network-glow" cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor="#25c0d5" stopOpacity="0.9" />
@@ -661,31 +611,42 @@ function LiveNetworkGraphic() {
         </linearGradient>
         <filter id="cv-node-blur"><feGaussianBlur stdDeviation="12" /></filter>
       </defs>
-      <ellipse cx="410" cy="132" rx="220" ry="112" fill="url(#cv-network-glow)" opacity="0.22" />
+      <ellipse cx="490" cy="150" rx="260" ry="138" fill="url(#cv-network-glow)" opacity="0.2" />
       <g fill="none" stroke="url(#cv-network-line)" strokeWidth="1.2">
-        <path d="M90 168C178 32 388 14 558 102" />
-        <path d="M84 198C230 118 412 94 586 143" />
-        <path d="M166 230C236 78 420 28 544 190" />
-        <path d="M250 236C292 112 394 70 500 42" />
-        <path d="M192 78C322 170 438 192 594 126" />
-        <path d="M130 130L280 82L390 146L508 78L570 164" />
-        <path d="M182 206L280 82L342 214L390 146L492 220L508 78" />
+        <path d="M54 206C190 28 470 12 724 126" />
+        <path d="M38 252C230 132 492 104 742 178" />
+        <path d="M146 292C252 86 524 34 692 240" />
+        <path d="M264 292C330 126 480 74 642 38" />
+        <path d="M176 86C346 214 526 230 752 146" />
+        <path d="M112 158L302 94L452 174L612 88L708 208" />
+        <path d="M178 264L302 94L382 278L452 174L592 286L612 88" />
       </g>
       <g fill="#4374ba" opacity="0.35" filter="url(#cv-node-blur)">
-        <circle cx="280" cy="82" r="22" /><circle cx="390" cy="146" r="28" /><circle cx="508" cy="78" r="20" />
+        <circle cx="302" cy="94" r="22" /><circle cx="452" cy="174" r="28" /><circle cx="612" cy="88" r="20" />
       </g>
       <g stroke="#9fc4ff" strokeWidth="1.2">
-        <circle cx="130" cy="130" r="5" fill="#4374ba" />
-        <circle cx="182" cy="206" r="4" fill="#25c0d5" />
-        <circle cx="280" cy="82" r="8" fill="#488ac9" />
-        <circle cx="342" cy="214" r="5" fill="#4374ba" />
-        <circle cx="390" cy="146" r="10" fill="#25c0d5" />
-        <circle cx="492" cy="220" r="4" fill="#488ac9" />
-        <circle cx="508" cy="78" r="7" fill="#4374ba" />
-        <circle cx="570" cy="164" r="5" fill="#25c0d5" />
+        <circle cx="112" cy="158" r="5" fill="#4374ba" />
+        <circle cx="178" cy="264" r="4" fill="#25c0d5" />
+        <circle cx="302" cy="94" r="8" fill="#488ac9" />
+        <circle cx="382" cy="278" r="5" fill="#4374ba" />
+        <circle cx="452" cy="174" r="10" fill="#25c0d5" />
+        <circle cx="592" cy="286" r="4" fill="#488ac9" />
+        <circle cx="612" cy="88" r="7" fill="#4374ba" />
+        <circle cx="708" cy="208" r="5" fill="#25c0d5" />
       </g>
       <g fill="#ffffff">
-        <circle cx="390" cy="146" r="2.4" /><circle cx="280" cy="82" r="1.8" /><circle cx="508" cy="78" r="1.8" />
+        <circle cx="452" cy="174" r="2.4" /><circle cx="302" cy="94" r="1.8" /><circle cx="612" cy="88" r="1.8" />
+      </g>
+      <g className="motion-reduce:hidden">
+        <circle r="3.5" fill="#25c0d5" filter="url(#cv-node-blur)" opacity="0.72">
+          <animateMotion dur="7s" repeatCount="indefinite" path="M54 206C190 28 470 12 724 126" />
+        </circle>
+        <circle r="2.8" fill="#9fc4ff" opacity="0.9">
+          <animateMotion dur="8.5s" begin="-2.5s" repeatCount="indefinite" path="M38 252C230 132 492 104 742 178" />
+        </circle>
+        <circle r="3" fill="#488ac9" opacity="0.92">
+          <animateMotion dur="6.4s" begin="-4s" repeatCount="indefinite" path="M178 264L302 94L382 278L452 174L592 286L612 88" />
+        </circle>
       </g>
     </svg>
   );

@@ -14,7 +14,7 @@ const navItems = [
   { label: "Membresías", href: "/#membresias" }
 ];
 
-export function TerraqoPublicHeader() {
+export function TerraqoPublicHeader({ tone = "light" }: { tone?: "light" | "dark" }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -28,10 +28,10 @@ export function TerraqoPublicHeader() {
   }, [open]);
 
   return (
-    <header className="tq-public-header">
+    <header className={`tq-public-header${tone === "dark" ? " tq-public-header--dark" : ""}`}>
       <div className="tq-public-wrap tq-header-inner">
         <Link href="/" className="tq-wordmark" aria-label="Terraqo inicio">
-          <TerraqoLogo variant="horizontal" alt="Terraqo" className="h-9 w-[145px] sm:h-10 sm:w-[170px]" />
+          <TerraqoLogo tone={tone} variant="horizontal" alt="Terraqo" className="h-9 w-[145px] sm:h-10 sm:w-[170px]" />
         </Link>
 
         <nav className="tq-desktop-nav" aria-label="Navegación principal de Terraqo">
