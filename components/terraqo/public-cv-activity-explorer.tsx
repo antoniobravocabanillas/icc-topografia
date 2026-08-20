@@ -95,7 +95,7 @@ function typeMeta(type: string) {
 }
 
 function formatDate(value: string, options: Intl.DateTimeFormatOptions) {
-  return new Intl.DateTimeFormat("es-PE", options).format(new Date(value)).replace(/\./g, "");
+  return new Intl.DateTimeFormat("es-PE", { ...options, timeZone: "America/Lima" }).format(new Date(value)).replace(/\./g, "");
 }
 
 function formatDay(value: string) {
