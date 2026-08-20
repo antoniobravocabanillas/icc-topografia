@@ -163,8 +163,8 @@ h2 {
 /* Terraqo 3.0 refinements applied to the existing public surfaces. */
 .tq-cv-v3 {
   background:
-    radial-gradient(circle at 90% 0%, rgba(37, 192, 213, .09), transparent 26rem),
-    linear-gradient(180deg, #fff 0%, #f3f3f3 100%);
+    radial-gradient(circle at 88% 0%, rgba(67, 116, 186, .16), transparent 30rem),
+    linear-gradient(180deg, #07111f 0%, #040b15 100%);
 }
 
 .tq-cv-v3 > header {
@@ -180,12 +180,13 @@ h2 {
 
 .tq-cv-v3 main > section:first-child {
   background:
-    radial-gradient(circle at 78% 0%, rgba(37, 192, 213, .14), transparent 28rem),
-    linear-gradient(180deg, rgba(255, 255, 255, .97), rgba(243, 243, 243, .92)) !important;
+    radial-gradient(circle at 78% 0%, rgba(67, 116, 186, .20), transparent 28rem),
+    radial-gradient(circle at 16% 12%, rgba(37, 192, 213, .10), transparent 24rem),
+    linear-gradient(180deg, #07111f 0%, #040b15 100%) !important;
 }
 
 .tq-cv-v3 main > section:nth-child(2) {
-  filter: drop-shadow(0 14px 28px rgba(15, 23, 42, .06));
+  filter: drop-shadow(0 18px 38px rgba(0, 0, 0, .18));
 }
 
 .terraqo-company-v3 > header {
