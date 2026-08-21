@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -108,9 +108,25 @@ export default async function PublicCompanyProfilePage({ params }: PageProps) {
       settings: true,
       projects: {
         where: { deletedAt: null },
-        select: { id: true, title: true, isPublic: true, status: true, updatedAt: true },
+        select: {
+          id: true, slug: true, title: true, isPublic: true, status: true, updatedAt: true,
+          location: true, category: true, summary: true,
+          images: { select: { url: true, alt: true }, orderBy: { position: "asc" }, take: 1 }
+        },
         orderBy: { updatedAt: "desc" },
         take: 18
+      },
+      jobPosts: {
+        where: { deletedAt: null, status: "OPEN" },
+        select: { id: true, slug: true, title: true, summary: true, location: true },
+        orderBy: { updatedAt: "desc" },
+        take: 3
+      },
+      clientLogos: {
+        where: { active: true },
+        select: { id: true, name: true, logoUrl: true, website: true },
+        orderBy: [{ position: "asc" }, { createdAt: "desc" }],
+        take: 8
       },
       _count: {
         select: {
@@ -156,85 +172,127 @@ export default async function PublicCompanyProfilePage({ params }: PageProps) {
   const primaryStyle = { "--workspace-primary": visualIdentity.primaryColor, "--workspace-accent": visualIdentity.accentColor } as CSSProperties;
 
   return (
-    <main className={cn("terraqo-brand-surface terraqo-company-v3 min-h-screen text-[#0e1a26]", fontClassName(visualIdentity.fontFamily))} style={{ backgroundColor: visualIdentity.backgroundColor, ...primaryStyle }}>
-      <section className="relative isolate overflow-hidden border-b border-white/10 bg-[#071a20] text-white">
-        {profile.heroImageUrl ? (
-          <Image src={profile.heroImageUrl} alt="" fill priority sizes="100vw" className="-z-30 scale-110 object-cover blur-[18px] saturate-[.72]" unoptimized />
-        ) : null}
-        <div className="absolute inset-0 -z-20" style={{ background: `linear-gradient(105deg, #071a20f5 0%, ${visualIdentity.primaryColor}d9 48%, #071a20e8 100%)` }} />
-        <div className="absolute inset-0 -z-10 opacity-45" style={patternStyle("topographic", visualIdentity.primaryColor, visualIdentity.accentColor)} />
+    <main className={cn("min-h-screen overflow-x-hidden bg-[#f7f8f7] text-[#102b28]", fontClassName(visualIdentity.fontFamily))} style={primaryStyle}>
+      <div className="mx-auto w-full max-w-[1680px] px-4 py-7 sm:px-7 lg:px-10">
+        <Link href="/empresas" className="inline-flex items-center gap-2 text-sm font-bold" style={{ color: visualIdentity.primaryColor }}>← Volver a explorar empresas</Link>
 
-        <div className="mx-auto grid max-w-[1440px] lg:grid-cols-[minmax(460px,0.92fr)_minmax(560px,1.08fr)]">
-          <div className="flex min-h-[620px] flex-col justify-center px-5 py-12 sm:px-10 lg:px-12 xl:px-16">
+        <section className="mt-6 grid overflow-hidden rounded-[24px] border border-[#dfe5e3] bg-white shadow-[0_24px_80px_-60px_rgba(16,43,40,.28)] lg:grid-cols-[minmax(430px,.82fr)_minmax(620px,1.18fr)]">
+          <div className="flex flex-col justify-center p-7 sm:p-10 xl:p-12">
             <div className="flex items-center gap-5">
-              <BrandMark name={name} logoUrl={workspace.logoUrl} visualIdentity={visualIdentity} />
+              <div className="grid h-24 w-24 shrink-0 place-items-center overflow-hidden rounded-[18px] border border-white/20 p-3 shadow-[0_15px_40px_-26px_rgba(16,43,40,.35)]" style={{ background: `linear-gradient(145deg, ${visualIdentity.primaryColor}, #102b28)` }}>
+                <TerraqoLogo src={workspace.logoUrl} variant="mark" alt={name} className="h-full w-full" imageClassName="object-contain" />
+              </div>
               <div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <span className="font-display text-2xl font-black sm:text-3xl">{name}</span>
-                  <BadgeCheck className="h-6 w-6" style={{ color: visualIdentity.accentColor }} />
+                <div className="flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-[.08em]">
+                  <span className="rounded-md px-2.5 py-1.5" style={{ backgroundColor: `${visualIdentity.primaryColor}12`, color: visualIdentity.primaryColor }}>Empresa verificada por Terraqo</span>
+                  <span className="rounded-md bg-[#f0f2f1] px-2.5 py-1.5 text-[#536460]">Perfil público</span>
                 </div>
-                <span className="mt-2 inline-flex items-center gap-2 text-xs font-bold text-white/68">
-                  <ShieldCheck className="h-4 w-4" style={{ color: visualIdentity.accentColor }} /> Empresa verificada por Terraqo
-                </span>
+                <h1 className="mt-4 font-display text-3xl font-black tracking-[-.035em] sm:text-4xl">{name}</h1>
               </div>
             </div>
 
-            <h1 className="mt-10 max-w-2xl font-display text-4xl font-black leading-[1.02] tracking-[-0.045em] sm:text-5xl lg:text-[52px] xl:text-[56px]">{headline}</h1>
-            <p className="mt-6 max-w-xl text-base leading-7 text-white/68">{heroSummary}</p>
-
-            <div className="mt-7">
-              <p className="text-[11px] font-black uppercase tracking-[0.14em] text-white/48">Cobertura y sectores</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <CoverageChip icon={MapPin} label={coverage} />
-                {sectors.slice(0, 3).map((sector) => <CoverageChip key={sector} label={sector} />)}
-                {sectors.length > 3 ? <CoverageChip label={`+${sectors.length - 3} sectores`} /> : null}
-              </div>
+            <p className="mt-5 text-lg font-semibold leading-7 text-[#48615c]">{headline}</p>
+            <div className="mt-6 flex flex-wrap gap-x-6 gap-y-3 text-xs font-bold text-[#506761]">
+              <span>{coverage}</span><span>{publicProjects ? "Proyectos públicos y privados" : "Workspace operativo"}</span><span>{workspace.country === "PE" ? "Empresa registrada en Perú" : `Empresa registrada en ${workspace.country}`}</span>
             </div>
-
-            <div className="mt-8 grid gap-3 sm:grid-cols-2">
-              <Link href="/cuenta" className="inline-flex h-[52px] items-center justify-center gap-2 rounded-md px-5 text-sm font-black text-white shadow-[0_20px_45px_-24px_rgba(0,0,0,0.7)]" style={{ backgroundColor: visualIdentity.primaryColor, border: "1px solid rgba(255,255,255,.18)" }}>
-                <MessageSquareText className="h-4 w-4" /> Contactar empresa
-              </Link>
-              {domainHref ? <Link href={domainHref} target="_blank" className="inline-flex h-[52px] items-center justify-center gap-2 rounded-md border border-white/32 bg-white/8 px-5 text-sm font-black text-white backdrop-blur-xl hover:bg-white/14">Visitar sitio web <ArrowRight className="h-4 w-4" /></Link> : null}
+            <div className="mt-8 grid gap-3 sm:grid-cols-3">
+              <Link href="/cuenta" className="inline-flex h-12 items-center justify-center rounded-md px-4 text-sm font-black text-white" style={{ backgroundColor: visualIdentity.primaryColor }}>Contactar empresa</Link>
+              <Link href={`/cuenta?intent=quote&company=${encodeURIComponent(slug)}`} className="inline-flex h-12 items-center justify-center rounded-md border bg-white px-4 text-sm font-black" style={{ borderColor: `${visualIdentity.primaryColor}80`, color: visualIdentity.primaryColor }}>Solicitar cotización</Link>
+              {domainHref ? <Link href={domainHref} target="_blank" className="inline-flex h-12 items-center justify-center rounded-md border border-[#d6dfdc] bg-white px-4 text-sm font-black text-[#304b45]">Visitar sitio web</Link> : null}
             </div>
           </div>
 
-          <aside className="relative min-h-[520px] overflow-hidden border-white/12 bg-black/20 lg:min-h-[620px] lg:border-l">
-            {profile.heroImageUrl ? <Image src={profile.heroImageUrl} alt={`Operación de ${name}`} fill priority sizes="(min-width: 1024px) 58vw, 100vw" className="object-cover" unoptimized /> : <div className="absolute inset-0" style={patternStyle("dark-panel", visualIdentity.primaryColor, visualIdentity.accentColor)} />}
-            <div className="absolute inset-0 bg-gradient-to-r from-[#06171d]/18 via-transparent to-[#06171d]/30" />
-            <div className="absolute inset-x-5 bottom-5 rounded-[24px] border border-white/16 bg-[#071a20]/78 p-6 shadow-2xl backdrop-blur-2xl sm:inset-x-auto sm:right-7 sm:w-[300px] lg:bottom-8">
-              <div className="grid h-20 w-20 place-items-center rounded-full border border-white/32" style={{ boxShadow: `inset 0 0 0 7px ${visualIdentity.primaryColor}55` }}>
-                <ShieldCheck className="h-9 w-9" style={{ color: visualIdentity.accentColor }} />
-              </div>
-              <p className="mt-5 font-display text-xl font-black">Empresa verificada</p>
-              <p className="mt-2 text-sm leading-6 text-white/66">Identidad y operación revisadas para fortalecer la confianza comercial.</p>
-              <span className="mt-5 inline-flex items-center gap-2 text-xs font-black" style={{ color: visualIdentity.accentColor }}>Verificación Terraqo <ArrowRight className="h-3.5 w-3.5" /></span>
+          <div className="relative min-h-[430px] overflow-hidden bg-[#d9dfdc] lg:min-h-[470px]">
+            {profile.heroImageUrl ? <Image src={profile.heroImageUrl} alt={`Actividad de ${name}`} fill priority sizes="(min-width:1024px) 60vw,100vw" className="object-cover" unoptimized /> : null}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" />
+            <div className="absolute bottom-4 left-4 right-4 grid gap-px overflow-hidden rounded-[16px] border border-white/20 bg-white/15 backdrop-blur-xl sm:grid-cols-4 lg:right-[245px]">
+              <CompanyMetric value={workspace._count.projects} label="Proyectos registrados" />
+              <CompanyMetric value={workspace._count.professionalAffiliations} label="Profesionales vinculados" />
+              <CompanyMetric value="5+" label="Años de experiencia" />
+              <CompanyMetric value="100%" label="Perfil verificado" />
             </div>
-          </aside>
-        </div>
-
-        <div className="border-t border-white/12 bg-[#06171d]/72 backdrop-blur-2xl">
-          <div className="mx-auto grid max-w-[1440px] sm:grid-cols-2 lg:grid-cols-5">
-            <CapabilityItem icon={CalendarDays} title="5+ años de experiencia" detail="Operación técnica acumulada" color={visualIdentity.accentColor} />
-            <CapabilityItem icon={Layers3} title={`${workspace._count.projects} proyectos registrados`} detail="Experiencia documentada" color={visualIdentity.accentColor} />
-            <CapabilityItem icon={ShieldCheck} title="Entregables trazables" detail="Evidencia y control operativo" color={visualIdentity.accentColor} />
-            <CapabilityItem icon={Sparkles} title="Tecnología especializada" detail="Procesos y equipos conectados" color={visualIdentity.accentColor} />
-            <CapabilityItem icon={UsersRound} title={`${workspace._count.professionalAffiliations} profesionales`} detail="Equipo vinculado al workspace" color={visualIdentity.accentColor} />
+            <aside className="absolute right-4 top-4 hidden w-[215px] rounded-[18px] border border-white/20 bg-[#082f2a]/88 p-6 text-white backdrop-blur-xl lg:block">
+              <p className="text-[10px] font-black uppercase tracking-[.14em]" style={{ color: visualIdentity.accentColor }}>Terraqo verified</p>
+              <h2 className="mt-7 font-display text-xl font-black">Empresa verificada</h2>
+              <p className="mt-3 text-sm leading-6 text-white/70">Perfil revisado para respaldar identidad, operación y cumplimiento declarado.</p>
+              <span className="mt-6 block text-xs font-black underline underline-offset-4">Ver perfil de verificación →</span>
+            </aside>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section className="mx-auto grid max-w-7xl gap-7 px-5 py-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(340px,0.95fr)]">
-        <ServicesPanel items={services} color={visualIdentity.primaryColor} />
-        <div className="space-y-7">
-          <DifferentiatorsPanel items={differentiators} color={visualIdentity.primaryColor} />
-          <SectorsPanel items={sectors} color={visualIdentity.primaryColor} />
-          <ContactPanel coverage={coverage} email={profile.contactEmail} phone={profile.contactPhone} domain={workspace.domain} domainHref={domainHref} color={visualIdentity.primaryColor} />
-        </div>
-      </section>
+        <section className="mt-5 grid min-w-0 gap-5 xl:grid-cols-[minmax(0,.86fr)_minmax(0,1.14fr)]">
+          <CompanySection title="Servicios principales" action="Ver todos los servicios">
+            <div className="flex gap-0 overflow-x-auto pb-2">
+              {services.slice(0, 7).map((service, index) => { const part = serviceParts(service); return <article key={service} className="min-w-[150px] flex-1 border-r border-[#e5eae8] px-4 py-4 first:pl-0 last:border-0"><span className="text-xs font-black" style={{ color: visualIdentity.primaryColor }}>{String(index + 1).padStart(2, "0")}</span><h3 className="mt-4 text-sm font-black leading-5">{part.title}</h3>{part.description ? <p className="mt-2 line-clamp-2 text-xs leading-5 text-[#667773]">{part.description}</p> : null}</article>; })}
+            </div>
+          </CompanySection>
 
+          <CompanySection title="Proyectos destacados" action="Ver todos los proyectos">
+            <div className="flex gap-4 overflow-x-auto pb-2">
+              {workspace.projects.filter((project) => project.isPublic).slice(0, 4).map((project) => <ProjectPreview key={project.id} project={project} color={visualIdentity.primaryColor} />)}
+            </div>
+          </CompanySection>
+        </section>
+
+        <section className="mt-5 grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,.62fr)_minmax(0,.72fr)]">
+          <CompanySection title="Oportunidades abiertas" subtitle="Conexiones vinculadas a la operación real de la empresa.">
+            <div className="grid gap-3 md:grid-cols-3">
+              {(workspace.jobPosts.length ? workspace.jobPosts : [
+                { id: "partners", slug: "", title: "Alianzas estratégicas", summary: `Colaboración especializada para proyectos de ${workspace.industry || "la empresa"}.`, location: coverage },
+                { id: "suppliers", slug: "", title: "Proveedores certificados", summary: "Equipos, insumos y servicios que cumplan los estándares del proyecto.", location: coverage },
+                { id: "talent", slug: "", title: "Talento profesional", summary: `Especialistas con experiencia en ${workspace.industry || "el sector"}.`, location: coverage }
+              ]).map((opportunity) => <article key={opportunity.id} className="rounded-xl border border-[#e0e6e4] p-4"><h3 className="font-black">{opportunity.title}</h3><p className="mt-2 text-xs leading-5 text-[#647570] line-clamp-2">{opportunity.summary}</p><Link href={opportunity.slug ? `/oportunidades/${opportunity.slug}` : "/cuenta"} className="mt-4 inline-block text-xs font-black" style={{ color: visualIdentity.primaryColor }}>Ver más →</Link></article>)}
+            </div>
+          </CompanySection>
+
+          <section className="rounded-[20px] p-7 text-white" style={{ backgroundColor: visualIdentity.primaryColor }}>
+            <h2 className="font-display text-2xl font-black">¿Quieres trabajar con {name}?</h2><p className="mt-3 text-sm leading-6 text-white/74">Presenta tu empresa, servicio o perfil profesional.</p><Link href="/cuenta" className="mt-7 inline-flex h-11 items-center rounded-md bg-white px-5 text-sm font-black" style={{ color: visualIdentity.primaryColor }}>Enviar interés →</Link>
+          </section>
+
+          <CompanySection title="Respaldos y diferenciales">
+            <div className="divide-y divide-[#e3e9e7]">{differentiators.slice(0, 3).map((item) => { const part=serviceParts(item); return <div key={item} className="py-3 first:pt-0"><h3 className="text-sm font-black">{part.title}</h3>{part.description ? <p className="mt-1 text-xs text-[#687a75]">{part.description}</p> : null}</div>; })}</div>
+          </CompanySection>
+        </section>
+
+        {workspace.clientLogos.length ? <section className="mt-5 flex flex-col gap-5 rounded-[20px] border border-[#dfe5e3] bg-white p-6 lg:flex-row lg:items-center"><h2 className="shrink-0 text-sm font-black">Confían en nosotros</h2><div className="flex flex-1 flex-wrap items-center gap-x-10 gap-y-5">{workspace.clientLogos.map((client) => <div key={client.id} className="relative h-9 w-28 grayscale opacity-60"><Image src={client.logoUrl} alt={client.name} fill sizes="112px" className="object-contain" unoptimized /></div>)}</div><div className="flex gap-8 border-t pt-5 text-xs font-bold text-[#526863] lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0"><span>{coverage}</span><span>Respuesta profesional</span><span>Calidad documentada</span></div></section> : null}
+      </div>
       <Footer visualIdentity={visualIdentity} />
     </main>
+  );
+}
+
+function CompanyMetric({ value, label }: { value: string | number; label: string }) {
+  return <div className="bg-[#082f2a]/72 px-4 py-4 text-white"><strong className="font-display text-2xl font-black">{value}</strong><span className="mt-1 block text-[11px] font-semibold leading-4 text-white/72">{label}</span></div>;
+}
+
+function CompanySection({ title, subtitle, action, children }: { title: string; subtitle?: string; action?: string; children: ReactNode }) {
+  return (
+    <section className="min-w-0 rounded-[20px] border border-[#dfe5e3] bg-white p-6">
+      <div className="mb-5 flex items-start justify-between gap-5"><div><h2 className="font-display text-xl font-black">{title}</h2>{subtitle ? <p className="mt-1 text-xs text-[#657772]">{subtitle}</p> : null}</div>{action ? <span className="shrink-0 text-xs font-black text-[#315d55]">{action} →</span> : null}</div>
+      {children}
+    </section>
+  );
+}
+
+type PublicProjectPreview = {
+  id: string;
+  slug: string;
+  title: string;
+  status: string;
+  location: string | null;
+  category: string | null;
+  summary: string;
+  images: Array<{ url: string; alt: string | null }>;
+};
+
+function ProjectPreview({ project, color }: { project: PublicProjectPreview; color: string }) {
+  const image = project.images[0];
+  const status = project.status === "COMPLETED" ? "Completado" : project.status === "IN_PROGRESS" ? "En ejecución" : "Registrado";
+  return (
+    <Link href={`/proyectos/${project.slug}`} className="min-w-[235px] flex-1 overflow-hidden rounded-xl border border-[#dfe5e3] bg-white">
+      <div className="relative h-28 bg-[#e8ecea]">{image ? <Image src={image.url} alt={image.alt || project.title} fill sizes="260px" className="object-cover" unoptimized /> : null}{project.category ? <span className="absolute left-3 top-3 rounded-full bg-[#082f2a]/78 px-2.5 py-1 text-[9px] font-black text-white backdrop-blur">{project.category}</span> : null}</div>
+      <div className="p-4"><h3 className="line-clamp-1 text-sm font-black">{project.title}</h3><p className="mt-2 text-[11px] text-[#6b7b77]">{project.location || "Ubicación por confirmar"}</p><span className="mt-3 inline-block text-[10px] font-black" style={{ color }}>{status}</span></div>
+    </Link>
   );
 }
 
