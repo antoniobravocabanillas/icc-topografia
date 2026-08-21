@@ -53,6 +53,14 @@ export async function updateWorkspaceBrandingAction(formData: FormData) {
     select: { settings: true }
   });
   const settings = settingsObject(current?.settings);
+  const existingCompanyProfile = settings.companyLiveProfile && typeof settings.companyLiveProfile === "object" && !Array.isArray(settings.companyLiveProfile)
+    ? { ...(settings.companyLiveProfile as Prisma.JsonObject) }
+    : {};
+  settings.companyLiveProfile = {
+    ...existingCompanyProfile,
+    heroImageUrl: text(formData, "heroImageUrl"),
+    updatedAt: new Date().toISOString()
+  };
   settings.visualIdentity = {
     primaryColor: isHexColor(text(formData, "primaryColor")) ? text(formData, "primaryColor") : defaultWorkspaceVisualIdentity.primaryColor,
     accentColor: isHexColor(text(formData, "accentColor")) ? text(formData, "accentColor") : defaultWorkspaceVisualIdentity.accentColor,

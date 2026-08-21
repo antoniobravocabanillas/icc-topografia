@@ -80,9 +80,9 @@ export default async function WorkspaceCompanyProfilePage({ searchParams }: Page
               <ClientLogoUploader
                 initialLogoUrl={profile.heroImageUrl}
                 inputName="heroImageUrl"
-                label="Foto de fondo del perfil empresa"
-                description="Sube una imagen horizontal de obra, equipo, operación o marca. Se mostrará con overlay profesional en el bloque visual del perfil público."
-                emptyLabel="Aún no hay foto de fondo cargada."
+                label="Portada corporativa del perfil"
+                description="Esta imagen se usa como background desenfocado de página y como fotografía nítida del hero. Terraqo aplica la paleta y capas de contraste automáticamente. Recomendado: 1920 × 900 px."
+                emptyLabel="Aún no hay una portada corporativa cargada."
                 previewClassName="h-28 w-52"
                 previewImageClassName="object-cover"
               />

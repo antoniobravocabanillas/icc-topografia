@@ -10,11 +10,20 @@ import { updateWorkspaceBrandingAction } from "@/lib/server/workspace-branding-a
 import { prisma } from "@/lib/prisma";
 import { getSessionTerraqoWorkspace } from "@/lib/terraqo/workspace-scope";
 import { resolveWorkspaceVisualIdentity } from "@/lib/terraqo/workspace-visual-identity";
+import type { Prisma } from "@prisma/client";
 
 type PageProps = { searchParams?: Promise<{ success?: string; error?: string }> };
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+function coverImageUrl(settings: Prisma.JsonValue | null | undefined) {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return undefined;
+  const profile = (settings as Prisma.JsonObject).companyLiveProfile;
+  if (!profile || typeof profile !== "object" || Array.isArray(profile)) return undefined;
+  const value = (profile as Prisma.JsonObject).heroImageUrl;
+  return typeof value === "string" ? value : undefined;
+}
 
 export default async function WorkspaceBrandingPage({ searchParams }: PageProps) {
   const params = await searchParams;
@@ -27,6 +36,7 @@ export default async function WorkspaceBrandingPage({ searchParams }: PageProps)
   const publicSlug = workspace.publicSlug || workspace.slug;
   const publicUrl = `/empresas/${publicSlug}`;
   const visualIdentity = resolveWorkspaceVisualIdentity(workspace.settings);
+  const heroImageUrl = coverImageUrl(workspace.settings);
 
   return (
     <section className="space-y-7">
@@ -79,7 +89,7 @@ export default async function WorkspaceBrandingPage({ searchParams }: PageProps)
                   <Palette className="mt-1 h-5 w-5 text-primary" />
                   <div>
                     <h2 className="font-display text-xl font-bold">Sistema visual del workspace</h2>
-                    <p className="mt-1 text-sm leading-6 text-muted-foreground">Tokens de marca blanca para aplicar color, fuente y atmósfera sin tocar cada módulo manualmente.</p>
+                    <p className="mt-1 text-sm leading-6 text-muted-foreground">La portada y la paleta de la empresa construyen una presencia corporativa propia, sin alterar el perfil profesional individual.</p>
                   </div>
                 </div>
                 <div className="mt-5 grid gap-5 md:grid-cols-3">
@@ -103,19 +113,22 @@ export default async function WorkspaceBrandingPage({ searchParams }: PageProps)
                       <option value="serif">Editorial serif</option>
                     </select>
                   </label>
-                  <label className="grid gap-2 text-sm font-semibold">
-                    Pieza visual hero
-                    <select name="heroPattern" defaultValue={visualIdentity.heroPattern} className="h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm">
-                      <option value="soft-grid">Grid suave</option>
-                      <option value="topographic">Topográfico</option>
-                      <option value="dark-panel">Panel oscuro</option>
-                      <option value="clean">Limpio</option>
-                    </select>
-                  </label>
+                  <input type="hidden" name="heroPattern" value="clean" />
                   <label className="grid gap-2 text-sm font-semibold">
                     Etiqueta del perfil
                     <Input name="badgeLabel" defaultValue={visualIdentity.badgeLabel} placeholder="Perfil empresa" />
                   </label>
+                  <div className="md:col-span-3">
+                    <ClientLogoUploader
+                      initialLogoUrl={heroImageUrl}
+                      inputName="heroImageUrl"
+                      label="Background de portada corporativa"
+                      description="Sube una fotografía horizontal de obra, operación, sede o equipo. En el perfil público se ampliará, desenfocará y combinará automáticamente con la paleta de la empresa para asegurar contraste. Recomendado: 1920 × 900 px."
+                      emptyLabel="Aún no hay una portada corporativa cargada."
+                      previewClassName="h-40 w-full"
+                      previewImageClassName="object-cover"
+                    />
+                  </div>
                 </div>
               </div>
 

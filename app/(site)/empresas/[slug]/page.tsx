@@ -152,67 +152,57 @@ export default async function PublicCompanyProfilePage({ params }: PageProps) {
   const domainHref = workspace.domain ? `https://${workspace.domain.replace(/^https?:\/\//i, "")}` : null;
   const coverage = profile.coverage || [workspace.locationCity, workspace.region, workspace.country].filter(Boolean).join(", ") || "Cobertura por confirmar";
   const publicProjects = workspace.projects.filter((project) => project.isPublic).length;
-  const latestActivity = workspace.projects[0]?.updatedAt;
   const primaryStyle = { "--workspace-primary": visualIdentity.primaryColor, "--workspace-accent": visualIdentity.accentColor } as CSSProperties;
 
   return (
     <main className={cn("terraqo-brand-surface terraqo-company-v3 min-h-screen text-[#0e1a26]", fontClassName(visualIdentity.fontFamily))} style={{ backgroundColor: visualIdentity.backgroundColor, ...primaryStyle }}>
-      <Header name={name} logoUrl={workspace.logoUrl} visualIdentity={visualIdentity} />
+      <section className="relative isolate overflow-hidden border-b border-white/10 bg-[#071a20] text-white">
+        {profile.heroImageUrl ? (
+          <Image src={profile.heroImageUrl} alt="" fill priority sizes="100vw" className="-z-30 scale-110 object-cover blur-[18px] saturate-[.72]" unoptimized />
+        ) : null}
+        <div className="absolute inset-0 -z-20" style={{ background: `linear-gradient(105deg, #071a20f5 0%, ${visualIdentity.primaryColor}d9 48%, #071a20e8 100%)` }} />
+        <div className="absolute inset-0 -z-10 opacity-45" style={patternStyle("topographic", visualIdentity.primaryColor, visualIdentity.accentColor)} />
 
-      <section className="mx-auto grid max-w-7xl gap-8 px-5 py-12 lg:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)] lg:py-16">
-        <div className="space-y-8">
-          <div className="flex flex-col gap-6 md:flex-row md:items-center">
-            <BrandMark name={name} logoUrl={workspace.logoUrl} visualIdentity={visualIdentity} />
-            <div>
-              <span className="inline-flex items-center gap-2 rounded-md border border-[#d8e0ec] bg-white px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] text-[#304b54]">
-                <BriefcaseBusiness className="h-3.5 w-3.5" /> {visualIdentity.badgeLabel}
-              </span>
-              <h1 className="mt-5 flex flex-wrap items-center gap-3 font-display text-5xl font-black leading-none tracking-[-0.045em] md:text-6xl">
-                {name}
-                <BadgeCheck className="h-7 w-7" style={{ color: visualIdentity.primaryColor }} />
-              </h1>
-              <p className="mt-4 max-w-3xl text-2xl font-semibold leading-8 text-[#26434d]">{headline}</p>
+        <div className="mx-auto grid max-w-7xl gap-10 px-5 py-12 lg:grid-cols-[minmax(0,1.04fr)_minmax(380px,0.96fr)] lg:items-center lg:py-16">
+          <div>
+            <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
+              <BrandMark name={name} logoUrl={workspace.logoUrl} visualIdentity={visualIdentity} />
+              <div>
+                <span className="inline-flex items-center gap-2 rounded-full border border-white/16 bg-black/18 px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-white/82 backdrop-blur-xl">
+                  <BriefcaseBusiness className="h-3.5 w-3.5" style={{ color: visualIdentity.accentColor }} /> {visualIdentity.badgeLabel}
+                </span>
+                <h1 className="mt-4 flex flex-wrap items-center gap-3 font-display text-4xl font-black leading-[.96] tracking-[-0.045em] sm:text-5xl lg:text-6xl">
+                  {name}<BadgeCheck className="h-7 w-7" style={{ color: visualIdentity.accentColor }} />
+                </h1>
+                <p className="mt-4 max-w-2xl text-xl font-semibold leading-8 text-white/78">{headline}</p>
+              </div>
             </div>
-          </div>
 
-          <div className="flex flex-wrap gap-5 text-sm font-semibold text-[#506b73]">
-            <InlineTrust icon={MapPin} label={coverage} color={visualIdentity.primaryColor} />
-            <InlineTrust icon={Globe2} label={publicProjects ? "Proyectos publicados" : "Workspace activo"} color={visualIdentity.primaryColor} />
-            <InlineTrust icon={ShieldCheck} label="Perfil verificado por Terraqo" color={visualIdentity.primaryColor} />
-          </div>
+            <div className="mt-7 flex flex-wrap gap-x-6 gap-y-3 text-sm font-semibold text-white/72">
+              <InlineTrust icon={MapPin} label={coverage} color={visualIdentity.accentColor} />
+              <InlineTrust icon={Globe2} label={publicProjects ? "Proyectos públicos" : "Workspace activo"} color={visualIdentity.accentColor} />
+              <InlineTrust icon={ShieldCheck} label="Empresa verificada" color={visualIdentity.accentColor} />
+            </div>
 
-          <article className="rounded-[26px] border border-[#d8e0ec] bg-white/86 p-7 shadow-[0_28px_90px_-60px_rgba(3,52,59,0.45)] md:p-8">
-            <p className="max-w-4xl text-base leading-8 text-[#314f58]">{summary}</p>
+            <p className="mt-7 max-w-3xl border-l-2 pl-5 text-[15px] leading-7 text-white/68" style={{ borderColor: visualIdentity.accentColor }}>{summary}</p>
             <div className="mt-8 flex flex-wrap gap-3">
-              {domainHref ? <Link href={domainHref} target="_blank" className="inline-flex h-12 items-center gap-2 rounded-md px-5 text-sm font-black text-white shadow-[0_20px_45px_-24px_rgba(0,0,0,0.5)]" style={{ backgroundColor: visualIdentity.primaryColor }}>Visitar sitio web <ArrowRight className="h-4 w-4" /></Link> : null}
-              <Link href="/cuenta" className="inline-flex h-12 items-center gap-2 rounded-md border bg-white px-5 text-sm font-black" style={{ borderColor: `${visualIdentity.primaryColor}50`, color: visualIdentity.primaryColor }}>
+              {domainHref ? <Link href={domainHref} target="_blank" className="inline-flex h-12 items-center gap-2 rounded-md px-5 text-sm font-black text-white shadow-[0_20px_45px_-24px_rgba(0,0,0,0.7)]" style={{ backgroundColor: visualIdentity.primaryColor, border: "1px solid rgba(255,255,255,.18)" }}>Visitar sitio web <ArrowRight className="h-4 w-4" /></Link> : null}
+              <Link href="/cuenta" className="inline-flex h-12 items-center gap-2 rounded-md border border-white/32 bg-white/8 px-5 text-sm font-black text-white backdrop-blur-xl hover:bg-white/14">
                 <MessageSquareText className="h-4 w-4" /> Contactar empresa
               </Link>
             </div>
-          </article>
-        </div>
-
-        <VisualOperationCard
-          name={name}
-          heroImageUrl={profile.heroImageUrl}
-          visualIdentity={visualIdentity}
-          projects={workspace._count.projects}
-          jobs={workspace._count.jobPosts}
-          professionals={workspace._count.professionalAffiliations}
-        />
-      </section>
-
-      <section className="mx-auto grid max-w-7xl overflow-hidden rounded-[22px] border border-[#d8e0ec] bg-white/90 px-5 shadow-[0_22px_70px_-55px_rgba(3,52,59,0.5)] md:grid-cols-5 md:px-0">
-        <MetricStrip icon={CalendarDays} value="5+ años" label="Experiencia acumulada" color={visualIdentity.primaryColor} />
-        <MetricStrip icon={Layers3} value={workspace._count.projects} label="Proyectos registrados" color={visualIdentity.primaryColor} />
-        <MetricStrip icon={ShieldCheck} value="100%" label="Perfil operativo activo" color={visualIdentity.primaryColor} />
-        <MetricStrip icon={FolderKanban} value={workspace._count.worklogs} label="Evidencias internas" color={visualIdentity.primaryColor} />
-        <div className="flex items-center gap-3 px-6 py-5 text-sm text-[#4c6870] md:border-l md:border-[#d8e0ec]">
-          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: visualIdentity.primaryColor }} />
-          <div>
-            <p>Última actividad</p>
-            <strong className="block text-[#0e1a26]">{latestActivity ? latestActivity.toLocaleDateString("es-PE", { day: "2-digit", month: "short", year: "numeric" }) : "Pendiente"}</strong>
           </div>
+
+          <aside className="relative min-h-[390px] overflow-hidden rounded-[26px] border border-white/16 bg-black/20 shadow-[0_36px_100px_-45px_rgba(0,0,0,.9)] backdrop-blur-xl">
+            {profile.heroImageUrl ? <Image src={profile.heroImageUrl} alt={`Operación de ${name}`} fill sizes="(min-width: 1024px) 520px, 100vw" className="object-cover" unoptimized /> : <div className="absolute inset-0" style={patternStyle("dark-panel", visualIdentity.primaryColor, visualIdentity.accentColor)} />}
+            <div className="absolute inset-0 bg-gradient-to-t from-[#06171d]/95 via-[#06171d]/12 to-transparent" />
+            <div className="absolute inset-x-4 bottom-4 grid grid-cols-2 gap-2 rounded-2xl border border-white/12 bg-[#071a20]/72 p-3 backdrop-blur-2xl sm:grid-cols-4">
+              <HeroMetric value={workspace._count.projects} label="Proyectos" color={visualIdentity.accentColor} />
+              <HeroMetric value={workspace._count.professionalAffiliations} label="Profesionales" color={visualIdentity.accentColor} />
+              <HeroMetric value="5+" label="Años" color={visualIdentity.accentColor} />
+              <HeroMetric value="100%" label="Verificado" color={visualIdentity.accentColor} />
+            </div>
+          </aside>
         </div>
       </section>
 
@@ -262,6 +252,15 @@ function BrandMark({ name, logoUrl, visualIdentity }: { name: string; logoUrl?: 
 
 function InlineTrust({ icon: Icon, label, color }: { icon: typeof MapPin; label: string; color: string }) {
   return <span className="inline-flex items-center gap-2"><Icon className="h-4 w-4" style={{ color }} /> {label}</span>;
+}
+
+function HeroMetric({ value, label, color }: { value: string | number; label: string; color: string }) {
+  return (
+    <div className="min-w-0 px-2 py-2 text-center sm:border-r sm:border-white/10 sm:last:border-r-0">
+      <strong className="block font-display text-2xl font-black leading-none" style={{ color }}>{value}</strong>
+      <span className="mt-1 block truncate text-[10px] font-bold uppercase tracking-[0.08em] text-white/68">{label}</span>
+    </div>
+  );
 }
 
 function VisualOperationCard({ name, heroImageUrl, visualIdentity, projects, jobs, professionals }: { name: string; heroImageUrl?: string; visualIdentity: VisualIdentity; projects: number; jobs: number; professionals: number }) {
