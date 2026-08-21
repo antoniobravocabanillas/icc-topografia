@@ -1,4 +1,7 @@
+"use client";
+
 import { UserRound } from "lucide-react";
+import { useEffect, useState } from "react";
 
 type UserAvatarProps = {
   name?: string | null;
@@ -23,16 +26,19 @@ function initials(name?: string | null) {
 export function UserAvatar({ name, image, size = "md", className = "" }: UserAvatarProps) {
   const label = name ? `Foto de perfil de ${name}` : "Foto de perfil";
   const fallback = initials(name);
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => setImageFailed(false), [image]);
 
   return (
     <span
       className={`relative grid shrink-0 place-items-center overflow-hidden rounded-full border border-primary/20 bg-primary/10 font-display font-bold text-primary ${sizeClasses[size]} ${className}`}
       aria-label={label}
     >
-      {image ? (
+      {image && !imageFailed ? (
         // Avatar URLs can come from Terraqo storage or an approved external identity provider.
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={image} alt={label} className="h-full w-full object-cover" />
+        <img src={image} alt={label} className="h-full w-full object-cover" onError={() => setImageFailed(true)} />
       ) : fallback ? (
         <span aria-hidden="true">{fallback}</span>
       ) : (
