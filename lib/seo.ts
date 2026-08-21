@@ -8,11 +8,11 @@ type SeoInput = {
 };
 
 export function createMetadata({ title, description, path = "" }: SeoInput): Metadata {
-  const fullTitle = `${title} | Terraqo`;
+  const fullTitle = /\bTerraqo$/i.test(title.trim()) ? title.trim() : `${title.trim()} | Terraqo`;
   const url = absoluteUrl(path);
 
   return {
-    title: fullTitle,
+    title: { absolute: fullTitle },
     description,
     alternates: { canonical: url },
     openGraph: {
