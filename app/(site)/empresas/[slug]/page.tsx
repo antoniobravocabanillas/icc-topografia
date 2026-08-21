@@ -263,7 +263,6 @@ export default async function PublicCompanyProfilePage({ params }: PageProps) {
 
         {workspace.clientLogos.length ? <section className="mt-5 flex flex-col gap-5 rounded-[20px] border border-[#dfe5e3] bg-white p-6 lg:flex-row lg:items-center"><h2 className="shrink-0 text-sm font-black">Confían en nosotros</h2><div className="flex flex-1 flex-wrap items-center gap-x-10 gap-y-5">{workspace.clientLogos.map((client) => <div key={client.id} className="relative h-9 w-28 grayscale opacity-60"><Image src={client.logoUrl} alt={client.name} fill sizes="112px" className="object-contain" unoptimized /></div>)}</div><div className="flex gap-8 border-t pt-5 text-xs font-bold text-[#526863] lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0"><span>{coverage}</span><span>Respuesta profesional</span><span>Calidad documentada</span></div></section> : null}
       </div>
-      <Footer visualIdentity={visualIdentity} />
     </main>
   );
 }
@@ -496,28 +495,4 @@ function ContactPanel({ coverage, email, phone, domain, domainHref, color }: { c
 
 function ContactRow({ icon: Icon, color, children }: { icon: typeof Mail; color: string; children: React.ReactNode }) {
   return <p className="flex items-start gap-3"><Icon className="mt-0.5 h-4 w-4 shrink-0" style={{ color }} /><span>{children}</span></p>;
-}
-
-function Footer({ visualIdentity }: { visualIdentity: VisualIdentity }) {
-  return (
-    <footer className="mt-8 bg-[#0e1a26] text-white">
-      <div className="mx-auto grid max-w-7xl gap-10 px-5 py-12 md:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr]">
-        <div>
-          <TerraqoLogo variant="horizontal" tone="dark" alt="Terraqo" className="h-10 w-[155px]" />
-          <p className="mt-5 max-w-sm text-sm leading-7 text-white/62">Software modular, red profesional y evidencia de trabajo en un solo ecosistema.</p>
-        </div>
-        <FooterGroup title="Plataforma" items={["Cómo funciona", "Membresías", "Seguridad"]} />
-        <FooterGroup title="Red profesional" items={["Profesionales", "Empresas", "Worklog"]} />
-        <FooterGroup title="Legal" items={["Términos", "Privacidad", "Cookies"]} />
-      </div>
-      <div className="mx-auto flex max-w-7xl flex-col gap-3 border-t border-white/10 px-5 py-6 text-xs text-white/45 md:flex-row md:items-center md:justify-between">
-        <span>© 2026 Terraqo. Todos los derechos reservados.</span>
-        <span className="inline-flex items-center gap-2"><ShieldCheck className="h-4 w-4" style={{ color: visualIdentity.accentColor }} /> Perfil verificado por Terraqo</span>
-      </div>
-    </footer>
-  );
-}
-
-function FooterGroup({ title, items }: { title: string; items: string[] }) {
-  return <div><h3 className="font-black">{title}</h3><div className="mt-4 grid gap-3 text-sm text-white/58">{items.map((item) => <span key={item}>{item}</span>)}</div></div>;
 }
