@@ -26,6 +26,7 @@ import { prisma } from "@/lib/prisma";
 import { fontClassName, resolveWorkspaceVisualIdentity } from "@/lib/terraqo/workspace-visual-identity";
 import { cn } from "@/lib/utils";
 import { TerraqoLogo } from "@/components/terraqo/terraqo-logo";
+import { CompanyProfileRail } from "@/components/terraqo/company-profile-rail";
 
 type PageProps = { params: Promise<{ slug: string }> };
 
@@ -128,6 +129,12 @@ export default async function PublicCompanyProfilePage({ params }: PageProps) {
         orderBy: [{ position: "asc" }, { createdAt: "desc" }],
         take: 8
       },
+      services: {
+        where: { isPublished: true, status: "ACTIVE" },
+        select: { id: true, slug: true, title: true, summary: true, category: true, cover: true, icon: true },
+        orderBy: [{ isFeatured: "desc" }, { updatedAt: "desc" }],
+        take: 12
+      },
       _count: {
         select: {
           projects: true,
@@ -205,32 +212,32 @@ export default async function PublicCompanyProfilePage({ params }: PageProps) {
           <div className="relative min-h-[430px] overflow-hidden bg-[#d9dfdc] lg:min-h-[470px]">
             {profile.heroImageUrl ? <Image src={profile.heroImageUrl} alt={`Actividad de ${name}`} fill priority sizes="(min-width:1024px) 60vw,100vw" className="object-cover" unoptimized /> : null}
             <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" />
-            <div className="absolute bottom-4 left-4 right-4 grid gap-px overflow-hidden rounded-[16px] border border-white/20 bg-white/15 backdrop-blur-xl sm:grid-cols-4 lg:right-[245px]">
+            <div className="absolute bottom-4 left-4 right-4 grid gap-px overflow-hidden rounded-[16px] border backdrop-blur-2xl sm:grid-cols-4 lg:right-[245px]" style={{ background: `linear-gradient(135deg, ${visualIdentity.primaryColor}d9, ${visualIdentity.primaryColor}9c)`, borderColor: `${visualIdentity.accentColor}66`, boxShadow: `0 18px 50px ${visualIdentity.primaryColor}40` }}>
               <CompanyMetric value={workspace._count.projects} label="Proyectos registrados" />
               <CompanyMetric value={workspace._count.professionalAffiliations} label="Profesionales vinculados" />
               <CompanyMetric value="5+" label="Años de experiencia" />
               <CompanyMetric value="100%" label="Perfil verificado" />
             </div>
-            <aside className="absolute right-4 top-4 hidden w-[215px] rounded-[18px] border border-white/20 bg-[#082f2a]/88 p-6 text-white backdrop-blur-xl lg:block">
+            <Link href={`/empresas/${slug}/verificacion`} className="absolute right-4 top-4 block w-[190px] rounded-[18px] border p-5 text-white shadow-2xl backdrop-blur-2xl transition hover:-translate-y-1 sm:w-[215px] sm:p-6" style={{ background: `linear-gradient(145deg, ${visualIdentity.primaryColor}e8, ${visualIdentity.primaryColor}a8)`, borderColor: `${visualIdentity.accentColor}66` }}>
               <p className="text-[10px] font-black uppercase tracking-[.14em]" style={{ color: visualIdentity.accentColor }}>Terraqo verified</p>
               <h2 className="mt-7 font-display text-xl font-black">Empresa verificada</h2>
               <p className="mt-3 text-sm leading-6 text-white/70">Perfil revisado para respaldar identidad, operación y cumplimiento declarado.</p>
               <span className="mt-6 block text-xs font-black underline underline-offset-4">Ver perfil de verificación →</span>
-            </aside>
+            </Link>
           </div>
         </section>
 
         <section className="mt-5 grid min-w-0 gap-5 xl:grid-cols-[minmax(0,.86fr)_minmax(0,1.14fr)]">
-          <CompanySection title="Servicios principales" action="Ver todos los servicios">
-            <div className="flex gap-0 overflow-x-auto pb-2">
-              {services.slice(0, 7).map((service, index) => { const part = serviceParts(service); return <article key={service} className="min-w-[150px] flex-1 border-r border-[#e5eae8] px-4 py-4 first:pl-0 last:border-0"><span className="text-xs font-black" style={{ color: visualIdentity.primaryColor }}>{String(index + 1).padStart(2, "0")}</span><h3 className="mt-4 text-sm font-black leading-5">{part.title}</h3>{part.description ? <p className="mt-2 line-clamp-2 text-xs leading-5 text-[#667773]">{part.description}</p> : null}</article>; })}
-            </div>
+          <CompanySection title="Servicios principales" action="Ver todos los servicios" actionHref="/servicios">
+            <CompanyProfileRail label="servicios">
+              {(workspace.services.length ? workspace.services : services.map((value, index) => { const part = serviceParts(value); return { id: `profile-${index}`, slug: "", title: part.title, summary: part.description, category: workspace.industry, cover: null, icon: null }; })).map((service) => <ServicePreview key={service.id} service={service} color={visualIdentity.primaryColor} />)}
+            </CompanyProfileRail>
           </CompanySection>
 
-          <CompanySection title="Proyectos destacados" action="Ver todos los proyectos">
-            <div className="flex gap-4 overflow-x-auto pb-2">
-              {workspace.projects.filter((project) => project.isPublic).slice(0, 4).map((project) => <ProjectPreview key={project.id} project={project} color={visualIdentity.primaryColor} />)}
-            </div>
+          <CompanySection title="Proyectos destacados" action="Ver todos los proyectos" actionHref="/proyectos">
+            <CompanyProfileRail label="proyectos">
+              {workspace.projects.filter((project) => project.isPublic).map((project) => <ProjectPreview key={project.id} project={project} color={visualIdentity.primaryColor} />)}
+            </CompanyProfileRail>
           </CompanySection>
         </section>
 
@@ -262,15 +269,27 @@ export default async function PublicCompanyProfilePage({ params }: PageProps) {
 }
 
 function CompanyMetric({ value, label }: { value: string | number; label: string }) {
-  return <div className="bg-[#082f2a]/72 px-4 py-4 text-white"><strong className="font-display text-2xl font-black">{value}</strong><span className="mt-1 block text-[11px] font-semibold leading-4 text-white/72">{label}</span></div>;
+  return <div className="border-r border-white/12 bg-white/5 px-4 py-4 text-white last:border-r-0"><strong className="font-display text-2xl font-black">{value}</strong><span className="mt-1 block text-[11px] font-semibold leading-4 text-white/76">{label}</span></div>;
 }
 
-function CompanySection({ title, subtitle, action, children }: { title: string; subtitle?: string; action?: string; children: ReactNode }) {
+function CompanySection({ title, subtitle, action, actionHref, children }: { title: string; subtitle?: string; action?: string; actionHref?: string; children: ReactNode }) {
   return (
     <section className="min-w-0 rounded-[20px] border border-[#dfe5e3] bg-white p-6">
-      <div className="mb-5 flex items-start justify-between gap-5"><div><h2 className="font-display text-xl font-black">{title}</h2>{subtitle ? <p className="mt-1 text-xs text-[#657772]">{subtitle}</p> : null}</div>{action ? <span className="shrink-0 text-xs font-black text-[#315d55]">{action} →</span> : null}</div>
+      <div className="mb-5 flex items-start justify-between gap-5"><div><h2 className="font-display text-xl font-black">{title}</h2>{subtitle ? <p className="mt-1 text-xs text-[#657772]">{subtitle}</p> : null}</div>{action && actionHref ? <Link href={actionHref} className="shrink-0 text-xs font-black text-[#315d55] hover:underline">{action} →</Link> : null}</div>
       {children}
     </section>
+  );
+}
+
+type PublicServicePreview = { id: string; slug: string; title: string; summary: string; category: string | null; cover: string | null; icon: string | null };
+
+function ServicePreview({ service, color }: { service: PublicServicePreview; color: string }) {
+  const href = service.slug ? `/servicios/${service.slug}` : "/servicios";
+  return (
+    <Link href={href} className="group min-w-[210px] max-w-[240px] flex-1 snap-start overflow-hidden rounded-xl border border-[#dfe5e3] bg-white transition hover:-translate-y-1 hover:shadow-lg">
+      <div className="relative h-28 overflow-hidden" style={{ backgroundColor: `${color}0c` }}>{service.cover ? <Image src={service.cover} alt={service.title} fill sizes="240px" className="object-cover transition duration-500 group-hover:scale-105" unoptimized /> : <div className="absolute inset-0 flex items-end p-4"><span className="text-[10px] font-black uppercase tracking-[.1em]" style={{ color }}>{service.category || "Servicio especializado"}</span></div>}</div>
+      <div className="p-4"><h3 className="line-clamp-2 text-sm font-black leading-5">{service.title}</h3><p className="mt-2 line-clamp-2 text-xs leading-5 text-[#667773]">{service.summary || "Conoce el alcance, entregables y aplicación de este servicio."}</p><span className="mt-4 inline-block text-xs font-black" style={{ color }}>Ver servicio →</span></div>
+    </Link>
   );
 }
 
@@ -289,7 +308,7 @@ function ProjectPreview({ project, color }: { project: PublicProjectPreview; col
   const image = project.images[0];
   const status = project.status === "COMPLETED" ? "Completado" : project.status === "IN_PROGRESS" ? "En ejecución" : "Registrado";
   return (
-    <Link href={`/proyectos/${project.slug}`} className="min-w-[235px] flex-1 overflow-hidden rounded-xl border border-[#dfe5e3] bg-white">
+    <Link href={`/proyectos/${project.slug}`} className="group min-w-[235px] max-w-[285px] flex-1 snap-start overflow-hidden rounded-xl border border-[#dfe5e3] bg-white transition hover:-translate-y-1 hover:shadow-lg">
       <div className="relative h-28 bg-[#e8ecea]">{image ? <Image src={image.url} alt={image.alt || project.title} fill sizes="260px" className="object-cover" unoptimized /> : null}{project.category ? <span className="absolute left-3 top-3 rounded-full bg-[#082f2a]/78 px-2.5 py-1 text-[9px] font-black text-white backdrop-blur">{project.category}</span> : null}</div>
       <div className="p-4"><h3 className="line-clamp-1 text-sm font-black">{project.title}</h3><p className="mt-2 text-[11px] text-[#6b7b77]">{project.location || "Ubicación por confirmar"}</p><span className="mt-3 inline-block text-[10px] font-black" style={{ color }}>{status}</span></div>
     </Link>
