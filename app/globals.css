@@ -443,6 +443,23 @@ select:-webkit-autofill:focus {
   color: rgba(243, 243, 243, 0.82);
 }
 
+.tq-public-header--menu-open {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  height: 100dvh;
+  overflow: hidden;
+  isolation: isolate;
+  backdrop-filter: none;
+}
+
+.tq-public-header--menu-open .tq-mobile-nav {
+  position: absolute;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
 .tq-header-inner {
   display: flex;
   min-height: 72px;
@@ -539,6 +556,7 @@ select:-webkit-autofill:focus {
   z-index: 999;
   background: var(--tq-paper);
   padding: 24px 0;
+  opacity: 1;
 }
 
 .tq-mobile-nav .tq-public-wrap { display: flex; flex-direction: column; }
