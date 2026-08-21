@@ -130,6 +130,7 @@ export default async function PublicCompanyProfilePage({ params }: PageProps) {
   const name = workspace.brandName || workspace.name;
   const headline = profile.headline || workspace.description || `Servicios especializados conectados a Terraqo`;
   const summary = profile.summary || workspace.description || "Perfil empresarial conectado a Terraqo para centralizar operaciones, oportunidades, proyectos, equipo y evidencia comercial.";
+  const heroSummary = summary.length > 230 ? `${summary.slice(0, 227).trimEnd()}…` : summary;
   const services = normalizeList(profile.services, [
     "Operación comercial: compras, cotizaciones y seguimiento del cliente en un solo workspace.",
     "Gestión de proyectos: planificación, ejecución, documentos y responsables conectados.",
@@ -163,46 +164,63 @@ export default async function PublicCompanyProfilePage({ params }: PageProps) {
         <div className="absolute inset-0 -z-20" style={{ background: `linear-gradient(105deg, #071a20f5 0%, ${visualIdentity.primaryColor}d9 48%, #071a20e8 100%)` }} />
         <div className="absolute inset-0 -z-10 opacity-45" style={patternStyle("topographic", visualIdentity.primaryColor, visualIdentity.accentColor)} />
 
-        <div className="mx-auto grid max-w-7xl gap-10 px-5 py-12 lg:grid-cols-[minmax(0,1.04fr)_minmax(380px,0.96fr)] lg:items-center lg:py-16">
-          <div>
-            <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
+        <div className="mx-auto grid max-w-[1440px] lg:grid-cols-[minmax(460px,0.92fr)_minmax(560px,1.08fr)]">
+          <div className="flex min-h-[620px] flex-col justify-center px-5 py-12 sm:px-10 lg:px-12 xl:px-16">
+            <div className="flex items-center gap-5">
               <BrandMark name={name} logoUrl={workspace.logoUrl} visualIdentity={visualIdentity} />
               <div>
-                <span className="inline-flex items-center gap-2 rounded-full border border-white/16 bg-black/18 px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-white/82 backdrop-blur-xl">
-                  <BriefcaseBusiness className="h-3.5 w-3.5" style={{ color: visualIdentity.accentColor }} /> {visualIdentity.badgeLabel}
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="font-display text-2xl font-black sm:text-3xl">{name}</span>
+                  <BadgeCheck className="h-6 w-6" style={{ color: visualIdentity.accentColor }} />
+                </div>
+                <span className="mt-2 inline-flex items-center gap-2 text-xs font-bold text-white/68">
+                  <ShieldCheck className="h-4 w-4" style={{ color: visualIdentity.accentColor }} /> Empresa verificada por Terraqo
                 </span>
-                <h1 className="mt-4 flex flex-wrap items-center gap-3 font-display text-4xl font-black leading-[.96] tracking-[-0.045em] sm:text-5xl lg:text-6xl">
-                  {name}<BadgeCheck className="h-7 w-7" style={{ color: visualIdentity.accentColor }} />
-                </h1>
-                <p className="mt-4 max-w-2xl text-xl font-semibold leading-8 text-white/78">{headline}</p>
               </div>
             </div>
 
-            <div className="mt-7 flex flex-wrap gap-x-6 gap-y-3 text-sm font-semibold text-white/72">
-              <InlineTrust icon={MapPin} label={coverage} color={visualIdentity.accentColor} />
-              <InlineTrust icon={Globe2} label={publicProjects ? "Proyectos públicos" : "Workspace activo"} color={visualIdentity.accentColor} />
-              <InlineTrust icon={ShieldCheck} label="Empresa verificada" color={visualIdentity.accentColor} />
+            <h1 className="mt-10 max-w-2xl font-display text-4xl font-black leading-[1.02] tracking-[-0.045em] sm:text-5xl lg:text-[52px] xl:text-[56px]">{headline}</h1>
+            <p className="mt-6 max-w-xl text-base leading-7 text-white/68">{heroSummary}</p>
+
+            <div className="mt-7">
+              <p className="text-[11px] font-black uppercase tracking-[0.14em] text-white/48">Cobertura y sectores</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <CoverageChip icon={MapPin} label={coverage} />
+                {sectors.slice(0, 3).map((sector) => <CoverageChip key={sector} label={sector} />)}
+                {sectors.length > 3 ? <CoverageChip label={`+${sectors.length - 3} sectores`} /> : null}
+              </div>
             </div>
 
-            <p className="mt-7 max-w-3xl border-l-2 pl-5 text-[15px] leading-7 text-white/68" style={{ borderColor: visualIdentity.accentColor }}>{summary}</p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              {domainHref ? <Link href={domainHref} target="_blank" className="inline-flex h-12 items-center gap-2 rounded-md px-5 text-sm font-black text-white shadow-[0_20px_45px_-24px_rgba(0,0,0,0.7)]" style={{ backgroundColor: visualIdentity.primaryColor, border: "1px solid rgba(255,255,255,.18)" }}>Visitar sitio web <ArrowRight className="h-4 w-4" /></Link> : null}
-              <Link href="/cuenta" className="inline-flex h-12 items-center gap-2 rounded-md border border-white/32 bg-white/8 px-5 text-sm font-black text-white backdrop-blur-xl hover:bg-white/14">
+            <div className="mt-8 grid gap-3 sm:grid-cols-2">
+              <Link href="/cuenta" className="inline-flex h-[52px] items-center justify-center gap-2 rounded-md px-5 text-sm font-black text-white shadow-[0_20px_45px_-24px_rgba(0,0,0,0.7)]" style={{ backgroundColor: visualIdentity.primaryColor, border: "1px solid rgba(255,255,255,.18)" }}>
                 <MessageSquareText className="h-4 w-4" /> Contactar empresa
               </Link>
+              {domainHref ? <Link href={domainHref} target="_blank" className="inline-flex h-[52px] items-center justify-center gap-2 rounded-md border border-white/32 bg-white/8 px-5 text-sm font-black text-white backdrop-blur-xl hover:bg-white/14">Visitar sitio web <ArrowRight className="h-4 w-4" /></Link> : null}
             </div>
           </div>
 
-          <aside className="relative min-h-[390px] overflow-hidden rounded-[26px] border border-white/16 bg-black/20 shadow-[0_36px_100px_-45px_rgba(0,0,0,.9)] backdrop-blur-xl">
-            {profile.heroImageUrl ? <Image src={profile.heroImageUrl} alt={`Operación de ${name}`} fill sizes="(min-width: 1024px) 520px, 100vw" className="object-cover" unoptimized /> : <div className="absolute inset-0" style={patternStyle("dark-panel", visualIdentity.primaryColor, visualIdentity.accentColor)} />}
-            <div className="absolute inset-0 bg-gradient-to-t from-[#06171d]/95 via-[#06171d]/12 to-transparent" />
-            <div className="absolute inset-x-4 bottom-4 grid grid-cols-2 gap-2 rounded-2xl border border-white/12 bg-[#071a20]/72 p-3 backdrop-blur-2xl sm:grid-cols-4">
-              <HeroMetric value={workspace._count.projects} label="Proyectos" color={visualIdentity.accentColor} />
-              <HeroMetric value={workspace._count.professionalAffiliations} label="Profesionales" color={visualIdentity.accentColor} />
-              <HeroMetric value="5+" label="Años" color={visualIdentity.accentColor} />
-              <HeroMetric value="100%" label="Verificado" color={visualIdentity.accentColor} />
+          <aside className="relative min-h-[520px] overflow-hidden border-white/12 bg-black/20 lg:min-h-[620px] lg:border-l">
+            {profile.heroImageUrl ? <Image src={profile.heroImageUrl} alt={`Operación de ${name}`} fill priority sizes="(min-width: 1024px) 58vw, 100vw" className="object-cover" unoptimized /> : <div className="absolute inset-0" style={patternStyle("dark-panel", visualIdentity.primaryColor, visualIdentity.accentColor)} />}
+            <div className="absolute inset-0 bg-gradient-to-r from-[#06171d]/18 via-transparent to-[#06171d]/30" />
+            <div className="absolute inset-x-5 bottom-5 rounded-[24px] border border-white/16 bg-[#071a20]/78 p-6 shadow-2xl backdrop-blur-2xl sm:inset-x-auto sm:right-7 sm:w-[300px] lg:bottom-8">
+              <div className="grid h-20 w-20 place-items-center rounded-full border border-white/32" style={{ boxShadow: `inset 0 0 0 7px ${visualIdentity.primaryColor}55` }}>
+                <ShieldCheck className="h-9 w-9" style={{ color: visualIdentity.accentColor }} />
+              </div>
+              <p className="mt-5 font-display text-xl font-black">Empresa verificada</p>
+              <p className="mt-2 text-sm leading-6 text-white/66">Identidad y operación revisadas para fortalecer la confianza comercial.</p>
+              <span className="mt-5 inline-flex items-center gap-2 text-xs font-black" style={{ color: visualIdentity.accentColor }}>Verificación Terraqo <ArrowRight className="h-3.5 w-3.5" /></span>
             </div>
           </aside>
+        </div>
+
+        <div className="border-t border-white/12 bg-[#06171d]/72 backdrop-blur-2xl">
+          <div className="mx-auto grid max-w-[1440px] sm:grid-cols-2 lg:grid-cols-5">
+            <CapabilityItem icon={CalendarDays} title="5+ años de experiencia" detail="Operación técnica acumulada" color={visualIdentity.accentColor} />
+            <CapabilityItem icon={Layers3} title={`${workspace._count.projects} proyectos registrados`} detail="Experiencia documentada" color={visualIdentity.accentColor} />
+            <CapabilityItem icon={ShieldCheck} title="Entregables trazables" detail="Evidencia y control operativo" color={visualIdentity.accentColor} />
+            <CapabilityItem icon={Sparkles} title="Tecnología especializada" detail="Procesos y equipos conectados" color={visualIdentity.accentColor} />
+            <CapabilityItem icon={UsersRound} title={`${workspace._count.professionalAffiliations} profesionales`} detail="Equipo vinculado al workspace" color={visualIdentity.accentColor} />
+          </div>
         </div>
       </section>
 
@@ -252,6 +270,23 @@ function BrandMark({ name, logoUrl, visualIdentity }: { name: string; logoUrl?: 
 
 function InlineTrust({ icon: Icon, label, color }: { icon: typeof MapPin; label: string; color: string }) {
   return <span className="inline-flex items-center gap-2"><Icon className="h-4 w-4" style={{ color }} /> {label}</span>;
+}
+
+function CoverageChip({ icon: Icon, label }: { icon?: typeof MapPin; label: string }) {
+  return (
+    <span className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-white/14 bg-white/8 px-3 py-2 text-xs font-bold text-white/76 backdrop-blur-xl">
+      {Icon ? <Icon className="h-3.5 w-3.5 shrink-0" /> : null}<span className="truncate">{label}</span>
+    </span>
+  );
+}
+
+function CapabilityItem({ icon: Icon, title, detail, color }: { icon: typeof MapPin; title: string; detail: string; color: string }) {
+  return (
+    <article className="flex min-h-32 items-start gap-4 border-b border-white/10 px-5 py-6 sm:border-r lg:border-b-0 lg:last:border-r-0">
+      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-white/14 bg-white/8" style={{ color }}><Icon className="h-5 w-5" /></span>
+      <div><h2 className="font-display text-sm font-black leading-5 text-white">{title}</h2><p className="mt-2 text-xs leading-5 text-white/52">{detail}</p></div>
+    </article>
+  );
 }
 
 function HeroMetric({ value, label, color }: { value: string | number; label: string; color: string }) {
