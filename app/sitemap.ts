@@ -4,13 +4,14 @@ import { safeDb } from "@/lib/server/safe-db";
 import { absoluteUrl } from "@/lib/utils";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const staticRoutes = ["", "/cuenta", "/registro", "/privacidad", "/terminos"];
+  const staticRoutes = ["", "/red", "/cuenta", "/registro", "/privacidad", "/terminos"];
   const profiles = await safeDb(
     "sitemap:public-cv-profiles",
     prisma.terraqoProfessionalProfile.findMany({
       where: {
         username: { not: null },
-        liveCvEnabled: true
+        liveCvEnabled: true,
+        friendDiscoveryEnabled: true
       },
       select: { username: true, updatedAt: true },
       orderBy: { updatedAt: "desc" }

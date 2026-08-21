@@ -1177,6 +1177,7 @@ function PublicCVCTA({ username, isPublicCv, completeness }: { username: string;
         </div>
       </div>
       <div className="flex flex-wrap gap-3">
+        <Link href="/red" className="inline-flex items-center justify-center gap-2 rounded-[8px] border border-[#25c0d5]/45 bg-[#25c0d5]/10 px-5 py-3 text-sm font-black text-[#8debf5] transition hover:bg-[#25c0d5]/20">Buscar más perfiles <ArrowRight className="h-4 w-4" /></Link>
         <Link href={publicCvCallback(username)} prefetch={false} className="inline-flex items-center justify-center gap-2 rounded-[8px] border border-[#488ac9]/45 bg-transparent px-5 py-3 text-sm font-black text-white transition hover:border-[#25c0d5] hover:text-[#25c0d5]"><MessageSquare className="h-4 w-4" />Contactar</Link>
         <Link href={publicCvCallback(username)} prefetch={false} className="inline-flex items-center justify-center gap-2 rounded-[8px] bg-[#4374ba] px-5 py-3 text-sm font-black text-white"><LockKeyhole className="h-4 w-4" />Solicitar acceso al CV completo</Link>
         <Link href={`/api/terraqo/cv/${username}/pdf`} target="_blank" className="inline-flex items-center justify-center gap-2 rounded-[8px] border border-white/15 bg-white/[0.04] px-5 py-3 text-sm font-black text-white"><Download className="h-4 w-4" />Descargar PDF</Link>

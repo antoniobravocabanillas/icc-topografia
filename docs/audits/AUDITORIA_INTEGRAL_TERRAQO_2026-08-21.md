@@ -8,11 +8,11 @@ Estado del informe: corte técnico inicial completo, con inventarios regenerable
 
 ## 1. Resumen ejecutivo
 
-Terraqo ya no es un prototipo visual. Es una plataforma modular multiempresa con superficies públicas, administración por workspace, comercio consultivo, CRM, proyectos, red profesional, CV vivo, bitácora, evidencia, validaciones, mensajería, equipos, foros, archivos y portales. El repositorio contiene 83 páginas, 85 endpoints, 87 componentes reutilizables, 84 modelos de datos y 53 enumeraciones de dominio.
+Terraqo ya no es un prototipo visual. Es una plataforma modular multiempresa con superficies públicas, administración por workspace, comercio consultivo, CRM, proyectos, red profesional, CV vivo, bitácora, evidencia, validaciones, mensajería, equipos, foros, archivos y portales. El repositorio contiene 84 páginas, 85 endpoints, 88 componentes reutilizables, 84 modelos de datos y 53 enumeraciones de dominio.
 
-El avance global ponderado estimado es **64%** respecto a la visión de Terraqo como sistema operativo empresarial que conecta empresas, proyectos, talento, evidencia, comercio y colaboración.
+El avance global ponderado estimado es **65%** respecto a la visión de Terraqo como sistema operativo empresarial que conecta empresas, proyectos, talento, evidencia, comercio y colaboración.
 
-Este 64% no significa que 64% de las pantallas estén dibujadas. La interfaz está más adelantada, alrededor de 78%. El porcentaje baja al exigir flujo completo, persistencia, aislamiento multiworkspace, seguridad, datos reales, pruebas automatizadas, observabilidad y operación comercial productiva.
+Este 65% no significa que 65% de las pantallas estén dibujadas. La interfaz está más adelantada, alrededor de 78%. El porcentaje baja al exigir flujo completo, persistencia, aislamiento multiworkspace, seguridad, datos reales, pruebas automatizadas, observabilidad y operación comercial productiva.
 
 Conclusión ejecutiva:
 
@@ -46,14 +46,14 @@ Escala:
 
 | Elemento | Cantidad |
 |---|---:|
-| Páginas | 83 |
+| Páginas | 84 |
 | Endpoints API | 85 |
-| Rutas totales | 168 |
-| Componentes en `components/` | 87 |
+| Rutas totales | 169 |
+| Componentes en `components/` | 88 |
 | Modelos Prisma | 84 |
 | Enumeraciones Prisma | 53 |
-| Archivos TS/TSX inventariados | 264 |
-| Controles interactivos detectados | 649 |
+| Archivos TS/TSX inventariados | 266 |
+| Controles interactivos detectados | 657 |
 | Formularios aproximados | 109 |
 | Campos de formulario aproximados | 217 |
 | Enlaces aproximados | 261 |
@@ -92,7 +92,7 @@ La arquitectura apoya esta visión. La experiencia todavía no siempre la comuni
 | Plataforma multiworkspace y módulos | 9% | 72% | 6.48 | Base sólida, aprovisionamiento limitado |
 | Sitio público y CMS | 7% | 80% | 5.60 | Útil y cercano a producción |
 | Perfil empresarial público | 5% | 82% | 4.10 | Fuerte, requiere contenidos verificables |
-| Red operativa/profesional | 8% | 67% | 5.36 | Útil; debe abrirse a empresas y oportunidades |
+| Red operativa/profesional | 8% | 70% | 5.60 | Directorio público operativo; falta integrar oportunidades |
 | CV vivo y perfil profesional | 8% | 84% | 6.72 | Uno de los activos más maduros |
 | Worklog, evidencia y validación | 9% | 78% | 7.02 | Diferenciador real, faltan pruebas amplias |
 | Proyectos y ejecución | 7% | 67% | 4.69 | Modelo amplio; gestión todavía fragmentada |
@@ -105,9 +105,9 @@ La arquitectura apoya esta visión. La experiencia todavía no siempre la comuni
 | Seguridad y permisos | 5% | 70% | 3.50 | Buen diseño, cobertura desigual |
 | Analítica, automatización y reportes | 4% | 43% | 1.72 | Temprano; reportes básicos, automatización nominal |
 | QA, observabilidad y DevOps | 5% | 40% | 2.00 | Principal deuda productiva |
-| **Total** | **100%** | **64.83%** | **64.83** | **MVP avanzado, no plataforma madura** |
+| **Total** | **100%** | **65.07%** | **65.07** | **MVP avanzado, no plataforma madura** |
 
-Por prudencia se comunica **64%**.
+Por prudencia se comunica **65%**.
 
 ## 6. Auditoría por módulo
 
@@ -170,13 +170,13 @@ Riesgos:
 - Oportunidades fallback pueden parecer reales cuando no existen job posts.
 - Falta historial de verificaciones, entidad verificadora, fecha, evidencia y vencimiento.
 
-### 6.4 Red operativa/profesional — 67%
+### 6.4 Red operativa/profesional — 70%
 
-Ya existe `/portal/red` con búsqueda, tabs, filtros, orden y vistas. Busca profesionales, empresas y grupos dentro de workspaces autorizados.
+Coexisten dos superficies deliberadamente separadas: `/red` como directorio público de perfiles descubribles y `/portal/red` como red privada con profesionales, empresas y grupos dentro de workspaces autorizados. La web pública incorpora búsqueda, filtros, paginación, acceso desde header, home y footer, ficha enlazada al CV vivo y retorno “Buscar más perfiles” desde cada CV.
 
 Es útil porque reduce búsqueda manual y conecta identidad, experiencia y disponibilidad con un workspace real.
 
-No debe duplicarse. Debe evolucionar a “Red operativa” y añadir oportunidades como cuarta fuente o reemplazar grupos según el rol.
+No debe crearse un tercer directorio. La siguiente evolución debe añadir oportunidades y acciones empresariales sobre estas dos superficies, respetando la diferencia entre descubrimiento público y colaboración autorizada.
 
 Recomendación:
 
@@ -344,7 +344,7 @@ No presentar automatización como capacidad madura hasta implementar ejecución 
 
 ## 7. Auditoría de controles y botones
 
-El anexo `interface-controls.csv` contiene los 649 controles detectados. Debe revisarse por lote con estas clasificaciones:
+El anexo `interface-controls.csv` contiene los 657 controles detectados. Debe revisarse por lote con estas clasificaciones:
 
 - Navega correctamente.
 - Ejecuta acción persistente.
@@ -451,7 +451,7 @@ El build tolera estas advertencias, pero una entrega con criterio de calidad est
 
 - CI obligatorio: encoding, typecheck, lint, build y tests de aislamiento.
 - Suite Playwright de recorridos críticos.
-- Auditoría de los 649 controles.
+- Auditoría de los 657 controles.
 - Matriz de roles/módulos/acciones.
 - Idempotencia y stock transaccional.
 - Observabilidad y error tracking.
@@ -513,7 +513,7 @@ Resultado esperado: 80% con un producto coherente y vendible, antes de ampliar m
 
 ## 14. Limitaciones de este corte
 
-- Inventario estático exhaustivo del código, pero no todas las 649 acciones fueron ejecutadas con todos los roles y estados de datos.
+- Inventario estático exhaustivo del código, pero no todas las 657 acciones fueron ejecutadas con todos los roles y estados de datos.
 - No se realizó pentest externo.
 - No se verificaron backups ni recuperación de desastres.
 - No se auditó cumplimiento legal por jurisdicción.

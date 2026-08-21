@@ -9,7 +9,7 @@ import { TerraqoLogo } from "@/components/terraqo/terraqo-logo";
 const navItems = [
   { label: "Plataforma", href: "/#plataforma" },
   { label: "Producto", href: "/#producto" },
-  { label: "Red profesional", href: "/#red" },
+  { label: "Red operativa", href: "/red" },
   { label: "Worklog", href: "/#worklog" },
   { label: "Membresías", href: "/#membresias" }
 ];

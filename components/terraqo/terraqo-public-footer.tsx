@@ -21,7 +21,7 @@ export function TerraqoPublicFooter() {
           </div>
           <div className="tq-footer-links">
             <Link href="/#plataforma">Plataforma</Link>
-            <Link href="/#red">Red profesional</Link>
+          <Link href="/red">Red operativa</Link>
             <a href={terraqoDomains.portal}>Ingresar</a>
             <Link href="/privacidad">Privacidad</Link>
             <Link href="/terminos">Términos</Link>

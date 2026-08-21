@@ -167,6 +167,11 @@ export default function TerraqoHomePage() {
             <MessagesSquare />
             <p><b>La conversacion nace del trabajo.</b> Chat, foros, equipos y videollamadas se conectan a proyectos y oportunidades, reduciendo mensajes frios y ruido comercial.</p>
           </div>
+          <div className="mt-8 flex justify-end">
+            <Link href="/red" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-white/25 bg-white px-6 text-sm font-black text-[#083b38] transition hover:-translate-y-0.5 hover:bg-[#dff7f1]">
+              Explorar la red operativa <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
         </div>
       </section>
 

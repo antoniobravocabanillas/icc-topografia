@@ -38,6 +38,7 @@
 "page","app/(site)/privacidad/page.tsx"
 "page","app/(site)/proyectos/[slug]/page.tsx"
 "page","app/(site)/proyectos/page.tsx"
+"page","app/(site)/red/page.tsx"
 "page","app/(site)/sectores/page.tsx"
 "page","app/(site)/servicios/[slug]/page.tsx"
 "page","app/(site)/servicios/page.tsx"
