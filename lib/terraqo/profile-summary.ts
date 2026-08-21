@@ -55,6 +55,8 @@ export function normalizeSpanishCopy(text?: string | null) {
     .replace(/\bverificacion\b/gi, "verificación")
     .replace(/\binformacion\b/gi, "información")
     .replace(/\bubicacion\b/gi, "ubicación")
+    .replace(/\bhistorica\b/gi, "histórica")
+    .replace(/\bhistorico\b/gi, "histórico")
     .replace(/\bFormacion\b/g, "Formación")
     .replace(/\bformacion\b/g, "formación")
     .trim();
