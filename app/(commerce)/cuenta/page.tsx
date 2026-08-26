@@ -35,7 +35,7 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
   const isWorkspacePortal = Boolean(workspace);
 
   return (
-    <section className="tq-auth-surface relative isolate min-h-[calc(100vh-81px)] overflow-hidden bg-[#041118] text-white">
+    <section className="tq-auth-surface relative isolate min-h-[calc(100vh-81px)] overflow-hidden bg-[#0e1a26] text-white">
       <div className="tq-auth-atmosphere" aria-hidden="true" />
       <div className="tq-auth-layout">
         <div className="tq-auth-story">

@@ -32,6 +32,7 @@ export const registerSchema = z.object({
   email: z.string().email().transform((value) => value.toLowerCase()),
   password: z.string().min(8),
   company: z.string().trim().optional(),
+  industry: z.string().trim().optional(),
   document: z.string().trim().optional(),
   phone: z.string().trim().optional(),
   roleTitle: z.string().trim().optional(),
@@ -50,5 +51,11 @@ export const registerSchema = z.object({
       path: ["company"],
       message: "La empresa es obligatoria para cuentas de cliente."
     });
+  }
+  if (value.accountType === "client" && !value.industry?.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["industry"], message: "Selecciona el rubro de la empresa." });
+  }
+  if (value.accountType === "professional" && !value.roleTitle?.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["roleTitle"], message: "Indica tu profesión o perfil." });
   }
 });

@@ -34,6 +34,7 @@ export function SignInForm({
   const searchParams = useSearchParams();
   const explicitCallbackUrl = searchParams.get("callbackUrl");
   const callbackUrl = safeRelativeCallback(explicitCallbackUrl);
+  const verification = searchParams.get("verification");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -76,6 +77,8 @@ export function SignInForm({
       </div>
 
       <div className="grid gap-4">
+      {verification === "success" ? <p className="tq-verification-notice">Correo verificado. Inicia sesión para completar tu perfil.</p> : null}
+      {verification === "invalid" ? <p className="text-sm font-medium text-destructive">El enlace de verificación es inválido o venció.</p> : null}
       <div>
         <label className="text-sm font-semibold" htmlFor="email">Correo</label>
         <Input id="email" name="email" type="email" autoComplete="email" required placeholder="correo@empresa.com" className="mt-2 bg-muted/40 text-foreground" />
@@ -90,7 +93,7 @@ export function SignInForm({
       </Button>
       {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
       </div>
-      {onRegister ? <p className="mt-7 text-center text-sm text-muted-foreground">¿No tienes cuenta? <button type="button" onClick={onRegister} className="font-bold text-primary transition hover:text-[#62e4bd]">Registrarme</button></p> : null}
+      {onRegister ? <p className="tq-auth-switch">¿No tienes cuenta? <button type="button" onClick={onRegister}>Registrarme</button></p> : null}
     </form>
   );
 }

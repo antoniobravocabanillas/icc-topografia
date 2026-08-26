@@ -379,28 +379,28 @@ select:-webkit-autofill:focus {
 }
 
 .tq-auth-surface {
-  --primary: 160 66% 45%;
-  --secondary: 169 54% 38%;
-  --accent: 160 66% 45%;
-  --ring: 160 66% 45%;
-  --background: 190 48% 8%;
-  --foreground: 160 20% 94%;
-  --card: 190 41% 10%;
-  --card-foreground: 160 20% 94%;
-  --muted: 184 25% 15%;
-  --muted-foreground: 166 12% 65%;
-  --border: 173 19% 28%;
-  --input: 173 19% 32%;
+  --primary: 215 43% 50%;
+  --secondary: 187 69% 49%;
+  --accent: 187 69% 49%;
+  --ring: 187 69% 49%;
+  --background: 207 47% 10%;
+  --foreground: 210 25% 96%;
+  --card: 207 42% 12%;
+  --card-foreground: 210 25% 96%;
+  --muted: 211 30% 17%;
+  --muted-foreground: 210 14% 68%;
+  --border: 213 25% 30%;
+  --input: 213 25% 34%;
 }
 
 body:has(.tq-auth-surface) .tq-public-header--dark {
-  border-bottom-color: rgba(103, 205, 172, 0.16);
-  background: rgba(3, 15, 21, 0.96);
+  border-bottom-color: rgba(37, 192, 213, 0.16);
+  background: rgba(14, 26, 38, 0.97);
   box-shadow: none;
 }
 
 body:has(.tq-auth-surface) .tq-public-header--dark .tq-header-cta {
-  border-color: rgba(103, 205, 172, 0.42);
+  border-color: rgba(37, 192, 213, 0.42);
   background: transparent;
 }
 
@@ -409,10 +409,10 @@ body:has(.tq-auth-surface) .tq-public-header--dark .tq-header-cta {
   inset: 0;
   z-index: -2;
   background:
-    radial-gradient(circle at 26% 28%, rgba(13, 122, 101, 0.14), transparent 30%),
-    linear-gradient(90deg, rgba(3, 15, 21, 0.08) 0%, rgba(3, 15, 21, 0.24) 42%, rgba(3, 15, 21, 0.88) 73%, #030f15 100%),
-    linear-gradient(180deg, rgba(3, 15, 21, 0.08), rgba(3, 15, 21, 0.34)),
-    url("/images/terraqo/auth-network-terrain-v1.webp") center / cover no-repeat;
+    radial-gradient(circle at 26% 28%, rgba(37, 192, 213, 0.12), transparent 30%),
+    linear-gradient(90deg, rgba(14, 26, 38, 0.05) 0%, rgba(14, 26, 38, 0.22) 42%, rgba(14, 26, 38, 0.9) 73%, #0e1a26 100%),
+    linear-gradient(180deg, rgba(14, 26, 38, 0.08), rgba(14, 26, 38, 0.34)),
+    url("/images/terraqo/auth-network-terrain-v2.webp") center / cover no-repeat;
 }
 
 .tq-auth-atmosphere::after {
@@ -420,8 +420,8 @@ body:has(.tq-auth-surface) .tq-public-header--dark .tq-header-cta {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(180deg, rgba(3, 15, 21, 0.1) 0%, transparent 48%, rgba(3, 15, 21, 0.42) 100%),
-    radial-gradient(circle at 16% 48%, transparent 0%, rgba(3, 15, 21, 0.08) 42%, rgba(3, 15, 21, 0.4) 100%);
+    linear-gradient(180deg, rgba(14, 26, 38, 0.1) 0%, transparent 48%, rgba(14, 26, 38, 0.45) 100%),
+    radial-gradient(circle at 16% 48%, transparent 0%, rgba(14, 26, 38, 0.08) 42%, rgba(14, 26, 38, 0.42) 100%);
 }
 
 .tq-auth-layout {
@@ -452,7 +452,7 @@ body:has(.tq-auth-surface) .tq-public-header--dark .tq-header-cta {
   font: 800 0.75rem/1.2 var(--font-mono), ui-monospace, monospace;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: #61ddb3;
+  color: #25c0d5;
 }
 
 .tq-auth-copy h1 {
@@ -467,7 +467,7 @@ body:has(.tq-auth-surface) .tq-public-header--dark .tq-header-cta {
 }
 
 .tq-auth-copy h1 span {
-  color: #4bc79d;
+  color: #25c0d5;
 }
 
 .tq-auth-lead {
@@ -483,7 +483,7 @@ body:has(.tq-auth-surface) .tq-public-header--dark .tq-header-cta {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
   margin-top: 48px;
-  border-top: 1px solid rgba(112, 196, 168, 0.22);
+  border-top: 1px solid rgba(67, 116, 186, 0.28);
   padding-top: 22px;
 }
 
@@ -496,14 +496,14 @@ body:has(.tq-auth-surface) .tq-public-header--dark .tq-header-cta {
 }
 
 .tq-auth-principles > div + div {
-  border-left: 1px solid rgba(112, 196, 168, 0.16);
+  border-left: 1px solid rgba(67, 116, 186, 0.22);
   padding-left: 18px;
 }
 
 .tq-auth-principles b {
   grid-row: 1 / span 2;
   font: 800 0.68rem/1.3 var(--font-mono), ui-monospace, monospace;
-  color: #4bc79d;
+  color: #25c0d5;
 }
 
 .tq-auth-principles strong {
@@ -526,9 +526,9 @@ body:has(.tq-auth-surface) .tq-public-header--dark .tq-header-cta {
 .tq-access-panel {
   position: relative;
   overflow: hidden;
-  border: 1px solid rgba(129, 185, 168, 0.25);
+  border: 1px solid rgba(67, 116, 186, 0.34);
   border-radius: 24px;
-  background: linear-gradient(145deg, rgba(12, 31, 39, 0.94), rgba(5, 21, 28, 0.96));
+  background: linear-gradient(145deg, rgba(20, 36, 53, 0.95), rgba(10, 23, 36, 0.97));
   box-shadow: 0 36px 110px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.035);
   backdrop-filter: blur(24px) saturate(115%);
 }
@@ -540,7 +540,7 @@ body:has(.tq-auth-surface) .tq-public-header--dark .tq-header-cta {
   width: 300px;
   height: 300px;
   border-radius: 999px;
-  background: rgba(54, 187, 147, 0.08);
+  background: rgba(37, 192, 213, 0.08);
   filter: blur(8px);
   pointer-events: none;
 }
@@ -551,7 +551,7 @@ body:has(.tq-auth-surface) .tq-public-header--dark .tq-header-cta {
   display: grid;
   grid-template-columns: 1fr 1fr;
   margin: 0 38px;
-  border-bottom: 1px solid rgba(135, 177, 164, 0.22);
+  border-bottom: 1px solid rgba(133, 160, 193, 0.24);
 }
 
 .tq-access-tabs button {
@@ -563,7 +563,13 @@ body:has(.tq-auth-surface) .tq-public-header--dark .tq-header-cta {
 }
 
 .tq-access-tabs button.is-active {
-  color: #62e4bd;
+  color: #25c0d5;
+}
+
+.tq-access-tabs button:focus-visible {
+  outline: 2px solid rgba(37, 192, 213, 0.75);
+  outline-offset: -5px;
+  border-radius: 8px;
 }
 
 .tq-access-tab-indicator {
@@ -572,8 +578,8 @@ body:has(.tq-auth-surface) .tq-public-header--dark .tq-header-cta {
   left: 0;
   width: 50%;
   height: 2px;
-  background: linear-gradient(90deg, #2eb88e, #66e4bd);
-  box-shadow: 0 0 22px rgba(71, 211, 168, 0.42);
+  background: linear-gradient(90deg, #4374ba, #25c0d5);
+  box-shadow: 0 0 22px rgba(37, 192, 213, 0.35);
   transition: transform 380ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -583,11 +589,7 @@ body:has(.tq-auth-surface) .tq-public-header--dark .tq-header-cta {
 
 .tq-access-stage {
   position: relative;
-  max-height: min(690px, calc(100vh - 200px));
-  overflow-x: hidden;
-  overflow-y: auto;
-  scrollbar-color: rgba(83, 183, 151, 0.45) transparent;
-  scrollbar-width: thin;
+  overflow: visible;
 }
 
 .tq-access-card-content {
@@ -608,8 +610,8 @@ body:has(.tq-auth-surface) .tq-public-header--dark .tq-header-cta {
 .tq-embedded-auth-form input,
 .tq-embedded-auth-form select {
   min-height: 48px;
-  border-color: rgba(139, 179, 167, 0.34) !important;
-  background: rgba(4, 17, 23, 0.3) !important;
+  border-color: rgba(133, 160, 193, 0.34) !important;
+  background: rgba(8, 21, 34, 0.42) !important;
   color: rgba(241, 249, 246, 0.94) !important;
   box-shadow: none !important;
 }
@@ -620,24 +622,25 @@ body:has(.tq-auth-surface) .tq-public-header--dark .tq-header-cta {
 
 .tq-embedded-auth-form input:focus,
 .tq-embedded-auth-form select:focus {
-  border-color: rgba(92, 222, 180, 0.75) !important;
-  box-shadow: 0 0 0 3px rgba(52, 189, 146, 0.1) !important;
+  border-color: rgba(37, 192, 213, 0.75) !important;
+  box-shadow: 0 0 0 3px rgba(37, 192, 213, 0.1) !important;
 }
 
 .tq-embedded-auth-form button[type="submit"] {
   min-height: 52px;
-  margin-top: 8px;
-  background: linear-gradient(100deg, #137458, #289b78);
-  box-shadow: inset 0 0 0 1px rgba(96, 230, 187, 0.35), 0 16px 34px rgba(5, 87, 66, 0.22);
+  margin-top: 12px;
+  margin-bottom: 4px;
+  background: linear-gradient(100deg, #365f9d, #4374ba 58%, #278fa7);
+  box-shadow: inset 0 0 0 1px rgba(101, 168, 231, 0.28), 0 16px 34px rgba(15, 48, 88, 0.3);
   color: white;
 }
 
 .tq-embedded-auth-form button[type="submit"]:hover {
-  background: linear-gradient(100deg, #198666, #32a984);
+  background: linear-gradient(100deg, #4374ba, #25a5bd);
 }
 
 .tq-embedded-auth-form .text-primary {
-  color: #62e4bd;
+  color: #25c0d5;
 }
 
 .tq-embedded-auth-form .text-muted-foreground {
@@ -645,13 +648,74 @@ body:has(.tq-auth-surface) .tq-public-header--dark .tq-header-cta {
 }
 
 .tq-embedded-auth-form .bg-primary\/10 {
-  background: rgba(56, 190, 149, 0.1);
+  background: rgba(37, 192, 213, 0.1);
 }
 
 .tq-embedded-auth-form .bg-muted\/30,
 .tq-embedded-auth-form .bg-muted\/40 {
-  background: rgba(4, 17, 23, 0.28);
+  background: rgba(8, 21, 34, 0.36);
 }
+
+.tq-account-type {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.tq-account-type > button {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 62px;
+  padding: 11px 14px;
+  border: 1px solid rgba(133, 160, 193, 0.26);
+  border-radius: 10px;
+  color: rgba(226, 235, 244, 0.68);
+  text-align: left;
+  transition: border-color 220ms ease, background 220ms ease, color 220ms ease;
+}
+
+.tq-account-type > button.is-active {
+  border-color: rgba(37, 192, 213, 0.62);
+  background: linear-gradient(135deg, rgba(67, 116, 186, 0.22), rgba(37, 192, 213, 0.08));
+  color: #fff;
+}
+
+.tq-account-type span { display: grid; gap: 2px; }
+.tq-account-type strong { font-size: 0.85rem; }
+.tq-account-type small { font-size: 0.68rem; color: rgba(208, 220, 232, 0.48); }
+
+.tq-auth-switch {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(133, 160, 193, 0.16);
+  color: rgba(210, 229, 238, 0.58);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.tq-auth-switch button { color: #25c0d5; font-weight: 750; }
+.tq-auth-switch button:hover { color: #79dce9; }
+
+.tq-verification-notice,
+.tq-next-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(37, 192, 213, 0.25);
+  border-radius: 10px;
+  background: rgba(37, 192, 213, 0.08);
+  padding: 12px 14px;
+  color: #bcebf1;
+  font-size: 0.82rem;
+}
+
+.tq-registration-success { min-height: 390px; display: flex; flex-direction: column; justify-content: center; }
+.tq-success-mark { display: grid; place-items: center; width: 58px; height: 58px; margin-bottom: 20px; border: 1px solid rgba(37, 192, 213, 0.36); border-radius: 16px; background: rgba(37, 192, 213, 0.1); color: #25c0d5; }
+.tq-next-step { margin-top: 22px; }
+.tq-secondary-action { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; margin-top: 22px; border: 1px solid rgba(67, 116, 186, 0.52); border-radius: 9px; color: #dce8f5; font-weight: 700; }
+.tq-secondary-action:hover { background: rgba(67, 116, 186, 0.14); }
 
 @media (max-width: 1180px) {
   .tq-auth-layout {
@@ -678,7 +742,7 @@ body:has(.tq-auth-surface) .tq-public-header--dark .tq-header-cta {
   .tq-auth-story { min-height: auto; padding-block: 0; }
   .tq-auth-copy h1 { max-width: 620px; }
   .tq-auth-principles { grid-template-columns: repeat(3, 1fr); }
-  .tq-auth-principles > div + div { border-left: 1px solid rgba(112, 196, 168, 0.16); padding-left: 14px; }
+  .tq-auth-principles > div + div { border-left: 1px solid rgba(67, 116, 186, 0.22); padding-left: 14px; }
   .tq-auth-panel-wrap { max-width: none; justify-self: stretch; }
   .tq-access-stage { max-height: none; overflow: visible; }
 }

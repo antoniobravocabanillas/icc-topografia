@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { created, fail, handleApiError, parseJson } from "@/lib/server/api";
-import { createEmailVerificationToken, sendEmailVerificationCode } from "@/lib/server/email-verification";
+import { createEmailVerificationLinkToken, sendEmailVerificationLink } from "@/lib/server/email-verification";
 import { getSubdivisionName } from "@/lib/locations";
 import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 import { registerSchema } from "@/lib/validations/crm";
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
         },
         select: { id: true, name: true, email: true, role: true, createdAt: true }
       });
-      const verification = await createEmailVerificationToken(tx, payload.email);
+      const verification = await createEmailVerificationLinkToken(tx, payload.email);
 
       if (payload.accountType === "professional") {
         const specialty = payload.specialty?.trim();
@@ -51,6 +51,7 @@ export async function POST(request: Request) {
             locationCity: payload.city || undefined,
             yearsExperience: payload.yearsExperience,
             specialties: specialty ? [specialty] : [],
+            professionalCategories: payload.roleTitle ? [payload.roleTitle] : [],
             equipment,
             software,
             portfolioUrl: payload.portfolioUrl || undefined,
@@ -93,6 +94,7 @@ export async function POST(request: Request) {
           document: payload.document,
           email: payload.email,
           phone: payload.phone,
+          industry: payload.industry,
           city: payload.city,
           country: payload.country,
           region: getSubdivisionName(payload.country, payload.subdivision) || undefined,
@@ -168,7 +170,7 @@ export async function POST(request: Request) {
       return { ...createdUser, verificationCode: verification.code };
     });
 
-    const delivery = await sendEmailVerificationCode(user.email, user.verificationCode);
+    const delivery = await sendEmailVerificationLink(user.email, user.verificationCode, request.url);
 
     return created({
       ...user,
