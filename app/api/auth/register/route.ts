@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { created, fail, handleApiError, parseJson } from "@/lib/server/api";
 import { createEmailVerificationLinkToken, sendEmailVerificationLink } from "@/lib/server/email-verification";
@@ -6,12 +7,27 @@ import { getSubdivisionName } from "@/lib/locations";
 import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 import { registerSchema } from "@/lib/validations/crm";
 
+function normalizeIdentityPart(value: string) {
+  return value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+}
+
 export async function POST(request: Request) {
   try {
     const payload = await parseJson(request, registerSchema);
+    const identityType = payload.accountType === "client"
+      ? "RUC"
+      : payload.identityType === "OTHER"
+        ? `OTHER_${normalizeIdentityPart(payload.identityTypeOther || "")}`
+        : payload.identityType;
+    const identityNumber = normalizeIdentityPart(payload.document || "");
+    const identityKey = `${identityType}:${identityNumber}`;
     const existingUser = await prisma.user.findUnique({ where: { email: payload.email } });
     if (existingUser) {
       return fail("Ya existe una cuenta con este correo.", 409);
+    }
+    const existingIdentity = await prisma.user.findUnique({ where: { identityKey } });
+    if (existingIdentity) {
+      return fail("Este documento de identidad ya está asociado a una cuenta Terraqo.", 409);
     }
 
     const passwordHash = await bcrypt.hash(payload.password, 12);
@@ -24,6 +40,9 @@ export async function POST(request: Request) {
           name: payload.name,
           email: payload.email,
           passwordHash,
+          identityType,
+          identityNumber,
+          identityKey,
           role: "CUSTOMER"
         },
         select: { id: true, name: true, email: true, role: true, createdAt: true }
@@ -181,6 +200,10 @@ export async function POST(request: Request) {
       status: payload.accountType === "professional" ? "professional_profile_created" : "pending_approval"
     });
   } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const target = Array.isArray(error.meta?.target) ? error.meta.target.join(",") : String(error.meta?.target || "");
+      if (target.includes("identityKey")) return fail("Este documento de identidad ya está asociado a una cuenta Terraqo.", 409);
+    }
     return handleApiError(error);
   }
 }

@@ -6,6 +6,17 @@ export const companyIndustries = [
   "Turismo y hospitalidad", "Otro rubro"
 ] as const;
 
+export const professionalIdentityTypes = [
+  { value: "DNI", label: "DNI / Documento nacional de identidad" },
+  { value: "CE", label: "Carné de extranjería" },
+  { value: "PASSPORT", label: "Pasaporte" },
+  { value: "CPP", label: "Carné de permiso temporal de permanencia (CPP)" },
+  { value: "PTP", label: "Permiso temporal de permanencia (PTP)" },
+  { value: "DIPLOMATIC_ID", label: "Carné diplomático" },
+  { value: "FOREIGN_ID", label: "Documento de identidad extranjero" },
+  { value: "OTHER", label: "Otro tipo de identificación" }
+] as const;
+
 const leadershipAndManagement = [
   "CEO / Director ejecutivo", "Gerente general", "Director de operaciones", "Gerente de operaciones",
   "COO / Chief Operating Officer", "Director de proyectos", "Gerente de proyectos", "Project manager",

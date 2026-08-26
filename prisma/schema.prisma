@@ -549,6 +549,9 @@ model User {
   emailVerified               DateTime?
   image                       String?
   passwordHash                String?
+  identityType               String?
+  identityNumber             String?
+  identityKey                String?                          @unique
   role                        Role                             @default(CUSTOMER)
   accounts                    Account[]
   sessions                    Session[]

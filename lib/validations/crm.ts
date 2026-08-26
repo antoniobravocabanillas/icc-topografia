@@ -34,6 +34,8 @@ export const registerSchema = z.object({
   company: z.string().trim().optional(),
   industry: z.string().trim().optional(),
   document: z.string().trim().optional(),
+  identityType: z.string().trim().min(2).max(40),
+  identityTypeOther: z.string().trim().max(60).optional(),
   phone: z.string().trim().optional(),
   roleTitle: z.string().trim().optional(),
   specialty: z.string().trim().optional(),
@@ -54,6 +56,15 @@ export const registerSchema = z.object({
   }
   if (value.accountType === "client" && !value.industry?.trim()) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["industry"], message: "Selecciona el rubro de la empresa." });
+  }
+  if (!value.document?.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["document"], message: "El número de identificación es obligatorio." });
+  }
+  if (value.accountType === "client" && !/^\d{11}$/.test(value.document || "")) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["document"], message: "El RUC debe contener 11 dígitos." });
+  }
+  if (value.accountType === "professional" && value.identityType === "OTHER" && !value.identityTypeOther?.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["identityTypeOther"], message: "Especifica el tipo de identificación." });
   }
   if (value.accountType === "professional" && !value.roleTitle?.trim()) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["roleTitle"], message: "Indica tu profesión o perfil." });
