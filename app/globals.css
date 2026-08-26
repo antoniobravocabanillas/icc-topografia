@@ -379,10 +379,319 @@ select:-webkit-autofill:focus {
 }
 
 .tq-auth-surface {
-  --primary: 215 47% 50%;
-  --secondary: 209 55% 54%;
-  --accent: 188 70% 49%;
-  --ring: 188 70% 49%;
+  --primary: 160 66% 45%;
+  --secondary: 169 54% 38%;
+  --accent: 160 66% 45%;
+  --ring: 160 66% 45%;
+  --background: 190 48% 8%;
+  --foreground: 160 20% 94%;
+  --card: 190 41% 10%;
+  --card-foreground: 160 20% 94%;
+  --muted: 184 25% 15%;
+  --muted-foreground: 166 12% 65%;
+  --border: 173 19% 28%;
+  --input: 173 19% 32%;
+}
+
+body:has(.tq-auth-surface) .tq-public-header--dark {
+  border-bottom-color: rgba(103, 205, 172, 0.16);
+  background: rgba(3, 15, 21, 0.96);
+  box-shadow: none;
+}
+
+body:has(.tq-auth-surface) .tq-public-header--dark .tq-header-cta {
+  border-color: rgba(103, 205, 172, 0.42);
+  background: transparent;
+}
+
+.tq-auth-atmosphere {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background:
+    radial-gradient(circle at 26% 28%, rgba(13, 122, 101, 0.14), transparent 30%),
+    linear-gradient(90deg, rgba(3, 15, 21, 0.08) 0%, rgba(3, 15, 21, 0.24) 42%, rgba(3, 15, 21, 0.88) 73%, #030f15 100%),
+    linear-gradient(180deg, rgba(3, 15, 21, 0.08), rgba(3, 15, 21, 0.34)),
+    url("/images/terraqo/auth-network-terrain-v1.webp") center / cover no-repeat;
+}
+
+.tq-auth-atmosphere::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(3, 15, 21, 0.1) 0%, transparent 48%, rgba(3, 15, 21, 0.42) 100%),
+    radial-gradient(circle at 16% 48%, transparent 0%, rgba(3, 15, 21, 0.08) 42%, rgba(3, 15, 21, 0.4) 100%);
+}
+
+.tq-auth-layout {
+  width: min(100% - 48px, 1520px);
+  min-height: calc(100vh - 81px);
+  margin-inline: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(500px, 0.78fr);
+  align-items: center;
+  gap: clamp(44px, 7vw, 120px);
+  padding-block: clamp(34px, 5vh, 72px);
+}
+
+.tq-auth-story {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  max-width: 720px;
+  padding-block: clamp(22px, 4vh, 54px);
+}
+
+.tq-auth-copy {
+  max-width: 680px;
+}
+
+.tq-auth-kicker {
+  font: 800 0.75rem/1.2 var(--font-mono), ui-monospace, monospace;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #61ddb3;
+}
+
+.tq-auth-copy h1 {
+  margin-top: 24px;
+  max-width: 680px;
+  font-family: var(--font-display), sans-serif;
+  font-size: clamp(2.8rem, 4.35vw, 5rem);
+  font-weight: 800;
+  line-height: 0.99;
+  letter-spacing: -0.05em;
+  text-wrap: balance;
+}
+
+.tq-auth-copy h1 span {
+  color: #4bc79d;
+}
+
+.tq-auth-lead {
+  max-width: 610px;
+  margin-top: 26px;
+  font-size: clamp(1rem, 1.25vw, 1.16rem);
+  line-height: 1.75;
+  color: rgba(231, 244, 239, 0.7);
+}
+
+.tq-auth-principles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin-top: 48px;
+  border-top: 1px solid rgba(112, 196, 168, 0.22);
+  padding-top: 22px;
+}
+
+.tq-auth-principles > div {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  min-width: 0;
+  padding-right: 18px;
+}
+
+.tq-auth-principles > div + div {
+  border-left: 1px solid rgba(112, 196, 168, 0.16);
+  padding-left: 18px;
+}
+
+.tq-auth-principles b {
+  grid-row: 1 / span 2;
+  font: 800 0.68rem/1.3 var(--font-mono), ui-monospace, monospace;
+  color: #4bc79d;
+}
+
+.tq-auth-principles strong {
+  font-size: 0.82rem;
+  color: rgba(245, 251, 249, 0.92);
+}
+
+.tq-auth-principles span {
+  font-size: 0.7rem;
+  line-height: 1.45;
+  color: rgba(219, 237, 231, 0.5);
+}
+
+.tq-auth-panel-wrap {
+  width: 100%;
+  max-width: 620px;
+  justify-self: end;
+}
+
+.tq-access-panel {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(129, 185, 168, 0.25);
+  border-radius: 24px;
+  background: linear-gradient(145deg, rgba(12, 31, 39, 0.94), rgba(5, 21, 28, 0.96));
+  box-shadow: 0 36px 110px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  backdrop-filter: blur(24px) saturate(115%);
+}
+
+.tq-access-panel::before {
+  content: "";
+  position: absolute;
+  inset: -120px -90px auto auto;
+  width: 300px;
+  height: 300px;
+  border-radius: 999px;
+  background: rgba(54, 187, 147, 0.08);
+  filter: blur(8px);
+  pointer-events: none;
+}
+
+.tq-access-tabs {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin: 0 38px;
+  border-bottom: 1px solid rgba(135, 177, 164, 0.22);
+}
+
+.tq-access-tabs button {
+  min-height: 76px;
+  color: rgba(225, 239, 234, 0.5);
+  font-size: 0.96rem;
+  font-weight: 750;
+  transition: color 260ms ease;
+}
+
+.tq-access-tabs button.is-active {
+  color: #62e4bd;
+}
+
+.tq-access-tab-indicator {
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 50%;
+  height: 2px;
+  background: linear-gradient(90deg, #2eb88e, #66e4bd);
+  box-shadow: 0 0 22px rgba(71, 211, 168, 0.42);
+  transition: transform 380ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tq-access-tab-indicator.is-register {
+  transform: translateX(100%);
+}
+
+.tq-access-stage {
+  position: relative;
+  max-height: min(690px, calc(100vh - 200px));
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-color: rgba(83, 183, 151, 0.45) transparent;
+  scrollbar-width: thin;
+}
+
+.tq-access-card-content {
+  animation: tqAuthSwap 430ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes tqAuthSwap {
+  from { opacity: 0; transform: translateY(12px) scale(0.992); filter: blur(4px); }
+  to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+
+.tq-embedded-auth-form {
+  position: relative;
+  padding: 34px 38px 38px;
+  color: hsl(var(--foreground));
+}
+
+.tq-embedded-auth-form input,
+.tq-embedded-auth-form select {
+  min-height: 48px;
+  border-color: rgba(139, 179, 167, 0.34) !important;
+  background: rgba(4, 17, 23, 0.3) !important;
+  color: rgba(241, 249, 246, 0.94) !important;
+  box-shadow: none !important;
+}
+
+.tq-embedded-auth-form input::placeholder {
+  color: rgba(212, 231, 224, 0.42);
+}
+
+.tq-embedded-auth-form input:focus,
+.tq-embedded-auth-form select:focus {
+  border-color: rgba(92, 222, 180, 0.75) !important;
+  box-shadow: 0 0 0 3px rgba(52, 189, 146, 0.1) !important;
+}
+
+.tq-embedded-auth-form button[type="submit"] {
+  min-height: 52px;
+  margin-top: 8px;
+  background: linear-gradient(100deg, #137458, #289b78);
+  box-shadow: inset 0 0 0 1px rgba(96, 230, 187, 0.35), 0 16px 34px rgba(5, 87, 66, 0.22);
+  color: white;
+}
+
+.tq-embedded-auth-form button[type="submit"]:hover {
+  background: linear-gradient(100deg, #198666, #32a984);
+}
+
+.tq-embedded-auth-form .text-primary {
+  color: #62e4bd;
+}
+
+.tq-embedded-auth-form .text-muted-foreground {
+  color: rgba(210, 229, 222, 0.55);
+}
+
+.tq-embedded-auth-form .bg-primary\/10 {
+  background: rgba(56, 190, 149, 0.1);
+}
+
+.tq-embedded-auth-form .bg-muted\/30,
+.tq-embedded-auth-form .bg-muted\/40 {
+  background: rgba(4, 17, 23, 0.28);
+}
+
+@media (max-width: 1180px) {
+  .tq-auth-layout {
+    grid-template-columns: minmax(0, 0.78fr) minmax(470px, 0.9fr);
+    gap: 48px;
+  }
+  .tq-auth-copy h1 { font-size: clamp(2.65rem, 5vw, 4.3rem); }
+  .tq-auth-principles { grid-template-columns: 1fr; gap: 14px; }
+  .tq-auth-principles > div + div { border-left: 0; padding-left: 0; }
+}
+
+@media (max-width: 900px) {
+  .tq-auth-surface { overflow: visible; }
+  .tq-auth-atmosphere {
+    background-position: 40% center;
+    opacity: 0.62;
+  }
+  .tq-auth-layout {
+    width: min(100% - 32px, 680px);
+    grid-template-columns: 1fr;
+    gap: 34px;
+    padding-block: 54px;
+  }
+  .tq-auth-story { min-height: auto; padding-block: 0; }
+  .tq-auth-copy h1 { max-width: 620px; }
+  .tq-auth-principles { grid-template-columns: repeat(3, 1fr); }
+  .tq-auth-principles > div + div { border-left: 1px solid rgba(112, 196, 168, 0.16); padding-left: 14px; }
+  .tq-auth-panel-wrap { max-width: none; justify-self: stretch; }
+  .tq-access-stage { max-height: none; overflow: visible; }
+}
+
+@media (max-width: 620px) {
+  .tq-auth-layout { width: min(100% - 24px, 680px); padding-block: 36px; }
+  .tq-auth-copy h1 { margin-top: 18px; font-size: clamp(2.45rem, 12vw, 3.6rem); }
+  .tq-auth-lead { margin-top: 20px; }
+  .tq-auth-principles { display: none; }
+  .tq-access-panel { border-radius: 18px; }
+  .tq-access-tabs { margin-inline: 22px; }
+  .tq-access-tabs button { min-height: 66px; font-size: 0.9rem; }
+  .tq-embedded-auth-form { padding: 28px 22px 30px; }
 }
 
 .tq-public-wrap {

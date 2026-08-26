@@ -20,7 +20,17 @@ function destinationForRole(role: string | undefined, callbackUrl: string | null
   return `${terraqoDomains.portal}/portal`;
 }
 
-export function SignInForm({ title = "Ingresar al Portal Terraqo", description = "Usa tus credenciales para acceder según tu perfil: empresa, profesional o equipo operativo." }: { title?: string; description?: string }) {
+export function SignInForm({
+  title = "Bienvenido de vuelta",
+  description = "Ingresa tus credenciales para continuar en el Portal Terraqo.",
+  embedded = false,
+  onRegister
+}: {
+  title?: string;
+  description?: string;
+  embedded?: boolean;
+  onRegister?: () => void;
+}) {
   const searchParams = useSearchParams();
   const explicitCallbackUrl = searchParams.get("callbackUrl");
   const callbackUrl = safeRelativeCallback(explicitCallbackUrl);
@@ -52,8 +62,8 @@ export function SignInForm({ title = "Ingresar al Portal Terraqo", description =
   }
 
   return (
-    <form action={submit} className="relative overflow-hidden rounded-lg border bg-card p-6 text-foreground shadow-2xl md:p-8">
-      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-[#24C8EE] to-primary" />
+    <form action={submit} className={embedded ? "tq-embedded-auth-form" : "relative overflow-hidden rounded-lg border bg-card p-6 text-foreground shadow-2xl md:p-8"}>
+      {!embedded ? <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-[#24C8EE] to-primary" /> : null}
       <div className="mb-6 flex items-start gap-3">
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
           <LockKeyhole className="h-5 w-5" />
@@ -80,6 +90,7 @@ export function SignInForm({ title = "Ingresar al Portal Terraqo", description =
       </Button>
       {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
       </div>
+      {onRegister ? <p className="mt-7 text-center text-sm text-muted-foreground">¿No tienes cuenta? <button type="button" onClick={onRegister} className="font-bold text-primary transition hover:text-[#62e4bd]">Registrarme</button></p> : null}
     </form>
   );
 }

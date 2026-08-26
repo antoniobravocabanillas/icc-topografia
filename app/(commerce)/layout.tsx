@@ -10,6 +10,7 @@ export default async function CommerceLayout({ children }: { children: React.Rea
   return (
     <CommerceShell
       header={<TerraqoPublicHeader />}
+      darkHeader={<TerraqoPublicHeader tone="dark" />}
       footer={<TerraqoPublicFooter />}
       forceBare={forceBare}
     >

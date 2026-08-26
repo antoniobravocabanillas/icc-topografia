@@ -1,13 +1,6 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowRight, BadgeCheck, BriefcaseBusiness, Building2, LockKeyhole, Network, ShieldCheck, UserRound } from "lucide-react";
 import { auth } from "@/auth";
-import { ClientRegistrationForm } from "@/components/auth/client-registration-form";
-import { SignInForm } from "@/components/auth/sign-in-form";
-import { SignOutButton } from "@/components/auth/sign-out-button";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AccountAccessPanel } from "@/components/auth/account-access-panel";
 import { prisma } from "@/lib/prisma";
 import { createMetadata } from "@/lib/seo";
 import { terraqoDomains } from "@/lib/terraqo-domains";
@@ -17,24 +10,9 @@ export const metadata = createMetadata({ title: "Portal Terraqo", description: "
 const workspaceAdminRoles = new Set(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"]);
 
 function resolveAccessDestination(role?: string | null) {
-  if (role === "SUPER_ADMIN") {
-    return {
-      href: `${terraqoDomains.admin}/admin/terraqo`,
-      label: "Ir al control Terraqo"
-    };
-  }
-
-  if (role && workspaceAdminRoles.has(role)) {
-    return {
-      href: `${terraqoDomains.admin}/admin`,
-      label: "Ir al panel operativo"
-    };
-  }
-
-  return {
-    href: `${terraqoDomains.portal}/portal`,
-    label: "Ir al Portal Terraqo"
-  };
+  if (role === "SUPER_ADMIN") return `${terraqoDomains.admin}/admin/terraqo`;
+  if (role && workspaceAdminRoles.has(role)) return `${terraqoDomains.admin}/admin`;
+  return `${terraqoDomains.portal}/portal`;
 }
 
 type AccountPageProps = {
@@ -44,8 +22,8 @@ type AccountPageProps = {
 export default async function AccountPage({ searchParams }: AccountPageProps) {
   const params = await searchParams;
   const session = await auth();
-  const accessDestination = resolveAccessDestination(session?.user?.role);
-  if (session?.user) redirect(accessDestination.href);
+  if (session?.user) redirect(resolveAccessDestination(session.user.role));
+
   const workspaceSlug = params.workspace?.trim();
   const workspace = workspaceSlug
     ? await prisma.terraqoWorkspace.findFirst({
@@ -57,94 +35,42 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
   const isWorkspacePortal = Boolean(workspace);
 
   return (
-    <section className="tq-auth-surface relative isolate overflow-hidden bg-[#0e1a26] text-white">
-      <div className="absolute inset-x-0 bottom-0 h-px bg-[#25c0d5]" />
-
-      <div className="container relative grid min-h-[calc(100vh-4rem)] items-center gap-10 py-16 xl:grid-cols-[0.85fr_1.15fr]">
-        <div className="max-w-3xl">
-          <Badge className="bg-[#f3f3f3] text-[#0e1a26] hover:bg-[#f3f3f3]">{isWorkspacePortal ? `Portal ${brandName}` : "Portal Terraqo"}</Badge>
-          {workspace?.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={workspace.logoUrl} alt={brandName} className="mt-5 h-14 max-w-[240px] object-contain" />
-          ) : null}
-          <h1 className="mt-5 font-display text-4xl font-bold leading-tight md:text-6xl">
-            {isWorkspacePortal ? `Accede a tu espacio asignado en ${brandName}.` : "Un solo acceso para empresas, profesionales y equipos operativos."}
-          </h1>
-          <p className="mt-6 max-w-2xl text-lg leading-8 text-white/72">
-            {isWorkspacePortal
-              ? "Entras por Portal Terraqo y trabajas dentro del workspace de la empresa que te corresponde, con su marca, permisos y datos aislados."
-              : "Gestiona cotizaciones, solicitudes, proyectos, perfiles técnicos y participación profesional desde un entorno conectado por workspace."}
-          </p>
-
-          <div className="mt-8 grid gap-3 sm:grid-cols-3">
-            {[
-              { icon: Building2, title: "Empresa", text: "solicitudes y proyectos" },
-              { icon: BriefcaseBusiness, title: "Profesional", text: "perfil y CV vivo" },
-              { icon: Network, title: "Workspace", text: "módulos activables" }
-            ].map((item) => (
-              <div key={item.title} className="rounded-lg border border-white/14 bg-white/[0.055] p-4 backdrop-blur">
-                <item.icon className="h-5 w-5 text-[#25c0d5]" />
-                <p className="mt-4 font-display text-xl font-bold">{item.title}</p>
-                <p className="mt-1 text-sm text-white/60">{item.text}</p>
-              </div>
-            ))}
+    <section className="tq-auth-surface relative isolate min-h-[calc(100vh-81px)] overflow-hidden bg-[#041118] text-white">
+      <div className="tq-auth-atmosphere" aria-hidden="true" />
+      <div className="tq-auth-layout">
+        <div className="tq-auth-story">
+          <div className="tq-auth-copy">
+            <p className="tq-auth-kicker">{isWorkspacePortal ? `Portal ${brandName}` : "Portal Terraqo"}</p>
+            {workspace?.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={workspace.logoUrl} alt={brandName} className="mt-5 h-12 max-w-[220px] object-contain object-left" />
+            ) : null}
+            <h1>
+              {isWorkspacePortal ? (
+                <>Tu operación, conectada a <span>{brandName}</span>.</>
+              ) : (
+                <>Un solo acceso para <span>empresas</span>, <span>profesionales</span> y <span>equipos</span> operativos.</>
+              )}
+            </h1>
+            <p className="tq-auth-lead">
+              {isWorkspacePortal
+                ? "Entra al espacio asignado a tu organización con identidad, permisos y datos aislados."
+                : "Proyectos, capacidades y evidencia conviven en una red que transforma actividad real en confianza y nuevas oportunidades."}
+            </p>
           </div>
 
-          <div className="mt-8 flex flex-wrap gap-3 text-sm text-white/68">
-            <span className="inline-flex items-center gap-2"><BadgeCheck className="h-4 w-4 text-[#25c0d5]" /> Acceso por perfil</span>
-            <span className="inline-flex items-center gap-2"><LockKeyhole className="h-4 w-4 text-[#25c0d5]" /> Datos privados por workspace</span>
-            <span className="inline-flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-[#25c0d5]" /> Módulos según suscripción</span>
+          <div className="tq-auth-principles" aria-label="Principios del Portal Terraqo">
+            <div><b>01</b><strong>Identidad confiable</strong><span>Perfiles y organizaciones con contexto verificable.</span></div>
+            <div><b>02</b><strong>Operación conectada</strong><span>Personas, proyectos y herramientas bajo un mismo entorno.</span></div>
+            <div><b>03</b><strong>Evidencia que crece</strong><span>El trabajo realizado alimenta reputación y oportunidades.</span></div>
           </div>
         </div>
 
-        <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-2">
-          {session?.user ? (
-            <>
-              <Card className="overflow-hidden border-white/14 bg-white text-foreground shadow-2xl">
-                <CardHeader className="border-b bg-[#f7fbfd]">
-                  <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-md bg-primary/10 text-primary">
-                    <UserRound className="h-6 w-6" />
-                  </div>
-                  <CardTitle>Sesión activa</CardTitle>
-                  <CardDescription>{session.user.name || session.user.email}</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-5 p-6">
-                  <div className="rounded-md border bg-muted/40 p-4">
-                    <p className="text-xs font-bold uppercase text-muted-foreground">Rol asignado</p>
-                    <p className="mt-1 font-display text-2xl font-bold">{session.user.role}</p>
-                  </div>
-                  <div className="grid gap-3">
-                  <Button asChild size="lg">
-                    <Link href={accessDestination.href}>
-                      {accessDestination.label}
-                      <ArrowRight className="h-4 w-4" />
-                    </Link>
-                  </Button>
-                  <Button asChild size="lg" variant="outline">
-                    <Link href="/registro">
-                      Crear otro acceso
-                      <ArrowRight className="h-4 w-4" />
-                    </Link>
-                  </Button>
-                  <SignOutButton className="h-11 w-full justify-center border-destructive/30 text-destructive hover:bg-destructive/10" />
-                  </div>
-                </CardContent>
-              </Card>
-              <div id="registro-cliente" className="scroll-mt-24">
-                <ClientRegistrationForm />
-              </div>
-            </>
-          ) : (
-            <>
-              <SignInForm
-                title={isWorkspacePortal ? `Ingresar al portal de ${brandName}` : undefined}
-                description={isWorkspacePortal ? "Usa tus credenciales Terraqo. Al ingresar verás el espacio, documentos, pedidos, soporte y mensajes asociados a este workspace." : undefined}
-              />
-              <div id="registro-cliente" className="scroll-mt-24">
-                <ClientRegistrationForm />
-              </div>
-            </>
-          )}
+        <div className="tq-auth-panel-wrap">
+          <AccountAccessPanel
+            loginTitle={isWorkspacePortal ? `Bienvenido a ${brandName}` : undefined}
+            loginDescription={isWorkspacePortal ? "Usa tus credenciales Terraqo para ingresar al espacio asignado." : undefined}
+          />
         </div>
       </div>
     </section>

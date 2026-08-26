@@ -28,7 +28,7 @@ const accountOptions: Array<{
   }
 ];
 
-export function ClientRegistrationForm() {
+export function ClientRegistrationForm({ embedded = false, onSignIn }: { embedded?: boolean; onSignIn?: () => void }) {
   const [accountType, setAccountType] = useState<AccountType>("client");
   const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -118,8 +118,8 @@ export function ClientRegistrationForm() {
 
   if (verificationEmail) {
     return (
-      <form action={verify} className="relative overflow-hidden rounded-lg border bg-card p-6 text-foreground shadow-2xl md:p-8">
-        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-[#24C8EE] to-primary" />
+      <form action={verify} className={embedded ? "tq-embedded-auth-form" : "relative overflow-hidden rounded-lg border bg-card p-6 text-foreground shadow-2xl md:p-8"}>
+        {!embedded ? <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-[#24C8EE] to-primary" /> : null}
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">Validacion de correo</p>
         <h2 className="mt-2 font-display text-2xl font-bold">Ingresa el codigo enviado</h2>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
@@ -139,8 +139,8 @@ export function ClientRegistrationForm() {
   }
 
   return (
-    <form action={submit} className="relative overflow-hidden rounded-lg border bg-card p-6 text-foreground shadow-2xl md:p-8">
-      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-[#24C8EE] to-primary" />
+    <form action={submit} className={embedded ? "tq-embedded-auth-form" : "relative overflow-hidden rounded-lg border bg-card p-6 text-foreground shadow-2xl md:p-8"}>
+      {!embedded ? <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-[#24C8EE] to-primary" /> : null}
       <div className="mb-6 flex items-start gap-3">
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
           <ActiveIcon className="h-5 w-5" />
@@ -206,6 +206,7 @@ export function ClientRegistrationForm() {
         {message ? <p className="flex items-center gap-2 text-sm font-medium text-emerald-700"><CheckCircle2 className="h-4 w-4" /> {message}</p> : null}
         {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
       </div>
+      {onSignIn ? <p className="mt-7 text-center text-sm text-muted-foreground">¿Ya tienes cuenta? <button type="button" onClick={onSignIn} className="font-bold text-primary transition hover:text-[#62e4bd]">Iniciar sesión</button></p> : null}
     </form>
   );
 }
