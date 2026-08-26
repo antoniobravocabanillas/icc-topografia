@@ -1,5 +1,6 @@
 import { randomBytes, randomInt } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
+import { terraqoDomains } from "@/lib/terraqo-domains";
 
 type VerificationTx = Pick<PrismaClient, "verificationToken">;
 
@@ -36,13 +37,11 @@ export async function createEmailVerificationLinkToken(tx: VerificationTx, email
   return { code: token, expires };
 }
 
-export async function sendEmailVerificationLink(email: string, token: string, requestUrl: string) {
+export async function sendEmailVerificationLink(email: string, token: string, _requestUrl: string) {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.TERRAQO_EMAIL_FROM || process.env.EMAIL_FROM;
   if (!apiKey || !from) return { delivered: false, reason: "missing_provider" as const };
-  const configuredOrigin = process.env.NEXT_PUBLIC_APP_URL || process.env.AUTH_URL;
-  const origin = configuredOrigin ? configuredOrigin.replace(/\/$/, "") : new URL(requestUrl).origin;
-  const verificationUrl = `${origin}/api/auth/verify-email-link?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
+  const verificationUrl = `${terraqoDomains.portal}/api/auth/verify-email-link?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
