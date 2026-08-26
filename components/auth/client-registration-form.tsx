@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { ArrowRight, BriefcaseBusiness, Building2, CheckCircle2, MailCheck } from "lucide-react";
+import { ArrowRight, BriefcaseBusiness, Building2, CheckCircle2, Eye, EyeOff, MailCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { companyIndustries, professionalIdentityTypes, professionalRoles } from "@/lib/terraqo/registration-options";
@@ -11,6 +11,8 @@ type AccountType = "client" | "professional";
 export function ClientRegistrationForm({ embedded = false, onSignIn }: { embedded?: boolean; onSignIn?: () => void }) {
   const [accountType, setAccountType] = useState<AccountType>("client");
   const [identityType, setIdentityType] = useState("DNI");
+  const [showPassword, setShowPassword] = useState(false);
+  const [emailDelivered, setEmailDelivered] = useState(true);
   const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -37,6 +39,7 @@ export function ClientRegistrationForm({ embedded = false, onSignIn }: { embedde
         setError(payload?.error?.message || payload?.error || "No se pudo crear la cuenta.");
         return;
       }
+      setEmailDelivered(payload?.data?.emailDelivery === "sent");
       setVerificationEmail(email);
     });
   }
@@ -47,7 +50,7 @@ export function ClientRegistrationForm({ embedded = false, onSignIn }: { embedde
         <span className="tq-success-mark"><MailCheck className="h-7 w-7" /></span>
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">Revisa tu correo</p>
         <h2 className="mt-2 font-display text-2xl font-bold">Confirma tu cuenta</h2>
-        <p className="mt-3 text-sm leading-6 text-muted-foreground">Enviamos un enlace de verificación a <strong className="text-foreground">{verificationEmail}</strong>. Ábrelo para activar tu acceso.</p>
+        <p className="mt-3 text-sm leading-6 text-muted-foreground">{emailDelivered ? <>Enviamos un enlace de verificación a <strong className="text-foreground">{verificationEmail}</strong>. Ábrelo para activar tu acceso.</> : <>La cuenta fue creada, pero el servicio de correo todavía no está disponible. No se envió ningún mensaje a <strong className="text-foreground">{verificationEmail}</strong>.</>}</p>
         <div className="tq-next-step"><CheckCircle2 className="h-5 w-5" /><span>Después de verificar, inicia sesión y completa tu perfil.</span></div>
         {onSignIn ? <button type="button" onClick={onSignIn} className="tq-secondary-action">Volver a iniciar sesión <ArrowRight className="h-4 w-4" /></button> : null}
       </div>
@@ -83,7 +86,10 @@ export function ClientRegistrationForm({ embedded = false, onSignIn }: { embedde
             {identityType === "OTHER" ? <Input name="identityTypeOther" required placeholder="Especifica el tipo de identificación" /> : null}
           </>
         )}
-        <Input name="password" type="password" required minLength={8} placeholder="Contraseña · mínimo 8 caracteres" autoComplete="new-password" />
+        <div className="tq-password-field">
+          <Input name="password" type={showPassword ? "text" : "password"} required minLength={8} placeholder="Contraseña · mínimo 8 caracteres" autoComplete="new-password" />
+          <button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"} aria-pressed={showPassword}>{showPassword ? <EyeOff /> : <Eye />}</button>
+        </div>
         <Button type="submit" size="lg" disabled={isPending} className="w-full">{isPending ? "Creando cuenta..." : "Crear cuenta"}<ArrowRight className="h-4 w-4" /></Button>
         {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
       </div>

@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
-import { ArrowRight, LockKeyhole } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, LockKeyhole } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { terraqoDomains } from "@/lib/terraqo-domains";
@@ -36,6 +36,8 @@ export function SignInForm({
   const callbackUrl = safeRelativeCallback(explicitCallbackUrl);
   const verification = searchParams.get("verification");
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function submit(formData: FormData) {
@@ -62,6 +64,23 @@ export function SignInForm({
     });
   }
 
+  async function resendVerification(formData: FormData) {
+    setResendMessage(null);
+    setError(null);
+    const email = String(formData.get("email") || "");
+    if (!email) {
+      setError("Escribe tu correo para reenviar la verificación.");
+      return;
+    }
+    const response = await fetch("/api/auth/resend-verification", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      setError(payload?.error?.message || "No se pudo reenviar la verificación.");
+      return;
+    }
+    setResendMessage(payload?.data?.delivered ? "Enlace reenviado. Revisa también spam o promociones." : "El servicio de correo aún no está configurado; no se envió ningún mensaje.");
+  }
+
   return (
     <form action={submit} className={embedded ? "tq-embedded-auth-form" : "relative overflow-hidden rounded-lg border bg-card p-6 text-foreground shadow-2xl md:p-8"}>
       {!embedded ? <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-[#24C8EE] to-primary" /> : null}
@@ -85,13 +104,18 @@ export function SignInForm({
       </div>
       <div>
         <label className="text-sm font-semibold" htmlFor="password">Contraseña</label>
-        <Input id="password" name="password" type="password" autoComplete="current-password" required placeholder="********" className="mt-2 bg-muted/40 text-foreground" />
+        <div className="tq-password-field mt-2">
+          <Input id="password" name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" required placeholder="********" className="bg-muted/40 text-foreground" />
+          <button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"} aria-pressed={showPassword}>{showPassword ? <EyeOff /> : <Eye />}</button>
+        </div>
       </div>
       <Button type="submit" size="lg" disabled={isPending} className="mt-2 w-full">
         {isPending ? "Validando acceso..." : "Ingresar"}
         <ArrowRight className="h-4 w-4" />
       </Button>
       {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
+      {resendMessage ? <p className="text-sm text-[#bcebf1]">{resendMessage}</p> : null}
+      <button type="submit" formAction={resendVerification} className="tq-resend-verification">Reenviar correo de verificación</button>
       </div>
       {onRegister ? <p className="tq-auth-switch">¿No tienes cuenta? <button type="button" onClick={onRegister}>Registrarme</button></p> : null}
     </form>

@@ -728,6 +728,14 @@ body:has(.tq-auth-surface) .tq-public-header--dark .tq-header-cta {
 .tq-secondary-action { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; margin-top: 22px; border: 1px solid rgba(67, 116, 186, 0.52); border-radius: 9px; color: #dce8f5; font-weight: 700; }
 .tq-secondary-action:hover { background: rgba(67, 116, 186, 0.14); }
 
+.tq-password-field { position: relative; min-width: 0; }
+.tq-password-field input { padding-right: 48px !important; }
+.tq-password-field > button { position: absolute; top: 50%; right: 14px; display: grid; width: 28px; height: 28px; place-items: center; transform: translateY(-50%); border-radius: 7px; color: rgba(210, 229, 238, 0.58); }
+.tq-password-field > button:hover, .tq-password-field > button:focus-visible { background: rgba(37, 192, 213, 0.1); color: #25c0d5; }
+.tq-password-field svg { width: 18px; height: 18px; }
+.tq-resend-verification { justify-self: center; color: #25c0d5; font-size: 0.78rem; font-weight: 700; }
+.tq-resend-verification:hover { color: #79dce9; text-decoration: underline; }
+
 @media (max-width: 1180px) {
   .tq-auth-layout {
     grid-template-columns: minmax(0, 0.78fr) minmax(470px, 0.9fr);
