@@ -23,7 +23,7 @@ export function CommerceShell({ children, header, darkHeader, footer, chat, forc
     <>
       {isAccount && darkHeader ? darkHeader : header}
       <main>{children}</main>
-      {!isAccount ? footer : null}
+      {footer}
       {!isAccount ? chat : null}
     </>
   );

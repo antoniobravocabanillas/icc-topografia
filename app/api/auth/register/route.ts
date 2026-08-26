@@ -170,7 +170,7 @@ export async function POST(request: Request) {
       return { ...createdUser, verificationCode: verification.code };
     });
 
-    const delivery = await sendEmailVerificationLink(user.email, user.verificationCode, request.url);
+    const delivery = await sendEmailVerificationLink(user.email, user.verificationCode);
 
     return created({
       ...user,

@@ -20,7 +20,7 @@ const officialAssets = {
   },
   dark: {
     mark: "/brand/terraqo-3/withbackground/icon bg dark.svg",
-    horizontal: "/brand/terraqo-3/withoutbackground/LH Compact bg dark.svg",
+    horizontal: "/brand/terraqo-3/logo-horizontal-dark-transparent.svg",
     vertical: "/brand/terraqo-3/withbackground/LV wordbran bg dark.svg"
   }
 } as const;
