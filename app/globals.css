@@ -412,7 +412,7 @@ body:has(.tq-auth-surface) .tq-public-header--dark .tq-header-cta {
     radial-gradient(circle at 26% 28%, rgba(37, 192, 213, 0.12), transparent 30%),
     linear-gradient(90deg, rgba(14, 26, 38, 0.05) 0%, rgba(14, 26, 38, 0.22) 42%, rgba(14, 26, 38, 0.9) 73%, #0e1a26 100%),
     linear-gradient(180deg, rgba(14, 26, 38, 0.08), rgba(14, 26, 38, 0.34)),
-    url("/images/terraqo/auth-network-terrain-v2.webp") center / cover no-repeat;
+    url("https://terraqoglobal.com/images/terraqo/auth-network-terrain-v2.webp") center / cover no-repeat;
 }
 
 .tq-auth-atmosphere::after {
