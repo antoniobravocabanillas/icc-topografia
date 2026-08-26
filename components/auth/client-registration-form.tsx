@@ -67,7 +67,7 @@ export function ClientRegistrationForm({ embedded = false, onSignIn }: { embedde
         {accountType === "client" ? (
           <div className="grid gap-3.5 sm:grid-cols-2"><Input name="company" required placeholder="Empresa / razón social" autoComplete="organization" /><select name="industry" required defaultValue="" aria-label="Rubro de la empresa"><option value="" disabled>Selecciona el rubro</option>{companyIndustries.map((item) => <option key={item} value={item}>{item}</option>)}</select></div>
         ) : (
-          <div><Input name="roleTitle" list="terraqo-professions" required placeholder="Profesión o perfil" autoComplete="organization-title" /><datalist id="terraqo-professions">{professionalRoles.map((item) => <option key={item} value={item} />)}</datalist><p className="mt-1.5 text-xs text-muted-foreground">Selecciona una sugerencia o escribe tu profesión.</p></div>
+          <div><Input name="roleTitle" list="terraqo-professions" required placeholder="Cargo, profesión o carrera" autoComplete="organization-title" /><datalist id="terraqo-professions">{professionalRoles.map((item) => <option key={item} value={item} />)}</datalist><p className="mt-1.5 text-xs text-muted-foreground">Busca por cargo o carrera. Si no aparece, escríbelo libremente.</p></div>
         )}
         <Input name="password" type="password" required minLength={8} placeholder="Contraseña · mínimo 8 caracteres" autoComplete="new-password" />
         <Button type="submit" size="lg" disabled={isPending} className="w-full">{isPending ? "Creando cuenta..." : "Crear cuenta"}<ArrowRight className="h-4 w-4" /></Button>
