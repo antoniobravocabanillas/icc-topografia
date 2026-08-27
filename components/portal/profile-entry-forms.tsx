@@ -16,6 +16,7 @@ type CompanyOption = {
   id: string;
   name: string;
   industry?: string | null;
+  projects: Array<{ id: string; title: string; category?: string | null; location?: string | null }>;
 };
 
 type ProfileEntryFormsProps = {
@@ -28,13 +29,15 @@ type ProfileEntryFormsProps = {
 export function ExperienceForm({ validators, companies, createExperienceAction }: Pick<ProfileEntryFormsProps, "validators" | "companies" | "createExperienceAction">) {
   const [current, setCurrent] = useState(false);
   const [companyId, setCompanyId] = useState("");
+  const [projectId, setProjectId] = useState("");
   const manualCompany = companyId === "OTHER";
+  const selectedCompany = companies.find((company) => company.id === companyId);
+  const manualProject = manualCompany || projectId === "OTHER";
   return (
     <form action={createExperienceAction} className="grid gap-3">
-      <Input name="title" placeholder="Ej. Control altimetrico en edificio multifamiliar" required />
       <label className="grid gap-1.5 text-sm font-semibold">
         Empresa o cliente
-        <select name="workspaceId" value={companyId} onChange={(event) => setCompanyId(event.target.value)} required className="h-11 rounded-md border border-input bg-background px-3 text-sm">
+        <select name="workspaceId" value={companyId} onChange={(event) => { setCompanyId(event.target.value); setProjectId(""); }} required className="h-11 rounded-md border border-input bg-background px-3 text-sm">
           <option value="">Selecciona una empresa registrada</option>
           {companies.map((company) => <option key={company.id} value={company.id}>{company.name}{company.industry ? ` · ${company.industry}` : ""}</option>)}
           <option value="OTHER">La empresa no aparece en Terraqo</option>
@@ -42,6 +45,18 @@ export function ExperienceForm({ validators, companies, createExperienceAction }
       </label>
       {manualCompany ? <Input name="companyName" placeholder="Escribe el nombre de la empresa o cliente" required autoFocus /> : null}
       <p className="-mt-1 text-xs text-muted-foreground">Selecciona la empresa si está registrada. Solo escríbela manualmente cuando no aparezca en la lista.</p>
+      {!manualCompany && selectedCompany ? (
+        <label className="grid gap-1.5 text-sm font-semibold">
+          Proyecto
+          <select name="projectId" value={projectId} onChange={(event) => setProjectId(event.target.value)} required className="h-11 rounded-md border border-input bg-background px-3 text-sm">
+            <option value="">Selecciona un proyecto público de la empresa</option>
+            {selectedCompany.projects.map((project) => <option key={project.id} value={project.id}>{project.title}{project.category ? ` · ${project.category}` : ""}{project.location ? ` · ${project.location}` : ""}</option>)}
+            <option value="OTHER">El proyecto no aparece en la lista</option>
+          </select>
+        </label>
+      ) : null}
+      {manualProject ? <Input name="title" placeholder="Escribe el nombre del proyecto o trabajo" required /> : null}
+      {selectedCompany && !selectedCompany.projects.length ? <p className="-mt-1 text-xs text-amber-700">Esta empresa todavía no tiene proyectos públicos. Selecciona “El proyecto no aparece” para registrarlo por nombre.</p> : null}
       <Input name="role" placeholder="Rol desempenado" />
       <LocationSelect countryName="country" subdivisionName="subdivision" cityName="city" required />
       <div className="grid gap-3 sm:grid-cols-2">

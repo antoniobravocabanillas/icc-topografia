@@ -206,7 +206,6 @@ export async function createHistoricalExperienceAction(formData: FormData) {
   });
   if (!profile) redirect("/portal?status=profile-required");
 
-  const title = cleanText(formData, "title", 140);
   const workspaceInput = cleanText(formData, "workspaceId", 80);
   const selectedWorkspace = workspaceInput && workspaceInput !== "OTHER"
     ? await prisma.terraqoWorkspace.findFirst({
@@ -215,6 +214,14 @@ export async function createHistoricalExperienceAction(formData: FormData) {
       })
     : null;
   const companyName = selectedWorkspace?.brandName || selectedWorkspace?.name || cleanText(formData, "companyName", 140);
+  const projectInput = cleanText(formData, "projectId", 80);
+  const selectedProject = selectedWorkspace && projectInput && projectInput !== "OTHER"
+    ? await prisma.project.findFirst({
+        where: { id: projectInput, terraqoWorkspaceId: selectedWorkspace.id, isPublic: true, deletedAt: null },
+        select: { id: true, title: true }
+      })
+    : null;
+  const title = selectedProject?.title || cleanText(formData, "title", 140);
   const role = cleanText(formData, "role", 120);
   const location = normalizeLocation(formData);
   const currentlyWorking = formData.get("currentlyWorking") === "on";
@@ -224,7 +231,7 @@ export async function createHistoricalExperienceAction(formData: FormData) {
   const validator = await resolveValidator(formData, "validatorFallback", workspaceIds);
   const visibilityValues = new Set<TerraqoVisibility>(["PRIVATE", "WORKSPACE", "COMMUNITY", "PUBLIC"]);
   const visibilityInput = String(formData.get("visibility") || "PRIVATE") as TerraqoVisibility;
-  if (!title || !companyName || (workspaceInput !== "OTHER" && !selectedWorkspace)) redirect("/portal/experiencias?status=missing");
+  if (!title || !companyName || (workspaceInput !== "OTHER" && !selectedWorkspace) || (selectedWorkspace && projectInput !== "OTHER" && !selectedProject)) redirect("/portal/experiencias?status=missing");
 
   const verificationRequested = Boolean(validator.validatorUserId || validator.validatorEmail || validator.validatorName);
   await prisma.terraqoProfessionalExperience.create({
@@ -232,6 +239,7 @@ export async function createHistoricalExperienceAction(formData: FormData) {
       professionalProfileId: profile.id,
       title,
       workspaceId: selectedWorkspace?.id || null,
+      projectId: selectedProject?.id || null,
       companyName,
       role,
       summary: longText(formData, "summary", 5000),

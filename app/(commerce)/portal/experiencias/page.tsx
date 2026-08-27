@@ -49,7 +49,18 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
     take: 80
   }), prisma.terraqoWorkspace.findMany({
     where: { active: true, deletedAt: null, companyId: { not: null } },
-    select: { id: true, name: true, brandName: true, industry: true },
+    select: {
+      id: true,
+      name: true,
+      brandName: true,
+      industry: true,
+      projects: {
+        where: { isPublic: true, deletedAt: null },
+        select: { id: true, title: true, category: true, location: true },
+        orderBy: [{ isFeatured: "desc" }, { updatedAt: "desc" }],
+        take: 100
+      }
+    },
     orderBy: [{ brandName: "asc" }, { name: "asc" }]
   })]);
   const totalMonths = experiences.reduce((sum, experience) => sum + monthsBetween(experience.startedAt, experience.currentlyWorking ? null : experience.endedAt), 0);
@@ -96,7 +107,7 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
             <CardDescription>Para trabajos anteriores donde quieres solicitar validacion de un encargado o cliente.</CardDescription>
           </CardHeader>
           <CardContent>
-            <ExperienceForm validators={validatorOptions} companies={companies.map((company) => ({ id: company.id, name: company.brandName || company.name, industry: company.industry }))} createExperienceAction={createHistoricalExperienceAction} />
+            <ExperienceForm validators={validatorOptions} companies={companies.map((company) => ({ id: company.id, name: company.brandName || company.name, industry: company.industry, projects: company.projects }))} createExperienceAction={createHistoricalExperienceAction} />
           </CardContent>
         </Card>
 
