@@ -207,7 +207,14 @@ export async function createHistoricalExperienceAction(formData: FormData) {
   if (!profile) redirect("/portal?status=profile-required");
 
   const title = cleanText(formData, "title", 140);
-  const companyName = cleanText(formData, "companyName", 140);
+  const workspaceInput = cleanText(formData, "workspaceId", 80);
+  const selectedWorkspace = workspaceInput && workspaceInput !== "OTHER"
+    ? await prisma.terraqoWorkspace.findFirst({
+        where: { id: workspaceInput, active: true, deletedAt: null, companyId: { not: null } },
+        select: { id: true, name: true, brandName: true }
+      })
+    : null;
+  const companyName = selectedWorkspace?.brandName || selectedWorkspace?.name || cleanText(formData, "companyName", 140);
   const role = cleanText(formData, "role", 120);
   const location = normalizeLocation(formData);
   const currentlyWorking = formData.get("currentlyWorking") === "on";
@@ -217,13 +224,14 @@ export async function createHistoricalExperienceAction(formData: FormData) {
   const validator = await resolveValidator(formData, "validatorFallback", workspaceIds);
   const visibilityValues = new Set<TerraqoVisibility>(["PRIVATE", "WORKSPACE", "COMMUNITY", "PUBLIC"]);
   const visibilityInput = String(formData.get("visibility") || "PRIVATE") as TerraqoVisibility;
-  if (!title || !companyName) redirect("/portal/experiencias?status=missing");
+  if (!title || !companyName || (workspaceInput !== "OTHER" && !selectedWorkspace)) redirect("/portal/experiencias?status=missing");
 
   const verificationRequested = Boolean(validator.validatorUserId || validator.validatorEmail || validator.validatorName);
   await prisma.terraqoProfessionalExperience.create({
     data: {
       professionalProfileId: profile.id,
       title,
+      workspaceId: selectedWorkspace?.id || null,
       companyName,
       role,
       summary: longText(formData, "summary", 5000),

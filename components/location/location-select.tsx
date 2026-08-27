@@ -42,6 +42,7 @@ export function LocationSelect({
   const [country, setCountry] = useState(defaultCountry);
   const [subdivision, setSubdivision] = useState(defaultSubdivision);
   const [city, setCity] = useState(defaultCity);
+  const manualCity = city === "OTHER";
 
   useEffect(() => {
     loadOptions("/api/locations/countries").then(setCountries);
@@ -100,10 +101,16 @@ export function LocationSelect({
 
       <label className="grid gap-1.5">
         <span className="text-[0.68rem] font-bold uppercase tracking-[0.18em] text-primary">Ciudad</span>
-        <select id={`${id}-city`} name={cityName} required={required && cities.length > 0} disabled={!country || cities.length === 0} className={selectClass} value={city} onChange={(event) => setCity(event.target.value)}>
-          <option value="">{cities.length ? "Selecciona ciudad" : "No disponible"}</option>
+        <select id={`${id}-city`} required={required && cities.length > 0} disabled={!country} className={selectClass} value={city} onChange={(event) => setCity(event.target.value)}>
+          <option value="">{cities.length ? "Selecciona ciudad o distrito" : "Escribe la ubicación"}</option>
           {cities.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          <option value="OTHER">Otra ciudad o distrito</option>
         </select>
+        {manualCity || (!cities.length && country) ? (
+          <input name={cityName} required={required} placeholder="Escribe la ciudad o distrito" className={selectClass} />
+        ) : (
+          <input type="hidden" name={cityName} value={city} />
+        )}
       </label>
     </div>
   );

@@ -1930,6 +1930,7 @@ model TerraqoWorkspace {
   jobApplications          TerraqoProjectApplication[]
   professionalAffiliations TerraqoProfessionalAffiliation[]
   professionalDocuments    TerraqoProfessionalDocument[]
+  professionalExperiences  TerraqoProfessionalExperience[]
   forumChannels            TerraqoForumChannel[]
   worklogs                 TerraqoWorklogEntry[]
   directConversations      TerraqoConversation[]
@@ -2324,6 +2325,8 @@ model TerraqoProfessionalExperience {
   professionalProfile   TerraqoProfessionalProfile @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
   projectId             String?
   project               Project?                   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  workspaceId           String?
+  workspace             TerraqoWorkspace?          @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
   title                 String
   companyName           String?
   role                  String?
@@ -2353,6 +2356,7 @@ model TerraqoProfessionalExperience {
   @@index([validatorUserId, verificationStatus])
   @@index([country, locationSubdivisionCode, locationCity])
   @@index([projectId])
+  @@index([workspaceId])
   @@index([verifiedByTerraqo])
   @@schema("icc")
 }

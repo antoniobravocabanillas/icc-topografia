@@ -9,6 +9,16 @@ function byLabel(left: LocationOption, right: LocationOption) {
   return left.label.localeCompare(right.label, "es");
 }
 
+const limaMetropolitanaDistricts = [
+  "Ancón", "Ate", "Barranco", "Breña", "Carabayllo", "Chaclacayo", "Chorrillos", "Cieneguilla", "Comas",
+  "El Agustino", "Independencia", "Jesús María", "La Molina", "La Victoria", "Lima", "Lince", "Los Olivos",
+  "Lurigancho-Chosica", "Lurín", "Magdalena del Mar", "Miraflores", "Pachacámac", "Pucusana", "Pueblo Libre",
+  "Puente Piedra", "Punta Hermosa", "Punta Negra", "Rímac", "San Bartolo", "San Borja", "San Isidro",
+  "San Juan de Lurigancho", "San Juan de Miraflores", "San Luis", "San Martín de Porres", "San Miguel",
+  "Santa Anita", "Santa María del Mar", "Santa Rosa", "Santiago de Surco", "Surquillo", "Villa El Salvador",
+  "Villa María del Triunfo"
+];
+
 const peruCitiesBySubdivision: Record<string, string[]> = {
   AMA: ["Chachapoyas", "Bagua", "Utcubamba"],
   ANC: ["Huaraz", "Chimbote", "Caraz"],
@@ -24,8 +34,11 @@ const peruCitiesBySubdivision: Record<string, string[]> = {
   JUN: ["Huancayo", "Jauja", "Tarma", "La Merced"],
   LAL: ["Trujillo", "Chepen", "Pacasmayo"],
   LAM: ["Chiclayo", "Lambayeque", "Ferreñafe"],
-  LIM: ["Huacho", "Huaral", "Cañete", "Barranca"],
-  LMA: ["Lima", "Ate", "Barranco", "Breña", "Carabayllo", "Chorrillos", "Comas", "Jesus Maria", "La Molina", "La Victoria", "Lince", "Miraflores", "San Borja", "San Isidro", "San Miguel", "Santiago de Surco"],
+  // Algunos catálogos ISO presentan Lima Metropolitana (LMA) y el departamento
+  // de Lima (LIM) por separado. Incluimos los 43 distritos metropolitanos en
+  // ambos para que el usuario no pierda su ubicación por esa diferencia externa.
+  LIM: [...limaMetropolitanaDistricts, "Barranca", "Cajatambo", "Canta", "Chancay", "Chosica", "Huacho", "Huaral", "Huarochirí", "Huaura", "Lunahuaná", "Mala", "Matucana", "Oyón", "San Vicente de Cañete", "Yauyos"],
+  LMA: limaMetropolitanaDistricts,
   LOR: ["Iquitos", "Yurimaguas", "Nauta"],
   MDD: ["Puerto Maldonado"],
   MOQ: ["Moquegua", "Ilo"],

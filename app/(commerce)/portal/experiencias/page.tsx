@@ -25,7 +25,7 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
   const education = profile.education;
   const workspaceIds = memberships.map((membership) => membership.workspaceId);
   const workspaceValidatorRoles: TerraqoMemberRole[] = ["OWNER", "ADMIN", "MANAGER"];
-  const validators = await prisma.user.findMany({
+  const [validators, companies] = await Promise.all([prisma.user.findMany({
     where: {
       OR: [
         { role: "SUPER_ADMIN", email: { endsWith: "@terraqoglobal.com" } },
@@ -47,7 +47,11 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
     select: { id: true, name: true, email: true, role: true },
     orderBy: [{ role: "desc" }, { name: "asc" }, { email: "asc" }],
     take: 80
-  });
+  }), prisma.terraqoWorkspace.findMany({
+    where: { active: true, deletedAt: null, companyId: { not: null } },
+    select: { id: true, name: true, brandName: true, industry: true },
+    orderBy: [{ brandName: "asc" }, { name: "asc" }]
+  })]);
   const totalMonths = experiences.reduce((sum, experience) => sum + monthsBetween(experience.startedAt, experience.currentlyWorking ? null : experience.endedAt), 0);
   const validatorOptions = validators.map((validator) => ({ id: validator.id, label: validator.name || "Responsable Terraqo", email: validator.email }));
 
@@ -92,7 +96,7 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
             <CardDescription>Para trabajos anteriores donde quieres solicitar validacion de un encargado o cliente.</CardDescription>
           </CardHeader>
           <CardContent>
-            <ExperienceForm validators={validatorOptions} createExperienceAction={createHistoricalExperienceAction} />
+            <ExperienceForm validators={validatorOptions} companies={companies.map((company) => ({ id: company.id, name: company.brandName || company.name, industry: company.industry }))} createExperienceAction={createHistoricalExperienceAction} />
           </CardContent>
         </Card>
 
