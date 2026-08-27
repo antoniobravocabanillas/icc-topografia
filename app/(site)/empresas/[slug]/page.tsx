@@ -139,7 +139,7 @@ export default async function PublicCompanyProfilePage({ params }: PageProps) {
         select: {
           projects: true,
           jobPosts: true,
-          professionalAffiliations: true,
+          professionalAffiliations: { where: { verificationStatus: "VERIFIED", current: true } },
           worklogs: true
         }
       }

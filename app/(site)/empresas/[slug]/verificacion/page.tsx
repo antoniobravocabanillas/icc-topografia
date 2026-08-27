@@ -18,7 +18,7 @@ export default async function CompanyVerificationPage({ params }: PageProps) {
     select: {
       name: true, brandName: true, logoUrl: true, industry: true, country: true, region: true,
       settings: true, createdAt: true,
-      _count: { select: { projects: true, professionalAffiliations: true, worklogs: true } }
+      _count: { select: { projects: true, professionalAffiliations: { where: { verificationStatus: "VERIFIED", current: true } }, worklogs: true } }
     }
   });
   if (!workspace) notFound();

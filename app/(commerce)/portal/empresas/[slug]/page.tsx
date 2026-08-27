@@ -26,7 +26,7 @@ export default async function CompanyProfilePage({ params }: PageProps) {
     prisma.project.findMany({ where: { terraqoWorkspaceId: workspace.id, isPublic: true, deletedAt: null }, select: { id: true, title: true, slug: true, summary: true, category: true }, orderBy: { updatedAt: "desc" }, take: 12 }),
     prisma.terraqoJobPost.findMany({ where: { workspaceId: workspace.id, status: "OPEN", deletedAt: null, visibility: { in: member ? ["PUBLIC", "COMMUNITY", "WORKSPACE"] : ["PUBLIC", "COMMUNITY"] } }, select: { id: true, title: true, summary: true, location: true, modality: true }, orderBy: { createdAt: "desc" }, take: 12 }),
     prisma.terraqoProfessionalAffiliation.findMany({
-      where: { workspaceId: workspace.id, current: true, visibility: { in: member ? ["PUBLIC", "COMMUNITY", "WORKSPACE"] : ["PUBLIC", "COMMUNITY"] } },
+      where: { workspaceId: workspace.id, verificationStatus: "VERIFIED", current: true, visibility: { in: member ? ["PUBLIC", "COMMUNITY", "WORKSPACE"] : ["PUBLIC", "COMMUNITY"] } },
       include: { professionalProfile: { include: { user: { select: { name: true } } } } },
       orderBy: { updatedAt: "desc" }, take: 16
     }),

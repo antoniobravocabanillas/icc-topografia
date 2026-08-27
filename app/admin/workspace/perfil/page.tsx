@@ -1,16 +1,17 @@
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
-import { ExternalLink, Globe2, Layers3 } from "lucide-react";
+import { CheckCircle2, ExternalLink, Globe2, Layers3, UserRoundCheck, XCircle } from "lucide-react";
 import { ClientLogoUploader } from "@/components/admin/client-logo-uploader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { updateCompanyLiveProfileAction } from "@/lib/server/workspace-branding-actions";
+import { reviewProfessionalAffiliationAction } from "@/lib/server/professional-affiliation-actions";
 import { prisma } from "@/lib/prisma";
 import { getSessionTerraqoWorkspace } from "@/lib/terraqo/workspace-scope";
 
-type PageProps = { searchParams?: Promise<{ success?: string }> };
+type PageProps = { searchParams?: Promise<{ success?: string; affiliation?: string }> };
 
 type CompanyLiveProfile = {
   headline?: string;
@@ -40,7 +41,17 @@ export default async function WorkspaceCompanyProfilePage({ searchParams }: Page
   const sessionWorkspace = await getSessionTerraqoWorkspace();
   const workspace = await prisma.terraqoWorkspace.findUnique({
     where: { id: sessionWorkspace.id },
-    select: { id: true, slug: true, publicSlug: true, settings: true }
+    select: {
+      id: true,
+      slug: true,
+      publicSlug: true,
+      settings: true,
+      professionalAffiliations: {
+        where: { verificationStatus: "REQUESTED" },
+        include: { professionalProfile: { include: { user: { select: { name: true, email: true, image: true } } } } },
+        orderBy: { updatedAt: "asc" }
+      }
+    }
   });
   if (!workspace) throw new Error("Workspace no encontrado.");
   const profile = companyProfile(workspace.settings);
@@ -60,6 +71,37 @@ export default async function WorkspaceCompanyProfilePage({ searchParams }: Page
       </div>
 
       {params?.success === "profile" ? <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Perfil empresarial actualizado.</div> : null}
+      {params?.affiliation === "approved" ? <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Profesional vinculado y acceso al workspace activado.</div> : null}
+      {params?.affiliation === "rejected" ? <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">Solicitud rechazada. El profesional fue notificado.</div> : null}
+
+      <Card id="professional-affiliations" className="border-primary/20">
+        <CardHeader>
+          <UserRoundCheck className="h-5 w-5 text-primary" />
+          <CardTitle>Solicitudes de vinculación profesional</CardTitle>
+          <CardDescription>Confirma que la persona pertenece o presta servicios a la empresa y valida el cargo con el que aparecerá vinculada.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3">
+          {workspace.professionalAffiliations.map((affiliation) => (
+            <form key={affiliation.id} action={reviewProfessionalAffiliationAction} className="grid gap-3 rounded-md border bg-muted/20 p-4 lg:grid-cols-[minmax(220px,1fr)_minmax(240px,0.8fr)_auto] lg:items-end">
+              <input type="hidden" name="affiliationId" value={affiliation.id} />
+              <div>
+                <p className="font-semibold">{affiliation.professionalProfile.user.name || "Profesional Terraqo"}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{affiliation.professionalProfile.user.email}</p>
+                <p className="mt-1 text-xs text-muted-foreground">Solicitado {affiliation.updatedAt.toLocaleString("es-PE")}</p>
+              </div>
+              <label className="grid gap-2 text-sm font-semibold">
+                Profesión o cargo validado
+                <Input name="roleTitle" defaultValue={affiliation.roleTitle || affiliation.professionalProfile.headline || ""} required />
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <Button type="submit" name="decision" value="approve"><CheckCircle2 className="h-4 w-4" /> Aprobar vínculo</Button>
+                <Button type="submit" name="decision" value="reject" variant="outline"><XCircle className="h-4 w-4" /> Rechazar</Button>
+              </div>
+            </form>
+          ))}
+          {!workspace.professionalAffiliations.length ? <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">No hay solicitudes pendientes.</p> : null}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
         <Card>

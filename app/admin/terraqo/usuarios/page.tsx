@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import type { Role, TerraqoMemberRole } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -61,12 +62,45 @@ async function upsertMembershipAction(formData: FormData) {
   const workspaceId = field(formData, "workspaceId");
   const role = field(formData, "memberRole") as TerraqoMemberRole;
   if (!userId || !workspaceId || !memberRoles.includes(role)) return;
-  await prisma.terraqoWorkspaceMember.upsert({
-    where: { workspaceId_userId: { workspaceId, userId } },
-    update: { role, active: true, joinedAt: new Date() },
-    create: { workspaceId, userId, role, active: true, invitedAt: new Date(), joinedAt: new Date() }
+  await prisma.$transaction(async (tx) => {
+    await tx.terraqoWorkspaceMember.upsert({
+      where: { workspaceId_userId: { workspaceId, userId } },
+      update: { role, active: true, joinedAt: new Date() },
+      create: { workspaceId, userId, role, active: true, invitedAt: new Date(), joinedAt: new Date() }
+    });
+    if (role !== "PROFESSIONAL") return;
+    const [profile, workspace] = await Promise.all([
+      tx.terraqoProfessionalProfile.findUnique({ where: { userId }, select: { id: true, headline: true } }),
+      tx.terraqoWorkspace.findUnique({ where: { id: workspaceId }, select: { name: true, brandName: true, companyId: true } })
+    ]);
+    if (!profile || !workspace) return;
+    await tx.terraqoProfessionalAffiliation.upsert({
+      where: { professionalProfileId_workspaceId: { professionalProfileId: profile.id, workspaceId } },
+      update: {
+        companyId: workspace.companyId,
+        companyName: workspace.brandName || workspace.name,
+        roleTitle: profile.headline,
+        current: true,
+        verificationStatus: "VERIFIED",
+        visibility: "WORKSPACE",
+        endedAt: null
+      },
+      create: {
+        professionalProfileId: profile.id,
+        workspaceId,
+        companyId: workspace.companyId,
+        companyName: workspace.brandName || workspace.name,
+        roleTitle: profile.headline,
+        current: true,
+        verificationStatus: "VERIFIED",
+        visibility: "WORKSPACE",
+        startedAt: new Date()
+      }
+    });
   });
   revalidatePath("/admin/terraqo/usuarios");
+  revalidatePath("/portal/perfil");
+  redirect("/admin/terraqo/usuarios?status=workspace-assigned");
 }
 
 async function updateMembershipAction(formData: FormData) {
@@ -82,7 +116,10 @@ async function updateMembershipAction(formData: FormData) {
 
 export const dynamic = "force-dynamic";
 
-export default async function TerraqoUsersPage() {
+type PageProps = { searchParams?: Promise<{ status?: string }> };
+
+export default async function TerraqoUsersPage({ searchParams }: PageProps) {
+  const params = await searchParams;
   await requireAdminPage(["SUPER_ADMIN"]);
   const [users, workspaces, totals] = await Promise.all([
     prisma.user.findMany({
@@ -109,6 +146,8 @@ export default async function TerraqoUsersPage() {
         <h1 className="mt-2 font-display text-4xl font-bold">Usuarios, perfiles y accesos</h1>
         <p className="mt-3 text-muted-foreground">Control global de identidades Terraqo. El rol global define la superficie disponible y la membresia limita cada usuario a los datos de su workspace.</p>
       </header>
+
+      {params?.status === "workspace-assigned" ? <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Workspace asignado correctamente. Si el usuario es profesional, su vínculo empresarial también quedó validado.</div> : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[[totals[0], "Usuarios"], [totals[1], "Superadministradores"], [totals[2], "Perfiles profesionales"], [totals[3], "Membresias activas"]].map(([value, label]) => (

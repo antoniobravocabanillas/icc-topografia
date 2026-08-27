@@ -1,9 +1,12 @@
 import Link from "next/link";
-import { BadgeCheck, ExternalLink, MapPin, ShieldCheck, Wrench } from "lucide-react";
+import { BadgeCheck, Building2, ExternalLink, Link2, MapPin, ShieldCheck, Wrench } from "lucide-react";
 import { PortalPageHeading } from "@/components/terraqo/portal-page-heading";
 import { UserAvatar } from "@/components/terraqo/user-avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { prisma } from "@/lib/prisma";
+import { requestProfessionalAffiliationAction } from "@/lib/server/professional-affiliation-actions";
 import { requireProfessionalPortal } from "@/lib/terraqo/professional-portal";
 import { terraqoDomains } from "@/lib/terraqo-domains";
 
@@ -17,8 +20,23 @@ const identityCopy: Record<string, string> = {
   REJECTED: "Requiere correccion"
 };
 
-export default async function ProfilePage() {
+type PageProps = { searchParams?: Promise<{ affiliation?: string }> };
+
+const affiliationMessages: Record<string, string> = {
+  requested: "Solicitud enviada. La empresa la verá en su workspace y deberá confirmar tu cargo.",
+  missing: "Selecciona una empresa e indica el cargo o profesión que deseas validar.",
+  "invalid-company": "La empresa seleccionada ya no está disponible para nuevas vinculaciones.",
+  "no-profile": "Primero debes completar tu perfil profesional."
+};
+
+export default async function ProfilePage({ searchParams }: PageProps) {
+  const params = await searchParams;
   const { profile } = await requireProfessionalPortal();
+  const companies = await prisma.terraqoWorkspace.findMany({
+    where: { active: true, deletedAt: null, companyId: { not: null } },
+    select: { id: true, name: true, brandName: true, industry: true },
+    orderBy: [{ brandName: "asc" }, { name: "asc" }]
+  });
   const name = profile.user.name || "Profesional Terraqo";
   const publicCvHref = profile.username ? `${terraqoDomains.public}/cv/${profile.username}` : null;
   const skills = [...profile.specialties, ...profile.equipment, ...profile.software];
@@ -33,6 +51,12 @@ export default async function ProfilePage() {
         description="Controla como te presentas ante empresas, equipos de proyecto y otros profesionales de la red."
         action={publicCvHref ? <Button asChild variant="outline"><Link href={publicCvHref} target="_blank">Ver CV público <ExternalLink className="ml-2 h-4 w-4" /></Link></Button> : null}
       />
+
+      {params?.affiliation && affiliationMessages[params.affiliation] ? (
+        <div className={`rounded-md border px-4 py-3 text-sm font-semibold ${params.affiliation === "requested" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
+          {affiliationMessages[params.affiliation]}
+        </div>
+      ) : null}
 
       <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <Card className="overflow-hidden border-primary/20">
@@ -81,6 +105,52 @@ export default async function ProfilePage() {
           <CardContent className="flex flex-wrap gap-2">
             {skills.map((skill) => <span key={skill} className="inline-flex items-center gap-1 rounded-md border bg-white px-3 py-1.5 text-sm font-semibold"><Wrench className="h-3.5 w-3.5 text-primary" />{skill}</span>)}
             {!skills.length ? <p className="text-sm text-muted-foreground">Completa equipos, software y especialidades para mejorar tu perfil.</p> : null}
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Building2 className="h-5 w-5 text-primary" /> Vínculos con empresas</CardTitle>
+            <CardDescription>Tu perfil funciona de manera independiente. Vincularte es opcional y nunca impide que completes o publiques tu trayectoria profesional.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {profile.affiliations.map((affiliation) => (
+              <div key={affiliation.id} className="flex flex-col justify-between gap-3 rounded-md border bg-muted/20 p-4 sm:flex-row sm:items-center">
+                <div>
+                  <p className="font-semibold">{affiliation.companyName}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{affiliation.roleTitle || "Cargo por confirmar"}</p>
+                </div>
+                <span className={`w-fit rounded-full px-3 py-1 text-xs font-bold ${affiliation.verificationStatus === "VERIFIED" ? "bg-emerald-100 text-emerald-800" : affiliation.verificationStatus === "REQUESTED" ? "bg-amber-100 text-amber-900" : "bg-muted text-muted-foreground"}`}>
+                  {affiliation.verificationStatus === "VERIFIED" ? "Validado por la empresa" : affiliation.verificationStatus === "REQUESTED" ? "Esperando validación" : affiliation.verificationStatus === "REJECTED" ? "No aprobado" : "Declarado"}
+                </span>
+              </div>
+            ))}
+            {!profile.affiliations.length ? <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">No estás vinculado a ninguna empresa. Puedes usar Terraqo y completar tu perfil con normalidad.</p> : null}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Link2 className="h-5 w-5 text-primary" /> Solicitar vinculación</CardTitle>
+            <CardDescription>Elige una empresa registrada y declara el cargo o profesión. La empresa confirmará la relación desde su workspace.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form action={requestProfessionalAffiliationAction} className="grid gap-4">
+              <label className="grid gap-2 text-sm font-semibold">
+                Empresa registrada
+                <select name="workspaceId" required defaultValue="" className="h-11 rounded-md border bg-background px-3 text-sm">
+                  <option value="" disabled>Selecciona una empresa</option>
+                  {companies.map((company) => <option key={company.id} value={company.id}>{company.brandName || company.name}{company.industry ? ` · ${company.industry}` : ""}</option>)}
+                </select>
+              </label>
+              <label className="grid gap-2 text-sm font-semibold">
+                Profesión o cargo a validar
+                <Input name="roleTitle" required minLength={2} defaultValue={profile.headline || ""} placeholder="Ej. Topógrafo, gerente financiero, ingeniera ambiental" />
+              </label>
+              <Button type="submit" className="w-full">Enviar solicitud a la empresa</Button>
+            </form>
           </CardContent>
         </Card>
       </section>

@@ -2314,6 +2314,7 @@ model TerraqoProfessionalAffiliation {
   @@index([professionalProfileId, current])
   @@index([workspaceId, verificationStatus])
   @@index([companyId])
+  @@unique([professionalProfileId, workspaceId])
   @@schema("icc")
 }
 

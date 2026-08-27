@@ -43,7 +43,7 @@ export default async function PublicNetworkPage() {
           take: 20
         },
         affiliations: {
-          where: { visibility: "PUBLIC", current: true },
+          where: { visibility: "PUBLIC", verificationStatus: "VERIFIED", current: true },
           select: { companyName: true, roleTitle: true },
           orderBy: { updatedAt: "desc" },
           take: 1
