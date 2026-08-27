@@ -10,6 +10,7 @@ import {
   FileText,
   MapPin,
   NotebookPen,
+  PlusCircle,
   ShieldCheck
 } from "lucide-react";
 
@@ -20,6 +21,7 @@ import { ProfessionalDocumentUploader } from "@/components/portal/professional-d
 import { WorklogCard } from "@/components/terraqo/worklog-card";
 import { FieldVerificationPanel } from "@/components/terraqo/field-verification-panel";
 import { Button } from "@/components/ui/button";
+import { updateProfessionalAvailabilityAction } from "@/lib/server/professional-actions";
 import { terraqoDomains } from "@/lib/terraqo-domains";
 import { formatExperienceDuration, monthsBetween } from "@/lib/terraqo/profile-summary";
 import { worklogInclude } from "@/lib/terraqo/worklog";
@@ -85,7 +87,7 @@ function ActivityRow({ icon: Icon, title, detail }: { icon: ElementType; title: 
   );
 }
 
-export function ProfessionalDashboard({ profile, workspaceId }: { profile: ProfessionalDashboardProfile; workspaceId: string }) {
+export function ProfessionalDashboard({ profile, workspaceId }: { profile: ProfessionalDashboardProfile; workspaceId?: string | null }) {
   const name = profile.user.name || profile.user.email;
   const percent = completion(profile);
   const verifiedExperiences = profile.experiences.filter((experience) => experience.verifiedByTerraqo).length;
@@ -116,7 +118,12 @@ export function ProfessionalDashboard({ profile, workspaceId }: { profile: Profe
             </div>
           </section>
 
-          <FieldVerificationPanel endpoint={`/api/terraqo/field-verification?workspaceId=${workspaceId}`} compact />
+          {workspaceId ? <FieldVerificationPanel endpoint={`/api/terraqo/field-verification?workspaceId=${workspaceId}`} compact /> : (
+            <section className="flex flex-col gap-3 rounded-lg border bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div><p className="font-semibold">Control de campo pendiente de vinculación</p><p className="mt-1 text-sm text-muted-foreground">La entrada, salida y geolocalización se activan cuando una empresa confirma tu vínculo y te asigna un proyecto.</p></div>
+              <Button asChild variant="outline"><Link href="/portal/perfil">Vincular empresa</Link></Button>
+            </section>
+          )}
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <ProfileMetric icon={BriefcaseBusiness} value={profile.experiences.length} label="Experiencias" detail="registradas" />
@@ -124,6 +131,11 @@ export function ProfessionalDashboard({ profile, workspaceId }: { profile: Profe
             <ProfileMetric icon={ShieldCheck} value={verifiedExperiences} label="Validaciones" detail="aprobadas" />
             <ProfileMetric icon={NotebookPen} value={profile.worklogs.length} label="Evidencias" detail="en tu CV vivo" />
           </div>
+
+          <section className="flex flex-col gap-4 rounded-lg border border-primary/20 bg-[linear-gradient(135deg,rgba(67,116,186,0.10),rgba(37,192,213,0.08))] p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-primary text-white"><NotebookPen className="h-5 w-5" /></span><div><h2 className="font-display text-lg font-bold">Convierte tu trabajo en evidencia</h2><p className="mt-1 text-sm text-muted-foreground">Registra avances, fotos, resultados y referencias desde la bitácora para alimentar tu CV vivo.</p></div></div>
+            <Button asChild className="shrink-0"><Link href="/portal/bitacora"><PlusCircle className="mr-2 h-4 w-4" /> Registrar evidencia</Link></Button>
+          </section>
 
           <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_380px]">
             <div className="min-w-0 space-y-6">
@@ -156,7 +168,7 @@ export function ProfessionalDashboard({ profile, workspaceId }: { profile: Profe
             </div>
 
             <aside className="space-y-6">
-              <section className="rounded-lg border bg-white p-6 shadow-[0_14px_36px_rgba(1,45,56,0.05)]"><div className="flex gap-4"><span className="grid h-12 w-12 place-items-center rounded-lg bg-primary/10 text-primary"><CalendarDays className="h-5 w-5" /></span><div><h2 className="font-display text-lg font-bold">Disponibilidad</h2><span className="mt-2 inline-block rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">{statusCopy[profile.status]}</span></div></div><div className="mt-5 border-t pt-4 text-sm"><p className="font-semibold">Ubicacion</p><p className="mt-1 text-muted-foreground">{profile.city || "Por completar"}</p><p className="mt-4 font-semibold">Miembro desde</p><p className="mt-1 text-muted-foreground">{new Intl.DateTimeFormat("es-PE", { month: "long", year: "numeric" }).format(profile.createdAt)}</p></div></section>
+              <section className="rounded-lg border bg-white p-6 shadow-[0_14px_36px_rgba(1,45,56,0.05)]"><div className="flex gap-4"><span className="grid h-12 w-12 place-items-center rounded-lg bg-primary/10 text-primary"><CalendarDays className="h-5 w-5" /></span><div><h2 className="font-display text-lg font-bold">Disponibilidad</h2><span className="mt-2 inline-block rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">{statusCopy[profile.status]}</span></div></div><form action={updateProfessionalAvailabilityAction} className="mt-5 grid gap-2 border-t pt-4"><label className="grid gap-1.5 text-sm font-semibold">Estado<select name="status" defaultValue={profile.status} className="h-10 rounded-md border bg-background px-3 text-sm"><option value="AVAILABLE">Disponible ahora</option><option value="OPEN_TO_PROJECTS">Abierto a proyectos</option><option value="WORKING">Trabajando actualmente</option><option value="NOT_AVAILABLE">No disponible</option></select></label><button type="submit" className="h-10 rounded-md border border-primary/30 text-sm font-bold text-primary transition hover:bg-primary hover:text-white">Actualizar disponibilidad</button></form><div className="mt-5 border-t pt-4 text-sm"><p className="font-semibold">Ubicacion</p><p className="mt-1 text-muted-foreground">{profile.city || "Por completar"}</p><p className="mt-4 font-semibold">Miembro desde</p><p className="mt-1 text-muted-foreground">{new Intl.DateTimeFormat("es-PE", { month: "long", year: "numeric" }).format(profile.createdAt)}</p></div></section>
 
               <section className="rounded-lg border bg-white p-6 shadow-[0_14px_36px_rgba(1,45,56,0.05)]"><div className="flex items-center justify-between"><h2 className="font-display text-lg font-bold">Documentos pendientes</h2><span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">{Number(!hasCv) + Number(!identityComplete)} pendientes</span></div><div className="mt-4 divide-y">{!hasCv ? <Link href="/portal/documentos" className="flex items-center justify-between gap-3 py-3 text-sm"><span><b>CV profesional</b><small className="mt-1 block text-muted-foreground">Completa tus postulaciones</small></span><span className="font-semibold text-primary">Subir</span></Link> : null}{!identityComplete ? <Link href="/portal/documentos" className="flex items-center justify-between gap-3 py-3 text-sm"><span><b>Verificacion de identidad</b><small className="mt-1 block text-muted-foreground">DNI por delante y detras</small></span><span className="font-semibold text-primary">Revisar</span></Link> : null}{hasCv && identityComplete ? <p className="py-4 text-sm text-emerald-700">Tus documentos principales estan completos.</p> : null}</div></section>
 

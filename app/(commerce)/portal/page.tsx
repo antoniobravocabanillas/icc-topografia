@@ -47,13 +47,15 @@ const successMessages: Record<string, string> = {
   ticket: "Ticket creado. El equipo ICC lo revisara y respondera desde soporte.",
   reply: "Respuesta enviada al ticket.",
   quote_accepted: "Cotizacion aceptada. El equipo comercial fue notificado.",
-  quote_rejected: "Cotizacion rechazada. El equipo comercial fue notificado."
+  quote_rejected: "Cotizacion rechazada. El equipo comercial fue notificado.",
+  availability: "Disponibilidad actualizada en tu perfil y CV vivo."
 };
 
 const statusMessages: Record<string, string> = {
   "username-invalid": "El usuario debe tener 3 a 30 caracteres: letras minusculas, numeros, punto, guion o guion bajo.",
   "username-taken": "Ese usuario ya esta en uso. Elige otra variante.",
-  "profile-required": "Completa tu perfil profesional antes de crear un enlace publico."
+  "profile-required": "Completa tu perfil profesional antes de crear un enlace publico.",
+  "availability-invalid": "Selecciona un estado de disponibilidad válido."
 };
 
 export default async function ClientPortalPage({ searchParams }: ClientPortalPageProps) {
@@ -97,14 +99,6 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
         { userId: session.user.id },
         { user: { email: session.user.email } }
       ],
-      user: {
-        terraqoMemberships: {
-          some: {
-            workspaceId: terraqoWorkspaceId,
-            active: true
-          }
-        }
-      }
     },
     include: {
       user: { select: { name: true, email: true, image: true } },
@@ -130,6 +124,11 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
       }
     }
   });
+  const professionalWorkspace = professionalProfile ? await prisma.terraqoWorkspaceMember.findFirst({
+    where: { userId: professionalProfile.userId, active: true, role: "PROFESSIONAL", workspace: { active: true, deletedAt: null } },
+    select: { workspaceId: true },
+    orderBy: { joinedAt: "desc" }
+  }) : null;
 
   const activeClientAccount = account && ["active", "approved"].includes(account.status) && account.client?.terraqoWorkspaceId === terraqoWorkspaceId ? account : null;
   const client = activeClientAccount?.client || null;
@@ -149,7 +148,7 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
             {statusMessages[params.status]}
           </div>
         ) : null}
-        <ProfessionalDashboard profile={professionalProfile} workspaceId={terraqoWorkspaceId} />
+        <ProfessionalDashboard profile={professionalProfile} workspaceId={professionalWorkspace?.workspaceId} />
         {client ? (
           <section id="operaciones-comerciales" className="scroll-mt-28 space-y-6">
             <div>

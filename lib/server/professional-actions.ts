@@ -1,6 +1,6 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import type { TerraqoMemberRole, TerraqoMessagePrivacy, TerraqoVisibility } from "@prisma/client";
+import type { TerraqoMemberRole, TerraqoMessagePrivacy, TerraqoProfessionalStatus, TerraqoVisibility } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getCountryName, getSubdivisionName } from "@/lib/locations";
@@ -20,6 +20,25 @@ const RESERVED_USERNAMES = new Set([
   "www"
 ]);
 const WORKSPACE_VALIDATOR_ROLES: TerraqoMemberRole[] = ["OWNER", "ADMIN", "MANAGER"];
+const PROFESSIONAL_STATUSES: TerraqoProfessionalStatus[] = ["AVAILABLE", "WORKING", "OPEN_TO_PROJECTS", "NOT_AVAILABLE"];
+
+export async function updateProfessionalAvailabilityAction(formData: FormData) {
+  "use server";
+
+  const session = await auth();
+  if (!session?.user?.id) redirect("/cuenta");
+  const status = String(formData.get("status") || "") as TerraqoProfessionalStatus;
+  if (!PROFESSIONAL_STATUSES.includes(status)) redirect("/portal?status=availability-invalid");
+  const profile = await prisma.terraqoProfessionalProfile.update({
+    where: { userId: session.user.id },
+    data: { status },
+    select: { username: true }
+  });
+  revalidatePath("/portal");
+  revalidatePath("/red");
+  if (profile.username) revalidatePath(`/cv/${profile.username}`);
+  redirect("/portal?success=availability");
+}
 
 export async function updateProfessionalUsernameAction(formData: FormData) {
   "use server";

@@ -2,7 +2,7 @@
 
 import { startAuthentication, startRegistration } from "@simplewebauthn/browser";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BadgeCheck, CalendarClock, Fingerprint, LocateFixed, LogIn, LogOut, MapPin, ShieldCheck } from "lucide-react";
+import { BadgeCheck, CalendarClock, Fingerprint, LocateFixed, LogIn, LogOut, MapPin, RefreshCw, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type VerificationStatus = {
@@ -40,14 +40,16 @@ export function FieldVerificationPanel({ endpoint, compact = false }: { endpoint
   const [projectId, setProjectId] = useState("");
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
+  const [loadError, setLoadError] = useState("");
 
   const load = useCallback(async () => {
     try {
+      setLoadError("");
       const next = await requestApi<VerificationStatus>(endpoint, { action: "status" });
       setStatus(next);
       setProjectId((current) => current || next.projects[0]?.id || "");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "No pudimos cargar asistencia y validaciones.");
+      setLoadError(error instanceof Error ? error.message : "No pudimos cargar asistencia y validaciones.");
     }
   }, [endpoint]);
 
@@ -133,7 +135,13 @@ export function FieldVerificationPanel({ endpoint, compact = false }: { endpoint
     }
   }
 
-  if (!status) return <div className="rounded-lg border bg-white p-5 text-sm text-muted-foreground">Cargando control de campo...</div>;
+  if (!status && loadError) return (
+    <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50/60 p-5 sm:flex-row sm:items-center sm:justify-between">
+      <div><p className="font-semibold text-amber-950">Control de campo no disponible</p><p className="mt-1 text-sm text-amber-900/75">{loadError}</p></div>
+      <Button type="button" variant="outline" onClick={() => void load()}><RefreshCw className="mr-2 h-4 w-4" /> Reintentar</Button>
+    </div>
+  );
+  if (!status) return <div className="rounded-lg border bg-white p-5 text-sm text-muted-foreground" role="status">Cargando control de campo...</div>;
 
   return (
     <section className={`overflow-hidden rounded-lg border bg-white shadow-[0_16px_44px_rgba(1,45,56,0.08)] ${compact ? "p-4" : "p-6"}`}>

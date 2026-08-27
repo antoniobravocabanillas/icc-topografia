@@ -15,7 +15,7 @@ type TerraqoLogoProps = {
 
 const officialAssets = {
   light: {
-    mark: "/brand/terraqo-3/withoutbackground/iso bg white.svg",
+    mark: "/brand/terraqo-3/isotipo-icono.svg",
     horizontal: "/brand/terraqo-3/withbackground/LH compact bg white.svg",
     vertical: "/brand/terraqo-3/withbackground/LV wordbran bg white.svg"
   },
