@@ -38,6 +38,7 @@ type PortalShellProps = {
   portalType?: "professional" | "client";
   workspaceBrand?: string | null;
   workspaceLogoUrl?: string | null;
+  planTier?: string | null;
   visualIdentity: WorkspaceVisualIdentity;
 };
 
@@ -138,11 +139,21 @@ function withAlpha(hex: string, opacity: string) {
   return `${hex}${opacity}`;
 }
 
-export function PortalShell({ children, name, image, headline, portalType = "professional", workspaceBrand, workspaceLogoUrl, visualIdentity }: PortalShellProps) {
+const planLabels: Record<string, string> = {
+  FREE: "Free",
+  BASIC: "Basic",
+  PROFESSIONAL: "Professional",
+  PREMIUM: "Premium",
+  ENTERPRISE: "Enterprise"
+};
+
+export function PortalShell({ children, name, image, headline, portalType = "professional", workspaceBrand, workspaceLogoUrl, planTier, visualIdentity }: PortalShellProps) {
   const pathname = usePathname();
   const items = portalType === "professional" ? professionalItems : clientItems;
-  const portalLabel = portalType === "professional" ? "Portal profesional" : "Portal del cliente";
-  const brandName = workspaceBrand || "Portal Terraqo";
+  const portalLabel = portalType === "professional" ? "Workspace personal" : "Workspace de empresa";
+  const brandName = portalType === "professional" ? "Portal Terraqo" : workspaceBrand || "Portal Terraqo";
+  const brandLogo = portalType === "professional" ? null : workspaceLogoUrl;
+  const planLabel = planLabels[planTier || "FREE"] || planTier || "Free";
   const primaryColor = visualIdentity.primaryColor;
   const accentColor = visualIdentity.accentColor;
 
@@ -152,11 +163,11 @@ export function PortalShell({ children, name, image, headline, portalType = "pro
         <div className="mx-auto flex h-[76px] max-w-[1720px] items-center gap-4 px-4 sm:px-6 xl:px-8">
           <Link href="/portal" className="flex min-w-0 items-center gap-3" aria-label="Ir al resumen del portal">
             <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-lg border bg-white p-1.5" style={{ borderColor: withAlpha(accentColor, "55") }}>
-              <TerraqoLogo src={workspaceLogoUrl} variant="mark" alt={brandName} className="h-full w-full" />
+              <TerraqoLogo src={brandLogo} variant="mark" alt={brandName} className="h-full w-full" />
             </span>
             <span className="hidden min-w-0 sm:block">
               <b className="block truncate font-display text-base" style={{ color: primaryColor }}>{brandName}</b>
-              <small className="block truncate text-xs text-[#607083]">{portalLabel}</small>
+              <small className="block truncate text-xs text-[#607083]">{portalLabel} · Plan {planLabel}</small>
             </span>
           </Link>
 

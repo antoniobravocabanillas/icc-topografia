@@ -17,14 +17,27 @@ export default async function PortalLayout({ children }: { children: ReactNode }
         select: {
           name: true,
           image: true,
-          terraqoProfessionalProfile: { select: { headline: true } },
+          terraqoProfessionalProfile: { select: { headline: true, planTier: true } },
           terraqoMemberships: {
             where: { active: true, ...(defaultWorkspaceId ? { workspaceId: defaultWorkspaceId } : {}) },
             orderBy: { joinedAt: "desc" },
             take: 1,
             select: {
               role: true,
-              workspace: { select: { name: true, brandName: true, logoUrl: true, settings: true } }
+              workspace: {
+                select: {
+                  name: true,
+                  brandName: true,
+                  logoUrl: true,
+                  settings: true,
+                  subscriptions: {
+                    where: { status: { in: ["TRIALING", "ACTIVE"] } },
+                    orderBy: { createdAt: "desc" },
+                    take: 1,
+                    select: { tier: true }
+                  }
+                }
+              }
             }
           }
         }
@@ -32,7 +45,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
     : null;
   const membership = user?.terraqoMemberships[0];
   const portalType = user?.terraqoProfessionalProfile ? "professional" : membership?.role === "CLIENT" ? "client" : "professional";
-  const visualIdentity = resolveWorkspaceVisualIdentity(membership?.workspace.settings);
+  const visualIdentity = resolveWorkspaceVisualIdentity(portalType === "professional" ? null : membership?.workspace.settings);
 
   return (
     <PortalShell
@@ -42,6 +55,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
       portalType={portalType}
       workspaceBrand={membership?.workspace.brandName || membership?.workspace.name}
       workspaceLogoUrl={membership?.workspace.logoUrl}
+      planTier={portalType === "professional" ? user?.terraqoProfessionalProfile?.planTier : membership?.workspace.subscriptions[0]?.tier || "FREE"}
       visualIdentity={visualIdentity}
     >
       {children}

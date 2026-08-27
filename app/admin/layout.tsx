@@ -24,7 +24,18 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     prisma.terraqoWorkspaceModule.findMany({ where: { workspaceId: activeWorkspace.id, active: true }, select: { code: true } }),
     prisma.terraqoWorkspace.findUnique({
       where: { id: activeWorkspace.id },
-      select: { name: true, brandName: true, logoUrl: true, settings: true }
+      select: {
+        name: true,
+        brandName: true,
+        logoUrl: true,
+        settings: true,
+        subscriptions: {
+          where: { status: { in: ["TRIALING", "ACTIVE"] } },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { tier: true }
+        }
+      }
     })
   ]);
   const navItems = getAdminNavigation(role, modules.map((module) => module.code)).map(({ group, label, href, icon }) => ({ group, label, href, icon }));
@@ -39,6 +50,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         panelName={`Panel ${workspaceDisplayName}`}
         brandName={workspaceDisplayName}
         logoUrl={workspaceBranding?.logoUrl}
+        planTier={workspaceBranding?.subscriptions[0]?.tier || "FREE"}
         visualIdentity={visualIdentity}
         email={session.user.email ?? "Usuario Terraqo"}
         role={role}

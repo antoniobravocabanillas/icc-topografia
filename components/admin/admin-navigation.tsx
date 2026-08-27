@@ -42,6 +42,7 @@ type AdminNavigationProps = {
   panelName: string;
   brandName: string;
   logoUrl?: string | null;
+  planTier: string;
   visualIdentity: WorkspaceVisualIdentity;
   email: string;
   role: string;
@@ -87,7 +88,7 @@ function withAlpha(hex: string, opacity: string) {
   return `${hex}${opacity}`;
 }
 
-export function AdminNavigation({ items, workspaceName, panelName, brandName, logoUrl, visualIdentity, email, role, activeWorkspaceId, workspaceOptions }: AdminNavigationProps) {
+export function AdminNavigation({ items, workspaceName, panelName, brandName, logoUrl, planTier, visualIdentity, email, role, activeWorkspaceId, workspaceOptions }: AdminNavigationProps) {
   const pathname = usePathname();
   const shellRef = useRef<HTMLElement>(null);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
@@ -180,7 +181,7 @@ export function AdminNavigation({ items, workspaceName, panelName, brandName, lo
             ) : null}
             <div className="min-w-0 text-right">
               <p className="truncate text-sm font-semibold text-white/88">{email}</p>
-              <p className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/42">{brandName} · {role.replaceAll("_", " ")}</p>
+              <p className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/42">{brandName} · Plan {planTier} · {role.replaceAll("_", " ")}</p>
             </div>
             {items.some((item) => item.href === "/admin/notificaciones") ? (
               <Link href="/admin/notificaciones" className={cn("grid h-10 w-10 place-items-center rounded-md border border-white/15 text-white/70 transition-colors hover:bg-white/8", isRouteActive(pathname, "/admin/notificaciones") && "text-white")} style={isRouteActive(pathname, "/admin/notificaciones") ? { borderColor: withAlpha(accentColor, "66"), backgroundColor: withAlpha(primaryColor, "aa"), color: accentColor } : undefined} aria-label="Ver notificaciones">

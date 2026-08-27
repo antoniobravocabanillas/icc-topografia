@@ -2160,6 +2160,7 @@ model TerraqoProfessionalProfile {
   userId                     String                            @unique
   user                       User                              @relation(fields: [userId], references: [id], onDelete: Cascade)
   username                   String?                           @unique
+  planTier                   TerraqoPlanTier                   @default(FREE)
   headline                   String?
   bio                        String?
   city                       String?

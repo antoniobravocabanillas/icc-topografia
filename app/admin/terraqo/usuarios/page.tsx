@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import type { Role, TerraqoMemberRole } from "@prisma/client";
+import type { Role, TerraqoMemberRole, TerraqoPlanTier } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ import { requireAdminPage } from "@/lib/server/admin-page-auth";
 
 const globalRoles: Role[] = ["CUSTOMER", "TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"];
 const memberRoles: TerraqoMemberRole[] = ["OWNER", "ADMIN", "MANAGER", "MEMBER", "VIEWER", "CLIENT", "PROFESSIONAL"];
+const planTiers: TerraqoPlanTier[] = ["FREE", "BASIC", "PROFESSIONAL", "PREMIUM", "ENTERPRISE"];
 
 function field(formData: FormData, key: string) {
   return String(formData.get(key) || "").trim();
@@ -114,6 +115,17 @@ async function updateMembershipAction(formData: FormData) {
   revalidatePath("/admin/terraqo/usuarios");
 }
 
+async function updateProfessionalPlanAction(formData: FormData) {
+  "use server";
+  await requireAdminPage(["SUPER_ADMIN"]);
+  const profileId = field(formData, "profileId");
+  const planTier = field(formData, "planTier") as TerraqoPlanTier;
+  if (!profileId || !planTiers.includes(planTier)) return;
+  await prisma.terraqoProfessionalProfile.update({ where: { id: profileId }, data: { planTier } });
+  revalidatePath("/admin/terraqo/usuarios");
+  revalidatePath("/portal");
+}
+
 export const dynamic = "force-dynamic";
 
 type PageProps = { searchParams?: Promise<{ status?: string }> };
@@ -125,7 +137,7 @@ export default async function TerraqoUsersPage({ searchParams }: PageProps) {
     prisma.user.findMany({
       include: {
         terraqoMemberships: { include: { workspace: { select: { id: true, name: true, slug: true } } }, orderBy: { createdAt: "asc" } },
-        terraqoProfessionalProfile: { select: { id: true, headline: true, identityVerificationStatus: true } }
+        terraqoProfessionalProfile: { select: { id: true, headline: true, identityVerificationStatus: true, planTier: true } }
       },
       orderBy: { createdAt: "desc" },
       take: 250
@@ -175,7 +187,7 @@ export default async function TerraqoUsersPage({ searchParams }: PageProps) {
               <div>
                 <div className="flex flex-wrap items-center gap-2"><CardTitle>{user.name || "Sin nombre"}</CardTitle><Badge variant={user.role === "SUPER_ADMIN" ? "default" : "secondary"}>{user.role}</Badge></div>
                 <CardDescription className="mt-2">{user.email} | creado {user.createdAt.toLocaleDateString("es-PE")}</CardDescription>
-                {user.terraqoProfessionalProfile ? <p className="mt-2 text-sm text-muted-foreground">Profesional: {user.terraqoProfessionalProfile.headline || "Perfil por completar"} | {user.terraqoProfessionalProfile.identityVerificationStatus}</p> : null}
+                {user.terraqoProfessionalProfile ? <p className="mt-2 text-sm text-muted-foreground">Profesional: {user.terraqoProfessionalProfile.headline || "Perfil por completar"} | {user.terraqoProfessionalProfile.identityVerificationStatus} | Plan {user.terraqoProfessionalProfile.planTier}</p> : null}
               </div>
               <form action={updateUserAction} className="grid gap-2 sm:grid-cols-[220px_200px_auto]">
                 <input type="hidden" name="userId" value={user.id} />
@@ -186,6 +198,14 @@ export default async function TerraqoUsersPage({ searchParams }: PageProps) {
             </CardHeader>
             <CardContent className="grid gap-5 xl:grid-cols-[1fr_380px]">
               <div>
+                {user.terraqoProfessionalProfile ? (
+                  <form action={updateProfessionalPlanAction} className="mb-5 grid gap-2 rounded-md border border-primary/20 bg-primary/5 p-3 sm:grid-cols-[1fr_180px_auto] sm:items-center">
+                    <input type="hidden" name="profileId" value={user.terraqoProfessionalProfile.id} />
+                    <div><p className="font-semibold">Plan profesional Terraqo</p><p className="text-xs text-muted-foreground">Pertenece al perfil personal y no al workspace de una empresa.</p></div>
+                    <select name="planTier" defaultValue={user.terraqoProfessionalProfile.planTier} className="h-10 rounded-md border bg-background px-3 text-sm">{planTiers.map((tier) => <option key={tier}>{tier}</option>)}</select>
+                    <Button type="submit" variant="outline">Actualizar plan</Button>
+                  </form>
+                ) : null}
                 <p className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">Membresias</p>
                 <div className="space-y-2">
                   {user.terraqoMemberships.map((membership) => (
