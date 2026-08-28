@@ -14,7 +14,7 @@ export async function requireProfessionalPortal() {
     include: {
       user: { select: { id: true, name: true, email: true, image: true } },
       experiences: {
-        include: { project: { select: { id: true, title: true, slug: true, location: true } } },
+        include: { project: { select: { id: true, title: true, slug: true, location: true } }, evidenceFiles: { orderBy: { createdAt: "asc" } } },
         orderBy: [{ verifiedByTerraqo: "desc" }, { createdAt: "desc" }]
       },
       education: {

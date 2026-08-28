@@ -2352,6 +2352,7 @@ model TerraqoProfessionalExperience {
   validatorEmail        String?
   visibility            TerraqoVisibility          @default(PRIVATE)
   evidence              String[]                   @default([])
+  evidenceFiles         TerraqoExperienceEvidence[]
   createdAt             DateTime                   @default(now())
   updatedAt             DateTime                   @updatedAt
 
@@ -2362,6 +2363,22 @@ model TerraqoProfessionalExperience {
   @@index([projectId])
   @@index([workspaceId])
   @@index([verifiedByTerraqo])
+  @@schema("icc")
+}
+
+model TerraqoExperienceEvidence {
+  id           String                        @id @default(cuid())
+  experienceId String
+  experience   TerraqoProfessionalExperience @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+  storageKey   String                        @unique
+  fileName     String
+  contentType  String
+  size         Int
+  uploadedById String
+  createdAt    DateTime                      @default(now())
+
+  @@index([experienceId, createdAt])
+  @@index([uploadedById])
   @@schema("icc")
 }
 

@@ -85,6 +85,7 @@ export const PROFESSIONAL_AVATAR_STORE = "terraqo-professional-avatars";
 export const PROFESSIONAL_AVATAR_PREFIX = "professional-avatars";
 export const WORKLOG_EVIDENCE_STORE = "terraqo-worklog-evidence";
 export const WORKLOG_EVIDENCE_PREFIX = "worklog-evidence";
+export const EXPERIENCE_EVIDENCE_PREFIX = "experience-evidence";
 export const WORKSPACE_FILE_STORE = "terraqo-workspace-files";
 export const WORKSPACE_FILE_PREFIX = "workspace-files";
 export const SERVICE_ICON_PREFIX = "service-icons";
@@ -95,6 +96,7 @@ export const MAX_PROJECT_IMAGE_SIZE = 8 * 1024 * 1024;
 export const MAX_PROFESSIONAL_DOCUMENT_SIZE = 10 * 1024 * 1024;
 export const MAX_PROFESSIONAL_AVATAR_SIZE = 3 * 1024 * 1024;
 export const MAX_WORKLOG_EVIDENCE_SIZE = 8 * 1024 * 1024;
+export const MAX_EXPERIENCE_EVIDENCE_SIZE = 8 * 1024 * 1024;
 export const MAX_WORKSPACE_FILE_SIZE = 35 * 1024 * 1024;
 export const ALLOWED_PRODUCT_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
 export const ALLOWED_CLIENT_LOGO_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif", "image/svg+xml"]);
@@ -125,6 +127,7 @@ export const ALLOWED_PRIVATE_DOCUMENT_TYPES = new Set([
 ]);
 export const ALLOWED_PROFESSIONAL_AVATAR_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
 export const ALLOWED_WORKLOG_EVIDENCE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
+export const ALLOWED_EXPERIENCE_EVIDENCE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif", "application/pdf"]);
 export const ALLOWED_WORKSPACE_FILE_TYPES = new Set([
   "application/pdf",
   "image/jpeg",
@@ -245,6 +248,13 @@ export function createWorklogEvidenceKey(worklogId: string, fileName: string) {
   const extension = safeName.includes(".") ? safeName.split(".").pop() : "jpg";
   const baseName = safeName.replace(/\.[^.]+$/, "");
   return `${WORKLOG_EVIDENCE_PREFIX}/${worklogId}/${crypto.randomUUID()}-${baseName}.${extension}`;
+}
+
+export function createExperienceEvidenceKey(experienceId: string, fileName: string) {
+  const safeName = sanitizeFileName(fileName) || "evidencia";
+  const extension = safeName.includes(".") ? safeName.split(".").pop() : "bin";
+  const baseName = safeName.replace(/\.[^.]+$/, "");
+  return `${EXPERIENCE_EVIDENCE_PREFIX}/${experienceId}/${crypto.randomUUID()}-${baseName}.${extension}`;
 }
 
 export function createWorkspaceFileKey(workspaceId: string, userId: string, fileName: string) {

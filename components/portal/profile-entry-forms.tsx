@@ -73,6 +73,11 @@ export function ExperienceForm({ validators, companies, createExperienceAction }
       <Textarea name="summary" placeholder="Detalle destacado visible en la pagina publica de esta experiencia. Ej. alcance, logros, decisiones, responsabilidades e impacto." className="min-h-28" />
       <Textarea name="highlights" placeholder="Puntos clave, uno por linea. Ej. Analisis de mercado, gestion de riesgos, reportes, ejecucion de operaciones." />
       <Textarea name="evidence" placeholder="Evidencias, enlaces o referencias, una por linea" />
+      <label className="grid gap-2 rounded-lg border border-dashed border-primary/35 bg-primary/5 p-4 text-sm font-semibold">
+        Fotos o documentos de respaldo
+        <input name="evidenceFiles" type="file" multiple accept="image/jpeg,image/png,image/webp,image/avif,application/pdf" className="block w-full text-sm font-normal file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-4 file:py-2 file:font-bold file:text-white" />
+        <span className="text-xs font-normal text-muted-foreground">Hasta 6 archivos JPG, PNG, WEBP, AVIF o PDF. Máximo 8 MB por archivo.</span>
+      </label>
       <SubmitButton pendingText="Registrando...">Guardar experiencia</SubmitButton>
     </form>
   );

@@ -5,6 +5,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getCountryName, getSubdivisionName } from "@/lib/locations";
 import { monthsBetween, refreshProfessionalGeneratedSummary } from "@/lib/terraqo/profile-summary";
+import { evidenceFilesFromForm, storeExperienceEvidenceFiles, validateExperienceEvidenceFiles } from "@/lib/server/experience-evidence";
 
 const USERNAME_PATTERN = /^[a-z0-9][a-z0-9._-]{2,29}$/;
 const RESERVED_USERNAMES = new Set([
@@ -253,7 +254,9 @@ export async function createHistoricalExperienceAction(formData: FormData) {
   if (!title || !companyName || (workspaceInput !== "OTHER" && !selectedWorkspace) || (selectedWorkspace && projectInput !== "OTHER" && !selectedProject)) redirect("/portal/experiencias?status=missing");
 
   const verificationRequested = Boolean(validator.validatorUserId || validator.validatorEmail || validator.validatorName);
-  await prisma.terraqoProfessionalExperience.create({
+  const evidenceFiles = evidenceFilesFromForm(formData);
+  if (validateExperienceEvidenceFiles(evidenceFiles)) redirect("/portal/experiencias?status=evidence-invalid");
+  const experience = await prisma.terraqoProfessionalExperience.create({
     data: {
       professionalProfileId: profile.id,
       title,
@@ -282,6 +285,7 @@ export async function createHistoricalExperienceAction(formData: FormData) {
         : "Experiencia historica cargada por el profesional. Pendiente de solicitar verificacion."
     }
   });
+  await storeExperienceEvidenceFiles(evidenceFiles, experience.id, session.user.id);
 
   const totalMonths = [...profile.experiences, { startedAt, endedAt, currentlyWorking }].reduce((sum, item) => sum + monthsBetween(item.startedAt, item.currentlyWorking ? null : item.endedAt), 0);
   await prisma.terraqoProfessionalProfile.update({
