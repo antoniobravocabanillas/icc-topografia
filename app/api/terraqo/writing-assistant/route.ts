@@ -9,6 +9,7 @@ const requestSchema = z.object({
 
 type OpenAIResponse = {
   output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }>;
+  error?: { type?: string; code?: string; message?: string };
 };
 
 function responseText(payload: OpenAIResponse) {
@@ -50,8 +51,17 @@ export async function POST(request: Request) {
     signal: AbortSignal.timeout(25_000)
   }).catch(() => null);
 
-  if (!upstream?.ok) return NextResponse.json({ error: "No pudimos mejorar el texto en este momento." }, { status: 502 });
-  const improved = responseText(await upstream.json() as OpenAIResponse);
+  if (!upstream) return NextResponse.json({ error: "El asistente no pudo conectarse. Inténtalo nuevamente." }, { status: 502 });
+  const payload = await upstream.json().catch(() => ({})) as OpenAIResponse;
+  if (!upstream.ok) {
+    const providerCode = payload.error?.code || payload.error?.type;
+    console.warn("Terraqo writing assistant upstream error", { status: upstream.status, code: providerCode || "unknown" });
+    if (providerCode === "insufficient_quota") return NextResponse.json({ error: "El asistente está temporalmente sin cuota disponible. Terraqo debe habilitar saldo API." }, { status: 503 });
+    if (upstream.status === 401) return NextResponse.json({ error: "La credencial del asistente necesita ser renovada." }, { status: 503 });
+    if (upstream.status === 429) return NextResponse.json({ error: "El asistente está recibiendo demasiadas solicitudes. Espera unos segundos." }, { status: 429 });
+    return NextResponse.json({ error: "No pudimos mejorar el texto en este momento." }, { status: 502 });
+  }
+  const improved = responseText(payload);
   if (!improved) return NextResponse.json({ error: "El asistente no devolvió una corrección utilizable." }, { status: 502 });
   return NextResponse.json({ data: { text: improved } });
 }
