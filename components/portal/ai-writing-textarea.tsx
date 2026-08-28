@@ -52,7 +52,7 @@ export function AiWritingTextarea({ purpose = "general", className, defaultValue
 
   return (
     <div className="grid gap-2">
-      <Textarea ref={textareaRef} {...props} value={value} onChange={(event) => setValue(event.target.value)} className={className} />
+      <Textarea ref={textareaRef} {...props} data-ai-writing="off" value={value} onChange={(event) => setValue(event.target.value)} className={className} />
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <span aria-live="polite" className={cn("text-xs", message.startsWith("Texto corregido") ? "text-emerald-700" : "text-muted-foreground")}>{message}</span>
         <button type="button" onClick={improve} disabled={working} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-primary/25 bg-primary/5 px-4 text-sm font-bold text-primary transition active:scale-[0.99] hover:bg-primary hover:text-white disabled:cursor-wait disabled:opacity-60 sm:min-h-9 sm:w-auto sm:rounded-md sm:px-3 sm:text-xs">
