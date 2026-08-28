@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { publicRequestOrigin } from "@/lib/server/request-origin";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const userId = url.searchParams.get("user") || "";
   const tokenValue = url.searchParams.get("token") || "";
-  const destination = new URL("/cuenta", url.origin);
+  const destination = new URL("/cuenta", publicRequestOrigin(request));
   const token = await prisma.verificationToken.findFirst({ where: { token: tokenValue, identifier: { startsWith: `email-change:${userId}:` }, expires: { gt: new Date() } } });
   if (!token) {
     destination.searchParams.set("emailChange", "invalid");

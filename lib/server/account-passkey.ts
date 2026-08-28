@@ -2,11 +2,12 @@ import { randomBytes } from "node:crypto";
 import { generateAuthenticationOptions, generateRegistrationOptions, verifyAuthenticationResponse, verifyRegistrationResponse } from "@simplewebauthn/server";
 import type { AuthenticationResponseJSON, AuthenticatorTransportFuture, RegistrationResponseJSON } from "@simplewebauthn/types";
 import { prisma } from "@/lib/prisma";
+import { publicRequestOrigin } from "@/lib/server/request-origin";
 
 const TTL = 5 * 60 * 1000;
 
 function context(request: Request) {
-  const url = new URL(request.url);
+  const url = new URL(publicRequestOrigin(request));
   return { rpId: url.hostname, origin: url.origin };
 }
 
