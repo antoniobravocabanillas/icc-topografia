@@ -50,6 +50,16 @@ export async function sendEmailVerificationLink(email: string, token: string, re
   });
 }
 
+export async function sendEmailChangeVerificationLink(email: string, verificationUrl: string, recipientName?: string | null) {
+  const content = await renderVerificationLinkEmail({ recipientName, verificationUrl });
+  return sendTransactionalEmail({
+    to: email,
+    subject: "Confirma tu nuevo correo en Terraqo",
+    ...content,
+    tags: [{ name: "category", value: "email-change" }]
+  });
+}
+
 export async function sendEmailVerificationCode(email: string, code: string, recipientName?: string | null) {
   const content = await renderVerificationCodeEmail({ recipientName, code });
   return sendTransactionalEmail({

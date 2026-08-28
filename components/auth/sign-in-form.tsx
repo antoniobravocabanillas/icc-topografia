@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { startAuthentication } from "@simplewebauthn/browser";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
-import { ArrowRight, Eye, EyeOff, LockKeyhole } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, Fingerprint, LockKeyhole } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { terraqoDomains } from "@/lib/terraqo-domains";
@@ -37,6 +38,8 @@ export function SignInForm({
   const verification = searchParams.get("verification");
   const sessionReason = searchParams.get("reason");
   const [error, setError] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [resendMessage, setResendMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -82,6 +85,29 @@ export function SignInForm({
     setResendMessage(payload?.data?.delivered ? "Enlace reenviado. Revisa también spam o promociones." : "El servicio de correo aún no está configurado; no se envió ningún mensaje.");
   }
 
+  async function signInWithPasskey() {
+    setError(null);
+    if (!email.trim()) return setError("Escribe tu correo para usar el acceso seguro.");
+    setPasskeyBusy(true);
+    try {
+      const optionsResponse = await fetch("/api/auth/passkey/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "options", email }) });
+      const optionsPayload = await optionsResponse.json();
+      if (!optionsResponse.ok) throw new Error(optionsPayload.error || "El acceso seguro no está disponible.");
+      const assertion = await startAuthentication(optionsPayload.data.options);
+      const verifyResponse = await fetch("/api/auth/passkey/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "verify", challengeId: optionsPayload.data.challengeId, response: assertion }) });
+      const verifyPayload = await verifyResponse.json();
+      if (!verifyResponse.ok) throw new Error(verifyPayload.error || "No pudimos validar tu dispositivo.");
+      const result = await signIn("credentials", { email: verifyPayload.data.email, passkeyToken: verifyPayload.data.token, redirect: false });
+      if (result?.error) throw new Error("El acceso seguro venció. Inténtalo nuevamente.");
+      const session = await fetch("/api/auth/session").then((res) => res.json());
+      window.location.assign(destinationForRole(session?.user?.role, callbackUrl));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No pudimos usar el acceso seguro.");
+    } finally {
+      setPasskeyBusy(false);
+    }
+  }
+
   return (
     <form action={submit} className={embedded ? "tq-embedded-auth-form" : "relative overflow-hidden rounded-lg border bg-card p-6 text-foreground shadow-2xl md:p-8"}>
       {!embedded ? <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-[#24C8EE] to-primary" /> : null}
@@ -102,7 +128,7 @@ export function SignInForm({
       {sessionReason === "inactive" ? <p className="tq-verification-notice">Cerramos tu sesión después de 30 minutos sin actividad para proteger tu cuenta.</p> : null}
       <div>
         <label className="text-sm font-semibold" htmlFor="email">Correo</label>
-        <Input id="email" name="email" type="email" autoComplete="email" required placeholder="correo@empresa.com" className="mt-2 bg-muted/40 text-foreground" />
+        <Input id="email" name="email" type="email" autoComplete="email webauthn" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="correo@empresa.com" className="mt-2 bg-muted/40 text-foreground" />
       </div>
       <div>
         <label className="text-sm font-semibold" htmlFor="password">Contraseña</label>
@@ -114,6 +140,9 @@ export function SignInForm({
       <Button type="submit" size="lg" disabled={isPending} className="mt-2 w-full">
         {isPending ? "Validando acceso..." : "Ingresar"}
         <ArrowRight className="h-4 w-4" />
+      </Button>
+      <Button type="button" variant="outline" size="lg" disabled={passkeyBusy || isPending} onClick={signInWithPasskey} className="w-full">
+        <Fingerprint className="h-4 w-4" /> {passkeyBusy ? "Verificando dispositivo…" : "Entrar con huella, rostro o PIN"}
       </Button>
       {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
       {resendMessage ? <p className="text-sm text-[#bcebf1]">{resendMessage}</p> : null}

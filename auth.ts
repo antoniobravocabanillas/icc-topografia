@@ -5,10 +5,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 
-const credentialsSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8)
-});
+const credentialsSchema = z.object({ email: z.string().email(), password: z.string().optional(), passkeyToken: z.string().optional() });
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   adapter: PrismaAdapter(prisma),
@@ -21,15 +18,25 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     Credentials({
       credentials: {
         email: {},
-        password: {}
+        password: {},
+        passkeyToken: {}
       },
       async authorize(credentials) {
         const parsed = credentialsSchema.safeParse(credentials);
         if (!parsed.success) return null;
         const user = await prisma.user.findUnique({ where: { email: parsed.data.email.toLowerCase() } });
-        if (!user?.passwordHash) return null;
-        const valid = await bcrypt.compare(parsed.data.password, user.passwordHash);
-        if (!valid) return null;
+        if (!user) return null;
+        if (parsed.data.passkeyToken) {
+          const consumed = await prisma.$transaction(async (tx) => {
+            const result = await tx.verificationToken.deleteMany({ where: { identifier: `passkey-login:${user.id}`, token: parsed.data.passkeyToken, expires: { gt: new Date() } } });
+            return result.count === 1;
+          });
+          if (!consumed) return null;
+        } else {
+          if (!user.passwordHash || !parsed.data.password || parsed.data.password.length < 8) return null;
+          const valid = await bcrypt.compare(parsed.data.password, user.passwordHash);
+          if (!valid) return null;
+        }
         const pendingEmailVerification = !user.emailVerified && await prisma.verificationToken.findFirst({
           where: {
             identifier: `email:${user.email.toLowerCase()}`,

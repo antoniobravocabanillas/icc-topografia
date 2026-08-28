@@ -432,6 +432,7 @@ enum TerraqoWorklogValidationStatus {
 
 enum TerraqoWebAuthnPurpose {
   REGISTRATION
+  LOGIN
   WORKLOG_VALIDATION
   ATTENDANCE
 

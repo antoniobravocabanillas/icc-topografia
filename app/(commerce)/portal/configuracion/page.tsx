@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { AccountSecurityCard } from "@/components/portal/account-security-card";
 import { prisma } from "@/lib/prisma";
 import { updateProfessionalSettingsAction } from "@/lib/server/professional-actions";
 import { createMetadata } from "@/lib/seo";
@@ -59,7 +60,7 @@ export default async function PortalSettingsPage({ searchParams }: SettingsPageP
   const profile = await prisma.terraqoProfessionalProfile.findUnique({
     where: { userId: session.user.id },
     include: {
-      user: { select: { name: true, email: true, image: true } },
+      user: { select: { name: true, email: true, emailVerified: true, image: true, terraqoPasskeys: { select: { id: true } } } },
       experiences: {
         where: { currentlyWorking: true },
         select: { id: true, title: true, companyName: true, role: true, startedAt: true },
@@ -107,6 +108,8 @@ export default async function PortalSettingsPage({ searchParams }: SettingsPageP
             {statusMessages[params.status]}
           </div>
         ) : null}
+
+        <AccountSecurityCard email={profile.user.email} emailVerified={Boolean(profile.user.emailVerified)} passkeyCount={profile.user.terraqoPasskeys.length} />
 
         <form action={updateProfessionalSettingsAction} className="grid gap-6">
           <Card>

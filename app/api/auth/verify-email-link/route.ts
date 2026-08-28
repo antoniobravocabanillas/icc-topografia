@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { terraqoDomains } from "@/lib/terraqo-domains";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const email = (url.searchParams.get("email") || "").trim().toLowerCase();
   const tokenValue = url.searchParams.get("token") || "";
-  const destination = new URL("/cuenta", terraqoDomains.portal);
+  const destination = new URL("/cuenta", url.origin);
   if (!email || !tokenValue) {
     destination.searchParams.set("verification", "invalid");
     return NextResponse.redirect(destination);
