@@ -24,6 +24,8 @@ export default async function ProfessionalProfilePage({ params }: PageProps) {
           id: true,
           name: true,
           image: true,
+          lastSeenAt: true,
+          onlineUntil: true,
           terraqoMemberships: {
             where: { active: true },
             select: { workspaceId: true }
@@ -62,7 +64,7 @@ export default async function ProfessionalProfilePage({ params }: PageProps) {
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#7DE4FF]">Perfil Terraqo</p>
             <h1 className="mt-4 font-display text-4xl font-bold md:text-5xl">{profile.user.name || "Profesional Terraqo"}</h1>
             <p className="mt-3 text-lg text-white/72">{profile.headline || "Perfil profesional"}</p>
-            <div className="mt-6 flex flex-wrap gap-3 text-sm text-white/68"><span className="flex items-center gap-2"><MapPin className="h-4 w-4 text-[#24C8EE]" />{profile.locationCity || profile.city || "Ubicacion privada"}</span><span>{formatExperienceDuration(totalMonths)} de experiencia</span>{profile.identityVerificationStatus === "VERIFIED" ? <span className="flex items-center gap-2 text-[#7DE4FF]"><BadgeCheck className="h-4 w-4" />Identidad validada</span> : null}</div>
+            <div className="mt-6 flex flex-wrap gap-3 text-sm text-white/68"><span className="flex items-center gap-2"><MapPin className="h-4 w-4 text-[#24C8EE]" />{profile.locationCity || profile.city || "Ubicacion privada"}</span><span>{formatExperienceDuration(totalMonths)} de experiencia</span><span className="flex items-center gap-2"><i className={`h-2 w-2 rounded-full ${profile.user.onlineUntil && profile.user.onlineUntil > new Date() ? "bg-emerald-400" : "bg-slate-400"}`} />{profile.user.onlineUntil && profile.user.onlineUntil > new Date() ? "En línea" : "Fuera de línea"}</span>{profile.identityVerificationStatus === "VERIFIED" ? <span className="flex items-center gap-2 text-[#7DE4FF]"><BadgeCheck className="h-4 w-4" />Identidad validada</span> : null}</div>
             {profile.generatedSummary || profile.bio ? <p className="mt-6 max-w-3xl leading-7 text-white/70">{profile.generatedSummary || profile.bio}</p> : null}
           </div>
           <aside className="rounded-lg border bg-white p-6 shadow-technical">

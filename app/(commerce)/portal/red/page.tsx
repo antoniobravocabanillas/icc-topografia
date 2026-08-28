@@ -15,7 +15,7 @@ export default async function ProfessionalNetworkDirectoryPage() {
           user: { terraqoMemberships: { some: { workspaceId: { in: workspaceIds }, active: true } } }
         },
         include: {
-          user: { select: { id: true, name: true, email: true, image: true } },
+          user: { select: { id: true, name: true, email: true, image: true, lastSeenAt: true, onlineUntil: true } },
           affiliations: {
             where: { workspaceId: { in: workspaceIds } },
             include: { workspace: { select: { name: true, brandName: true } } },
@@ -61,6 +61,8 @@ export default async function ProfessionalNetworkDirectoryPage() {
           workspaceName: workspace?.brandName || workspace?.name || "Terraqo",
           skills: [...profile.professionalCategories, ...profile.specialties],
           verifiedExperiences: profile.experiences.length,
+          lastSeenAt: profile.user.lastSeenAt?.toISOString() || null,
+          onlineUntil: profile.user.onlineUntil?.toISOString() || null,
           updatedAt: profile.updatedAt.toISOString()
         };
       })}

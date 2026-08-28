@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { auth } from "@/auth";
 import { PortalShell } from "@/components/portal/portal-shell";
+import { SessionPresence } from "@/components/auth/session-presence";
 import { prisma } from "@/lib/prisma";
 import { resolveWorkspaceVisualIdentity } from "@/lib/terraqo/workspace-visual-identity";
 import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
@@ -48,7 +49,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
   const visualIdentity = resolveWorkspaceVisualIdentity(portalType === "professional" ? null : membership?.workspace.settings);
 
   return (
-    <PortalShell
+    <><SessionPresence /><PortalShell
       name={user?.name || session?.user?.name}
       image={user?.image}
       headline={user?.terraqoProfessionalProfile?.headline}
@@ -59,6 +60,6 @@ export default async function PortalLayout({ children }: { children: ReactNode }
       visualIdentity={visualIdentity}
     >
       {children}
-    </PortalShell>
+    </PortalShell></>
   );
 }

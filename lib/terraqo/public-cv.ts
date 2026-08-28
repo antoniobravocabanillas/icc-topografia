@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 
 export const publicCvProfileInclude = {
-  user: { select: { name: true, email: true, image: true } },
+  user: { select: { name: true, email: true, image: true, lastSeenAt: true, onlineUntil: true } },
   experiences: {
     where: { visibility: "PUBLIC" },
     include: {

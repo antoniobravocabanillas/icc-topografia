@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import type { Role } from "@prisma/client";
 import { auth } from "@/auth";
+import { SessionPresence } from "@/components/auth/session-presence";
 import { AdminNavigation } from "@/components/admin/admin-navigation";
 import { AdminNotificationMonitor } from "@/components/admin/admin-notification-monitor";
 import { allowedAdminRoles, getAdminNavigation } from "@/lib/admin-navigation";
@@ -43,6 +44,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const visualIdentity = resolveWorkspaceVisualIdentity(workspaceBranding?.settings);
 
   return (
+    <><SessionPresence />
     <div className="min-h-screen" style={{ backgroundColor: visualIdentity.backgroundColor }}>
       <AdminNavigation
         items={navItems}
@@ -62,5 +64,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       </main>
       <AdminNotificationMonitor />
     </div>
+    </>
   );
 }

@@ -36,7 +36,7 @@ export default async function PublicNetworkPage() {
         specialties: true,
         identityVerificationStatus: true,
         updatedAt: true,
-        user: { select: { name: true, image: true } },
+        user: { select: { name: true, image: true, lastSeenAt: true, onlineUntil: true } },
         experiences: {
           where: { OR: [{ verifiedByTerraqo: true }, { visibility: "PUBLIC" }] },
           select: { id: true, verifiedByTerraqo: true },
@@ -75,6 +75,8 @@ export default async function PublicNetworkPage() {
         verifiedExperiences: profile.experiences.filter((experience) => experience.verifiedByTerraqo).length,
         companyName: profile.affiliations[0]?.companyName || null,
         roleTitle: profile.affiliations[0]?.roleTitle || null,
+        lastSeenAt: profile.user.lastSeenAt?.toISOString() || null,
+        onlineUntil: profile.user.onlineUntil?.toISOString() || null,
         updatedAt: profile.updatedAt.toISOString()
       }))}
     />

@@ -19,6 +19,8 @@ type ProfessionalItem = {
   workspaceName: string;
   skills: string[];
   verifiedExperiences: number;
+  lastSeenAt?: string | null;
+  onlineUntil?: string | null;
   updatedAt: string;
 };
 
@@ -79,6 +81,7 @@ export function ProfessionalNetworkDirectory({ professionals, companies, groups 
         if (location !== "all" && (item.locationCity || item.city) !== location) return false;
         if (specialty !== "all" && !item.skills.includes(specialty)) return false;
         if (availability === "available" && !["AVAILABLE", "OPEN_TO_PROJECTS"].includes(item.status)) return false;
+        if (availability === "online" && (!item.onlineUntil || Date.parse(item.onlineUntil) <= Date.now())) return false;
         return true;
       })
       .sort((left, right) => {
@@ -177,7 +180,7 @@ export function ProfessionalNetworkDirectory({ professionals, companies, groups 
           <div className="mt-5 space-y-5">
             <FilterSelect label="Ubicacion" value={location} onChange={setLocation} options={[{ value: "all", label: "Todas las ubicaciones" }, ...locationOptions.map((item) => ({ value: item, label: item }))]} />
             <FilterSelect label="Especialidad" value={specialty} onChange={setSpecialty} options={[{ value: "all", label: "Todas las especialidades" }, ...specialtyOptions.map((item) => ({ value: item, label: item }))]} />
-            <FilterSelect label="Disponibilidad" value={availability} onChange={setAvailability} options={[{ value: "all", label: "Todas" }, { value: "available", label: "Disponible ahora" }]} />
+            <FilterSelect label="Disponibilidad" value={availability} onChange={setAvailability} options={[{ value: "all", label: "Todas" }, { value: "available", label: "Disponible para proyectos" }, { value: "online", label: "En línea ahora" }]} />
           </div>
           <button type="button" className="mt-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-white">
             <Filter className="h-4 w-4" /> Aplicar filtros
@@ -194,17 +197,19 @@ function ProfessionalsList({ items, view }: { items: ProfessionalItem[]; view: V
     <div className={view === "grid" ? "grid gap-4 lg:grid-cols-2" : "space-y-4"}>
       {items.map((profile) => {
         const available = ["AVAILABLE", "OPEN_TO_PROJECTS"].includes(profile.status);
+        const online = Boolean(profile.onlineUntil && Date.parse(profile.onlineUntil) > Date.now());
         return (
           <article key={profile.id} className={`rounded-xl border border-[#d8e0ec] bg-white p-5 shadow-[0_14px_36px_rgba(10,45,52,0.06)] transition hover:-translate-y-0.5 hover:border-primary/45 ${view === "list" ? "grid gap-4 md:grid-cols-[auto_minmax(0,1fr)_minmax(240px,0.85fr)_auto] md:items-center" : "space-y-4"}`}>
             <div className="relative w-fit">
               <UserAvatar name={profile.name} image={profile.image} size="xl" />
-              {available ? <span className="absolute bottom-2 right-2 h-4 w-4 rounded-full border-2 border-white bg-emerald-500" /> : null}
+              <span className={`absolute bottom-2 right-2 h-4 w-4 rounded-full border-2 border-white ${online ? "bg-emerald-500" : "bg-slate-400"}`} title={online ? "En línea" : "Fuera de línea"} />
             </div>
             <div className="min-w-0">
               <h2 className="truncate font-display text-xl font-bold text-[#0e1a26]">{profile.name}</h2>
               <p className="mt-1 font-bold text-primary">{profile.headline || "Perfil profesional"}</p>
               <p className="mt-1 text-sm text-[#46576a]">{profile.workspaceName}</p>
               <p className="mt-2 flex items-center gap-1.5 text-sm text-[#607083]"><MapPin className="h-4 w-4" /> {profile.locationCity || profile.city || "Ubicacion por confirmar"}</p>
+              <p className={`mt-2 text-xs font-bold ${online ? "text-emerald-700" : "text-[#7b8795]"}`}>{online ? "En línea" : profile.lastSeenAt ? `Última actividad ${new Date(profile.lastSeenAt).toLocaleDateString("es-PE", { day: "2-digit", month: "short" })}` : "Fuera de línea"}</p>
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap gap-2">
@@ -213,7 +218,7 @@ function ProfessionalsList({ items, view }: { items: ProfessionalItem[]; view: V
               <p className="mt-3 text-sm leading-6 text-[#46576a]">CV vivo con {profile.verifiedExperiences} experiencia(s) verificada(s) o referenciales visibles.</p>
             </div>
             <div className="flex flex-row gap-2 md:flex-col">
-              <span className={`rounded-md px-3 py-1 text-center text-xs font-bold ${available ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-[#607083]"}`}>{available ? "Disponible" : "No disponible"}</span>
+              <span className={`rounded-md px-3 py-1 text-center text-xs font-bold ${available ? "bg-cyan-50 text-cyan-800" : "bg-slate-100 text-[#607083]"}`}>{available ? "Disponible para proyectos" : "No disponible para proyectos"}</span>
               <ButtonLink href={`/portal/profesionales/${profile.id}`}>Ver perfil</ButtonLink>
               <ButtonLink href={`/portal/mensajes?to=${profile.id}`} primary>Conectar</ButtonLink>
             </div>

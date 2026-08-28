@@ -22,7 +22,8 @@ import {
   Settings,
   ShieldCheck,
   UserRound,
-  UsersRound
+  UsersRound,
+  ChevronDown
 } from "lucide-react";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
@@ -180,14 +181,25 @@ export function PortalShell({ children, name, image, headline, portalType = "pro
               <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full" style={{ backgroundColor: accentColor }} />
             </Link>
             <div className="hidden h-9 w-px bg-[#d8e0ec] sm:block" />
-            <div className="flex min-w-0 items-center gap-2.5">
-              <UserAvatar name={name} image={image} size="md" />
-              <span className="hidden max-w-48 min-w-0 lg:block">
-                <b className="block truncate text-sm">{name || "Cuenta Terraqo"}</b>
-                <small className="block truncate text-xs text-[#607083]">{headline || portalLabel}</small>
-              </span>
-            </div>
-            <SignOutButton className="hidden xl:inline-flex" />
+            <details className="group relative">
+              <summary className="flex cursor-pointer list-none items-center gap-2.5 rounded-lg px-1.5 py-1 transition hover:bg-[#eef3f7] [&::-webkit-details-marker]:hidden">
+                <UserAvatar name={name} image={image} size="md" />
+                <span className="hidden max-w-48 min-w-0 lg:block">
+                  <b className="block truncate text-sm">{name || "Cuenta Terraqo"}</b>
+                  <small className="block truncate text-xs text-[#607083]">{headline || portalLabel}</small>
+                </span>
+                <ChevronDown className="hidden h-4 w-4 text-[#607083] transition group-open:rotate-180 sm:block" />
+              </summary>
+              <div className="absolute right-0 top-[calc(100%+10px)] z-50 w-64 rounded-xl border border-[#d8e0ec] bg-white p-2 shadow-[0_20px_50px_rgba(14,26,38,0.16)]">
+                <div className="border-b border-[#e7ecf2] px-3 py-2.5">
+                  <p className="truncate text-sm font-bold">{name || "Cuenta Terraqo"}</p>
+                  <p className="mt-0.5 truncate text-xs text-[#607083]">{headline || `${portalLabel} · Plan ${planLabel}`}</p>
+                </div>
+                {portalType === "professional" ? <Link href="/portal/perfil" className="mt-1 flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-semibold text-[#35485b] hover:bg-[#eef3f7]"><UserRound className="h-4 w-4" /> Mi perfil</Link> : null}
+                <Link href="/portal/configuracion" className="flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-semibold text-[#35485b] hover:bg-[#eef3f7]"><Settings className="h-4 w-4" /> Configuración</Link>
+                <SignOutButton className="mt-1 w-full justify-start border-0 bg-transparent px-3 text-[#b42318] shadow-none hover:bg-[#fff1f0] hover:text-[#b42318]" />
+              </div>
+            </details>
           </div>
         </div>
       </header>

@@ -22,6 +22,8 @@ type PublicProfile = {
   verifiedExperiences: number;
   companyName?: string | null;
   roleTitle?: string | null;
+  lastSeenAt?: string | null;
+  onlineUntil?: string | null;
   updatedAt: string;
 };
 
@@ -63,6 +65,7 @@ export function PublicNetworkDirectory({ profiles }: { profiles: PublicProfile[]
       if (specialty !== "all" && !skills.includes(specialty)) return false;
       if (location !== "all" && profile.location !== location) return false;
       if (availability === "available" && !["AVAILABLE", "OPEN_TO_PROJECTS"].includes(profile.status)) return false;
+      if (availability === "online" && (!profile.onlineUntil || Date.parse(profile.onlineUntil) <= Date.now())) return false;
       if (availability === "verified" && !profile.verified) return false;
       return true;
     });
@@ -91,7 +94,7 @@ export function PublicNetworkDirectory({ profiles }: { profiles: PublicProfile[]
             <div className="mt-3 grid gap-3 sm:grid-cols-3">
               <Filter value={specialty} onChange={setSpecialty} label="Especialidad" options={[{ value: "all", label: "Todas" }, ...specialtyOptions.map((value) => ({ value, label: value }))]} />
               <Filter value={location} onChange={setLocation} label="Ubicación" options={[{ value: "all", label: "Todas" }, ...locationOptions.map((value) => ({ value, label: value }))]} />
-              <Filter value={availability} onChange={setAvailability} label="Estado" options={[{ value: "all", label: "Todos" }, { value: "available", label: "Disponibles" }, { value: "verified", label: "Verificados" }]} />
+              <Filter value={availability} onChange={setAvailability} label="Estado" options={[{ value: "all", label: "Todos" }, { value: "available", label: "Disponibles para proyectos" }, { value: "online", label: "En línea ahora" }, { value: "verified", label: "Verificados" }]} />
             </div>
           </div>
         </div>
@@ -131,6 +134,7 @@ export function PublicNetworkDirectory({ profiles }: { profiles: PublicProfile[]
 
 function ProfileRow({ profile }: { profile: PublicProfile }) {
   const skills = Array.from(new Set([...profile.categories, ...profile.specialties])).slice(0, 5);
+  const online = Boolean(profile.onlineUntil && Date.parse(profile.onlineUntil) > Date.now());
   return (
     <article className="group p-5 transition hover:bg-[#f7faf8] sm:p-7">
       <div className="grid gap-5 md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center">
@@ -139,7 +143,8 @@ function ProfileRow({ profile }: { profile: PublicProfile }) {
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="font-display text-2xl font-black tracking-[-0.025em] text-[#092b2a]">{profile.name}</h2>
             {profile.verified ? <span className="rounded-full bg-[#dff4ea] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-[#07664e]">Verificado</span> : null}
-            <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#52706a]"><i className={`h-2 w-2 rounded-full ${["AVAILABLE", "OPEN_TO_PROJECTS"].includes(profile.status) ? "bg-[#14a16d]" : "bg-[#93a39f]"}`} />{availabilityLabel(profile.status)}</span>
+            <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#52706a]"><i className="h-2 w-2 rounded-full bg-[#25a9b8]" />{availabilityLabel(profile.status)}</span>
+            <span className={`inline-flex items-center gap-1.5 text-xs font-bold ${online ? "text-[#087a58]" : "text-[#7a8986]"}`}><i className={`h-2 w-2 rounded-full ${online ? "bg-[#14a16d]" : "bg-[#93a39f]"}`} />{online ? "En línea" : "Fuera de línea"}</span>
           </div>
           <p className="mt-1 font-bold text-[#08746d]">{profile.headline || profile.roleTitle || "Profesional Terraqo"}</p>
           <p className="mt-2 text-sm text-[#657773]">{[profile.companyName, profile.location, profile.country].filter(Boolean).join(" · ")}</p>

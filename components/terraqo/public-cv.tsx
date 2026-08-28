@@ -588,7 +588,8 @@ function ProfileHero({ profile, name, username, specialties, isPublicCv }: { pro
         <p className="mt-3 font-display text-lg font-black text-[#488ac9] sm:text-xl">{currentHeadline(profile)}</p>
         <div className="mt-4 flex flex-wrap justify-center gap-x-4 gap-y-2 text-xs font-semibold text-white/70 sm:justify-start sm:text-sm">
           <span className="inline-flex items-center gap-2"><MapPin className="h-4 w-4 text-[#25c0d5]" />{profile.city || "Ubicación por completar"}</span>
-          <span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-[#25c0d5] shadow-[0_0_10px_rgba(37,192,213,0.65)]" />{STATUS_COPY[profile.status] || "Estado profesional activo"}</span>
+          <span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-[#25c0d5]" />{STATUS_COPY[profile.status] || "Disponibilidad no indicada"}</span>
+          <span className="inline-flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${profile.user.onlineUntil && profile.user.onlineUntil > new Date() ? "bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.65)]" : "bg-slate-400"}`} />{profile.user.onlineUntil && profile.user.onlineUntil > new Date() ? "En línea" : "Fuera de línea"}</span>
           <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-white/50">@{username}</span>
         </div>
         {profile.socialLinks.length ? (

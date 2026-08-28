@@ -15,6 +15,7 @@ export function SignOutButton({ className }: SignOutButtonProps) {
       size="sm"
       className={className}
       onClick={async () => {
+        await fetch("/api/auth/presence", { method: "DELETE", keepalive: true }).catch(() => null);
         await signOut({ redirect: false });
         window.location.assign("/cuenta");
       }}

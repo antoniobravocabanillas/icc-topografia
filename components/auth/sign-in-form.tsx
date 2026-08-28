@@ -35,6 +35,7 @@ export function SignInForm({
   const explicitCallbackUrl = searchParams.get("callbackUrl");
   const callbackUrl = safeRelativeCallback(explicitCallbackUrl);
   const verification = searchParams.get("verification");
+  const sessionReason = searchParams.get("reason");
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [resendMessage, setResendMessage] = useState<string | null>(null);
@@ -98,6 +99,7 @@ export function SignInForm({
       <div className="grid gap-4">
       {verification === "success" ? <p className="tq-verification-notice">Correo verificado. Inicia sesión para completar tu perfil.</p> : null}
       {verification === "invalid" ? <p className="text-sm font-medium text-destructive">El enlace de verificación es inválido o venció.</p> : null}
+      {sessionReason === "inactive" ? <p className="tq-verification-notice">Cerramos tu sesión después de 30 minutos sin actividad para proteger tu cuenta.</p> : null}
       <div>
         <label className="text-sm font-semibold" htmlFor="email">Correo</label>
         <Input id="email" name="email" type="email" autoComplete="email" required placeholder="correo@empresa.com" className="mt-2 bg-muted/40 text-foreground" />
