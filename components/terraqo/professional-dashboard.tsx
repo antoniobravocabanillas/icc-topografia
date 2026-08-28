@@ -107,8 +107,7 @@ export function ProfessionalDashboard({ profile, workspaceId, communityUpdates }
 
   return (
     <div className="min-w-0 space-y-6 py-6 lg:py-8">
-          <section id="perfil" className="relative overflow-hidden rounded-lg bg-[#0e1a26] p-6 text-white shadow-[0_24px_70px_rgba(2,47,53,0.18)] lg:p-8">
-            <div className="absolute inset-y-0 right-0 w-2/5 opacity-20 [background-image:repeating-radial-gradient(ellipse_at_center,rgba(100,232,219,0.4)_0_1px,transparent_1px_14px)]" />
+          <section id="perfil" className="relative overflow-hidden rounded-lg bg-[linear-gradient(135deg,#0e1a26_0%,#102936_55%,#123d43_100%)] p-6 text-white shadow-[0_24px_70px_rgba(2,47,53,0.18)] lg:p-8">
             <div className="relative lg:hidden">
               <div className="flex items-start justify-between gap-3">
                 <div className="grid min-w-0 grid-cols-[80px_minmax(0,1fr)] items-center gap-4">
