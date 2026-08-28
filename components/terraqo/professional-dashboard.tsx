@@ -87,7 +87,12 @@ function ActivityRow({ icon: Icon, title, detail }: { icon: ElementType; title: 
   );
 }
 
-export function ProfessionalDashboard({ profile, workspaceId }: { profile: ProfessionalDashboardProfile; workspaceId?: string | null }) {
+type CommunityUpdates = {
+  posts: Array<{ id: string; title: string; body: string; date: Date; author: string; context: string }>;
+  worklogs: Array<{ id: string; title: string; body: string; date: Date; author: string; context: string }>;
+};
+
+export function ProfessionalDashboard({ profile, workspaceId, communityUpdates }: { profile: ProfessionalDashboardProfile; workspaceId?: string | null; communityUpdates?: CommunityUpdates }) {
   const name = profile.user.name || profile.user.email;
   const percent = completion(profile);
   const verifiedExperiences = profile.experiences.filter((experience) => experience.verifiedByTerraqo).length;
@@ -95,6 +100,9 @@ export function ProfessionalDashboard({ profile, workspaceId }: { profile: Profe
   const identityComplete = profile.identityVerificationStatus === "VERIFIED";
   const publicCvHref = profile.username ? `${terraqoDomains.public}/cv/${profile.username}` : null;
   const totalMonths = profile.experiences.reduce((sum, experience) => sum + monthsBetween(experience.startedAt, experience.currentlyWorking ? null : experience.endedAt), 0);
+  const validatedWorklogs = profile.worklogs.filter((worklog) => worklog.validations.some((validation) => validation.status === "APPROVED")).length;
+  const cvMomentum = Math.min(100, profile.experiences.length * 10 + profile.worklogs.length * 6 + verifiedExperiences * 12 + validatedWorklogs * 8 + (identityComplete ? 15 : 0));
+  const updates = [...(communityUpdates?.posts || []).map((item) => ({ ...item, kind: "Conversación" })), ...(communityUpdates?.worklogs || []).map((item) => ({ ...item, kind: "Evidencia" }))].sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 5);
 
   return (
     <div className="min-w-0 space-y-6 py-6 lg:py-8">
@@ -118,6 +126,14 @@ export function ProfessionalDashboard({ profile, workspaceId }: { profile: Profe
             </div>
           </section>
 
+          <section className="rounded-lg border bg-white p-5 shadow-[0_14px_36px_rgba(1,45,56,0.05)] lg:p-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="font-mono text-xs font-bold uppercase tracking-[0.16em] text-primary">Ahora en tu red</p><h2 className="mt-1 font-display text-2xl font-bold">Últimas actualizaciones de la comunidad</h2><p className="mt-1 text-sm text-muted-foreground">Trabajo documentado, conversaciones y oportunidades de aprendizaje de perfiles visibles.</p></div><Button asChild variant="outline"><Link href="/portal/red">Explorar la red</Link></Button></div>
+            <div className="mt-5 grid gap-3 lg:grid-cols-2">
+              {updates.map((update) => <article key={`${update.kind}-${update.id}`} className="rounded-lg border bg-muted/20 p-4"><div className="flex flex-wrap items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-primary"><span>{update.kind}</span><span className="text-muted-foreground">· {update.context}</span></div><h3 className="mt-2 font-display text-lg font-bold">{update.title}</h3><p className="mt-2 line-clamp-2 text-sm leading-6 text-muted-foreground">{update.body}</p><p className="mt-3 text-xs font-semibold text-[#2f4154]">{update.author} · {new Intl.DateTimeFormat("es-PE", { dateStyle: "medium" }).format(update.date)}</p></article>)}
+              {!updates.length ? <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground lg:col-span-2">Cuando la comunidad publique avances o conversaciones visibles, aparecerán aquí. Puedes iniciar desde tu bitácora.</div> : null}
+            </div>
+          </section>
+
           {workspaceId ? <FieldVerificationPanel endpoint={`/api/terraqo/field-verification?workspaceId=${workspaceId}`} compact /> : (
             <section className="flex flex-col gap-3 rounded-lg border bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
               <div><p className="font-semibold">Control de campo pendiente de vinculación</p><p className="mt-1 text-sm text-muted-foreground">La entrada, salida y geolocalización se activan cuando una empresa confirma tu vínculo y te asigna un proyecto.</p></div>
@@ -131,6 +147,12 @@ export function ProfessionalDashboard({ profile, workspaceId }: { profile: Profe
             <ProfileMetric icon={ShieldCheck} value={verifiedExperiences} label="Validaciones" detail="aprobadas" />
             <ProfileMetric icon={NotebookPen} value={profile.worklogs.length} label="Evidencias" detail="en tu CV vivo" />
           </div>
+
+          <section className="grid gap-5 rounded-lg border border-primary/20 bg-[#eefbf9] p-5 lg:grid-cols-[220px_1fr_auto] lg:items-center">
+            <div><p className="font-mono text-xs font-bold uppercase tracking-[0.16em] text-primary">Impulso del CV</p><p className="mt-1 font-display text-4xl font-bold text-[#0e1a26]">{cvMomentum}%</p><p className="text-xs text-muted-foreground">progreso con respaldo real</p></div>
+            <div><div className="h-2 overflow-hidden rounded-full bg-primary/10"><div className="h-full rounded-full bg-primary transition-all" style={{ width: `${cvMomentum}%` }} /></div><p className="mt-3 text-sm leading-6 text-muted-foreground">El avance aumenta con experiencias completas, bitácoras con evidencia, validaciones y verificación de identidad. Publicar contenido repetido no suma.</p></div>
+            <Button asChild><Link href="/portal/bitacora"><NotebookPen className="mr-2 h-4 w-4" /> Registrar avance útil</Link></Button>
+          </section>
 
           <section className="flex flex-col gap-4 rounded-lg border border-primary/20 bg-[linear-gradient(135deg,rgba(67,116,186,0.10),rgba(37,192,213,0.08))] p-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-primary text-white"><NotebookPen className="h-5 w-5" /></span><div><h2 className="font-display text-lg font-bold">Convierte tu trabajo en evidencia</h2><p className="mt-1 text-sm text-muted-foreground">Registra avances, fotos, resultados y referencias desde la bitácora para alimentar tu CV vivo.</p></div></div>

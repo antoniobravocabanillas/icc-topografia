@@ -4,6 +4,7 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarClock, CheckCircle2, ImagePlus, Link2, NotebookPen, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AiWritingTextarea } from "@/components/portal/ai-writing-textarea";
 
 type WorkspaceOption = {
   id: string;
@@ -113,12 +114,8 @@ export function WorklogComposer({ workspaces }: { workspaces: WorkspaceOption[] 
         <label className="grid gap-2 text-sm font-semibold md:col-span-2">Titulo
           <input name="title" className="h-11 rounded-md border bg-background px-3" placeholder="Ej. Control de ejes completado en torre B" required minLength={4} maxLength={180} />
         </label>
-        <label className="grid gap-2 text-sm font-semibold md:col-span-2">Que hiciste y que problema resolviste
-          <textarea name="summary" className="min-h-32 rounded-md border bg-background p-3" placeholder="Describe el trabajo, la decision tecnica y el contexto necesario para entenderlo." required minLength={20} maxLength={2400} />
-        </label>
-        <label className="grid gap-2 text-sm font-semibold md:col-span-2">Resultado observable
-          <textarea name="outcome" className="min-h-20 rounded-md border bg-background p-3" placeholder="Ej. Se liberaron los frentes sin observaciones y se entrego el reporte de control." maxLength={800} />
-        </label>
+        <div className="grid gap-2 text-sm font-semibold md:col-span-2"><span>Qué hiciste y qué problema resolviste</span><AiWritingTextarea name="summary" purpose="worklog" className="min-h-32" placeholder="Describe el trabajo, la decisión técnica y el contexto necesario para entenderlo." required minLength={20} maxLength={2400} /></div>
+        <div className="grid gap-2 text-sm font-semibold md:col-span-2"><span>Resultado observable</span><AiWritingTextarea name="outcome" purpose="worklog" className="min-h-20" placeholder="Ej. Se liberaron los frentes sin observaciones y se entregó el reporte de control." maxLength={800} /></div>
         <label className="grid gap-2 text-sm font-semibold">Tipo de evidencia
           <select name="type" className="h-11 rounded-md border bg-background px-3">
             <option value="FIELD_UPDATE">Avance de trabajo</option>

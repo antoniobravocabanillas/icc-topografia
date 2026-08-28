@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MessageSquarePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AiWritingTextarea } from "@/components/portal/ai-writing-textarea";
 
 export function ForumPostComposer({ channelId }: { channelId: string }) {
   const router = useRouter();
@@ -50,9 +51,7 @@ export function ForumPostComposer({ channelId }: { channelId: string }) {
         <label className="grid gap-2 text-sm font-semibold">Pregunta o tema
           <input name="title" className="h-11 rounded-md border bg-background px-3" placeholder="Ej. Como documentan el control de ejes antes del vaciado?" minLength={8} maxLength={180} required />
         </label>
-        <label className="grid gap-2 text-sm font-semibold">Contexto tecnico
-          <textarea name="body" className="min-h-36 rounded-md border bg-background p-3" placeholder="Explica el problema, lo que ya probaste y el tipo de aporte que necesitas." minLength={30} maxLength={6000} required />
-        </label>
+        <div className="grid gap-2 text-sm font-semibold"><span>Contexto técnico</span><AiWritingTextarea name="body" purpose="post" className="min-h-36" placeholder="Explica el problema, lo que ya probaste y el tipo de aporte que necesitas." minLength={30} maxLength={6000} required /></div>
         <label className="grid gap-2 text-sm font-semibold">Etiquetas, separadas por coma
           <input name="tags" className="h-11 rounded-md border bg-background px-3" placeholder="control de obra, QA/QC, replanteo" />
         </label>

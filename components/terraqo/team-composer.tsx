@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { UsersRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { TeamHubData } from "@/lib/terraqo/teams";
+import { AiWritingTextarea } from "@/components/portal/ai-writing-textarea";
 
 type Props = Pick<TeamHubData, "workspaces" | "colleagues" | "projects">;
 
@@ -69,9 +70,7 @@ export function TeamComposer({ workspaces, colleagues, projects }: Props) {
         <label className="grid gap-2 text-sm font-semibold lg:col-span-2">Nombre del equipo
           <input name="name" className="h-11 rounded-md border bg-background px-3" placeholder="Ej. Squad control geometrico Torre Norte" minLength={3} maxLength={120} required />
         </label>
-        <label className="grid gap-2 text-sm font-semibold lg:col-span-2">Objetivo compartido
-          <textarea name="purpose" className="min-h-28 rounded-md border bg-background p-3" placeholder="Describe el reto, el resultado esperado y como pueden complementarse." minLength={20} maxLength={1200} required />
-        </label>
+        <div className="grid gap-2 text-sm font-semibold lg:col-span-2"><span>Objetivo compartido</span><AiWritingTextarea name="purpose" purpose="general" className="min-h-28" placeholder="Describe el reto, el resultado esperado y cómo pueden complementarse." minLength={20} maxLength={1200} required /></div>
         <fieldset className="grid gap-3 lg:col-span-2">
           <legend className="mb-2 text-sm font-semibold">Profesionales a invitar</legend>
           {availableColleagues.length ? (

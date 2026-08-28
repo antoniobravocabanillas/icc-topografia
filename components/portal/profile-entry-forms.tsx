@@ -5,6 +5,7 @@ import { LocationSelect } from "@/components/location/location-select";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { AiWritingTextarea } from "@/components/portal/ai-writing-textarea";
 
 type ValidatorOption = {
   id: string;
@@ -70,8 +71,8 @@ export function ExperienceForm({ validators, companies, createExperienceAction }
       <VisibilitySelect />
       <ValidatorSelect validators={validators} />
       <Input name="validatorFallback" placeholder="Si no aparece en la lista, correo o nombre del responsable" />
-      <Textarea name="summary" placeholder="Detalle destacado visible en la pagina publica de esta experiencia. Ej. alcance, logros, decisiones, responsabilidades e impacto." className="min-h-28" />
-      <Textarea name="highlights" placeholder="Puntos clave, uno por linea. Ej. Analisis de mercado, gestion de riesgos, reportes, ejecucion de operaciones." />
+      <AiWritingTextarea name="summary" purpose="experience" placeholder="Detalle destacado visible en la pagina publica de esta experiencia. Ej. alcance, logros, decisiones, responsabilidades e impacto." className="min-h-28" />
+      <AiWritingTextarea name="highlights" purpose="highlights" placeholder="Puntos clave, uno por linea. Ej. Analisis de mercado, gestion de riesgos, reportes, ejecucion de operaciones." />
       <Textarea name="evidence" placeholder="Evidencias, enlaces o referencias, una por linea" />
       <label className="grid gap-2 rounded-lg border border-dashed border-primary/35 bg-primary/5 p-4 text-sm font-semibold">
         Fotos o documentos de respaldo

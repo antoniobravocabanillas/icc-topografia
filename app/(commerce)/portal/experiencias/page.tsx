@@ -2,11 +2,12 @@ import { BadgeCheck, BookOpenCheck, CircleCheck, Eye, History, ShieldCheck, Spar
 import type { TerraqoMemberRole } from "@prisma/client";
 import { EntryReferenceRequest } from "@/components/portal/entry-reference-request";
 import { ExperiencePublicDetailsEditor } from "@/components/portal/experience-public-details-editor";
+import { ExperienceMaintenanceEditor } from "@/components/portal/experience-maintenance-editor";
 import { ExperienceForm, EducationForm } from "@/components/portal/profile-entry-forms";
 import { PortalPageHeading } from "@/components/terraqo/portal-page-heading";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { createEducationAction, createHistoricalExperienceAction, requestEducationVerificationAction, requestExperienceVerificationAction, updateEducationReferenceAction, updateExperiencePublicDetailsAction, updateExperienceReferenceAction } from "@/lib/server/professional-actions";
+import { createEducationAction, createHistoricalExperienceAction, requestEducationVerificationAction, requestExperienceVerificationAction, updateEducationReferenceAction, updateExperiencePublicDetailsAction, updateExperienceReferenceAction, updateProfessionalExperienceAction } from "@/lib/server/professional-actions";
 import { prisma } from "@/lib/prisma";
 import { requireProfessionalPortal } from "@/lib/terraqo/professional-portal";
 import { formatExperienceDuration, monthsBetween } from "@/lib/terraqo/profile-summary";
@@ -77,12 +78,15 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
       {params.success === "experience" ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Experiencia cargada. Quedo privada y pendiente de verificacion.</div> : null}
       {params.success === "education" ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Educacion registrada. El extracto del perfil fue actualizado.</div> : null}
       {params.success === "experience-details" ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Detalle publico de la experiencia actualizado.</div> : null}
+      {params.success === "experience-updated" ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Experiencia actualizada. Las evidencias y solicitudes de validación quedaron registradas.</div> : null}
       {params.success === "verification-requested" ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Solicitud enviada a Terraqo. El equipo revisara las referencias y evidencias declaradas.</div> : null}
       {params.status === "missing" ? <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">Completa al menos titulo y empresa para registrar la experiencia.</div> : null}
       {params.status === "education-missing" ? <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">Completa institucion y grado para registrar educacion.</div> : null}
       {params.status === "verification-reference-required" ? <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">Para pedir validacion Terraqo, primero carga un responsable, correo de referencia, certificado, constancia o evidencia.</div> : null}
       {params.status === "verification-already-requested" ? <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-900">Esta entrada ya tiene una validacion en curso o resuelta.</div> : null}
       {params.status === "evidence-invalid" ? <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">No pudimos adjuntar la evidencia. Usa hasta 6 imágenes o PDF de máximo 8 MB cada uno.</div> : null}
+      {params.status === "end-date-required" ? <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">Indica la fecha de finalización o marca que todavía trabajas allí.</div> : null}
+      {params.status === "date-order-invalid" ? <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">La fecha de finalización no puede ser anterior al inicio.</div> : null}
 
       <Card className="border-primary/20 bg-[#eefbf9]">
         <CardContent className="grid gap-4 p-5 lg:grid-cols-[1fr_auto] lg:items-center">
@@ -149,6 +153,7 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
                   <div className="mt-3">
                     <ExperiencePublicDetailsEditor experienceId={experience.id} summary={experience.summary} highlights={experience.highlights} action={updateExperiencePublicDetailsAction} />
                   </div>
+                  <div className="mt-3"><ExperienceMaintenanceEditor experience={experience} validators={validatorOptions} action={updateProfessionalExperienceAction} /></div>
                   {experience.validatorUserId || experience.validatorEmail || experience.validatorName ? <p className="mt-2 text-xs font-semibold text-primary">Responsable solicitado: {experience.validatorName || experience.validatorEmail || experience.validatorUserId}</p> : null}
                   {experience.evidence.length ? <p className="mt-2 text-xs font-semibold text-primary">{experience.evidence.length} referencia(s) o evidencia(s) declarada(s)</p> : null}
                   {experience.evidenceFiles.length ? <div className="mt-3 flex flex-wrap gap-2">{experience.evidenceFiles.map((file) => <a key={file.id} href={`/api/terraqo/experience-evidence/${file.id}`} target="_blank" rel="noreferrer" className="rounded-md border bg-muted px-3 py-2 text-xs font-bold text-primary hover:bg-primary/10">{file.fileName}</a>)}</div> : null}

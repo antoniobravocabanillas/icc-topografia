@@ -129,6 +129,20 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
     select: { workspaceId: true },
     orderBy: { joinedAt: "desc" }
   }) : null;
+  const communityUpdates = professionalProfile ? await Promise.all([
+    prisma.terraqoForumPost.findMany({
+      where: { deletedAt: null, visibility: { in: ["COMMUNITY", "PUBLIC"] } },
+      select: { id: true, title: true, body: true, createdAt: true, author: { select: { name: true } }, channel: { select: { name: true } } },
+      orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
+      take: 4
+    }),
+    prisma.terraqoWorklogEntry.findMany({
+      where: { deletedAt: null, visibility: { in: ["COMMUNITY", "PUBLIC"] }, NOT: { authorId: professionalProfile.userId } },
+      select: { id: true, title: true, summary: true, occurredAt: true, author: { select: { name: true } }, workspace: { select: { brandName: true, name: true } } },
+      orderBy: { occurredAt: "desc" },
+      take: 4
+    })
+  ]) : null;
 
   const activeClientAccount = account && ["active", "approved"].includes(account.status) && account.client?.terraqoWorkspaceId === terraqoWorkspaceId ? account : null;
   const client = activeClientAccount?.client || null;
@@ -148,7 +162,10 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
             {statusMessages[params.status]}
           </div>
         ) : null}
-        <ProfessionalDashboard profile={professionalProfile} workspaceId={professionalWorkspace?.workspaceId} />
+        <ProfessionalDashboard profile={professionalProfile} workspaceId={professionalWorkspace?.workspaceId} communityUpdates={communityUpdates ? {
+          posts: communityUpdates[0].map((post) => ({ id: post.id, title: post.title, body: post.body, date: post.createdAt, author: post.author?.name || "Comunidad Terraqo", context: post.channel.name })),
+          worklogs: communityUpdates[1].map((worklog) => ({ id: worklog.id, title: worklog.title, body: worklog.summary, date: worklog.occurredAt, author: worklog.author?.name || "Profesional Terraqo", context: worklog.workspace?.brandName || worklog.workspace?.name || "Red profesional" }))
+        } : undefined} />
         {client ? (
           <section id="operaciones-comerciales" className="scroll-mt-28 space-y-6">
             <div>

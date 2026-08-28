@@ -300,6 +300,80 @@ export async function createHistoricalExperienceAction(formData: FormData) {
   redirect("/portal/experiencias?success=experience");
 }
 
+export async function updateProfessionalExperienceAction(formData: FormData) {
+  "use server";
+
+  const session = await auth();
+  if (!session?.user?.id) redirect("/cuenta");
+  const experienceId = cleanText(formData, "experienceId", 80);
+  if (!experienceId) redirect("/portal/experiencias?status=verification-invalid");
+
+  const profile = await prisma.terraqoProfessionalProfile.findUnique({
+    where: { userId: session.user.id },
+    select: { id: true, username: true, user: { select: { terraqoMemberships: { where: { active: true }, select: { workspaceId: true } } } } }
+  });
+  if (!profile) redirect("/portal?status=profile-required");
+  const previous = await prisma.terraqoProfessionalExperience.findFirst({ where: { id: experienceId, professionalProfileId: profile.id } });
+  if (!previous) redirect("/portal/experiencias?status=verification-invalid");
+
+  const currentlyWorking = formData.get("currentlyWorking") === "on";
+  const startedAt = optionalDate(formData, "startedAt");
+  const endedAt = currentlyWorking ? null : optionalDate(formData, "endedAt");
+  if (!currentlyWorking && !endedAt) redirect("/portal/experiencias?status=end-date-required");
+  if (startedAt && endedAt && endedAt < startedAt) redirect("/portal/experiencias?status=date-order-invalid");
+
+  const location = normalizeLocation(formData);
+  const workspaceIds = profile.user.terraqoMemberships.map((membership) => membership.workspaceId);
+  const validator = await resolveValidator(formData, "validatorFallback", workspaceIds);
+  const evidenceFiles = evidenceFilesFromForm(formData);
+  if (validateExperienceEvidenceFiles(evidenceFiles)) redirect("/portal/experiencias?status=evidence-invalid");
+  const visibilityValues = new Set<TerraqoVisibility>(["PRIVATE", "WORKSPACE", "COMMUNITY", "PUBLIC"]);
+  const visibilityInput = String(formData.get("visibility") || previous.visibility) as TerraqoVisibility;
+  const evidence = listFromText(formData, "evidence");
+  const datesChanged = previous.currentlyWorking !== currentlyWorking || previous.startedAt?.getTime() !== startedAt?.getTime() || previous.endedAt?.getTime() !== endedAt?.getTime();
+  const selectedValidator = validator.validatorUserId || validator.validatorName || validator.validatorEmail;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.terraqoProfessionalExperience.update({
+      where: { id: previous.id },
+      data: {
+        startedAt,
+        endedAt,
+        currentlyWorking,
+        country: location.country,
+        locationSubdivisionCode: location.subdivision,
+        locationCity: location.city,
+        location: location.label || previous.location,
+        visibility: visibilityValues.has(visibilityInput) ? visibilityInput : previous.visibility,
+        evidence,
+        ...(selectedValidator ? {
+          validatorUserId: validator.validatorUserId,
+          validatorName: validator.validatorName,
+          validatorEmail: validator.validatorEmail,
+          verificationStatus: "REQUESTED",
+          verificationRequestedAt: new Date(),
+          verificationNote: `Solicitud de verificación enviada a ${validator.validatorName || validator.validatorEmail || "responsable seleccionado"}.`
+        } : datesChanged && previous.verifiedByTerraqo ? {
+          verifiedByTerraqo: false,
+          verificationStatus: "NOT_REQUESTED",
+          verificationRequestedAt: null,
+          verificationNote: "Las fechas cambiaron después de la validación. Se requiere una nueva revisión."
+        } : {})
+      }
+    });
+    if (validator.validatorUserId && previous.workspaceId) {
+      await tx.notification.create({ data: { userId: validator.validatorUserId, terraqoWorkspaceId: previous.workspaceId, type: "SYSTEM", title: "Experiencia pendiente de validación", body: `${session.user.name || session.user.email || "Un profesional"} solicita validar ${previous.title}.`, href: "/portal/validaciones" } });
+    }
+  });
+  await storeExperienceEvidenceFiles(evidenceFiles, previous.id, session.user.id);
+  await refreshProfessionalGeneratedSummary(profile.id);
+  revalidatePath("/portal");
+  revalidatePath("/portal/experiencias");
+  revalidatePath("/portal/validaciones");
+  if (profile.username) { revalidatePath(`/cv/${profile.username}`); revalidatePath(`/cv/${profile.username}/experiencias/${previous.id}`); }
+  redirect("/portal/experiencias?success=experience-updated");
+}
+
 export async function createEducationAction(formData: FormData) {
   "use server";
 
