@@ -109,7 +109,33 @@ export function ProfessionalDashboard({ profile, workspaceId, communityUpdates }
     <div className="min-w-0 space-y-6 py-6 lg:py-8">
           <section id="perfil" className="relative overflow-hidden rounded-lg bg-[#0e1a26] p-6 text-white shadow-[0_24px_70px_rgba(2,47,53,0.18)] lg:p-8">
             <div className="absolute inset-y-0 right-0 w-2/5 opacity-20 [background-image:repeating-radial-gradient(ellipse_at_center,rgba(100,232,219,0.4)_0_1px,transparent_1px_14px)]" />
-            <div className="relative grid items-center gap-7 lg:grid-cols-[minmax(0,1fr)_190px]">
+            <div className="relative lg:hidden">
+              <div className="flex items-start justify-between gap-3">
+                <div className="grid min-w-0 grid-cols-[80px_minmax(0,1fr)] items-center gap-4">
+                  <ProfessionalPhotoUploader name={name} image={profile.user.image} compact />
+                  <div className="min-w-0">
+                    <h1 className="font-display text-[1.65rem] font-bold leading-[1.05] tracking-tight">{name}</h1>
+                    <p className="mt-2 line-clamp-2 text-sm font-semibold leading-5 text-[#25c0d5]">{profile.headline || profile.specialties[0] || "Profesional Terraqo"}</p>
+                  </div>
+                </div>
+                <span className="shrink-0 rounded-full bg-emerald-400/10 px-2.5 py-1 text-[10px] font-bold text-emerald-300">{statusCopy[profile.status]}</span>
+              </div>
+
+              <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-white/15 pb-4 text-xs text-white/70">
+                <span className="inline-flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 text-[#25c0d5]" />{profile.locationCity || profile.city || "Ubicación por completar"}</span>
+                <Link href="/portal/perfil" className="font-semibold text-[#25c0d5]">Cambiar ubicación</Link>
+                <span className="basis-full inline-flex items-center gap-1.5"><BriefcaseBusiness className="h-3.5 w-3.5 text-[#25c0d5]" />{formatExperienceDuration(totalMonths)} de experiencia</span>
+              </div>
+
+              {profile.generatedSummary ? <ExpandableSummary text={profile.generatedSummary} className="mt-3" /> : null}
+
+              <div className="mt-4 grid grid-cols-2 gap-2.5">
+                <Button asChild className="min-w-0 bg-gradient-to-r from-[#4374ba] to-[#37b99e] px-3 text-xs text-white"><Link href={publicCvHref || `/portal/profesionales/${profile.id}`} target={publicCvHref ? "_blank" : undefined}>Ver perfil público <ChevronRight className="ml-1 h-4 w-4" /></Link></Button>
+                <Button asChild variant="outline" className="min-w-0 justify-between border-white/35 bg-transparent px-3 text-xs text-white hover:bg-white/10"><Link href="/portal/documentos"><span>Completar perfil</span><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full border-2 border-[#25c0d5] text-[10px] font-bold">{percent}%</span></Link></Button>
+              </div>
+            </div>
+
+            <div className="relative hidden items-center gap-7 lg:grid lg:grid-cols-[minmax(0,1fr)_190px]">
               <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
                 <ProfessionalPhotoUploader name={name} image={profile.user.image} />
                 <div className="min-w-0">

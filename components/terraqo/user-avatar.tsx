@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 type UserAvatarProps = {
   name?: string | null;
   image?: string | null;
-  size?: "sm" | "md" | "lg" | "xl";
+  size?: "sm" | "md" | "lg" | "xl" | "profile";
   className?: string;
 };
 
@@ -14,7 +14,8 @@ const sizeClasses = {
   sm: "h-8 w-8 text-[10px]",
   md: "h-10 w-10 text-xs",
   lg: "h-14 w-14 text-base",
-  xl: "h-28 w-28 text-2xl"
+  xl: "h-28 w-28 text-2xl",
+  profile: "h-20 w-20 text-lg sm:h-28 sm:w-28 sm:text-2xl"
 };
 
 function initials(name?: string | null) {

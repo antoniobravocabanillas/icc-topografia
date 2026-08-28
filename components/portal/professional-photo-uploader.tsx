@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Camera, Loader2 } from "lucide-react";
 import { UserAvatar } from "@/components/terraqo/user-avatar";
 
-export function ProfessionalPhotoUploader({ name, image }: { name: string; image?: string | null }) {
+export function ProfessionalPhotoUploader({ name, image, compact = false }: { name: string; image?: string | null; compact?: boolean }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -32,7 +32,7 @@ export function ProfessionalPhotoUploader({ name, image }: { name: string; image
 
   return (
     <div className="relative shrink-0">
-      <UserAvatar name={name} image={image} size="xl" className="border-4 border-white shadow-xl" />
+      <UserAvatar name={name} image={image} size={compact ? "profile" : "xl"} className="border-[3px] border-white shadow-xl sm:border-4" />
       <input
         ref={inputRef}
         type="file"
@@ -44,7 +44,7 @@ export function ProfessionalPhotoUploader({ name, image }: { name: string; image
         type="button"
         onClick={() => inputRef.current?.click()}
         disabled={busy}
-        className="absolute bottom-0 right-0 grid h-9 w-9 place-items-center rounded-full border-2 border-white bg-primary text-white shadow-lg transition hover:bg-primary/90 disabled:opacity-60"
+        className={`absolute bottom-0 right-0 grid place-items-center rounded-full border-2 border-white bg-primary text-white shadow-lg transition hover:bg-primary/90 disabled:opacity-60 ${compact ? "h-7 w-7 sm:h-9 sm:w-9" : "h-9 w-9"}`}
         title="Actualizar foto de perfil"
         aria-label="Actualizar foto de perfil"
       >
