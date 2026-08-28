@@ -10,13 +10,13 @@ const resendSchema = z.object({
 export async function POST(request: Request) {
   try {
     const { email } = await parseJson(request, resendSchema);
-    const user = await prisma.user.findUnique({ where: { email }, select: { email: true, emailVerified: true } });
+    const user = await prisma.user.findUnique({ where: { email }, select: { email: true, emailVerified: true, name: true } });
 
     // A generic success prevents using this endpoint to enumerate registered emails.
     if (!user || user.emailVerified) return ok({ delivered: true });
 
     const verification = await prisma.$transaction((tx) => createEmailVerificationLinkToken(tx, email));
-    const delivery = await sendEmailVerificationLink(email, verification.code);
+    const delivery = await sendEmailVerificationLink(email, verification.code, user.name);
     return ok({ delivered: delivery.delivered });
   } catch (error) {
     const response = handleApiError(error);

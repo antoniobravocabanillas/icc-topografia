@@ -337,7 +337,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     });
 
     const emailDelivery = result.verificationCode
-      ? await sendEmailVerificationCode(result.user.email, result.verificationCode)
+      ? await sendEmailVerificationCode(result.user.email, result.verificationCode, result.user.name)
       : { delivered: true as const };
 
     return ok({
