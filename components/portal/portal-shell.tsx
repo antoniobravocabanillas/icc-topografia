@@ -174,6 +174,21 @@ export function PortalShell({ children, name, image, headline, portalType = "pro
     setSidebarCollapsed(window.localStorage.getItem("terraqo:portal-sidebar") === "collapsed");
   }, []);
 
+  useEffect(() => {
+    const closeOutside = (event: PointerEvent) => {
+      document.querySelectorAll<HTMLDetailsElement>("details[data-portal-popover][open]").forEach((popover) => {
+        if (!popover.contains(event.target as Node)) popover.open = false;
+      });
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    return () => document.removeEventListener("pointerdown", closeOutside);
+  }, []);
+
+  function closePopover(event: React.MouseEvent<HTMLElement>) {
+    const interactive = (event.target as HTMLElement).closest("a,button");
+    if (interactive) event.currentTarget.closest("details")?.removeAttribute("open");
+  }
+
   function toggleSidebar() {
     setSidebarCollapsed((current) => {
       const next = !current;
@@ -205,7 +220,7 @@ export function PortalShell({ children, name, image, headline, portalType = "pro
               <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full" style={{ backgroundColor: accentColor }} />
             </Link>
             <div className="hidden h-9 w-px bg-[#d8e0ec] sm:block" />
-            <details className="group relative">
+            <details data-portal-popover className="group relative">
               <summary className="flex cursor-pointer list-none items-center gap-2.5 rounded-lg px-1.5 py-1 transition hover:bg-[#eef3f7] [&::-webkit-details-marker]:hidden">
                 <UserAvatar name={name} image={image} size="md" />
                 <span className="hidden max-w-48 min-w-0 lg:block">
@@ -214,7 +229,7 @@ export function PortalShell({ children, name, image, headline, portalType = "pro
                 </span>
                 <ChevronDown className="hidden h-4 w-4 text-[#607083] transition group-open:rotate-180 sm:block" />
               </summary>
-              <div className="absolute right-0 top-[calc(100%+10px)] z-50 w-64 rounded-xl border border-[#d8e0ec] bg-white p-2 shadow-[0_20px_50px_rgba(14,26,38,0.16)]">
+              <div onClick={closePopover} className="fixed inset-x-3 top-[72px] z-50 rounded-2xl border border-[#d8e0ec] bg-white p-3 shadow-[0_24px_65px_rgba(14,26,38,0.22)] sm:absolute sm:inset-x-auto sm:right-0 sm:top-[calc(100%+10px)] sm:w-72 sm:rounded-xl sm:p-2">
                 <div className="border-b border-[#e7ecf2] px-3 py-2.5">
                   <p className="truncate text-sm font-bold">{name || "Cuenta Terraqo"}</p>
                   <p className="mt-0.5 truncate text-xs text-[#607083]">{headline || `${portalLabel} · Plan ${planLabel}`}</p>
@@ -273,9 +288,9 @@ export function PortalShell({ children, name, image, headline, portalType = "pro
             const active = isActive(pathname, item.href);
             return <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-bold" style={active ? { backgroundColor: withAlpha(accentColor, "18"), color: primaryColor } : { color: "#607083" }}><Icon className="h-5 w-5" /><span className="max-w-full truncate">{item.label === "Experiencias" ? "Experiencia" : item.label}</span></Link>;
           })}
-          <details className="group relative">
+          <details data-portal-popover className="group relative">
             <summary className="flex min-h-14 cursor-pointer list-none flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-bold text-[#607083] [&::-webkit-details-marker]:hidden"><MoreHorizontal className="h-5 w-5" /><span>Más</span></summary>
-            <div className="absolute bottom-[calc(100%+12px)] right-0 grid max-h-[70vh] w-[min(20rem,calc(100vw-1rem))] grid-cols-2 gap-1 overflow-y-auto rounded-2xl border border-[#d8e0ec] bg-white p-2 shadow-[0_22px_60px_rgba(14,26,38,0.22)]">
+            <div onClick={closePopover} className="fixed inset-x-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] grid max-h-[calc(100dvh-7rem)] grid-cols-2 gap-2 overflow-y-auto rounded-2xl border border-[#d8e0ec] bg-white p-3 shadow-[0_24px_70px_rgba(14,26,38,0.24)]">
               {mobileMoreItems.map((item) => { const Icon = item.icon; const active = isActive(pathname, item.href); return <Link key={item.href} href={item.href} className="flex min-h-12 items-center gap-2 rounded-xl px-3 text-xs font-semibold" style={active ? { backgroundColor: withAlpha(accentColor, "18"), color: primaryColor } : { color: "#35485b" }}><Icon className="h-4 w-4 shrink-0" />{item.label}</Link>; })}
               <SignOutButton className="col-span-2 mt-1 w-full justify-start border-0 bg-[#fff1f0] px-3 text-[#b42318] shadow-none" />
             </div>

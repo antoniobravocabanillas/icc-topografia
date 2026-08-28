@@ -18,6 +18,7 @@ import {
 
 import { ProfessionalPhotoUploader } from "@/components/portal/professional-photo-uploader";
 import { ProfessionalDocumentUploader } from "@/components/portal/professional-document-uploader";
+import { ExpandableSummary } from "@/components/portal/expandable-summary";
 import { WorklogCard } from "@/components/terraqo/worklog-card";
 import { FieldVerificationPanel } from "@/components/terraqo/field-verification-panel";
 import { Button } from "@/components/ui/button";
@@ -115,7 +116,7 @@ export function ProfessionalDashboard({ profile, workspaceId, communityUpdates }
                   <div className="flex flex-wrap items-center gap-3"><h1 className="font-display text-3xl font-bold lg:text-4xl">{name}</h1>{identityComplete ? <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-3 py-1 text-xs font-semibold text-[#25c0d5]"><BadgeCheck className="h-4 w-4" /> Perfil verificado</span> : null}</div>
                   <p className="mt-2 text-lg font-semibold text-[#25c0d5]">{profile.headline || profile.specialties[0] || "Profesional Terraqo"}</p>
                   <div className="mt-3 flex flex-wrap gap-3 text-sm text-white/70"><span className="inline-flex items-center gap-1.5"><MapPin className="h-4 w-4 text-[#25c0d5]" />{profile.locationCity || profile.city || "Ubicacion por completar"}</span><span>|</span><span>{formatExperienceDuration(totalMonths)} de experiencia</span></div>
-                  {profile.generatedSummary ? <p className="mt-4 max-w-3xl text-sm leading-6 text-white/70">{profile.generatedSummary}</p> : null}
+                  {profile.generatedSummary ? <ExpandableSummary text={profile.generatedSummary} className="mt-4 max-w-3xl" /> : null}
                   <div className="mt-6 flex flex-wrap gap-3"><Button asChild className="bg-primary text-white hover:bg-primary/90"><Link href={`/portal/profesionales/${profile.id}`}>Ver perfil <ChevronRight className="ml-2 h-4 w-4" /></Link></Button><Button asChild variant="outline" className="border-white/40 bg-transparent text-white hover:bg-white/10"><Link href="/portal/documentos">Completar perfil</Link></Button></div>
                 </div>
               </div>
