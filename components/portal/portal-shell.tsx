@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ElementType, ReactNode } from "react";
+import { useEffect, useState, type ElementType, type ReactNode } from "react";
 import {
   Bell,
   BriefcaseBusiness,
@@ -24,7 +24,9 @@ import {
   UserRound,
   UsersRound,
   ChevronDown,
-  MoreHorizontal
+  MoreHorizontal,
+  PanelLeftClose,
+  PanelLeftOpen
 } from "lucide-react";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
@@ -98,13 +100,15 @@ function PortalNavigation({
   pathname,
   primaryColor,
   accentColor,
-  variant = "stack"
+  variant = "stack",
+  collapsed = false
 }: {
   items: PortalNavItem[];
   pathname: string;
   primaryColor: string;
   accentColor: string;
   variant?: "stack" | "mobile";
+  collapsed?: boolean;
 }) {
   const navClass =
     variant === "mobile"
@@ -120,8 +124,9 @@ function PortalNavigation({
           <Link
             key={`${item.href}-${item.label}`}
             href={item.href}
+            title={collapsed ? item.label : undefined}
             aria-current={active ? "page" : undefined}
-            className={`flex min-h-11 items-center gap-3 rounded-lg px-3.5 text-sm font-semibold transition-colors ${
+            className={`flex min-h-11 items-center rounded-lg text-sm font-semibold transition-colors ${collapsed ? "justify-center px-2" : "gap-3 px-3.5"} ${
               active
                 ? "text-[#4374ba]"
                 : "text-[#2f4154] hover:bg-[#e8eef7] hover:text-[#0e1a26]"
@@ -129,7 +134,7 @@ function PortalNavigation({
             style={active ? { backgroundColor: withAlpha(accentColor, "22"), color: primaryColor } : undefined}
           >
             <Icon className="h-[18px] w-[18px] shrink-0" />
-            <span>{item.label}</span>
+            <span className={collapsed ? "sr-only" : undefined}>{item.label}</span>
           </Link>
         );
       })}
@@ -151,6 +156,7 @@ const planLabels: Record<string, string> = {
 
 export function PortalShell({ children, name, image, headline, portalType = "professional", workspaceBrand, workspaceLogoUrl, planTier, visualIdentity }: PortalShellProps) {
   const pathname = usePathname();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const items = portalType === "professional" ? professionalItems : clientItems;
   const portalLabel = portalType === "professional" ? "Workspace personal" : "Workspace de empresa";
   const brandName = portalType === "professional" ? "Portal Terraqo" : workspaceBrand || "Portal Terraqo";
@@ -162,6 +168,18 @@ export function PortalShell({ children, name, image, headline, portalType = "pro
     ? professionalItems.filter((item) => ["/portal", "/portal/experiencias", "/portal/bitacora", "/portal/red"].includes(item.href))
     : clientItems.slice(0, 4);
   const mobileMoreItems = items.filter((item) => !mobilePrimaryItems.some((primary) => primary.href === item.href));
+
+  useEffect(() => {
+    setSidebarCollapsed(window.localStorage.getItem("terraqo:portal-sidebar") === "collapsed");
+  }, []);
+
+  function toggleSidebar() {
+    setSidebarCollapsed((current) => {
+      const next = !current;
+      window.localStorage.setItem("terraqo:portal-sidebar", next ? "collapsed" : "expanded");
+      return next;
+    });
+  }
 
   return (
     <div className="min-h-screen overflow-x-hidden text-[#0e1a26]" style={{ backgroundColor: visualIdentity.backgroundColor }}>
@@ -220,20 +238,25 @@ export function PortalShell({ children, name, image, headline, portalType = "pro
           </div>
         </div>
 
-        <div className="grid min-h-[calc(100vh-64px)] gap-5 pb-24 sm:min-h-[calc(100vh-76px)] sm:gap-7 sm:pb-0 xl:grid-cols-[250px_minmax(0,1fr)] xl:gap-9">
-          <aside className="hidden border-r border-[#d8e0ec] pr-6 pt-8 xl:block">
+        <div className={`grid min-h-[calc(100vh-64px)] gap-5 pb-24 transition-[grid-template-columns,gap] duration-300 sm:min-h-[calc(100vh-76px)] sm:gap-7 sm:pb-0 xl:gap-7 ${sidebarCollapsed ? "xl:grid-cols-[76px_minmax(0,1fr)]" : "xl:grid-cols-[250px_minmax(0,1fr)] xl:gap-9"}`}>
+          <aside className={`hidden border-r border-[#d8e0ec] pt-6 transition-[padding] duration-300 xl:block ${sidebarCollapsed ? "pr-3" : "pr-6"}`}>
             <div className="sticky top-[108px]">
-              <p className="mb-4 px-3 font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-[#4374ba]">Navegación</p>
-              <PortalNavigation items={items} pathname={pathname} primaryColor={primaryColor} accentColor={accentColor} />
-              <div className="mt-7 border-t border-[#d8e0ec] pt-6">
-                <a href="mailto:proyectos@icctopografia.com" className="flex items-center gap-3 rounded-lg px-3.5 py-3 text-sm font-semibold text-[#35485b] hover:bg-white hover:text-primary">
-                  <Headphones className="h-[18px] w-[18px]" /> Ayuda y soporte
-                </a>
-                <SignOutButton className="mt-2 w-full justify-start border-0 bg-transparent px-3.5 text-[#35485b] shadow-none hover:bg-white" />
+              <div className={`mb-4 flex items-center ${sidebarCollapsed ? "justify-center" : "justify-between gap-3 px-3"}`}>
+                <p className={sidebarCollapsed ? "sr-only" : "font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-[#4374ba]"}>Navegación</p>
+                <button type="button" onClick={toggleSidebar} title={sidebarCollapsed ? "Expandir navegación" : "Contraer navegación"} aria-label={sidebarCollapsed ? "Expandir navegación" : "Contraer navegación"} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#d8e0ec] bg-white text-[#35485b] shadow-sm transition hover:border-primary/30 hover:bg-primary/5 hover:text-primary">
+                  {sidebarCollapsed ? <PanelLeftOpen className="h-[18px] w-[18px]" /> : <PanelLeftClose className="h-[18px] w-[18px]" />}
+                </button>
               </div>
-              <div className="mt-8 rounded-lg bg-[#eaf6f4] p-4 text-sm text-[#35485b]">
+              <PortalNavigation items={items} pathname={pathname} primaryColor={primaryColor} accentColor={accentColor} collapsed={sidebarCollapsed} />
+              <div className="mt-7 border-t border-[#d8e0ec] pt-6">
+                <a href="mailto:proyectos@icctopografia.com" title={sidebarCollapsed ? "Ayuda y soporte" : undefined} className={`flex min-h-11 items-center rounded-lg text-sm font-semibold text-[#35485b] hover:bg-white hover:text-primary ${sidebarCollapsed ? "justify-center px-2" : "gap-3 px-3.5 py-3"}`}>
+                  <Headphones className="h-[18px] w-[18px]" /> <span className={sidebarCollapsed ? "sr-only" : undefined}>Ayuda y soporte</span>
+                </a>
+                <SignOutButton iconOnly={sidebarCollapsed} className={`mt-2 w-full border-0 bg-transparent text-[#35485b] shadow-none hover:bg-white ${sidebarCollapsed ? "justify-center px-2" : "justify-start px-3.5"}`} />
+              </div>
+              <div className={`mt-8 rounded-lg bg-[#eaf6f4] text-sm text-[#35485b] ${sidebarCollapsed ? "grid place-items-center p-3" : "p-4"}`} title={sidebarCollapsed ? "Tu información está protegida por permisos de Terraqo." : undefined}>
                 <ShieldCheck className="h-5 w-5" style={{ color: primaryColor }} />
-                <p className="mt-3 font-semibold">Tu información está protegida por permisos de Terraqo.</p>
+                <p className={sidebarCollapsed ? "sr-only" : "mt-3 font-semibold"}>Tu información está protegida por permisos de Terraqo.</p>
               </div>
             </div>
           </aside>
