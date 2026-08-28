@@ -43,8 +43,9 @@ export default async function ProfessionalProfilePage({ params }: PageProps) {
   const sharedWorkspace =
     profile.affiliations.some((affiliation) => viewerWorkspaceIds.includes(affiliation.workspaceId)) ||
     profile.user.terraqoMemberships.some((membership) => viewerWorkspaceIds.includes(membership.workspaceId));
-  if (!owner && profile.visibility === "PRIVATE") notFound();
-  if (!owner && profile.visibility === "WORKSPACE" && !sharedWorkspace) notFound();
+  // La ficha interna solo es accesible para el propietario o para miembros de un
+  // workspace compartido. La publicación externa sigue gobernada por el CV vivo.
+  if (!owner && !sharedWorkspace) notFound();
 
   const worklogs = await prisma.terraqoWorklogEntry.findMany({
     where: { professionalProfileId: profile.id, ...visibleWorklogWhere(session.user.id, viewerWorkspaceIds) },
