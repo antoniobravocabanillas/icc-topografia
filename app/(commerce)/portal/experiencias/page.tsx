@@ -105,8 +105,8 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
         </CardContent>
       </Card>
 
-      <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <Card>
+      <section className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.18fr)_minmax(0,0.82fr)]">
+        <Card className="min-w-0">
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><History className="h-5 w-5 text-primary" /> Cargar experiencia historica</CardTitle>
             <CardDescription>Para trabajos anteriores donde quieres solicitar validacion de un encargado o cliente.</CardDescription>
@@ -116,7 +116,7 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="min-w-0">
           <CardHeader>
             <CardTitle>Historial profesional</CardTitle>
             <CardDescription>Experiencias asociadas a tu CV vivo.</CardDescription>

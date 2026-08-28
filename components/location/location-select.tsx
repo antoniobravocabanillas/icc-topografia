@@ -75,8 +75,8 @@ export function LocationSelect({
     "h-11 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60";
 
   return (
-    <div className={`grid gap-3 sm:grid-cols-3 ${className}`}>
-      <label className="grid gap-1.5">
+    <div className={`grid min-w-0 gap-3 md:grid-cols-2 2xl:grid-cols-3 ${className}`}>
+      <label className="grid min-w-0 gap-1.5">
         <span className="text-[0.68rem] font-bold uppercase tracking-[0.18em] text-primary">Pais</span>
         <select id={`${id}-country`} name={countryName} required={required} className={selectClass} value={country} onChange={(event) => {
           setCountry(event.target.value);
@@ -88,7 +88,7 @@ export function LocationSelect({
         </select>
       </label>
 
-      <label className="grid gap-1.5">
+      <label className="grid min-w-0 gap-1.5">
         <span className="text-[0.68rem] font-bold uppercase tracking-[0.18em] text-primary">Departamento / estado</span>
         <select id={`${id}-subdivision`} name={subdivisionName} required={required && subdivisions.length > 0} disabled={!country || subdivisions.length === 0} className={selectClass} value={subdivision} onChange={(event) => {
           setSubdivision(event.target.value);
@@ -99,7 +99,7 @@ export function LocationSelect({
         </select>
       </label>
 
-      <label className="grid gap-1.5">
+      <label className="grid min-w-0 gap-1.5 md:col-span-2 2xl:col-span-1">
         <span className="text-[0.68rem] font-bold uppercase tracking-[0.18em] text-primary">Ciudad</span>
         <select id={`${id}-city`} required={required && cities.length > 0} disabled={!country} className={selectClass} value={city} onChange={(event) => setCity(event.target.value)}>
           <option value="">{cities.length ? "Selecciona ciudad o distrito" : "Escribe la ubicación"}</option>
