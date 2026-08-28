@@ -1,25 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
+import { generateTerraqoText, hasConfiguredAiProvider } from "@/lib/terraqo/ai-provider";
 
 const requestSchema = z.object({
   text: z.string().trim().min(3).max(6000),
   purpose: z.enum(["experience", "highlights", "worklog", "post", "profile", "general"]).default("general")
 });
-
-type OpenAIResponse = {
-  output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }>;
-  error?: { type?: string; code?: string; message?: string };
-};
-
-function responseText(payload: OpenAIResponse) {
-  return payload.output
-    ?.flatMap((item) => item.content || [])
-    .filter((content) => content.type === "output_text" && typeof content.text === "string")
-    .map((content) => content.text)
-    .join("\n")
-    .trim();
-}
 
 export async function POST(request: Request) {
   const session = await auth();
@@ -27,7 +14,7 @@ export async function POST(request: Request) {
 
   const parsed = requestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Escribe al menos una idea breve para mejorarla." }, { status: 400 });
-  if (!process.env.OPENAI_API_KEY) return NextResponse.json({ error: "El asistente de redacción no está configurado." }, { status: 503 });
+  if (!hasConfiguredAiProvider()) return NextResponse.json({ error: "El asistente de redacción no está configurado." }, { status: 503 });
 
   const purposeCopy = {
     experience: "una experiencia profesional verificable",
@@ -38,30 +25,21 @@ export async function POST(request: Request) {
     general: "un texto profesional"
   }[parsed.data.purpose];
 
-  const upstream = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: process.env.OPENAI_TEXT_MODEL || "gpt-5.4-mini",
-      store: false,
-      max_output_tokens: 1200,
-      instructions: `Eres el asistente editorial de Terraqo. Corrige ortografía, gramática, sintaxis y claridad en español para ${purposeCopy}. Conserva estrictamente los hechos, cifras, empresas, cargos y alcance escritos por el usuario. No inventes experiencia, resultados, certificaciones ni responsabilidades. Devuelve únicamente el texto final, sin explicación, encabezados ni comillas.`,
-      input: parsed.data.text
-    }),
-    signal: AbortSignal.timeout(25_000)
-  }).catch(() => null);
+  const result = await generateTerraqoText([
+    {
+      role: "system",
+      content: `Eres el asistente editorial de Terraqo. Corrige ortografía, gramática, sintaxis y claridad en español para ${purposeCopy}. Conserva estrictamente los hechos, cifras, empresas, cargos y alcance escritos por el usuario. No inventes experiencia, resultados, certificaciones ni responsabilidades. Devuelve únicamente el texto final, sin explicación, encabezados ni comillas.`
+    },
+    { role: "user", content: parsed.data.text }
+  ]);
 
-  if (!upstream) return NextResponse.json({ error: "El asistente no pudo conectarse. Inténtalo nuevamente." }, { status: 502 });
-  const payload = await upstream.json().catch(() => ({})) as OpenAIResponse;
-  if (!upstream.ok) {
-    const providerCode = payload.error?.code || payload.error?.type;
-    console.warn("Terraqo writing assistant upstream error", { status: upstream.status, code: providerCode || "unknown" });
-    if (providerCode === "insufficient_quota") return NextResponse.json({ error: "El asistente está temporalmente sin cuota disponible. Terraqo debe habilitar saldo API." }, { status: 503 });
-    if (upstream.status === 401) return NextResponse.json({ error: "La credencial del asistente necesita ser renovada." }, { status: 503 });
-    if (upstream.status === 429) return NextResponse.json({ error: "El asistente está recibiendo demasiadas solicitudes. Espera unos segundos." }, { status: 429 });
+  if (!result.ok) {
+    console.warn("Terraqo writing assistant upstream error", { status: result.status, code: result.code, provider: result.provider || "none" });
+    if (result.code === "insufficient_quota") return NextResponse.json({ error: "El asistente está temporalmente sin cuota disponible." }, { status: 503 });
+    if (result.status === 401 || result.status === 403) return NextResponse.json({ error: "La credencial del asistente necesita ser renovada." }, { status: 503 });
+    if (result.status === 429) return NextResponse.json({ error: "El asistente está recibiendo demasiadas solicitudes. Espera unos segundos." }, { status: 429 });
+    if (result.status === 504) return NextResponse.json({ error: "El asistente tardó demasiado. Inténtalo nuevamente." }, { status: 504 });
     return NextResponse.json({ error: "No pudimos mejorar el texto en este momento." }, { status: 502 });
   }
-  const improved = responseText(payload);
-  if (!improved) return NextResponse.json({ error: "El asistente no devolvió una corrección utilizable." }, { status: 502 });
-  return NextResponse.json({ data: { text: improved } });
+  return NextResponse.json({ data: { text: result.text } });
 }

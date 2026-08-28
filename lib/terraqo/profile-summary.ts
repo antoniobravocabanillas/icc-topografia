@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { generateTerraqoText, hasConfiguredAiProvider } from "@/lib/terraqo/ai-provider";
 
 type SummaryExperience = {
   title: string;
@@ -98,38 +99,21 @@ function configuredSummaryProvider() {
   const explicit = process.env.AI_PROFILE_SUMMARY_PROVIDER || process.env.AI_PROVIDER;
   if (explicit) return explicit.trim().toLowerCase();
   if (process.env.OLLAMA_BASE_URL) return "ollama";
+  if (process.env.GROQ_API_KEY) return "groq";
   if (process.env.OPENAI_API_KEY) return "openai";
   return "none";
 }
 
-async function openAiSummary(input: Parameters<typeof deterministicSummary>[0]) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return null;
-
-  const response = await fetchWithTimeout("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${apiKey}`,
-      "content-type": "application/json"
+async function hostedAiSummary(input: Parameters<typeof deterministicSummary>[0]) {
+  if (!hasConfiguredAiProvider()) return null;
+  const result = await generateTerraqoText([
+    {
+      role: "system",
+      content: "Redacta un extracto profesional sobrio, verificable y comercial para un CV vivo. No inventes datos. Máximo 75 palabras. Español neutro. Usa correctamente tildes y la letra ñ. Devuelve solo el extracto."
     },
-    body: JSON.stringify({
-      model: process.env.OPENAI_PROFILE_SUMMARY_MODEL || "gpt-4.1-mini",
-      input: [
-        {
-          role: "system",
-          content: "Redacta un extracto profesional sobrio, verificable y comercial para un CV vivo. No inventes datos. Máximo 75 palabras. Español neutro. Usa correctamente tildes y la letra ñ."
-        },
-        {
-          role: "user",
-          content: JSON.stringify(input)
-        }
-      ]
-    })
-  });
-  if (!response.ok) return null;
-  const payload = await response.json().catch(() => null);
-  const text = payload?.output_text || payload?.output?.flatMap?.((item: { content?: Array<{ text?: string }> }) => item.content || []).map((item: { text?: string }) => item.text).filter(Boolean).join(" ");
-  return typeof text === "string" ? normalizeSpanishCopy(text) : null;
+    { role: "user", content: JSON.stringify(input) }
+  ], 500);
+  return result.ok ? normalizeSpanishCopy(result.text) : null;
 }
 
 async function ollamaSummary(input: Parameters<typeof deterministicSummary>[0]) {
@@ -168,7 +152,7 @@ async function aiSummary(input: Parameters<typeof deterministicSummary>[0]) {
   const provider = configuredSummaryProvider();
   try {
     if (provider === "ollama" || provider === "local") return await ollamaSummary(input);
-    if (provider === "openai") return await openAiSummary(input);
+    if (provider === "openai" || provider === "groq") return await hostedAiSummary(input);
     if (provider === "none" || provider === "off" || provider === "false") return null;
   } catch {
     return null;
@@ -176,7 +160,7 @@ async function aiSummary(input: Parameters<typeof deterministicSummary>[0]) {
 
   const ollamaResult = await ollamaSummary(input).catch(() => null);
   if (ollamaResult) return ollamaResult;
-  return openAiSummary(input).catch(() => null);
+  return hostedAiSummary(input).catch(() => null);
 }
 
 export async function refreshProfessionalGeneratedSummary(professionalProfileId: string) {
