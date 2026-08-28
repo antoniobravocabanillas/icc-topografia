@@ -30,7 +30,7 @@ const visibilityLabels: Record<string, string> = {
 export function WorklogCard({ worklog, viewerId }: { worklog: WorklogWithContext; viewerId: string }) {
   const ownReaction = worklog.reactions.find((reaction) => reaction.userId === viewerId)?.type;
   return (
-    <article className="rounded-lg border bg-white p-6 shadow-technical">
+    <article className="min-w-0 rounded-2xl border bg-white p-4 shadow-technical sm:rounded-lg sm:p-6">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
           <div className="grid h-11 w-11 shrink-0 place-items-center rounded-md bg-[#063D63] font-display font-bold text-white">
@@ -49,7 +49,7 @@ export function WorklogCard({ worklog, viewerId }: { worklog: WorklogWithContext
 
       <div className="mt-6">
         <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">{typeLabels[worklog.type] || worklog.type}</p>
-        <h2 className="mt-2 font-display text-2xl font-bold">{worklog.title}</h2>
+        <h2 className="mt-2 break-words font-display text-xl font-bold sm:text-2xl">{worklog.title}</h2>
         <p className="mt-3 whitespace-pre-line text-[15px] leading-7 text-muted-foreground">{worklog.summary}</p>
         {worklog.outcome ? <div className="mt-4 border-l-2 border-primary bg-muted/35 px-4 py-3 text-sm"><strong>Resultado:</strong> {worklog.outcome}</div> : null}
       </div>

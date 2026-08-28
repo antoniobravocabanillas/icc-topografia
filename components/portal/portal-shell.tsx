@@ -23,7 +23,8 @@ import {
   ShieldCheck,
   UserRound,
   UsersRound,
-  ChevronDown
+  ChevronDown,
+  MoreHorizontal
 } from "lucide-react";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
@@ -157,11 +158,15 @@ export function PortalShell({ children, name, image, headline, portalType = "pro
   const planLabel = planLabels[planTier || "FREE"] || planTier || "Free";
   const primaryColor = visualIdentity.primaryColor;
   const accentColor = visualIdentity.accentColor;
+  const mobilePrimaryItems = portalType === "professional"
+    ? professionalItems.filter((item) => ["/portal", "/portal/experiencias", "/portal/bitacora", "/portal/red"].includes(item.href))
+    : clientItems.slice(0, 4);
+  const mobileMoreItems = items.filter((item) => !mobilePrimaryItems.some((primary) => primary.href === item.href));
 
   return (
     <div className="min-h-screen overflow-x-hidden text-[#0e1a26]" style={{ backgroundColor: visualIdentity.backgroundColor }}>
       <header className="sticky top-0 z-50 border-b border-[#d8e0ec] bg-white/95 backdrop-blur-xl">
-        <div className="mx-auto flex h-[76px] max-w-[1720px] items-center gap-4 px-4 sm:px-6 xl:px-8">
+        <div className="mx-auto flex h-16 max-w-[1720px] items-center gap-4 px-4 sm:h-[76px] sm:px-6 xl:px-8">
           <Link href="/portal" className="flex min-w-0 items-center gap-3" aria-label="Ir al resumen del portal">
             <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-lg border bg-white p-1.5" style={{ borderColor: withAlpha(accentColor, "55") }}>
               <TerraqoLogo src={brandLogo} variant="mark" alt={brandName} className="h-full w-full" />
@@ -205,7 +210,7 @@ export function PortalShell({ children, name, image, headline, portalType = "pro
       </header>
 
       <div className="mx-auto max-w-[1720px] px-4 sm:px-6 xl:px-8">
-        <div className="sticky top-[76px] z-40 -mx-4 border-b border-[#d8e0ec] bg-white/88 px-4 py-3 shadow-[0_14px_28px_rgba(15,59,67,0.06)] backdrop-blur-xl sm:-mx-6 sm:px-6 xl:hidden">
+        <div className="sticky top-[76px] z-40 -mx-4 hidden border-b border-[#d8e0ec] bg-white/88 px-4 py-3 shadow-[0_14px_28px_rgba(15,59,67,0.06)] backdrop-blur-xl sm:-mx-6 sm:px-6 md:block xl:hidden">
           <div className="mb-2 flex items-center justify-between gap-4">
             <p className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-[#4374ba]">Navegación</p>
             <span className="truncate text-xs font-semibold text-[#607083]">{portalLabel}</span>
@@ -215,7 +220,7 @@ export function PortalShell({ children, name, image, headline, portalType = "pro
           </div>
         </div>
 
-        <div className="grid min-h-[calc(100vh-76px)] gap-7 xl:grid-cols-[250px_minmax(0,1fr)] xl:gap-9">
+        <div className="grid min-h-[calc(100vh-64px)] gap-5 pb-24 sm:min-h-[calc(100vh-76px)] sm:gap-7 sm:pb-0 xl:grid-cols-[250px_minmax(0,1fr)] xl:gap-9">
           <aside className="hidden border-r border-[#d8e0ec] pr-6 pt-8 xl:block">
             <div className="sticky top-[108px]">
               <p className="mb-4 px-3 font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-[#4374ba]">Navegación</p>
@@ -236,6 +241,23 @@ export function PortalShell({ children, name, image, headline, portalType = "pro
           <main className="min-w-0">{children}</main>
         </div>
       </div>
+
+      <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-[#d8e0ec] bg-white/95 px-[max(0.5rem,env(safe-area-inset-left))] pb-[max(0.45rem,env(safe-area-inset-bottom))] pt-1.5 shadow-[0_-12px_35px_rgba(14,26,38,0.12)] backdrop-blur-xl md:hidden" aria-label="Navegación móvil del portal">
+        <div className="mx-auto grid max-w-lg grid-cols-5 gap-1">
+          {mobilePrimaryItems.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(pathname, item.href);
+            return <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-bold" style={active ? { backgroundColor: withAlpha(accentColor, "18"), color: primaryColor } : { color: "#607083" }}><Icon className="h-5 w-5" /><span className="max-w-full truncate">{item.label === "Experiencias" ? "Experiencia" : item.label}</span></Link>;
+          })}
+          <details className="group relative">
+            <summary className="flex min-h-14 cursor-pointer list-none flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-bold text-[#607083] [&::-webkit-details-marker]:hidden"><MoreHorizontal className="h-5 w-5" /><span>Más</span></summary>
+            <div className="absolute bottom-[calc(100%+12px)] right-0 grid max-h-[70vh] w-[min(20rem,calc(100vw-1rem))] grid-cols-2 gap-1 overflow-y-auto rounded-2xl border border-[#d8e0ec] bg-white p-2 shadow-[0_22px_60px_rgba(14,26,38,0.22)]">
+              {mobileMoreItems.map((item) => { const Icon = item.icon; const active = isActive(pathname, item.href); return <Link key={item.href} href={item.href} className="flex min-h-12 items-center gap-2 rounded-xl px-3 text-xs font-semibold" style={active ? { backgroundColor: withAlpha(accentColor, "18"), color: primaryColor } : { color: "#35485b" }}><Icon className="h-4 w-4 shrink-0" />{item.label}</Link>; })}
+              <SignOutButton className="col-span-2 mt-1 w-full justify-start border-0 bg-[#fff1f0] px-3 text-[#b42318] shadow-none" />
+            </div>
+          </details>
+        </div>
+      </nav>
     </div>
   );
 }

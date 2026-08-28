@@ -89,7 +89,7 @@ export function WorklogComposer({ workspaces }: { workspaces: WorkspaceOption[] 
   }
 
   return (
-    <form onSubmit={submit} className="rounded-lg border bg-white p-6 shadow-technical">
+    <form onSubmit={submit} className="min-w-0 rounded-2xl border bg-white p-4 shadow-technical sm:rounded-lg sm:p-6">
       <div className="flex items-start gap-3">
         <span className="grid h-10 w-10 place-items-center rounded-md bg-primary/10 text-primary"><NotebookPen className="h-5 w-5" /></span>
         <div>
@@ -99,25 +99,25 @@ export function WorklogComposer({ workspaces }: { workspaces: WorkspaceOption[] 
         </div>
       </div>
 
-      <div className="mt-6 grid gap-4 md:grid-cols-2">
+      <div className="mt-5 grid min-w-0 gap-4 sm:mt-6 md:grid-cols-2">
         <label className="grid gap-2 text-sm font-semibold">Workspace
-          <select name="workspaceId" value={workspaceId} onChange={(event) => setWorkspaceId(event.target.value)} className="h-11 rounded-md border bg-background px-3" required>
+          <select name="workspaceId" value={workspaceId} onChange={(event) => setWorkspaceId(event.target.value)} className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm" required>
             {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
           </select>
         </label>
         <label className="grid gap-2 text-sm font-semibold">Proyecto vinculado
-          <select name="projectId" className="h-11 rounded-md border bg-background px-3">
+          <select name="projectId" className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm">
             <option value="">Sin proyecto vinculado</option>
             {projects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}
           </select>
         </label>
         <label className="grid gap-2 text-sm font-semibold md:col-span-2">Titulo
-          <input name="title" className="h-11 rounded-md border bg-background px-3" placeholder="Ej. Control de ejes completado en torre B" required minLength={4} maxLength={180} />
+          <input name="title" className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm" placeholder="Ej. Control de ejes completado en torre B" required minLength={4} maxLength={180} />
         </label>
         <div className="grid gap-2 text-sm font-semibold md:col-span-2"><span>Qué hiciste y qué problema resolviste</span><AiWritingTextarea name="summary" purpose="worklog" className="min-h-32" placeholder="Describe el trabajo, la decisión técnica y el contexto necesario para entenderlo." required minLength={20} maxLength={2400} /></div>
         <div className="grid gap-2 text-sm font-semibold md:col-span-2"><span>Resultado observable</span><AiWritingTextarea name="outcome" purpose="worklog" className="min-h-20" placeholder="Ej. Se liberaron los frentes sin observaciones y se entregó el reporte de control." maxLength={800} /></div>
         <label className="grid gap-2 text-sm font-semibold">Tipo de evidencia
-          <select name="type" className="h-11 rounded-md border bg-background px-3">
+          <select name="type" className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm">
             <option value="FIELD_UPDATE">Avance de trabajo</option>
             <option value="DELIVERABLE">Entregable</option>
             <option value="PROBLEM_SOLVED">Problema resuelto</option>
@@ -126,7 +126,7 @@ export function WorklogComposer({ workspaces }: { workspaces: WorkspaceOption[] 
           </select>
         </label>
         <label className="grid gap-2 text-sm font-semibold">Quien puede verlo
-          <select name="visibility" className="h-11 rounded-md border bg-background px-3" defaultValue="PRIVATE">
+          <select name="visibility" className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm" defaultValue="PRIVATE">
             <option value="PRIVATE">Solo yo</option>
             <option value="WORKSPACE">Empresa vinculada</option>
             <option value="COMMUNITY">Comunidad Terraqo</option>
@@ -134,19 +134,19 @@ export function WorklogComposer({ workspaces }: { workspaces: WorkspaceOption[] 
           </select>
         </label>
         <label className="grid gap-2 text-sm font-semibold">Habilidades, separadas por coma
-          <input name="skills" className="h-11 rounded-md border bg-background px-3" placeholder="Topografia, GNSS, AutoCAD" />
+          <input name="skills" className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm" placeholder="Topografia, GNSS, AutoCAD" />
         </label>
         <div className="flex min-h-11 items-center gap-3 rounded-md border bg-[#f2f8f7] px-3 text-sm text-[#35485b]">
           <CalendarClock className="h-4 w-4 shrink-0 text-primary" />
           <span><b>Fecha y hora automáticas.</b> Se registran al guardar y no podrán modificarse.</span>
         </div>
         <label className="grid gap-2 text-sm font-semibold md:col-span-2"><span className="flex items-center gap-2"><Link2 className="h-4 w-4" /> Evidencias externas, una URL por linea</span>
-          <textarea name="evidenceUrls" className="min-h-20 rounded-md border bg-background p-3" placeholder="https://..." />
+          <textarea name="evidenceUrls" className="min-h-24 min-w-0 rounded-xl border bg-background p-3 text-base sm:rounded-md sm:text-sm" placeholder="https://..." />
         </label>
         <label className="grid gap-2 text-sm font-semibold md:col-span-2">
           <span className="flex items-center gap-2"><ImagePlus className="h-4 w-4" /> Fotos desde tu dispositivo</span>
           <span className="rounded-md border border-dashed bg-muted/25 p-4 text-sm font-medium text-muted-foreground">
-            <input type="file" accept="image/jpeg,image/png,image/webp,image/avif" multiple onChange={selectPhotos} className="block w-full text-sm file:mr-4 file:rounded-md file:border-0 file:bg-primary file:px-4 file:py-2 file:font-bold file:text-primary-foreground" />
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/avif" multiple onChange={selectPhotos} className="block w-full min-w-0 text-sm file:mb-2 file:mr-4 file:min-h-11 file:w-full file:rounded-xl file:border-0 file:bg-primary file:px-4 file:py-2 file:font-bold file:text-primary-foreground sm:file:mb-0 sm:file:w-auto sm:file:rounded-md" />
             <small className="mt-2 block">Hasta 6 fotos en JPG, PNG, WEBP o AVIF. Maximo 8 MB por archivo.</small>
           </span>
         </label>
@@ -159,9 +159,9 @@ export function WorklogComposer({ workspaces }: { workspaces: WorkspaceOption[] 
         </div> : null}
       </div>
 
-      <div className="mt-5 flex flex-col gap-3 border-t pt-5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="sticky bottom-[4.8rem] z-20 -mx-4 mt-5 flex flex-col gap-3 border-t bg-white/95 px-4 py-4 backdrop-blur-xl sm:static sm:mx-0 sm:flex-row sm:items-center sm:justify-between sm:bg-transparent sm:px-0 sm:pb-0 sm:pt-5">
         <p className="flex items-center gap-2 text-sm text-muted-foreground"><CheckCircle2 className="h-4 w-4 text-primary" /> Privada por defecto. Tu decides cuando compartirla.</p>
-        <Button type="submit" disabled={submitting}>{submitting ? "Registrando..." : "Guardar en mi bitacora"}</Button>
+        <Button type="submit" disabled={submitting} className="min-h-12 w-full rounded-xl text-base sm:min-h-10 sm:w-auto sm:rounded-md sm:text-sm">{submitting ? "Registrando..." : "Guardar en mi bitacora"}</Button>
       </div>
       {message ? <p role="status" className="mt-4 rounded-md border bg-muted/40 p-3 text-sm font-semibold">{message}</p> : null}
     </form>

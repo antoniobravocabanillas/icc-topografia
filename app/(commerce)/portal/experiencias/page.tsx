@@ -68,7 +68,7 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
   const validatorOptions = validators.map((validator) => ({ id: validator.id, label: validator.name || "Responsable Terraqo", email: validator.email }));
 
   return (
-    <div className="min-w-0 space-y-8 py-6 lg:py-8">
+    <div className="min-w-0 space-y-5 py-4 sm:space-y-8 sm:py-6 lg:py-8">
       <PortalPageHeading
         eyebrow="Experiencias"
         title="Carga trabajos reales y conviertelos en experiencia verificable."
@@ -89,7 +89,7 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
       {params.status === "date-order-invalid" ? <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">La fecha de finalización no puede ser anterior al inicio.</div> : null}
 
       <Card className="border-primary/20 bg-[#eefbf9]">
-        <CardContent className="grid gap-4 p-5 lg:grid-cols-[1fr_auto] lg:items-center">
+        <CardContent className="grid gap-4 p-4 sm:p-5 lg:grid-cols-[1fr_auto] lg:items-center">
           <div className="flex gap-3">
             <Sparkles className="mt-1 h-5 w-5 shrink-0 text-primary" />
             <div>
@@ -106,7 +106,7 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
       </Card>
 
       <section className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.18fr)_minmax(0,0.82fr)]">
-        <Card className="min-w-0">
+        <Card className="min-w-0 overflow-hidden rounded-2xl sm:rounded-lg">
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><History className="h-5 w-5 text-primary" /> Cargar experiencia historica</CardTitle>
             <CardDescription>Para trabajos anteriores donde quieres solicitar validacion de un encargado o cliente.</CardDescription>
@@ -116,7 +116,7 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
           </CardContent>
         </Card>
 
-        <Card className="min-w-0">
+        <Card className="min-w-0 overflow-hidden rounded-2xl sm:rounded-lg">
           <CardHeader>
             <CardTitle>Historial profesional</CardTitle>
             <CardDescription>Experiencias asociadas a tu CV vivo.</CardDescription>
@@ -127,10 +127,10 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
               const statusLabel = checks >= 2 ? "2 checks" : experience.verifiedByTerraqo ? "Verificado por Terraqo referencialmente" : "Sin verificar";
               const hasReference = Boolean(experience.validatorUserId || experience.validatorEmail || experience.validatorName || experience.evidence.length);
               return (
-                <article key={experience.id} className="rounded-lg border bg-white p-4">
+                <article key={experience.id} className="min-w-0 rounded-2xl border bg-white p-4 sm:rounded-lg">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                      <h2 className="font-display text-lg font-bold">{experience.title}</h2>
+                      <h2 className="break-words font-display text-lg font-bold">{experience.title}</h2>
                       <p className="mt-1 text-sm text-muted-foreground">{experience.companyName || "Empresa por confirmar"} | {experience.role || "Rol por completar"}</p>
                       <p className="mt-1 text-xs font-semibold text-muted-foreground">{formatExperienceDuration(monthsBetween(experience.startedAt, experience.currentlyWorking ? null : experience.endedAt))} · {experience.currentlyWorking ? "Actualmente" : "Finalizado"}{experience.locationCity || experience.location ? ` · ${experience.locationCity || experience.location}` : ""}</p>
                       {experience.project ? <p className="mt-2 text-sm font-semibold text-primary">Proyecto vinculado: {experience.project.title}</p> : null}

@@ -43,7 +43,7 @@ export default async function WorklogPage({ searchParams }: WorklogPageProps) {
   }));
 
   return (
-    <div className="min-w-0 space-y-8 py-6 lg:py-8">
+    <div className="min-w-0 space-y-5 py-4 sm:space-y-8 sm:py-6 lg:py-8">
         <PortalPageHeading eyebrow="CV vivo" title="Tu trabajo habla por ti." description="Convierte avances, decisiones y entregables en una trayectoria verificable. Cada entrada conserva su contexto, proyecto y nivel de visibilidad." />
 
         {workspaceOptions.length ? <WorklogComposer workspaces={workspaceOptions} /> : (
@@ -54,14 +54,14 @@ export default async function WorklogPage({ searchParams }: WorklogPageProps) {
           </div>
         )}
 
-        <section className="rounded-lg border bg-white p-5 shadow-technical">
+        <section className="rounded-2xl border bg-white p-4 shadow-technical sm:rounded-lg sm:p-5">
           <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-end">
             <div>
               <p className="font-mono text-xs font-bold uppercase tracking-[0.16em] text-primary">Linea de tiempo</p>
               <h2 className="mt-1 font-display text-2xl font-bold">Bitacoras por fecha</h2>
               <p className="mt-2 text-sm text-muted-foreground">Selecciona un dia para revisar exactamente que evidencia fue generada.</p>
             </div>
-            <Link href="/portal/bitacora" className={`rounded-md border px-4 py-2 text-sm font-semibold ${!selectedDate ? "bg-primary text-white" : "hover:bg-muted"}`}>Todas</Link>
+            <Link href="/portal/bitacora" className={`min-h-11 rounded-xl border px-4 py-2.5 text-center text-sm font-semibold sm:min-h-0 sm:rounded-md sm:py-2 ${!selectedDate ? "bg-primary text-white" : "hover:bg-muted"}`}>Todas</Link>
           </div>
           <div className="mt-5 flex gap-2 overflow-x-auto pb-1">
             {days.map((day) => (

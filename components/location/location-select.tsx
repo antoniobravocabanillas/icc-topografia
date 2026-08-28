@@ -72,10 +72,10 @@ export function LocationSelect({
   }, [country, subdivision]);
 
   const selectClass =
-    "h-11 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60";
+    "h-12 w-full min-w-0 rounded-xl border border-input bg-background px-3 text-base text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60 sm:h-11 sm:rounded-md sm:text-sm";
 
   return (
-    <div className={`grid min-w-0 gap-3 md:grid-cols-2 2xl:grid-cols-3 ${className}`}>
+    <div className={`grid min-w-0 gap-3 sm:grid-cols-2 2xl:grid-cols-3 ${className}`}>
       <label className="grid min-w-0 gap-1.5">
         <span className="text-[0.68rem] font-bold uppercase tracking-[0.18em] text-primary">Pais</span>
         <select id={`${id}-country`} name={countryName} required={required} className={selectClass} value={country} onChange={(event) => {
@@ -99,7 +99,7 @@ export function LocationSelect({
         </select>
       </label>
 
-      <label className="grid min-w-0 gap-1.5 md:col-span-2 2xl:col-span-1">
+      <label className="grid min-w-0 gap-1.5 sm:col-span-2 2xl:col-span-1">
         <span className="text-[0.68rem] font-bold uppercase tracking-[0.18em] text-primary">Ciudad</span>
         <select id={`${id}-city`} required={required && cities.length > 0} disabled={!country} className={selectClass} value={city} onChange={(event) => setCity(event.target.value)}>
           <option value="">{cities.length ? "Selecciona ciudad o distrito" : "Escribe la ubicación"}</option>

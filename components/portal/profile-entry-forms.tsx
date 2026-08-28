@@ -35,10 +35,10 @@ export function ExperienceForm({ validators, companies, createExperienceAction }
   const selectedCompany = companies.find((company) => company.id === companyId);
   const manualProject = manualCompany || projectId === "OTHER";
   return (
-    <form action={createExperienceAction} className="grid gap-3">
+    <form action={createExperienceAction} className="grid min-w-0 gap-4">
       <label className="grid gap-1.5 text-sm font-semibold">
         Empresa o cliente
-        <select name="workspaceId" value={companyId} onChange={(event) => { setCompanyId(event.target.value); setProjectId(""); }} required className="h-11 rounded-md border border-input bg-background px-3 text-sm">
+        <select name="workspaceId" value={companyId} onChange={(event) => { setCompanyId(event.target.value); setProjectId(""); }} required className="h-12 min-w-0 rounded-xl border border-input bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm">
           <option value="">Selecciona una empresa registrada</option>
           {companies.map((company) => <option key={company.id} value={company.id}>{company.name}{company.industry ? ` · ${company.industry}` : ""}</option>)}
           <option value="OTHER">La empresa no aparece en Terraqo</option>
@@ -49,7 +49,7 @@ export function ExperienceForm({ validators, companies, createExperienceAction }
       {!manualCompany && selectedCompany ? (
         <label className="grid gap-1.5 text-sm font-semibold">
           Proyecto
-          <select name="projectId" value={projectId} onChange={(event) => setProjectId(event.target.value)} required className="h-11 rounded-md border border-input bg-background px-3 text-sm">
+          <select name="projectId" value={projectId} onChange={(event) => setProjectId(event.target.value)} required className="h-12 min-w-0 rounded-xl border border-input bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm">
             <option value="">Selecciona un proyecto público de la empresa</option>
             {selectedCompany.projects.map((project) => <option key={project.id} value={project.id}>{project.title}{project.category ? ` · ${project.category}` : ""}{project.location ? ` · ${project.location}` : ""}</option>)}
             <option value="OTHER">El proyecto no aparece en la lista</option>
@@ -64,8 +64,8 @@ export function ExperienceForm({ validators, companies, createExperienceAction }
         <label className="grid gap-1 text-sm font-semibold">Inicio<Input name="startedAt" type="date" /></label>
         <label className="grid gap-1 text-sm font-semibold">Fin<Input name="endedAt" type="date" disabled={current} /></label>
       </div>
-      <label className="inline-flex items-center gap-2 text-sm font-semibold">
-        <input name="currentlyWorking" type="checkbox" checked={current} onChange={(event) => setCurrent(event.target.checked)} className="h-4 w-4 rounded border-input accent-primary" />
+      <label className="inline-flex min-h-12 items-center gap-3 rounded-xl border bg-muted/25 px-3 text-sm font-semibold sm:min-h-0 sm:rounded-none sm:border-0 sm:bg-transparent sm:px-0">
+        <input name="currentlyWorking" type="checkbox" checked={current} onChange={(event) => setCurrent(event.target.checked)} className="h-5 w-5 rounded border-input accent-primary" />
         Actualmente trabajo aqui
       </label>
       <VisibilitySelect />
@@ -74,12 +74,12 @@ export function ExperienceForm({ validators, companies, createExperienceAction }
       <AiWritingTextarea name="summary" purpose="experience" placeholder="Detalle destacado visible en la pagina publica de esta experiencia. Ej. alcance, logros, decisiones, responsabilidades e impacto." className="min-h-28" />
       <AiWritingTextarea name="highlights" purpose="highlights" placeholder="Puntos clave, uno por linea. Ej. Analisis de mercado, gestion de riesgos, reportes, ejecucion de operaciones." />
       <Textarea name="evidence" placeholder="Evidencias, enlaces o referencias, una por linea" />
-      <label className="grid gap-2 rounded-lg border border-dashed border-primary/35 bg-primary/5 p-4 text-sm font-semibold">
+      <label className="grid gap-3 rounded-2xl border border-dashed border-primary/35 bg-primary/5 p-4 text-sm font-semibold sm:rounded-lg">
         Fotos o documentos de respaldo
-        <input name="evidenceFiles" type="file" multiple accept="image/jpeg,image/png,image/webp,image/avif,application/pdf" className="block w-full text-sm font-normal file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-4 file:py-2 file:font-bold file:text-white" />
+        <input name="evidenceFiles" type="file" multiple accept="image/jpeg,image/png,image/webp,image/avif,application/pdf" className="block w-full min-w-0 text-sm font-normal file:mb-2 file:mr-3 file:min-h-11 file:w-full file:rounded-xl file:border-0 file:bg-primary file:px-4 file:py-2 file:font-bold file:text-white sm:file:mb-0 sm:file:w-auto sm:file:rounded-md" />
         <span className="text-xs font-normal text-muted-foreground">Hasta 6 archivos JPG, PNG, WEBP, AVIF o PDF. Máximo 8 MB por archivo.</span>
       </label>
-      <SubmitButton pendingText="Registrando...">Guardar experiencia</SubmitButton>
+      <SubmitButton pendingText="Registrando..." className="min-h-12 w-full rounded-xl text-base sm:min-h-10 sm:w-auto sm:rounded-md sm:text-sm">Guardar experiencia</SubmitButton>
     </form>
   );
 }
@@ -87,7 +87,7 @@ export function ExperienceForm({ validators, companies, createExperienceAction }
 export function EducationForm({ validators, createEducationAction }: Pick<ProfileEntryFormsProps, "validators" | "createEducationAction">) {
   const [current, setCurrent] = useState(false);
   return (
-    <form action={createEducationAction} className="grid gap-3">
+    <form action={createEducationAction} className="grid min-w-0 gap-4">
       <Input name="institution" placeholder="Institucion educativa" required />
       <Input name="degree" placeholder="Grado, titulo o certificacion" required />
       <Input name="field" placeholder="Especialidad o area de estudio" />
@@ -96,15 +96,15 @@ export function EducationForm({ validators, createEducationAction }: Pick<Profil
         <label className="grid gap-1 text-sm font-semibold">Inicio<Input name="educationStartedAt" type="date" /></label>
         <label className="grid gap-1 text-sm font-semibold">Fin<Input name="educationEndedAt" type="date" disabled={current} /></label>
       </div>
-      <label className="inline-flex items-center gap-2 text-sm font-semibold">
-        <input name="currentlyStudying" type="checkbox" checked={current} onChange={(event) => setCurrent(event.target.checked)} className="h-4 w-4 rounded border-input accent-primary" />
+      <label className="inline-flex min-h-12 items-center gap-3 rounded-xl border bg-muted/25 px-3 text-sm font-semibold sm:min-h-0 sm:rounded-none sm:border-0 sm:bg-transparent sm:px-0">
+        <input name="currentlyStudying" type="checkbox" checked={current} onChange={(event) => setCurrent(event.target.checked)} className="h-5 w-5 rounded border-input accent-primary" />
         Actualmente estudio aqui
       </label>
       <VisibilitySelect />
       <ValidatorSelect validators={validators} />
       <Input name="educationValidatorFallback" placeholder="Correo o nombre del responsable academico" />
       <Textarea name="educationEvidence" placeholder="Certificados, enlaces, constancias o referencias, una por linea" />
-      <SubmitButton pendingText="Guardando...">Guardar educacion</SubmitButton>
+      <SubmitButton pendingText="Guardando..." className="min-h-12 w-full rounded-xl text-base sm:min-h-10 sm:w-auto sm:rounded-md sm:text-sm">Guardar educacion</SubmitButton>
     </form>
   );
 }
@@ -113,7 +113,7 @@ function VisibilitySelect() {
   return (
     <label className="grid gap-1 text-sm font-semibold">
       Visibilidad en CV vivo
-      <select name="visibility" defaultValue="PRIVATE" className="h-11 rounded-md border bg-background px-3 text-sm">
+      <select name="visibility" defaultValue="PRIVATE" className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm">
         <option value="PRIVATE">Privada: solo yo y Terraqo</option>
         <option value="WORKSPACE">Visible para mis workspaces</option>
         <option value="COMMUNITY">Visible en comunidad Terraqo</option>
@@ -127,7 +127,7 @@ function ValidatorSelect({ validators }: { validators: ValidatorOption[] }) {
   return (
     <label className="grid gap-1 text-sm font-semibold">
       Solicitar verificacion a un responsable
-      <select name="validatorUserId" defaultValue="" className="h-11 rounded-md border bg-background px-3 text-sm">
+      <select name="validatorUserId" defaultValue="" className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm">
         <option value="">Selecciona un perfil autorizado</option>
         {validators.map((validator) => (
           <option key={validator.id} value={validator.id}>{validator.label} · {validator.email}</option>
