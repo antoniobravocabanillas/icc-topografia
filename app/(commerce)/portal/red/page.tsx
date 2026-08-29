@@ -22,7 +22,7 @@ export default async function ProfessionalNetworkDirectoryPage() {
             orderBy: [{ current: "desc" }, { updatedAt: "desc" }],
             take: 1
           },
-          experiences: { where: { OR: [{ verifiedByTerraqo: true }, { visibility: { in: ["PUBLIC", "COMMUNITY", "WORKSPACE"] } }] }, select: { id: true }, take: 8 }
+          experiences: { where: { OR: [{ verifiedByTerraqo: true }, { visibility: { in: ["PUBLIC", "COMMUNITY", "WORKSPACE"] } }] }, select: { id: true, verifiedByTerraqo: true }, take: 20 }
         },
         orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
         take: 80
@@ -31,7 +31,7 @@ export default async function ProfessionalNetworkDirectoryPage() {
   const companies = workspaceIds.length
     ? await prisma.company.findMany({
         where: { terraqoWorkspaceId: { in: workspaceIds }, deletedAt: null },
-        select: { id: true, legalName: true, tradeName: true, document: true, city: true, locationCity: true, industry: true, status: true, publicSlug: true, updatedAt: true },
+        select: { id: true, legalName: true, tradeName: true, document: true, city: true, locationCity: true, industry: true, status: true, publicSlug: true, logoUrl: true, updatedAt: true },
         orderBy: { updatedAt: "desc" },
         take: 80
       })
@@ -58,9 +58,12 @@ export default async function ProfessionalNetworkDirectoryPage() {
           city: profile.city,
           locationCity: profile.locationCity,
           status: profile.status,
+          verified: profile.identityVerificationStatus === "VERIFIED",
           workspaceName: workspace?.brandName || workspace?.name || "Terraqo",
+          roleTitle: profile.affiliations[0]?.roleTitle || null,
           skills: [...profile.professionalCategories, ...profile.specialties],
-          verifiedExperiences: profile.experiences.length,
+          visibleExperiences: profile.experiences.length,
+          verifiedExperiences: profile.experiences.filter((experience) => experience.verifiedByTerraqo).length,
           lastSeenAt: profile.user.lastSeenAt?.toISOString() || null,
           onlineUntil: profile.user.onlineUntil?.toISOString() || null,
           updatedAt: profile.updatedAt.toISOString()
@@ -73,6 +76,7 @@ export default async function ProfessionalNetworkDirectoryPage() {
         city: company.locationCity || company.city,
         industry: company.industry,
         status: company.status,
+        logoUrl: company.logoUrl,
         publicSlug: company.publicSlug,
         updatedAt: company.updatedAt.toISOString()
       }))}
