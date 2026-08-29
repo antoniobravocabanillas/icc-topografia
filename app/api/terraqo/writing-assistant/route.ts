@@ -9,6 +9,21 @@ const requestSchema = z.object({
   purpose: z.enum(["experience", "highlights", "worklog", "post", "profile", "general"]).default("general")
 });
 
+const assistantResultSchema = z.object({
+  language: z.string().trim().min(2).max(80),
+  corrected: z.string().trim().min(1).max(12000),
+  improved: z.string().trim().min(1).max(12000)
+});
+
+function parseAssistantResult(text: string) {
+  const normalized = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  const start = normalized.indexOf("{");
+  const end = normalized.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
+  const parsed = assistantResultSchema.safeParse(JSON.parse(normalized.slice(start, end + 1)));
+  return parsed.success ? parsed.data : null;
+}
+
 export async function POST(request: Request) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Debes iniciar sesión." }, { status: 401 });
@@ -34,10 +49,10 @@ export async function POST(request: Request) {
   const result = await generateTerraqoText([
     {
       role: "system",
-      content: `Eres el asistente editorial de Terraqo. Corrige ortografía, gramática, sintaxis y claridad en español para ${purposeCopy}. Conserva estrictamente los hechos, cifras, empresas, cargos y alcance escritos por el usuario. No inventes experiencia, resultados, certificaciones ni responsabilidades. Devuelve únicamente el texto final, sin explicación, encabezados ni comillas.`
+      content: `Eres el asistente editorial de Terraqo para ${purposeCopy}. Detecta el idioma del texto y responde en ese mismo idioma. Conserva estrictamente los hechos, cifras, empresas, cargos, intención y alcance escritos por el usuario. No inventes experiencia, resultados, certificaciones ni responsabilidades. Genera dos versiones: "corrected", que sólo corrige ortografía, gramática, puntuación y sintaxis manteniendo al máximo las palabras y extensión originales; e "improved", que reescribe como un experto de forma más clara, profesional y, cuando aporte valor, ligeramente más amplia, sin exagerar ni perder la esencia. Devuelve exclusivamente JSON válido con esta forma exacta: {"language":"idioma detectado","corrected":"texto corregido","improved":"texto mejorado"}. No uses Markdown ni bloques de código.`
     },
     { role: "user", content: parsed.data.text }
-  ]);
+  ], 2400);
 
   if (!result.ok) {
     console.warn("Terraqo writing assistant upstream error", { status: result.status, code: result.code, provider: result.provider || "none" });
@@ -47,5 +62,12 @@ export async function POST(request: Request) {
     if (result.status === 504) return NextResponse.json({ error: "El asistente tardó demasiado. Inténtalo nuevamente." }, { status: 504 });
     return NextResponse.json({ error: "No pudimos mejorar el texto en este momento." }, { status: 502 });
   }
-  return NextResponse.json({ data: { text: result.text } });
+  let suggestions = null;
+  try {
+    suggestions = parseAssistantResult(result.text);
+  } catch {
+    suggestions = null;
+  }
+  if (!suggestions) return NextResponse.json({ error: "El asistente no devolvió alternativas válidas. Inténtalo nuevamente." }, { status: 502 });
+  return NextResponse.json({ data: suggestions });
 }

@@ -44,6 +44,7 @@ export function WorkspaceWritingAssistant() {
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState(false);
+  const [suggestions, setSuggestions] = useState<{ corrected: string; improved: string; language: string } | null>(null);
 
   useEffect(() => {
     const handleFocus = (event: FocusEvent) => {
@@ -52,6 +53,7 @@ export function WorkspaceWritingAssistant() {
         activeField.current = event.target;
         setMessage("");
         setSuccess(false);
+        setSuggestions(null);
         setVisible(true);
       } catch (error) {
         console.error("Terraqo writing assistant focus detection failed", error);
@@ -76,6 +78,7 @@ export function WorkspaceWritingAssistant() {
 
     setWorking(true);
     setMessage("");
+    setSuggestions(null);
     try {
       const response = await fetch("/api/terraqo/writing-assistant", {
         method: "POST",
@@ -84,9 +87,9 @@ export function WorkspaceWritingAssistant() {
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error || "No pudimos corregir el texto.");
-      updateField(field, payload.data.text);
       setSuccess(true);
-      setMessage("Texto corregido. Revísalo antes de guardar.");
+      setSuggestions(payload.data);
+      setMessage(`Idioma detectado: ${payload.data.language}`);
     } catch (error) {
       setSuccess(false);
       setMessage(error instanceof Error ? error.message : "No pudimos corregir el texto.");
@@ -97,14 +100,32 @@ export function WorkspaceWritingAssistant() {
 
   if (!visible) return null;
 
+  function applySuggestion(text: string) {
+    const field = activeField.current;
+    if (!field || !document.contains(field)) return setVisible(false);
+    updateField(field, text);
+    setSuggestions(null);
+    setMessage("Versión aplicada. Revísala antes de guardar.");
+  }
+
   return (
-    <aside className="fixed inset-x-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-[70] mx-auto flex max-w-md items-center gap-2 rounded-2xl border border-[#b9d6df] bg-white/95 p-2.5 shadow-[0_18px_55px_rgba(14,26,38,0.2)] backdrop-blur-xl md:inset-x-auto md:bottom-6 md:right-6 md:mx-0" aria-label="Asistente de redacción">
+    <aside className="fixed inset-x-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-[70] mx-auto grid max-h-[min(78dvh,680px)] max-w-2xl gap-2 overflow-y-auto rounded-2xl border border-[#b9d6df] bg-white/95 p-2.5 shadow-[0_18px_55px_rgba(14,26,38,0.2)] backdrop-blur-xl md:inset-x-auto md:bottom-6 md:right-6 md:mx-0 md:w-[min(680px,calc(100vw-3rem))]" aria-label="Asistente de redacción">
+      <div className="flex items-center gap-2">
       <button type="button" onPointerDown={(event) => event.preventDefault()} onClick={improve} disabled={working} className="flex min-h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#4374ba] to-[#20b8ce] px-4 text-sm font-bold text-white transition hover:brightness-105 disabled:cursor-wait disabled:opacity-70">
         {working ? <LoaderCircle className="h-4 w-4 animate-spin" /> : success ? <Check className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
-        {working ? "Corrigiendo…" : "Corregir redacción"}
+        {working ? "Analizando…" : suggestions ? "Generar nuevamente" : "Revisar con IA"}
       </button>
       {message ? <p aria-live="polite" className={`max-w-48 text-xs font-medium ${success ? "text-emerald-700" : "text-[#607083]"}`}>{message}</p> : null}
       <button type="button" onPointerDown={(event) => event.preventDefault()} onClick={() => setVisible(false)} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-[#607083] hover:bg-[#eef3f7]" aria-label="Ocultar asistente"><X className="h-4 w-4" /></button>
+      </div>
+      {suggestions ? <div className="grid gap-2 md:grid-cols-2">
+        <AssistantSuggestion title="Corrección fiel" description="Corrige idioma y sintaxis sin reformular la esencia." text={suggestions.corrected} onApply={() => applySuggestion(suggestions.corrected)} />
+        <AssistantSuggestion title="Versión profesional" description="Mejora claridad y profundidad sin exagerar." text={suggestions.improved} onApply={() => applySuggestion(suggestions.improved)} />
+      </div> : null}
     </aside>
   );
+}
+
+function AssistantSuggestion({ title, description, text, onApply }: { title: string; description: string; text: string; onApply: () => void }) {
+  return <article className="rounded-xl border border-[#d8e2e8] bg-[#f7fafc] p-3"><p className="text-sm font-bold text-[#0e1a26]">{title}</p><p className="mt-1 text-xs text-[#607083]">{description}</p><p className="mt-3 max-h-44 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-[#35485b]">{text}</p><button type="button" onPointerDown={(event) => event.preventDefault()} onClick={onApply} className="mt-3 min-h-10 w-full rounded-lg border border-[#4374ba]/25 bg-white px-3 text-xs font-bold text-[#4374ba] hover:bg-[#4374ba] hover:text-white">Usar esta versión</button></article>;
 }
