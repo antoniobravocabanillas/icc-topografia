@@ -98,6 +98,33 @@ export async function renderVerificationCodeEmail(input: { recipientName?: strin
   return { html: await render(element), text: await render(element, { plainText: true }) };
 }
 
+export function ProfileCompletionTemplate({ recipientName, profileUrl, customMessage, emailVerified, hasUsername }: { recipientName?: string | null; profileUrl: string; customMessage?: string | null; emailVerified: boolean; hasUsername: boolean }) {
+  const helpUrl = "https://wa.me/51926912607?text=Necesito%20ayuda%20con%20mi%20cuenta%20de%20Terraqo";
+  return (
+    <EmailFrame preview="Completa tu perfil Terraqo y convierte tu experiencia en oportunidades." eyebrow="Tu perfil profesional" title="Haz que tu trabajo hable por ti" recipientName={recipientName} footerNote="Terraqo sólo muestra la información que decides publicar. Las empresas vinculadas acceden únicamente a los datos autorizados para su workspace.">
+      {customMessage ? <p style={{ ...paragraphStyle, padding: "14px 16px", backgroundColor: "#f4f7fa", borderLeft: `3px solid ${colors.cyan}` }}>{customMessage}</p> : null}
+      <p style={paragraphStyle}>Tu perfil puede convertirse en un CV vivo respaldado por experiencias, proyectos y evidencia real de trabajo.</p>
+      <table role="presentation" width="100%" cellPadding="0" cellSpacing="0" style={{ margin: "22px 0", border: `1px solid ${colors.line}`, borderRadius: "10px", backgroundColor: "#f8fbfd" }}><tbody>
+        <tr><td style={{ padding: "18px" }}><strong style={{ color: colors.ink }}>Vista previa de tu perfil público</strong><p style={{ margin: "8px 0 0", color: colors.muted, fontSize: "14px", lineHeight: "21px" }}>{recipientName || "Tu nombre profesional"}<br />Experiencia, capacidades, proyectos y bitácoras verificables.</p></td></tr>
+      </tbody></table>
+      <p style={paragraphStyle}><strong>Próximos pasos:</strong></p>
+      <ul style={{ margin: "0 0 22px", paddingLeft: "22px", color: "#35485b", fontSize: "15px", lineHeight: "25px" }}>
+        <li>{emailVerified ? "Tu correo ya está verificado." : "Verifica tu correo para proteger y activar completamente tu cuenta."}</li>
+        <li>{hasUsername ? "Tu nombre de usuario ya está creado; revisa que represente tu marca profesional." : "Crea tu nombre de usuario para obtener un enlace público fácil de compartir."}</li>
+        <li>Completa la mayor cantidad posible de información profesional.</li>
+        <li>Registra bitácoras con avances, fotos y resultados para sumar valor a tu CV.</li>
+      </ul>
+      <table role="presentation" cellPadding="0" cellSpacing="0" style={{ margin: "26px 0" }}><tbody><tr><td style={buttonCellStyle}><a href={profileUrl} style={buttonLinkStyle}>{emailVerified ? "Completar mi perfil" : "Verificar correo y continuar"}&nbsp;&nbsp;→</a></td></tr></tbody></table>
+      <p style={helperStyle}>¿Necesitas ayuda? Escríbenos al <a href={helpUrl} style={urlLinkStyle}>926 912 607</a> con el asunto: <strong>Necesito ayuda con mi cuenta de Terraqo</strong>.</p>
+    </EmailFrame>
+  );
+}
+
+export async function renderProfileCompletionEmail(input: { recipientName?: string | null; profileUrl: string; customMessage?: string | null; emailVerified: boolean; hasUsername: boolean }) {
+  const element = <ProfileCompletionTemplate {...input} />;
+  return { html: await render(element), text: await render(element, { plainText: true }) };
+}
+
 const bodyStyle: CSSProperties = { margin: 0, padding: 0, backgroundColor: colors.canvas, fontFamily: "Arial, Helvetica, sans-serif", color: colors.ink };
 const previewStyle: CSSProperties = { display: "none", maxHeight: 0, overflow: "hidden", opacity: 0, color: "transparent", lineHeight: "1px", fontSize: "1px" };
 const canvasStyle: CSSProperties = { width: "100%", backgroundColor: colors.canvas, borderCollapse: "collapse" };

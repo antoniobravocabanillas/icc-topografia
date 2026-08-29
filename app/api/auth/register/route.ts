@@ -4,11 +4,16 @@ import { prisma } from "@/lib/prisma";
 import { created, fail, handleApiError, parseJson } from "@/lib/server/api";
 import { createEmailVerificationLinkToken, sendEmailVerificationLink } from "@/lib/server/email-verification";
 import { getSubdivisionName } from "@/lib/locations";
-import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
+import { getDefaultModulesForTier } from "@/lib/workspace";
 import { registerSchema } from "@/lib/validations/crm";
 
 function normalizeIdentityPart(value: string) {
   return value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+}
+
+function workspaceSlug(companyName: string, document?: string) {
+  const name = companyName.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 46) || "empresa";
+  return `${name}-${normalizeIdentityPart(document || "empresa").slice(-8).toLowerCase()}`;
 }
 
 export async function POST(request: Request) {
@@ -31,9 +36,6 @@ export async function POST(request: Request) {
     }
 
     const passwordHash = await bcrypt.hash(payload.password, 12);
-    const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
-    if (!terraqoWorkspaceId) return fail("Workspace Terraqo no configurado", 500);
-
     const user = await prisma.$transaction(async (tx) => {
       const createdUser = await tx.user.create({
         data: {
@@ -76,28 +78,8 @@ export async function POST(request: Request) {
             portfolioUrl: payload.portfolioUrl || undefined,
             status: "OPEN_TO_PROJECTS",
             visibility: "PRIVATE",
-            liveCvEnabled: false
-          }
-        });
-
-        await tx.terraqoWorkspaceMember.create({
-          data: {
-            workspaceId: terraqoWorkspaceId,
-            userId: createdUser.id,
-            role: "PROFESSIONAL",
-            title: payload.roleTitle || specialty || "Profesional tecnico",
-            active: true,
-            joinedAt: new Date()
-          }
-        });
-
-        await tx.notification.create({
-          data: {
-            terraqoWorkspaceId,
-            type: "SYSTEM",
-            title: "Nuevo profesional registrado en Terraqo",
-            body: `${payload.name} creo un perfil profesional para la red Terraqo.`,
-            href: "/admin/terraqo"
+            liveCvEnabled: false,
+            onboardingSource: "TERRAQO_PUBLIC_REGISTRATION"
           }
         });
 
@@ -105,6 +87,30 @@ export async function POST(request: Request) {
       }
 
       const companyName = payload.company || payload.name;
+      const workspace = await tx.terraqoWorkspace.create({
+        data: {
+          name: companyName,
+          brandName: companyName,
+          slug: workspaceSlug(companyName, payload.document),
+          type: "CLIENT_COMPANY",
+          industry: payload.industry,
+          ownerUserId: createdUser.id,
+          country: payload.country,
+          region: getSubdivisionName(payload.country, payload.subdivision) || undefined,
+          locationSubdivisionCode: payload.subdivision || undefined,
+          locationCity: payload.city || undefined,
+          subscriptions: { create: { tier: "BASIC", status: "TRIALING", seats: 5 } },
+          modules: {
+            create: getDefaultModulesForTier("BASIC").map((code) => ({
+              code,
+              active: true,
+              enabledAt: new Date(),
+              config: { provisioning: { mode: "blank", version: 1, provisionedAt: new Date().toISOString() } }
+            }))
+          }
+        }
+      });
+      const terraqoWorkspaceId = workspace.id;
       const company = await tx.company.create({
         data: {
           terraqoWorkspaceId,
@@ -133,6 +139,8 @@ export async function POST(request: Request) {
         },
         include: { contacts: true }
       });
+
+      await tx.terraqoWorkspace.update({ where: { id: terraqoWorkspaceId }, data: { companyId: company.id } });
 
       const client = await tx.client.create({
         data: {
@@ -179,7 +187,7 @@ export async function POST(request: Request) {
         data: {
           workspaceId: terraqoWorkspaceId,
           userId: createdUser.id,
-          role: "CLIENT",
+          role: "OWNER",
           title: companyName,
           active: true,
           joinedAt: new Date()

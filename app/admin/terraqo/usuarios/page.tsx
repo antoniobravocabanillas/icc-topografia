@@ -6,8 +6,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { prisma } from "@/lib/prisma";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
+import { createEmailVerificationLinkToken } from "@/lib/server/email-verification";
+import { sendTransactionalEmail } from "@/lib/server/transactional-email";
+import { renderProfileCompletionEmail } from "@/emails/terraqo-transactional";
+import { terraqoDomains } from "@/lib/terraqo-domains";
 
 const globalRoles: Role[] = ["CUSTOMER", "TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"];
 const memberRoles: TerraqoMemberRole[] = ["OWNER", "ADMIN", "MANAGER", "MEMBER", "VIEWER", "CLIENT", "PROFESSIONAL"];
@@ -126,18 +131,61 @@ async function updateProfessionalPlanAction(formData: FormData) {
   revalidatePath("/portal");
 }
 
+async function sendProfileNudgeAction(formData: FormData) {
+  "use server";
+  await requireAdminPage(["SUPER_ADMIN"]);
+  const userId = field(formData, "userId");
+  const verificationFilter = field(formData, "verificationFilter");
+  const query = field(formData, "query").trim();
+  const customMessage = field(formData, "customMessage").slice(0, 1200);
+  const where = userId
+    ? { id: userId, terraqoProfessionalProfile: { isNot: null } }
+    : {
+        terraqoProfessionalProfile: { isNot: null },
+        ...(verificationFilter === "verified" ? { emailVerified: { not: null } } : verificationFilter === "unverified" ? { emailVerified: null } : {}),
+        ...(query ? { OR: [{ email: { contains: query, mode: "insensitive" as const } }, { name: { contains: query, mode: "insensitive" as const } }] } : {})
+      };
+  const recipients = await prisma.user.findMany({
+    where,
+    select: { id: true, email: true, name: true, emailVerified: true, terraqoProfessionalProfile: { select: { username: true } } },
+    orderBy: { createdAt: "desc" },
+    take: userId ? 1 : 100
+  });
+
+  let delivered = 0;
+  for (const recipient of recipients) {
+    let actionUrl = `${terraqoDomains.portal}/portal/configuracion`;
+    if (!recipient.emailVerified) {
+      const verification = await createEmailVerificationLinkToken(prisma, recipient.email);
+      actionUrl = `${terraqoDomains.portal}/api/auth/verify-email-link?token=${encodeURIComponent(verification.code)}&email=${encodeURIComponent(recipient.email)}`;
+    }
+    const content = await renderProfileCompletionEmail({ recipientName: recipient.name, profileUrl: actionUrl, customMessage, emailVerified: Boolean(recipient.emailVerified), hasUsername: Boolean(recipient.terraqoProfessionalProfile?.username) });
+    const result = await sendTransactionalEmail({ to: recipient.email, subject: "Completa tu perfil y aumenta tus oportunidades en Terraqo", ...content, tags: [{ name: "category", value: "profile-completion" }] });
+    if (result.delivered) delivered += 1;
+  }
+  revalidatePath("/admin/terraqo/usuarios");
+  redirect(`/admin/terraqo/usuarios?status=emails-sent&sent=${delivered}`);
+}
+
 export const dynamic = "force-dynamic";
 
-type PageProps = { searchParams?: Promise<{ status?: string }> };
+type PageProps = { searchParams?: Promise<{ status?: string; sent?: string; verification?: string; q?: string }> };
 
 export default async function TerraqoUsersPage({ searchParams }: PageProps) {
   const params = await searchParams;
   await requireAdminPage(["SUPER_ADMIN"]);
+  const verification = params?.verification || "all";
+  const q = params?.q?.trim() || "";
+  const userWhere = {
+    ...(verification === "verified" ? { emailVerified: { not: null } } : verification === "unverified" ? { emailVerified: null } : {}),
+    ...(q ? { OR: [{ email: { contains: q, mode: "insensitive" as const } }, { name: { contains: q, mode: "insensitive" as const } }] } : {})
+  };
   const [users, workspaces, totals] = await Promise.all([
     prisma.user.findMany({
+      where: userWhere,
       include: {
         terraqoMemberships: { include: { workspace: { select: { id: true, name: true, slug: true } } }, orderBy: { createdAt: "asc" } },
-        terraqoProfessionalProfile: { select: { id: true, headline: true, identityVerificationStatus: true, planTier: true } }
+        terraqoProfessionalProfile: { select: { id: true, headline: true, username: true, identityVerificationStatus: true, planTier: true } }
       },
       orderBy: { createdAt: "desc" },
       take: 250
@@ -145,6 +193,8 @@ export default async function TerraqoUsersPage({ searchParams }: PageProps) {
     prisma.terraqoWorkspace.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true, slug: true } }),
     Promise.all([
       prisma.user.count(),
+      prisma.user.count({ where: { emailVerified: { not: null } } }),
+      prisma.user.count({ where: { emailVerified: null } }),
       prisma.user.count({ where: { role: "SUPER_ADMIN" } }),
       prisma.terraqoProfessionalProfile.count(),
       prisma.terraqoWorkspaceMember.count({ where: { active: true } })
@@ -160,12 +210,30 @@ export default async function TerraqoUsersPage({ searchParams }: PageProps) {
       </header>
 
       {params?.status === "workspace-assigned" ? <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Workspace asignado correctamente. Si el usuario es profesional, su vínculo empresarial también quedó validado.</div> : null}
+      {params?.status === "emails-sent" ? <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Se enviaron {params.sent || "0"} correos de acompañamiento.</div> : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {[[totals[0], "Usuarios"], [totals[1], "Superadministradores"], [totals[2], "Perfiles profesionales"], [totals[3], "Membresias activas"]].map(([value, label]) => (
+        {[[totals[0], "Usuarios"], [totals[1], "Correos verificados"], [totals[2], "Correos pendientes"], [totals[4], "Perfiles profesionales"]].map(([value, label]) => (
           <Card key={String(label)}><CardHeader><CardTitle className="text-3xl">{value}</CardTitle><CardDescription>{label}</CardDescription></CardHeader></Card>
         ))}
       </div>
+
+      <Card>
+        <CardHeader><CardTitle>Seguimiento de activación y empleabilidad</CardTitle><CardDescription>Filtra usuarios y envía una invitación personalizada para verificar el correo, crear su nombre de usuario, completar el perfil y registrar bitácoras.</CardDescription></CardHeader>
+        <CardContent className="grid gap-5">
+          <form method="get" className="grid gap-3 md:grid-cols-[1fr_220px_auto]">
+            <Input name="q" defaultValue={q} placeholder="Buscar por nombre o correo" />
+            <select name="verification" defaultValue={verification} className="h-10 rounded-md border bg-background px-3 text-sm"><option value="all">Todos los correos</option><option value="verified">Verificados</option><option value="unverified">No verificados</option></select>
+            <Button type="submit" variant="outline">Aplicar filtros</Button>
+          </form>
+          <form action={sendProfileNudgeAction} className="grid gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
+            <input type="hidden" name="verificationFilter" value={verification} />
+            <input type="hidden" name="query" value={q} />
+            <label className="grid gap-2 text-sm font-semibold">Mensaje personalizado <Textarea name="customMessage" maxLength={1200} placeholder="Ej. Queremos ayudarte a fortalecer tu presencia profesional y mostrar mejor tu experiencia." className="min-h-24 bg-white font-normal" /></label>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-xs leading-5 text-muted-foreground">Se enviará a un máximo de 100 profesionales según el filtro de verificación seleccionado. Los pendientes recibirán un enlace nuevo de verificación.</p><Button type="submit">Enviar a los usuarios filtrados</Button></div>
+          </form>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader><CardTitle>Crear acceso</CardTitle><CardDescription>Alta manual para administradores, equipo Terraqo o cuentas asistidas.</CardDescription></CardHeader>
@@ -185,7 +253,7 @@ export default async function TerraqoUsersPage({ searchParams }: PageProps) {
           <Card key={user.id}>
             <CardHeader className="gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <div className="flex flex-wrap items-center gap-2"><CardTitle>{user.name || "Sin nombre"}</CardTitle><Badge variant={user.role === "SUPER_ADMIN" ? "default" : "secondary"}>{user.role}</Badge></div>
+                <div className="flex flex-wrap items-center gap-2"><CardTitle>{user.name || "Sin nombre"}</CardTitle><Badge variant={user.role === "SUPER_ADMIN" ? "default" : "secondary"}>{user.role}</Badge><Badge variant={user.emailVerified ? "default" : "outline"}>{user.emailVerified ? "Correo verificado" : "Correo pendiente"}</Badge></div>
                 <CardDescription className="mt-2">{user.email} | creado {user.createdAt.toLocaleDateString("es-PE")}</CardDescription>
                 {user.terraqoProfessionalProfile ? <p className="mt-2 text-sm text-muted-foreground">Profesional: {user.terraqoProfessionalProfile.headline || "Perfil por completar"} | {user.terraqoProfessionalProfile.identityVerificationStatus} | Plan {user.terraqoProfessionalProfile.planTier}</p> : null}
               </div>
@@ -199,12 +267,12 @@ export default async function TerraqoUsersPage({ searchParams }: PageProps) {
             <CardContent className="grid gap-5 xl:grid-cols-[1fr_380px]">
               <div>
                 {user.terraqoProfessionalProfile ? (
-                  <form action={updateProfessionalPlanAction} className="mb-5 grid gap-2 rounded-md border border-primary/20 bg-primary/5 p-3 sm:grid-cols-[1fr_180px_auto] sm:items-center">
+                  <><div className="mb-4 grid gap-3 rounded-xl border bg-[#0e1a26] p-4 text-white sm:grid-cols-[1fr_auto] sm:items-center"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-[#25c0d5]">Vista previa del CV público</p><p className="mt-2 font-display text-lg font-bold">{user.name || "Nombre profesional"}</p><p className="mt-1 text-sm text-white/70">{user.terraqoProfessionalProfile.headline || "Título profesional por completar"}</p><p className="mt-2 text-xs text-white/50">{user.terraqoProfessionalProfile.username ? `terraqoglobal.com/cv/${user.terraqoProfessionalProfile.username}` : "Aún no creó su nombre de usuario"}</p></div>{user.terraqoProfessionalProfile.username ? <Button asChild variant="outline" className="border-white/30 bg-transparent text-white"><a href={`${terraqoDomains.public}/cv/${user.terraqoProfessionalProfile.username}`} target="_blank">Ver perfil</a></Button> : null}</div><form action={sendProfileNudgeAction} className="mb-4 flex flex-col gap-2 rounded-md border p-3 sm:flex-row sm:items-end"><input type="hidden" name="userId" value={user.id} /><label className="grid flex-1 gap-1 text-xs font-bold">Mensaje personalizado<Input name="customMessage" placeholder="Mensaje opcional para este usuario" className="font-normal" /></label><Button type="submit" variant="outline">Enviar invitación</Button></form><form action={updateProfessionalPlanAction} className="mb-5 grid gap-2 rounded-md border border-primary/20 bg-primary/5 p-3 sm:grid-cols-[1fr_180px_auto] sm:items-center">
                     <input type="hidden" name="profileId" value={user.terraqoProfessionalProfile.id} />
                     <div><p className="font-semibold">Plan profesional Terraqo</p><p className="text-xs text-muted-foreground">Pertenece al perfil personal y no al workspace de una empresa.</p></div>
                     <select name="planTier" defaultValue={user.terraqoProfessionalProfile.planTier} className="h-10 rounded-md border bg-background px-3 text-sm">{planTiers.map((tier) => <option key={tier}>{tier}</option>)}</select>
                     <Button type="submit" variant="outline">Actualizar plan</Button>
-                  </form>
+                  </form></>
                 ) : null}
                 <p className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">Membresias</p>
                 <div className="space-y-2">
