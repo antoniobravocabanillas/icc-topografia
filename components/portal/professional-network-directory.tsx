@@ -9,7 +9,7 @@ import { UserAvatar } from "@/components/terraqo/user-avatar";
 
 type DirectoryMode = "professionals" | "companies" | "groups";
 type ViewMode = "grid" | "list";
-type StoryWorklog = { id: string; title: string; summary: string; outcome?: string | null; type: string; evidenceStatus: string; skills: string[]; occurredAt: string; workspaceName?: string | null; projectName?: string | null; mediaId?: string | null; reactions: number; comments: number };
+type StoryWorklog = { id: string; title: string; summary: string; outcome?: string | null; type: string; evidenceStatus: string; skills: string[]; occurredAt: string; workspaceName?: string | null; projectName?: string | null; mediaIds: string[]; reactions: number; comments: number };
 type ProfessionalItem = { id: string; name: string; image?: string | null; headline?: string | null; roleTitle?: string | null; city?: string | null; locationCity?: string | null; status: string; verified: boolean; workspaceName: string; skills: string[]; visibleExperiences: number; verifiedExperiences: number; lastSeenAt?: string | null; onlineUntil?: string | null; latestWorklog?: StoryWorklog | null; updatedAt: string };
 type CompanyItem = { id: string; name: string; document?: string | null; city?: string | null; industry?: string | null; status: string; publicSlug?: string | null; logoUrl?: string | null; updatedAt: string };
 type GroupItem = { id: string; name: string; purpose: string; workspaceName: string; members: number; updatedAt: string };
@@ -158,13 +158,28 @@ function StoryAvatar({ name, image, online, hasStory }: { name: string; image?: 
 
 function StoryModal({ profile, closing, onClose }: { profile: ProfessionalItem; closing: boolean; onClose: () => void }) {
   const worklog = profile.latestWorklog;
+  const mediaIds = worklog?.mediaIds || [];
+  const [activeMedia, setActiveMedia] = useState(0);
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const previousMedia = () => setActiveMedia((current) => (current - 1 + mediaIds.length) % mediaIds.length);
+  const nextMedia = () => setActiveMedia((current) => (current + 1) % mediaIds.length);
+  const finishSwipe = (clientX: number) => {
+    if (touchStart === null || mediaIds.length < 2) return setTouchStart(null);
+    const distance = clientX - touchStart;
+    if (Math.abs(distance) > 42) {
+      if (distance > 0) previousMedia();
+      else nextMedia();
+    }
+    setTouchStart(null);
+  };
   return <div role="dialog" aria-modal="true" aria-label={`Historia de ${profile.name}`} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }} className={`fixed inset-0 z-[100] grid place-items-center bg-[#06151f]/70 p-3 backdrop-blur-sm transition-opacity duration-200 sm:p-6 ${closing ? "opacity-0" : "opacity-100"}`}>
     <article className={`relative grid max-h-[min(820px,calc(100dvh-24px))] w-full max-w-[920px] overflow-hidden rounded-[26px] border border-white/40 bg-white shadow-[0_36px_110px_rgba(0,0,0,0.34)] transition duration-200 md:grid-cols-[minmax(310px,1.05fr)_minmax(330px,0.95fr)] ${closing ? "translate-y-3 scale-[0.985] opacity-0" : "translate-y-0 scale-100 opacity-100"}`}>
       <button type="button" onClick={onClose} aria-label="Cerrar historia" className="absolute right-4 top-4 z-20 grid h-10 w-10 place-items-center rounded-full border border-[#d5e2e6] bg-white/90 text-[#354c5d] shadow-sm backdrop-blur hover:bg-white"><X className="h-5 w-5" /></button>
-      <div className="relative min-h-[260px] bg-[linear-gradient(145deg,#0a2532,#087d79)] md:min-h-[590px]">
-        {worklog?.mediaId ? <img src={`/api/terraqo/worklog/evidence/${worklog.mediaId}`} alt={`Evidencia de ${worklog.title}`} className="absolute inset-0 h-full w-full object-cover" /> : <div className="absolute inset-0 grid place-items-center overflow-hidden"><div className="absolute inset-0 bg-[radial-gradient(circle_at_65%_25%,rgba(38,201,190,0.32),transparent_38%),linear-gradient(145deg,#071d2a,#0a5f62)]" /><BriefcaseBusiness className="relative h-20 w-20 text-white/75" /></div>}
+      <div className="relative min-h-[260px] touch-pan-y select-none overflow-hidden bg-[linear-gradient(145deg,#0a2532,#087d79)] md:min-h-[590px]" onTouchStart={(event) => setTouchStart(event.touches[0]?.clientX ?? null)} onTouchEnd={(event) => finishSwipe(event.changedTouches[0]?.clientX ?? 0)}>
+        {mediaIds.length ? <div className="absolute inset-0 flex transition-transform duration-500 ease-out" style={{ transform: `translateX(-${activeMedia * 100}%)` }}>{mediaIds.map((mediaId, index) => <img key={mediaId} src={`/api/terraqo/worklog/evidence/${mediaId}`} alt={`Evidencia ${index + 1} de ${worklog?.title || profile.name}`} className="h-full w-full shrink-0 object-cover" draggable={false} />)}</div> : <div className="absolute inset-0 grid place-items-center overflow-hidden"><div className="absolute inset-0 bg-[radial-gradient(circle_at_65%_25%,rgba(38,201,190,0.32),transparent_38%),linear-gradient(145deg,#071d2a,#0a5f62)]" /><BriefcaseBusiness className="relative h-20 w-20 text-white/75" /></div>}
         <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/45 to-transparent" />
         <div className="absolute left-4 right-16 top-4 flex items-center gap-3 text-white"><UserAvatar name={profile.name} image={profile.image} size="sm" className="ring-2 ring-white/70" /><div className="min-w-0"><p className="truncate text-sm font-bold">{profile.name}</p><p className="truncate text-[11px] text-white/80">{profile.roleTitle || profile.headline || "Profesional Terraqo"}</p></div></div>
+        {mediaIds.length > 1 ? <><button type="button" onClick={previousMedia} aria-label="Foto anterior" className="absolute left-3 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-white/50 bg-black/25 text-white backdrop-blur transition hover:bg-black/45"><ArrowLeft className="h-5 w-5" /></button><button type="button" onClick={nextMedia} aria-label="Foto siguiente" className="absolute right-3 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-white/50 bg-black/25 text-white backdrop-blur transition hover:bg-black/45"><ArrowRight className="h-5 w-5" /></button><div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/35 px-3 py-2 backdrop-blur">{mediaIds.map((mediaId, index) => <button key={mediaId} type="button" onClick={() => setActiveMedia(index)} aria-label={`Mostrar foto ${index + 1}`} aria-current={activeMedia === index ? "true" : undefined} className={`h-1.5 rounded-full transition-all ${activeMedia === index ? "w-6 bg-white" : "w-1.5 bg-white/55 hover:bg-white/80"}`} />)}</div><span className="absolute bottom-4 right-4 rounded-full bg-black/45 px-2.5 py-1 text-[10px] font-bold text-white backdrop-blur">{activeMedia + 1}/{mediaIds.length}</span></> : null}
       </div>
       <div className="min-h-0 overflow-y-auto p-6 sm:p-8 md:pt-20">
         {worklog ? <>

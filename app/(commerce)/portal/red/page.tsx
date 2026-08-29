@@ -34,7 +34,7 @@ export default async function ProfessionalNetworkDirectoryPage({ searchParams }:
               skills: true, occurredAt: true,
               workspace: { select: { name: true, brandName: true } },
               project: { select: { title: true } },
-              media: { orderBy: { sortOrder: "asc" }, take: 1, select: { id: true } },
+              media: { orderBy: { sortOrder: "asc" }, take: 10, select: { id: true, contentType: true } },
               _count: { select: { comments: true, reactions: true } }
             }
           }
@@ -124,7 +124,7 @@ export default async function ProfessionalNetworkDirectoryPage({ searchParams }:
             occurredAt: profile.worklogs[0].occurredAt.toISOString(),
             workspaceName: profile.worklogs[0].workspace?.brandName || profile.worklogs[0].workspace?.name || null,
             projectName: profile.worklogs[0].project?.title || null,
-            mediaId: profile.worklogs[0].media[0]?.id || null,
+            mediaIds: profile.worklogs[0].media.filter((media) => media.contentType.startsWith("image/")).map((media) => media.id),
             reactions: profile.worklogs[0]._count.reactions,
             comments: profile.worklogs[0]._count.comments
           } : null,
