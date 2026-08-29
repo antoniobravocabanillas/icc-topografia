@@ -5,13 +5,11 @@ import { PortalShell } from "@/components/portal/portal-shell";
 import { SessionPresence } from "@/components/auth/session-presence";
 import { prisma } from "@/lib/prisma";
 import { resolveWorkspaceVisualIdentity } from "@/lib/terraqo/workspace-visual-identity";
-import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 
 export const dynamic = "force-dynamic";
 
 export default async function PortalLayout({ children }: { children: ReactNode }) {
   const session = await auth();
-  const defaultWorkspaceId = await getDefaultTerraqoWorkspaceId();
   const user = session?.user?.email
     ? await prisma.user.findUnique({
         where: { email: session.user.email },
@@ -20,7 +18,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
           image: true,
           terraqoProfessionalProfile: { select: { headline: true, planTier: true } },
           terraqoMemberships: {
-            where: { active: true, ...(defaultWorkspaceId ? { workspaceId: defaultWorkspaceId } : {}) },
+            where: { active: true, workspace: { active: true, deletedAt: null } },
             orderBy: { joinedAt: "desc" },
             take: 1,
             select: {
@@ -31,6 +29,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
                   brandName: true,
                   logoUrl: true,
                   settings: true,
+                  modules: { where: { code: "AI_WRITING_ASSISTANT", active: true }, select: { code: true } },
                   subscriptions: {
                     where: { status: { in: ["TRIALING", "ACTIVE"] } },
                     orderBy: { createdAt: "desc" },
@@ -45,7 +44,8 @@ export default async function PortalLayout({ children }: { children: ReactNode }
       })
     : null;
   const membership = user?.terraqoMemberships[0];
-  const portalType = user?.terraqoProfessionalProfile ? "professional" : membership?.role === "CLIENT" ? "client" : "professional";
+  const portalType = user?.terraqoProfessionalProfile ? "professional" : membership ? "client" : "professional";
+  const writingAssistantEnabled = Boolean(membership?.workspace.modules.length);
   const visualIdentity = resolveWorkspaceVisualIdentity(portalType === "professional" ? null : membership?.workspace.settings);
 
   return (
@@ -58,6 +58,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
       workspaceLogoUrl={membership?.workspace.logoUrl}
       planTier={portalType === "professional" ? user?.terraqoProfessionalProfile?.planTier : membership?.workspace.subscriptions[0]?.tier || "FREE"}
       visualIdentity={visualIdentity}
+      writingAssistantEnabled={writingAssistantEnabled}
     >
       {children}
     </PortalShell></>

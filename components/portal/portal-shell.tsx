@@ -44,6 +44,7 @@ type PortalShellProps = {
   workspaceBrand?: string | null;
   workspaceLogoUrl?: string | null;
   planTier?: string | null;
+  writingAssistantEnabled?: boolean;
   visualIdentity: WorkspaceVisualIdentity;
 };
 
@@ -155,7 +156,7 @@ const planLabels: Record<string, string> = {
   ENTERPRISE: "Enterprise"
 };
 
-export function PortalShell({ children, name, image, headline, portalType = "professional", workspaceBrand, workspaceLogoUrl, planTier, visualIdentity }: PortalShellProps) {
+export function PortalShell({ children, name, image, headline, portalType = "professional", workspaceBrand, workspaceLogoUrl, planTier, writingAssistantEnabled = false, visualIdentity }: PortalShellProps) {
   const pathname = usePathname();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const items = portalType === "professional" ? professionalItems : clientItems;
@@ -297,7 +298,7 @@ export function PortalShell({ children, name, image, headline, portalType = "pro
           </details>
         </div>
       </nav>
-      <WorkspaceWritingAssistant />
+      {writingAssistantEnabled ? <WorkspaceWritingAssistant /> : null}
     </div>
   );
 }

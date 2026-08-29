@@ -98,11 +98,18 @@ export async function renderVerificationCodeEmail(input: { recipientName?: strin
   return { html: await render(element), text: await render(element, { plainText: true }) };
 }
 
-export function ProfileCompletionTemplate({ recipientName, profileUrl, customMessage, emailVerified, hasUsername }: { recipientName?: string | null; profileUrl: string; customMessage?: string | null; emailVerified: boolean; hasUsername: boolean }) {
+type ProfileCompletionEmailInput = { recipientName?: string | null; profileUrl: string; customMessage?: string | null; emailVerified: boolean; hasUsername: boolean; registrationSourceName?: string | null };
+
+export function ProfileCompletionTemplate({ recipientName, profileUrl, customMessage, emailVerified, hasUsername, registrationSourceName }: ProfileCompletionEmailInput) {
   const helpUrl = "https://wa.me/51926912607?text=Necesito%20ayuda%20con%20mi%20cuenta%20de%20Terraqo";
   return (
     <EmailFrame preview="Completa tu perfil Terraqo y convierte tu experiencia en oportunidades." eyebrow="Tu perfil profesional" title="Haz que tu trabajo hable por ti" recipientName={recipientName} footerNote="Terraqo sólo muestra la información que decides publicar. Las empresas vinculadas acceden únicamente a los datos autorizados para su workspace.">
       {customMessage ? <p style={{ ...paragraphStyle, padding: "14px 16px", backgroundColor: "#f4f7fa", borderLeft: `3px solid ${colors.cyan}` }}>{customMessage}</p> : null}
+      {registrationSourceName ? (
+        <p style={paragraphStyle}>Recibes este mensaje porque te registraste o postulaste mediante <strong>{registrationSourceName}</strong>, una organización cliente que utiliza Terraqo para gestionar sus procesos profesionales. Terraqo es su proveedor tecnológico y facilita a la empresa donde postulaste un perfil completo con la información que tú decidas registrar y autorizar.</p>
+      ) : (
+        <p style={paragraphStyle}>Recibes este mensaje porque creaste una cuenta profesional en Terraqo o utilizaste uno de los procesos de registro operados por nuestra plataforma.</p>
+      )}
       <p style={paragraphStyle}>Tu perfil puede convertirse en un CV vivo respaldado por experiencias, proyectos y evidencia real de trabajo.</p>
       <table role="presentation" width="100%" cellPadding="0" cellSpacing="0" style={{ margin: "22px 0", border: `1px solid ${colors.line}`, borderRadius: "10px", backgroundColor: "#f8fbfd" }}><tbody>
         <tr><td style={{ padding: "18px" }}><strong style={{ color: colors.ink }}>Vista previa de tu perfil público</strong><p style={{ margin: "8px 0 0", color: colors.muted, fontSize: "14px", lineHeight: "21px" }}>{recipientName || "Tu nombre profesional"}<br />Experiencia, capacidades, proyectos y bitácoras verificables.</p></td></tr>
@@ -120,7 +127,7 @@ export function ProfileCompletionTemplate({ recipientName, profileUrl, customMes
   );
 }
 
-export async function renderProfileCompletionEmail(input: { recipientName?: string | null; profileUrl: string; customMessage?: string | null; emailVerified: boolean; hasUsername: boolean }) {
+export async function renderProfileCompletionEmail(input: ProfileCompletionEmailInput) {
   const element = <ProfileCompletionTemplate {...input} />;
   return { html: await render(element), text: await render(element, { plainText: true }) };
 }

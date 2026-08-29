@@ -147,19 +147,26 @@ async function sendProfileNudgeAction(formData: FormData) {
       };
   const recipients = await prisma.user.findMany({
     where,
-    select: { id: true, email: true, name: true, emailVerified: true, terraqoProfessionalProfile: { select: { username: true } } },
+    select: { id: true, email: true, name: true, emailVerified: true, terraqoProfessionalProfile: { select: { username: true, onboardingSource: true } } },
     orderBy: { createdAt: "desc" },
     take: userId ? 1 : 100
   });
+  const sourceSlugs = [...new Set(recipients.map((recipient) => recipient.terraqoProfessionalProfile?.onboardingSource?.match(/^public-careers:(.+)$/)?.[1]).filter((value): value is string => Boolean(value)))];
+  const sourceWorkspaces = sourceSlugs.length
+    ? await prisma.terraqoWorkspace.findMany({ where: { slug: { in: sourceSlugs } }, select: { slug: true, name: true, brandName: true } })
+    : [];
+  const sourceNames = new Map(sourceWorkspaces.map((workspace) => [workspace.slug, workspace.brandName || workspace.name]));
 
   let delivered = 0;
   for (const recipient of recipients) {
+    const sourceSlug = recipient.terraqoProfessionalProfile?.onboardingSource?.match(/^public-careers:(.+)$/)?.[1];
+    const registrationSourceName = sourceSlug ? sourceNames.get(sourceSlug) || sourceSlug : null;
     let actionUrl = `${terraqoDomains.portal}/portal/configuracion`;
     if (!recipient.emailVerified) {
       const verification = await createEmailVerificationLinkToken(prisma, recipient.email);
       actionUrl = `${terraqoDomains.portal}/api/auth/verify-email-link?token=${encodeURIComponent(verification.code)}&email=${encodeURIComponent(recipient.email)}`;
     }
-    const content = await renderProfileCompletionEmail({ recipientName: recipient.name, profileUrl: actionUrl, customMessage, emailVerified: Boolean(recipient.emailVerified), hasUsername: Boolean(recipient.terraqoProfessionalProfile?.username) });
+    const content = await renderProfileCompletionEmail({ recipientName: recipient.name, profileUrl: actionUrl, customMessage, emailVerified: Boolean(recipient.emailVerified), hasUsername: Boolean(recipient.terraqoProfessionalProfile?.username), registrationSourceName });
     const result = await sendTransactionalEmail({ to: recipient.email, subject: "Completa tu perfil y aumenta tus oportunidades en Terraqo", ...content, tags: [{ name: "category", value: "profile-completion" }] });
     if (result.delivered) delivered += 1;
   }

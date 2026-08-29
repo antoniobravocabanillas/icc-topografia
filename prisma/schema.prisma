@@ -303,6 +303,7 @@ enum TerraqoModuleCode {
   ANALYTICS
   AUTOMATIONS
   DOCUMENTS
+  AI_WRITING_ASSISTANT
 
   @@schema("icc")
 }

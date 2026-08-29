@@ -106,6 +106,12 @@ export const terraqoModules: TerraqoModuleDefinition[] = [
     label: "Documentos y data room",
     description: "Control documental, permisos, entregables y repositorio privado.",
     minimumTier: "PROFESSIONAL"
+  },
+  {
+    code: "AI_WRITING_ASSISTANT",
+    label: "Asistente de escritura con IA",
+    description: "Corrección contextual de ortografía, gramática, sintaxis y claridad en los campos de redacción del workspace.",
+    minimumTier: "PROFESSIONAL"
   }
 ];
 
