@@ -31,6 +31,7 @@ import {
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { WorkspaceWritingAssistant } from "@/components/portal/workspace-writing-assistant";
+import { ClientFeatureBoundary } from "@/components/errors/client-feature-boundary";
 import { UserAvatar } from "@/components/terraqo/user-avatar";
 import { TerraqoLogo } from "@/components/terraqo/terraqo-logo";
 import type { WorkspaceVisualIdentity } from "@/lib/terraqo/workspace-visual-identity";
@@ -298,7 +299,7 @@ export function PortalShell({ children, name, image, headline, portalType = "pro
           </details>
         </div>
       </nav>
-      {writingAssistantEnabled ? <WorkspaceWritingAssistant /> : null}
+      {writingAssistantEnabled ? <ClientFeatureBoundary feature="writing-assistant"><WorkspaceWritingAssistant /></ClientFeatureBoundary> : null}
     </div>
   );
 }

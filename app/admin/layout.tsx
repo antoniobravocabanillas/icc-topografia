@@ -5,6 +5,7 @@ import { SessionPresence } from "@/components/auth/session-presence";
 import { AdminNavigation } from "@/components/admin/admin-navigation";
 import { AdminNotificationMonitor } from "@/components/admin/admin-notification-monitor";
 import { WorkspaceWritingAssistant } from "@/components/portal/workspace-writing-assistant";
+import { ClientFeatureBoundary } from "@/components/errors/client-feature-boundary";
 import { allowedAdminRoles, getAdminNavigation } from "@/lib/admin-navigation";
 import { getAdminWorkspaceOptions, getWorkspaceForUser, hasWorkspaceAdminAccess } from "@/lib/terraqo/workspace-access";
 import { resolveWorkspaceVisualIdentity } from "@/lib/terraqo/workspace-visual-identity";
@@ -64,7 +65,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         {children}
       </main>
       <AdminNotificationMonitor />
-      {modules.some((module) => module.code === "AI_WRITING_ASSISTANT") ? <WorkspaceWritingAssistant /> : null}
+      {modules.some((module) => module.code === "AI_WRITING_ASSISTANT") ? <ClientFeatureBoundary feature="writing-assistant"><WorkspaceWritingAssistant /></ClientFeatureBoundary> : null}
     </div>
     </>
   );

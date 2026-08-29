@@ -47,11 +47,15 @@ export function WorkspaceWritingAssistant() {
 
   useEffect(() => {
     const handleFocus = (event: FocusEvent) => {
-      if (!isEditableProseField(event.target)) return;
-      activeField.current = event.target;
-      setMessage("");
-      setSuccess(false);
-      setVisible(true);
+      try {
+        if (!isEditableProseField(event.target)) return;
+        activeField.current = event.target;
+        setMessage("");
+        setSuccess(false);
+        setVisible(true);
+      } catch (error) {
+        console.error("Terraqo writing assistant focus detection failed", error);
+      }
     };
     document.addEventListener("focusin", handleFocus);
     return () => document.removeEventListener("focusin", handleFocus);
