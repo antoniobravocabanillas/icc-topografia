@@ -1,6 +1,7 @@
 import { ProfessionalNetworkDirectory } from "@/components/portal/professional-network-directory";
 import { prisma } from "@/lib/prisma";
 import { requireProfessionalPortal } from "@/lib/terraqo/professional-portal";
+import { visibleWorklogWhere } from "@/lib/terraqo/worklog";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -23,7 +24,20 @@ export default async function ProfessionalNetworkDirectoryPage({ searchParams }:
             orderBy: [{ current: "desc" }, { updatedAt: "desc" }],
             take: 1
           },
-          experiences: { where: { OR: [{ verifiedByTerraqo: true }, { visibility: { in: ["PUBLIC", "COMMUNITY", "WORKSPACE"] } }] }, select: { id: true, verifiedByTerraqo: true }, take: 20 }
+          experiences: { where: { OR: [{ verifiedByTerraqo: true }, { visibility: { in: ["PUBLIC", "COMMUNITY", "WORKSPACE"] } }] }, select: { id: true, verifiedByTerraqo: true }, take: 20 },
+          worklogs: {
+            where: visibleWorklogWhere(session.user.id, workspaceIds),
+            orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
+            take: 1,
+            select: {
+              id: true, title: true, summary: true, outcome: true, type: true, evidenceStatus: true,
+              skills: true, occurredAt: true,
+              workspace: { select: { name: true, brandName: true } },
+              project: { select: { title: true } },
+              media: { orderBy: { sortOrder: "asc" }, take: 1, select: { id: true } },
+              _count: { select: { comments: true, reactions: true } }
+            }
+          }
         },
         orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
         take: 80
@@ -99,6 +113,21 @@ export default async function ProfessionalNetworkDirectoryPage({ searchParams }:
           verifiedExperiences: profile.experiences.filter((experience) => experience.verifiedByTerraqo).length,
           lastSeenAt: profile.user.lastSeenAt?.toISOString() || null,
           onlineUntil: profile.user.onlineUntil?.toISOString() || null,
+          latestWorklog: profile.worklogs[0] ? {
+            id: profile.worklogs[0].id,
+            title: profile.worklogs[0].title,
+            summary: profile.worklogs[0].summary,
+            outcome: profile.worklogs[0].outcome,
+            type: profile.worklogs[0].type,
+            evidenceStatus: profile.worklogs[0].evidenceStatus,
+            skills: profile.worklogs[0].skills,
+            occurredAt: profile.worklogs[0].occurredAt.toISOString(),
+            workspaceName: profile.worklogs[0].workspace?.brandName || profile.worklogs[0].workspace?.name || null,
+            projectName: profile.worklogs[0].project?.title || null,
+            mediaId: profile.worklogs[0].media[0]?.id || null,
+            reactions: profile.worklogs[0]._count.reactions,
+            comments: profile.worklogs[0]._count.comments
+          } : null,
           updatedAt: profile.updatedAt.toISOString()
         };
       })}

@@ -3,12 +3,14 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, BadgeCheck, BriefcaseBusiness, Building2, ChevronDown, Grid2X2, List, MapPin, MessageSquare, Plus, SlidersHorizontal, Sparkles, UserPlus, UsersRound } from "lucide-react";
+import { createPortal } from "react-dom";
+import { ArrowLeft, ArrowRight, BadgeCheck, BriefcaseBusiness, Building2, CalendarDays, ChevronDown, FolderKanban, Grid2X2, Heart, List, MapPin, MessageSquare, Plus, SlidersHorizontal, Sparkles, UserPlus, UsersRound, X } from "lucide-react";
 import { UserAvatar } from "@/components/terraqo/user-avatar";
 
 type DirectoryMode = "professionals" | "companies" | "groups";
 type ViewMode = "grid" | "list";
-type ProfessionalItem = { id: string; name: string; image?: string | null; headline?: string | null; roleTitle?: string | null; city?: string | null; locationCity?: string | null; status: string; verified: boolean; workspaceName: string; skills: string[]; visibleExperiences: number; verifiedExperiences: number; lastSeenAt?: string | null; onlineUntil?: string | null; updatedAt: string };
+type StoryWorklog = { id: string; title: string; summary: string; outcome?: string | null; type: string; evidenceStatus: string; skills: string[]; occurredAt: string; workspaceName?: string | null; projectName?: string | null; mediaId?: string | null; reactions: number; comments: number };
+type ProfessionalItem = { id: string; name: string; image?: string | null; headline?: string | null; roleTitle?: string | null; city?: string | null; locationCity?: string | null; status: string; verified: boolean; workspaceName: string; skills: string[]; visibleExperiences: number; verifiedExperiences: number; lastSeenAt?: string | null; onlineUntil?: string | null; latestWorklog?: StoryWorklog | null; updatedAt: string };
 type CompanyItem = { id: string; name: string; document?: string | null; city?: string | null; industry?: string | null; status: string; publicSlug?: string | null; logoUrl?: string | null; updatedAt: string };
 type GroupItem = { id: string; name: string; purpose: string; workspaceName: string; members: number; updatedAt: string };
 type JobAd = { id: string; title: string; summary: string; company: string; companySlug: string; companyLogo?: string | null; location?: string | null; modality?: string | null; skills: string[]; publishedAt: string };
@@ -119,19 +121,67 @@ function JobHero({ jobs }: { jobs: JobAd[] }) {
 }
 
 function NetworkStories({ professionals, companies }: { professionals: ProfessionalItem[]; companies: CompanyItem[] }) {
-  const stories = [
-    ...professionals.slice(0, 8).map((profile) => ({ id: profile.id, name: profile.name, image: profile.image, href: `/portal/profesionales/${profile.id}`, online: Boolean(profile.onlineUntil && Date.parse(profile.onlineUntil) > Date.now()), kind: "professional" as const })),
-    ...companies.slice(0, 4).map((company) => ({ id: company.id, name: company.name, image: company.logoUrl, href: company.publicSlug ? `/portal/empresas/${company.publicSlug}` : "/portal/operaciones", online: false, kind: "company" as const }))
-  ];
-  if (!stories.length) return null;
-  return <section aria-label="Historias de la red" className="mt-5 rounded-[22px] border border-[#d7e3e8] bg-white px-4 py-4 shadow-[0_10px_30px_rgba(11,35,48,0.045)] sm:px-6">
-    <div className="flex items-center justify-between gap-4"><h2 className="font-display text-base font-bold text-[#102535]">Historias de la red</h2><Link href="#directorio-red" className="text-xs font-bold text-[#087d79]">Ver todas</Link></div>
-    <div className="-mx-2 mt-4 flex gap-5 overflow-x-auto px-2 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      <Link href="/portal/bitacora" className="group w-[74px] shrink-0 text-center"><span className="mx-auto grid h-16 w-16 place-items-center rounded-full border border-dashed border-[#9ebdc0] bg-[#f7fbfb] text-[#52717b] transition group-hover:border-[#087d79] group-hover:text-[#087d79]"><Plus className="h-5 w-5" /></span><span className="mt-2 block text-[11px] font-semibold text-[#526878]">Tu historia</span></Link>
-      {stories.map((story) => <Link key={`${story.kind}-${story.id}`} href={story.href} className="group w-[82px] shrink-0 text-center"><span className="relative mx-auto block h-16 w-16 rounded-full bg-[linear-gradient(135deg,#0aa19a,#4374ba)] p-[2px]"><span className="grid h-full w-full place-items-center overflow-hidden rounded-full border-[3px] border-white bg-[#edf6f6] font-display text-sm font-bold text-[#087d79]">{story.image ? <img src={story.image} alt="" className="h-full w-full object-cover" /> : story.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("")}</span>{story.online ? <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-[3px] border-white bg-emerald-500" /> : null}</span><span className="mt-2 line-clamp-2 block text-[11px] font-bold leading-4 text-[#354c5d] group-hover:text-[#087d79]">{story.name}</span></Link>)}
-    </div>
-  </section>;
+  const [activeProfile, setActiveProfile] = useState<ProfessionalItem | null>(null);
+  const [closing, setClosing] = useState(false);
+  const closeStory = () => {
+    if (!activeProfile || closing) return;
+    setClosing(true);
+    window.setTimeout(() => { setActiveProfile(null); setClosing(false); }, 180);
+  };
+  useEffect(() => {
+    if (!activeProfile) return;
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") closeStory(); };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+    return () => { document.body.style.overflow = previousOverflow; window.removeEventListener("keydown", onKeyDown); };
+  // closeStory intentionally follows the active modal lifecycle.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProfile]);
+  if (!professionals.length && !companies.length) return null;
+  return <>
+    <section aria-label="Historias de la red" className="mt-5 rounded-[22px] border border-[#d7e3e8] bg-white px-4 py-4 shadow-[0_10px_30px_rgba(11,35,48,0.045)] sm:px-6">
+      <div className="flex items-center justify-between gap-4"><h2 className="font-display text-base font-bold text-[#102535]">Historias de la red</h2><span className="text-[11px] font-semibold text-[#78909c]">Últimas bitácoras</span></div>
+      <div className="-mx-2 mt-4 flex gap-5 overflow-x-auto px-2 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <Link href="/portal/bitacora" className="group w-[74px] shrink-0 text-center"><span className="mx-auto grid h-16 w-16 place-items-center rounded-full border border-dashed border-[#9ebdc0] bg-[#f7fbfb] text-[#52717b] transition group-hover:border-[#087d79] group-hover:text-[#087d79]"><Plus className="h-5 w-5" /></span><span className="mt-2 block text-[11px] font-semibold text-[#526878]">Tu historia</span></Link>
+        {professionals.slice(0, 8).map((profile) => <button key={profile.id} type="button" onClick={() => { setClosing(false); setActiveProfile(profile); }} className="group w-[82px] shrink-0 text-center" aria-label={`Ver última bitácora de ${profile.name}`}><StoryAvatar name={profile.name} image={profile.image} online={Boolean(profile.onlineUntil && Date.parse(profile.onlineUntil) > Date.now())} hasStory={Boolean(profile.latestWorklog)} /><span className="mt-2 line-clamp-2 block text-[11px] font-bold leading-4 text-[#354c5d] group-hover:text-[#087d79]">{profile.name}</span></button>)}
+        {companies.slice(0, 4).map((company) => <Link key={company.id} href={company.publicSlug ? `/portal/empresas/${company.publicSlug}` : "/portal/operaciones"} className="group w-[82px] shrink-0 text-center"><StoryAvatar name={company.name} image={company.logoUrl} online={false} hasStory={false} /><span className="mt-2 line-clamp-2 block text-[11px] font-bold leading-4 text-[#354c5d] group-hover:text-[#087d79]">{company.name}</span></Link>)}
+      </div>
+    </section>
+    {activeProfile ? createPortal(<StoryModal profile={activeProfile} closing={closing} onClose={closeStory} />, document.body) : null}
+  </>;
 }
+
+function StoryAvatar({ name, image, online, hasStory }: { name: string; image?: string | null; online: boolean; hasStory: boolean }) {
+  return <span className={`relative mx-auto block h-16 w-16 rounded-full p-[2px] ${hasStory ? "bg-[linear-gradient(135deg,#0aa19a,#4374ba)]" : "bg-[#cddcdf]"}`}><span className="grid h-full w-full place-items-center overflow-hidden rounded-full border-[3px] border-white bg-[#edf6f6] font-display text-sm font-bold text-[#087d79]">{image ? <img src={image} alt="" className="h-full w-full object-cover" /> : name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("")}</span>{online ? <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-[3px] border-white bg-emerald-500" /> : null}</span>;
+}
+
+function StoryModal({ profile, closing, onClose }: { profile: ProfessionalItem; closing: boolean; onClose: () => void }) {
+  const worklog = profile.latestWorklog;
+  return <div role="dialog" aria-modal="true" aria-label={`Historia de ${profile.name}`} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }} className={`fixed inset-0 z-[100] grid place-items-center bg-[#06151f]/70 p-3 backdrop-blur-sm transition-opacity duration-200 sm:p-6 ${closing ? "opacity-0" : "opacity-100"}`}>
+    <article className={`relative grid max-h-[min(820px,calc(100dvh-24px))] w-full max-w-[920px] overflow-hidden rounded-[26px] border border-white/40 bg-white shadow-[0_36px_110px_rgba(0,0,0,0.34)] transition duration-200 md:grid-cols-[minmax(310px,1.05fr)_minmax(330px,0.95fr)] ${closing ? "translate-y-3 scale-[0.985] opacity-0" : "translate-y-0 scale-100 opacity-100"}`}>
+      <button type="button" onClick={onClose} aria-label="Cerrar historia" className="absolute right-4 top-4 z-20 grid h-10 w-10 place-items-center rounded-full border border-[#d5e2e6] bg-white/90 text-[#354c5d] shadow-sm backdrop-blur hover:bg-white"><X className="h-5 w-5" /></button>
+      <div className="relative min-h-[260px] bg-[linear-gradient(145deg,#0a2532,#087d79)] md:min-h-[590px]">
+        {worklog?.mediaId ? <img src={`/api/terraqo/worklog/evidence/${worklog.mediaId}`} alt={`Evidencia de ${worklog.title}`} className="absolute inset-0 h-full w-full object-cover" /> : <div className="absolute inset-0 grid place-items-center overflow-hidden"><div className="absolute inset-0 bg-[radial-gradient(circle_at_65%_25%,rgba(38,201,190,0.32),transparent_38%),linear-gradient(145deg,#071d2a,#0a5f62)]" /><BriefcaseBusiness className="relative h-20 w-20 text-white/75" /></div>}
+        <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/45 to-transparent" />
+        <div className="absolute left-4 right-16 top-4 flex items-center gap-3 text-white"><UserAvatar name={profile.name} image={profile.image} size="sm" className="ring-2 ring-white/70" /><div className="min-w-0"><p className="truncate text-sm font-bold">{profile.name}</p><p className="truncate text-[11px] text-white/80">{profile.roleTitle || profile.headline || "Profesional Terraqo"}</p></div></div>
+      </div>
+      <div className="min-h-0 overflow-y-auto p-6 sm:p-8 md:pt-20">
+        {worklog ? <>
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#087d79]">Última bitácora</p>
+          <h2 className="mt-3 font-display text-2xl font-bold leading-tight text-[#102535] sm:text-3xl">{worklog.title}</h2>
+          <p className="mt-4 whitespace-pre-line text-sm leading-6 text-[#526878]">{worklog.summary}</p>
+          {worklog.outcome ? <div className="mt-5 rounded-xl border-l-4 border-[#0aa19a] bg-[#edf8f7] px-4 py-3 text-sm leading-6 text-[#35545d]"><strong>Resultado:</strong> {worklog.outcome}</div> : null}
+          <div className="mt-5 flex flex-wrap gap-2">{worklog.projectName ? <StoryDetail icon={<FolderKanban className="h-3.5 w-3.5" />}>{worklog.projectName}</StoryDetail> : null}{worklog.workspaceName ? <StoryDetail icon={<Building2 className="h-3.5 w-3.5" />}>{worklog.workspaceName}</StoryDetail> : null}<StoryDetail icon={<CalendarDays className="h-3.5 w-3.5" />}>{new Intl.DateTimeFormat("es-PE", { dateStyle: "medium" }).format(new Date(worklog.occurredAt))}</StoryDetail></div>
+          <div className="mt-4 flex flex-wrap gap-2">{worklog.skills.slice(0, 4).map((skill) => <span key={skill} className="rounded-lg bg-[#eff4f5] px-2.5 py-1 text-[11px] font-bold text-[#526878]">#{skill}</span>)}</div>
+          <div className="mt-7 flex items-center gap-6 border-t border-[#e1eaed] pt-5 text-sm font-bold text-[#526878]"><span className="inline-flex items-center gap-2"><Heart className="h-5 w-5 text-[#0aa19a]" />{worklog.reactions}</span><span className="inline-flex items-center gap-2"><MessageSquare className="h-5 w-5 text-[#4374ba]" />{worklog.comments}</span><Link href={`/portal/profesionales/${profile.id}`} className="ml-auto text-[#087d79] hover:underline">Ver perfil completo</Link></div>
+        </> : <div className="grid min-h-[360px] content-center text-center"><span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[#eaf7f6] text-[#087d79]"><Sparkles className="h-6 w-6" /></span><h2 className="mt-5 font-display text-2xl font-bold text-[#102535]">Aún no publicó una bitácora</h2><p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-[#667b89]">Puedes conocer su experiencia, habilidades y disponibilidad desde el perfil profesional.</p><Link href={`/portal/profesionales/${profile.id}`} className="mx-auto mt-6 inline-flex h-11 items-center rounded-xl bg-[#087d79] px-5 text-sm font-bold text-white">Ver perfil profesional</Link></div>}
+      </div>
+    </article>
+  </div>;
+}
+
+function StoryDetail({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) { return <span className="inline-flex items-center gap-1.5 rounded-full border border-[#d5e2e6] bg-[#f8fbfb] px-3 py-1.5 text-xs font-bold text-[#526878]">{icon}{children}</span>; }
 
 function HeroChip({ children, icon }: { children: React.ReactNode; icon?: React.ReactNode }) { return <span className="inline-flex items-center gap-1.5 rounded-full border border-[#c9dddf] bg-white/70 px-3 py-1.5 text-xs font-bold text-[#41616b]">{icon}{children}</span>; }
 function CarouselButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) { return <button type="button" onClick={onClick} aria-label={label} className="grid h-9 w-9 place-items-center rounded-full border border-[#c5dcdf] bg-white/75 text-[#087d79] transition hover:bg-white">{children}</button>; }
