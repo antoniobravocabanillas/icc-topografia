@@ -35,6 +35,42 @@ export async function getSessionTerraqoWorkspaceId() {
   return (await getSessionTerraqoWorkspace()).id;
 }
 
+export async function getSessionWorkspaceWithModule(code: TerraqoModuleCode) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Sesion requerida.");
+
+  // Preserve the explicitly selected/admin workspace when it owns the module.
+  const activeWorkspace = await getWorkspaceForUser(
+    session.user.id,
+    session.user.role as Role | undefined
+  );
+  if (activeWorkspace?.active && await hasWorkspaceModule(code, activeWorkspace.id)) {
+    return activeWorkspace;
+  }
+
+  // Professional and client memberships also inherit sellable workspace modules.
+  // The previous admin-only lookup made the UI visible but rejected its API call.
+  const membership = await prisma.terraqoWorkspaceMember.findFirst({
+    where: {
+      userId: session.user.id,
+      active: true,
+      workspace: {
+        active: true,
+        deletedAt: null,
+        modules: { some: { code, active: true } }
+      }
+    },
+    orderBy: { joinedAt: "desc" },
+    select: {
+      workspace: {
+        select: { id: true, slug: true, name: true, active: true }
+      }
+    }
+  });
+
+  return membership?.workspace ?? null;
+}
+
 export const getDefaultWorkspaceEntitlements = cache(async () => {
   return prisma.terraqoWorkspace.findUnique({
     where: { slug: workspace.defaultWorkspaceSlug },

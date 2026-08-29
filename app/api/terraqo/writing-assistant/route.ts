@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { generateTerraqoText, hasConfiguredAiProvider } from "@/lib/terraqo/ai-provider";
-import { getSessionTerraqoWorkspace, hasWorkspaceModule } from "@/lib/terraqo/workspace-scope";
+import { getSessionWorkspaceWithModule } from "@/lib/terraqo/workspace-scope";
 
 const requestSchema = z.object({
   text: z.string().trim().min(3).max(6000),
@@ -28,8 +28,8 @@ export async function POST(request: Request) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Debes iniciar sesión." }, { status: 401 });
 
-  const workspace = await getSessionTerraqoWorkspace().catch(() => null);
-  if (!workspace || !(await hasWorkspaceModule("AI_WRITING_ASSISTANT", workspace.id))) {
+  const workspace = await getSessionWorkspaceWithModule("AI_WRITING_ASSISTANT").catch(() => null);
+  if (!workspace) {
     return NextResponse.json({ error: "El módulo Asistente de escritura con IA no está activo en este workspace." }, { status: 403 });
   }
 
