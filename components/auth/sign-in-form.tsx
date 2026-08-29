@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { startAuthentication } from "@simplewebauthn/browser";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
-import { ArrowRight, Eye, EyeOff, Fingerprint, LockKeyhole } from "lucide-react";
+import { ArrowRight, BriefcaseBusiness, Building2, Eye, EyeOff, Fingerprint, LockKeyhole } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { terraqoDomains } from "@/lib/terraqo-domains";
@@ -37,6 +37,7 @@ export function SignInForm({
   const callbackUrl = safeRelativeCallback(explicitCallbackUrl);
   const verification = searchParams.get("verification");
   const sessionReason = searchParams.get("reason");
+  const audience = searchParams.get("audience");
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [passkeyBusy, setPasskeyBusy] = useState(false);
@@ -120,6 +121,17 @@ export function SignInForm({
           <h2 className="mt-1 font-display text-2xl font-bold">{title}</h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
         </div>
+      </div>
+
+      <div className="tq-account-type tq-login-destinations" aria-label="Tipo de acceso">
+        <a href={`${terraqoDomains.admin}/cuenta?audience=company&callbackUrl=${encodeURIComponent("/admin")}`} className={audience === "company" ? "is-active" : ""}>
+          <Building2 className="h-4 w-4" />
+          <span><strong>Empresa</strong><small>Workspace de organización</small></span>
+        </a>
+        <a href={`${terraqoDomains.portal}/cuenta?audience=professional&callbackUrl=${encodeURIComponent("/portal")}`} className={audience === "professional" ? "is-active" : ""}>
+          <BriefcaseBusiness className="h-4 w-4" />
+          <span><strong>Profesional</strong><small>Perfil y CV vivo</small></span>
+        </a>
       </div>
 
       <div className="grid gap-4">

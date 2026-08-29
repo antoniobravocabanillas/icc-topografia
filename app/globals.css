@@ -674,7 +674,8 @@ body:has(.tq-auth-surface) .tq-public-header--dark .tq-header-cta {
   margin-bottom: 18px;
 }
 
-.tq-account-type > button {
+.tq-account-type > button,
+.tq-account-type > a {
   display: flex;
   align-items: center;
   gap: 11px;
@@ -684,13 +685,22 @@ body:has(.tq-auth-surface) .tq-public-header--dark .tq-header-cta {
   border-radius: 10px;
   color: rgba(226, 235, 244, 0.68);
   text-align: left;
+  text-decoration: none;
   transition: border-color 220ms ease, background 220ms ease, color 220ms ease;
 }
 
-.tq-account-type > button.is-active {
+.tq-account-type > button.is-active,
+.tq-account-type > a.is-active {
   border-color: rgba(37, 192, 213, 0.62);
   background: linear-gradient(135deg, rgba(67, 116, 186, 0.22), rgba(37, 192, 213, 0.08));
   color: #fff;
+}
+
+.tq-login-destinations > a:hover,
+.tq-login-destinations > a:focus-visible {
+  border-color: rgba(37, 192, 213, 0.62);
+  color: #fff;
+  outline: none;
 }
 
 .tq-account-type span { display: grid; gap: 2px; }
