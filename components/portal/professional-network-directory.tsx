@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, BadgeCheck, BriefcaseBusiness, Building2, ChevronDown, Grid2X2, List, MapPin, MessageSquare, Plus, Search, SlidersHorizontal, Sparkles, UserPlus, UsersRound, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, BadgeCheck, BriefcaseBusiness, Building2, ChevronDown, Grid2X2, List, MapPin, MessageSquare, Plus, SlidersHorizontal, Sparkles, UserPlus, UsersRound } from "lucide-react";
 import { UserAvatar } from "@/components/terraqo/user-avatar";
 
 type DirectoryMode = "professionals" | "companies" | "groups";
@@ -25,7 +25,7 @@ function normalized(value: string) { return value.normalize("NFD").replace(/[\u0
 export function ProfessionalNetworkDirectory({ initialQuery = "", jobAds, professionals, companies, groups }: DirectoryProps) {
   const [mode, setMode] = useState<DirectoryMode>("professionals");
   const [view, setView] = useState<ViewMode>("grid");
-  const [query, setQuery] = useState(initialQuery);
+  const query = initialQuery;
   const [sort, setSort] = useState("relevant");
   const [location, setLocation] = useState("all");
   const [specialty, setSpecialty] = useState("all");
@@ -65,18 +65,18 @@ export function ProfessionalNetworkDirectory({ initialQuery = "", jobAds, profes
     <NetworkStories professionals={professionals} companies={companies} />
 
     <section id="directorio-red" className="sticky top-[72px] z-20 -mx-2 mt-5 scroll-mt-24 rounded-2xl border border-[#d7e3e8] bg-white/95 p-2 shadow-[0_14px_40px_rgba(11,35,48,0.08)] backdrop-blur-xl sm:mx-0 sm:p-3">
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-        <label className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#667b89]" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por nombre, empresa, profesión o habilidad" className="h-12 w-full rounded-xl border border-[#d7e3e8] bg-[#f7fafb] pl-11 pr-10 text-sm font-medium text-[#183042] outline-none transition focus:border-[#13a8a4] focus:bg-white focus:ring-4 focus:ring-[#13a8a4]/10" />{query ? <button type="button" onClick={() => setQuery("")} className="absolute right-3 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-[#667b89] hover:bg-[#e7f2f3]" aria-label="Limpiar búsqueda"><X className="h-4 w-4" /></button> : null}</label>
-        <div className="grid grid-cols-3 rounded-xl border border-[#d7e3e8] bg-white p-1 xl:w-[440px]">{tabs.map((tab) => { const Icon = tab.icon; const active = mode === tab.value; return <button key={tab.value} type="button" onClick={() => setMode(tab.value)} className={`inline-flex h-10 items-center justify-center gap-2 rounded-lg px-2 text-xs font-bold transition sm:text-sm ${active ? "bg-[linear-gradient(135deg,#087d79,#0aa19a)] text-white shadow-[0_8px_20px_rgba(8,125,121,0.2)]" : "text-[#526878] hover:bg-[#edf6f6]"}`}><Icon className="h-4 w-4" /><span className="hidden min-[390px]:inline">{tab.label}</span></button>; })}</div>
-      </div>
-    </section>
-
-    <div className="mt-6 flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-[#526878]"><strong className="text-lg text-[#102535]">{count}</strong> {totalLabel}</p><div className="flex flex-wrap items-center gap-2">
+      <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="grid min-w-[300px] flex-1 grid-cols-3 rounded-xl border border-[#d7e3e8] bg-white p-1 lg:max-w-[470px]">{tabs.map((tab) => { const Icon = tab.icon; const active = mode === tab.value; return <button key={tab.value} type="button" onClick={() => setMode(tab.value)} className={`inline-flex h-10 items-center justify-center gap-2 rounded-lg px-2 text-xs font-bold transition sm:text-sm ${active ? "bg-[linear-gradient(135deg,#087d79,#0aa19a)] text-white shadow-[0_8px_20px_rgba(8,125,121,0.2)]" : "text-[#526878] hover:bg-[#edf6f6]"}`}><Icon className="h-4 w-4" /><span>{tab.label}</span></button>; })}</div>
+        <div className="ml-auto flex shrink-0 items-center gap-2">
         <label className="relative"><select value={sort} onChange={(event) => setSort(event.target.value)} className="h-10 appearance-none rounded-xl border border-[#d7e3e8] bg-white pl-3 pr-9 text-xs font-bold text-[#354c5d] outline-none sm:text-sm"><option value="relevant">Más relevantes</option><option value="available">Disponibles primero</option><option value="recent">Más recientes</option></select><ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#667b89]" /></label>
         <div className="hidden rounded-xl border border-[#d7e3e8] bg-white p-1 sm:flex"><ViewButton active={view === "grid"} onClick={() => setView("grid")} label="Vista en cuadrícula"><Grid2X2 className="h-4 w-4" /></ViewButton><ViewButton active={view === "list"} onClick={() => setView("list")} label="Vista en lista"><List className="h-4 w-4" /></ViewButton></div>
         {mode === "professionals" ? <button type="button" onClick={() => setFiltersOpen((value) => !value)} className={`inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-xs font-bold transition sm:text-sm ${filtersOpen || activeFilterCount ? "border-[#0b8e88] bg-[#e9f7f6] text-[#087d79]" : "border-[#d7e3e8] bg-white text-[#354c5d]"}`}><SlidersHorizontal className="h-4 w-4" />Filtros{activeFilterCount ? <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[#087d79] px-1 text-[10px] text-white">{activeFilterCount}</span> : null}</button> : null}
-      </div></div>
+        </div>
+      </div>
+    </section>
+
+    <div className="mt-5 flex flex-col gap-4">
+      <p className="text-sm text-[#526878]"><strong className="text-lg text-[#102535]">{count}</strong> {totalLabel}</p>
       {mode === "professionals" && (filtersOpen || activeFilterCount) ? <div className="grid gap-3 rounded-2xl border border-[#d7e3e8] bg-[#f8fbfb] p-4 sm:grid-cols-3 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-end"><FilterSelect label="Ubicación" value={location} onChange={setLocation} options={[{ value: "all", label: "Todas" }, ...locationOptions.map((item) => ({ value: item, label: item }))]} /><FilterSelect label="Especialidad" value={specialty} onChange={setSpecialty} options={[{ value: "all", label: "Todas" }, ...specialtyOptions.map((item) => ({ value: item, label: item }))]} /><FilterSelect label="Disponibilidad" value={availability} onChange={setAvailability} options={[{ value: "all", label: "Todas" }, { value: "available", label: "Disponible para proyectos" }, { value: "online", label: "En línea ahora" }, { value: "verified", label: "Identidad verificada" }]} /><button type="button" onClick={clearFilters} disabled={!activeFilterCount} className="h-11 rounded-xl px-4 text-sm font-bold text-[#087d79] disabled:opacity-40">Limpiar filtros</button></div> : null}
       {mode === "professionals" ? <ProfessionalsList items={visibleProfessionals} view={view} /> : null}{mode === "companies" ? <CompaniesList items={visibleCompanies} view={view} /> : null}{mode === "groups" ? <GroupsList items={visibleGroups} view={view} /> : null}
     </div>
