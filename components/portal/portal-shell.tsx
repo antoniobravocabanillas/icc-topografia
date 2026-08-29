@@ -213,7 +213,16 @@ export function PortalShell({ children, name, image, headline, portalType = "pro
             </span>
           </Link>
 
-          <div className="ml-auto flex items-center gap-2 sm:gap-3">
+          {portalType === "professional" ? (
+            <form action="/portal/red" method="get" role="search" className="mx-auto hidden min-w-0 max-w-2xl flex-1 md:block">
+              <label className="relative block">
+                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#607083]" />
+                <input name="q" type="search" placeholder="Buscar profesionales, empresas, equipos o habilidades..." className="h-11 w-full rounded-full border border-[#d8e0ec] bg-[#f6f8fa] pl-11 pr-4 text-sm font-medium text-[#2f4154] outline-none transition focus:border-primary/45 focus:bg-white focus:ring-4 focus:ring-primary/10" />
+              </label>
+            </form>
+          ) : null}
+
+          <div className="ml-auto flex items-center gap-2 sm:gap-3 md:ml-0">
             <Link href="/portal/mensajes" className="relative grid h-10 w-10 place-items-center rounded-lg border border-[#d8e0ec] text-[#35485b] transition hover:bg-[#e8eef7] hover:text-primary" aria-label="Abrir mensajes">
               <MessagesSquare className="h-[18px] w-[18px]" />
             </Link>

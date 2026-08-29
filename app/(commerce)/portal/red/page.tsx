@@ -5,8 +5,9 @@ import { requireProfessionalPortal } from "@/lib/terraqo/professional-portal";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export default async function ProfessionalNetworkDirectoryPage() {
+export default async function ProfessionalNetworkDirectoryPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const { session, memberships } = await requireProfessionalPortal();
+  const params = await searchParams;
   const workspaceIds = memberships.map((membership) => membership.workspaceId);
   const profiles = workspaceIds.length
     ? await prisma.terraqoProfessionalProfile.findMany({
@@ -46,8 +47,40 @@ export default async function ProfessionalNetworkDirectoryPage() {
       })
     : [];
 
+  const jobs = await prisma.terraqoJobPost.findMany({
+    where: {
+      status: "OPEN",
+      deletedAt: null,
+      workspace: { active: true, modules: { some: { code: "JOB_MARKETPLACE", active: true } } },
+      OR: [
+        { visibility: { in: ["PUBLIC", "COMMUNITY"] } },
+        ...(workspaceIds.length ? [{ visibility: "WORKSPACE" as const, workspaceId: { in: workspaceIds } }] : [])
+      ]
+    },
+    select: {
+      id: true, title: true, summary: true, location: true, modality: true, createdAt: true,
+      requiredSkills: true,
+      workspace: { select: { slug: true, name: true, brandName: true, logoUrl: true } }
+    },
+    orderBy: { createdAt: "desc" },
+    take: 6
+  });
+
   return (
     <ProfessionalNetworkDirectory
+      initialQuery={params.q?.trim().slice(0, 120) || ""}
+      jobAds={jobs.map((job) => ({
+        id: job.id,
+        title: job.title,
+        summary: job.summary,
+        company: job.workspace.brandName || job.workspace.name,
+        companySlug: job.workspace.slug,
+        companyLogo: job.workspace.logoUrl,
+        location: job.location,
+        modality: job.modality,
+        skills: job.requiredSkills,
+        publishedAt: job.createdAt.toISOString()
+      }))}
       professionals={profiles.map((profile) => {
         const workspace = profile.affiliations[0]?.workspace;
         return {
