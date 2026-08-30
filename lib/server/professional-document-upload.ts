@@ -57,27 +57,19 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
     const purpose = String(formData.get("purpose") || "");
     if (!["cv", "identity", "document"].includes(purpose)) return fail("Tipo de carga no valido.", 400);
 
-    const profile = await prisma.terraqoProfessionalProfile.findUnique({
-      where: { userId },
-      include: {
-        applications: {
-          where: requestedWorkspaceId ? { workspaceId: requestedWorkspaceId } : undefined,
-          orderBy: { createdAt: "desc" },
-          select: { workspaceId: true },
-          take: 1,
-        },
-      },
-    });
+    const profile = await prisma.terraqoProfessionalProfile.findUnique({ where: { userId } });
     if (!profile) return fail("Perfil profesional no encontrado.", 404);
 
-    const workspaceId = requestedWorkspaceId || profile.applications[0]?.workspaceId;
-    if (!workspaceId) return fail("El perfil no esta vinculado a un workspace.", 409);
-
-    const membership = await prisma.terraqoWorkspaceMember.findFirst({
-      where: { workspaceId, userId, active: true, role: "PROFESSIONAL" },
-      select: { id: true },
-    });
-    if (!membership) return fail("El perfil no tiene acceso profesional a este workspace.", 403);
+    // A professional owns a personal Terraqo profile. A company workspace is
+    // only required when the upload originates from that company's portal.
+    const workspaceId = requestedWorkspaceId || null;
+    if (workspaceId) {
+      const membership = await prisma.terraqoWorkspaceMember.findFirst({
+        where: { workspaceId, userId, active: true, role: "PROFESSIONAL" },
+        select: { id: true },
+      });
+      if (!membership) return fail("El perfil no tiene acceso profesional a este workspace.", 403);
+    }
 
     const requestedFiles: Array<{ type: DocumentType; file: File }> = [];
     if (purpose === "cv") {
@@ -114,7 +106,7 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
             originalName: item.file.name,
             size: item.file.size,
             profileId: profile.id,
-            workspaceId,
+            ...(workspaceId ? { workspaceId } : {}),
             documentType: item.type,
             uploadedBy: userId,
             uploadedAt: new Date().toISOString(),

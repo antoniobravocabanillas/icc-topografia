@@ -2409,8 +2409,8 @@ model TerraqoProfessionalDocument {
   id                    String                          @id @default(cuid())
   professionalProfileId String
   professionalProfile   TerraqoProfessionalProfile      @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
-  workspaceId           String
-  workspace             TerraqoWorkspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId           String?
+  workspace             TerraqoWorkspace?               @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
   type                  TerraqoProfessionalDocumentType
   storageKey            String                          @unique
   fileName              String

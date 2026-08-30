@@ -30,7 +30,7 @@ const identityCopy = {
   },
   UNDER_REVIEW: {
     label: "Identidad en revision",
-    description: "Tus documentos fueron recibidos y estan siendo revisados por el workspace."
+    description: "Tus documentos fueron recibidos y estan siendo revisados por Terraqo."
   },
   VERIFIED: {
     label: "Identidad verificada",
@@ -142,7 +142,7 @@ export function ProfessionalDocumentUploader({ identityStatus, identityNote, doc
         <CardContent className="space-y-4">
           <div className="flex gap-3 rounded-md border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground">
             <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-            <p>El DNI es privado. Solo tu cuenta y los responsables autorizados del workspace pueden consultarlo para validar identidad.</p>
+            <p>El DNI es privado. Solo tu cuenta y el equipo autorizado de Terraqo pueden consultarlo para validar tu identidad.</p>
           </div>
           {identityNote ? <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Observacion: {identityNote}</p> : null}
           {identityStatus !== "VERIFIED" ? (
@@ -169,7 +169,7 @@ export function ProfessionalDocumentUploader({ identityStatus, identityNote, doc
       <Card className="xl:col-span-2">
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><FileBadge2 className="h-5 w-5 text-primary" /> Documentos y datos profesionales</CardTitle>
-          <CardDescription className="mt-2 max-w-3xl">Organiza antecedentes penales, antecedentes policiales, Certiadulto y SCTR. El expediente es privado y solo puede verlo tu cuenta y la empresa vinculada a este workspace.</CardDescription>
+          <CardDescription className="mt-2 max-w-3xl">Organiza antecedentes penales, antecedentes policiales, Certiadulto y SCTR. Tu expediente pertenece a tu perfil personal y permanece privado; no necesitas estar vinculado a una empresa.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
           <form ref={privateFormRef} className="grid content-start gap-3 rounded-lg border bg-muted/20 p-4" onSubmit={(event) => { event.preventDefault(); void upload(event.currentTarget, "document"); }}>

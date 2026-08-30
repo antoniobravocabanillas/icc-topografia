@@ -24,7 +24,7 @@ export async function GET(request: Request, { params }: DocumentRouteProps) {
 
     const isOwner = document.professionalProfile.userId === session.user.id;
     const isSuperAdmin = session.user.role === "SUPER_ADMIN";
-    const reviewerMembership = !isOwner && !isSuperAdmin
+    const reviewerMembership = !isOwner && !isSuperAdmin && document.workspaceId
       ? await prisma.terraqoWorkspaceMember.findFirst({
           where: {
             workspaceId: document.workspaceId,

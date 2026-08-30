@@ -206,7 +206,7 @@ export default async function TerraqoValidationsPage() {
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="outline">{document.type}</Badge>
-                  <Badge>{document.workspace.brandName || document.workspace.name}</Badge>
+                  <Badge>{document.workspace ? document.workspace.brandName || document.workspace.name : "Perfil personal Terraqo"}</Badge>
                 </div>
                 <h2 className="mt-2 font-semibold">{document.professionalProfile.user.name || document.professionalProfile.user.email}</h2>
                 <p className="text-sm text-muted-foreground">{document.professionalProfile.headline || "Perfil profesional"} · {document.fileName}</p>
