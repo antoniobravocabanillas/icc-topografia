@@ -74,6 +74,7 @@ export async function getTeamHub(userId: string) {
             id: true,
             name: true,
             email: true,
+            image: true,
             terraqoProfessionalProfile: { select: { headline: true, status: true } }
           }
         }
@@ -93,6 +94,7 @@ export async function getTeamHub(userId: string) {
     userId: membership.user.id,
     name: membership.user.name || membership.user.email,
     email: membership.user.email,
+    image: membership.user.image,
     headline: membership.user.terraqoProfessionalProfile?.headline || "Profesional Terraqo",
     status: membership.user.terraqoProfessionalProfile?.status || "OPEN_TO_PROJECTS"
   }])).values());
