@@ -5,8 +5,19 @@ import path from "node:path";
 type MediaMetadata = Record<string, unknown>;
 
 type MediaStore = {
-  set: (key: string, data: ArrayBuffer, options?: { metadata?: MediaMetadata }) => Promise<unknown>;
-  getWithMetadata: (key: string, options: { type: "arrayBuffer" }) => Promise<{ data: ArrayBuffer; metadata: MediaMetadata; etag?: string } | null>;
+  set: (
+    key: string,
+    data: ArrayBuffer,
+    options?: { metadata?: MediaMetadata },
+  ) => Promise<unknown>;
+  getWithMetadata: (
+    key: string,
+    options: { type: "arrayBuffer" },
+  ) => Promise<{
+    data: ArrayBuffer;
+    metadata: MediaMetadata;
+    etag?: string;
+  } | null>;
   delete: (key: string) => Promise<unknown>;
 };
 
@@ -19,18 +30,27 @@ class LocalMediaStore implements MediaStore {
 
   private resolveKey(key: string) {
     const filePath = path.resolve(this.root, key);
-    if (!filePath.startsWith(`${this.root}${path.sep}`)) throw new Error("Ruta de archivo no permitida.");
+    if (!filePath.startsWith(`${this.root}${path.sep}`))
+      throw new Error("Ruta de archivo no permitida.");
     return filePath;
   }
 
-  async set(key: string, data: ArrayBuffer, options?: { metadata?: MediaMetadata }) {
+  async set(
+    key: string,
+    data: ArrayBuffer,
+    options?: { metadata?: MediaMetadata },
+  ) {
     const filePath = this.resolveKey(key);
     const metadataPath = `${filePath}.metadata.json`;
     const etag = crypto.randomUUID();
     await mkdir(path.dirname(filePath), { recursive: true });
     await Promise.all([
       writeFile(filePath, Buffer.from(data)),
-      writeFile(metadataPath, JSON.stringify({ metadata: options?.metadata || {}, etag }), "utf8")
+      writeFile(
+        metadataPath,
+        JSON.stringify({ metadata: options?.metadata || {}, etag }),
+        "utf8",
+      ),
     ]);
     return { etag };
   }
@@ -41,13 +61,16 @@ class LocalMediaStore implements MediaStore {
     try {
       const [data, storedMetadata] = await Promise.all([
         readFile(filePath),
-        readFile(`${filePath}.metadata.json`, "utf8").catch(() => "{}")
+        readFile(`${filePath}.metadata.json`, "utf8").catch(() => "{}"),
       ]);
-      const parsed = JSON.parse(storedMetadata) as { metadata?: MediaMetadata; etag?: string };
+      const parsed = JSON.parse(storedMetadata) as {
+        metadata?: MediaMetadata;
+        etag?: string;
+      };
       return {
         data: Uint8Array.from(data).buffer,
         metadata: parsed.metadata || {},
-        etag: parsed.etag
+        etag: parsed.etag,
       };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
@@ -59,13 +82,16 @@ class LocalMediaStore implements MediaStore {
     const filePath = this.resolveKey(key);
     await Promise.all([
       rm(filePath, { force: true }),
-      rm(`${filePath}.metadata.json`, { force: true })
+      rm(`${filePath}.metadata.json`, { force: true }),
     ]);
   }
 }
 
 function getMediaStore(storeName: string): MediaStore {
-  if (process.env.NODE_ENV === "development" && process.env.NETLIFY !== "true") {
+  if (
+    process.env.NODE_ENV === "development" &&
+    process.env.NETLIFY !== "true"
+  ) {
     return new LocalMediaStore(storeName);
   }
   return getStore(storeName) as MediaStore;
@@ -88,6 +114,8 @@ export const WORKLOG_EVIDENCE_PREFIX = "worklog-evidence";
 export const EXPERIENCE_EVIDENCE_PREFIX = "experience-evidence";
 export const WORKSPACE_FILE_STORE = "terraqo-workspace-files";
 export const WORKSPACE_FILE_PREFIX = "workspace-files";
+export const MESSAGE_ATTACHMENT_STORE = "terraqo-message-attachments";
+export const MESSAGE_ATTACHMENT_PREFIX = "message-attachments";
 export const SERVICE_ICON_PREFIX = "service-icons";
 export const MAX_PRODUCT_IMAGE_SIZE = 5 * 1024 * 1024;
 export const MAX_CUSTOMER_FILE_SIZE = 10 * 1024 * 1024;
@@ -98,36 +126,69 @@ export const MAX_PROFESSIONAL_AVATAR_SIZE = 3 * 1024 * 1024;
 export const MAX_WORKLOG_EVIDENCE_SIZE = 8 * 1024 * 1024;
 export const MAX_EXPERIENCE_EVIDENCE_SIZE = 8 * 1024 * 1024;
 export const MAX_WORKSPACE_FILE_SIZE = 35 * 1024 * 1024;
-export const ALLOWED_PRODUCT_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
-export const ALLOWED_CLIENT_LOGO_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif", "image/svg+xml"]);
-export const ALLOWED_PROJECT_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
+export const MAX_MESSAGE_ATTACHMENT_SIZE = 20 * 1024 * 1024;
+export const ALLOWED_PRODUCT_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/avif",
+]);
+export const ALLOWED_CLIENT_LOGO_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/avif",
+  "image/svg+xml",
+]);
+export const ALLOWED_PROJECT_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/avif",
+]);
 export const ALLOWED_CUSTOMER_FILE_TYPES = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
   "image/avif",
-  "application/pdf"
+  "application/pdf",
 ]);
 export const ALLOWED_CV_FILE_TYPES = new Set([
   "application/pdf",
   "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ]);
 export const ALLOWED_IDENTITY_FILE_TYPES = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
-  "application/pdf"
+  "application/pdf",
 ]);
 export const ALLOWED_PRIVATE_DOCUMENT_TYPES = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
-  "application/pdf"
+  "application/pdf",
 ]);
-export const ALLOWED_PROFESSIONAL_AVATAR_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
-export const ALLOWED_WORKLOG_EVIDENCE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
-export const ALLOWED_EXPERIENCE_EVIDENCE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif", "application/pdf"]);
+export const ALLOWED_PROFESSIONAL_AVATAR_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/avif",
+]);
+export const ALLOWED_WORKLOG_EVIDENCE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/avif",
+]);
+export const ALLOWED_EXPERIENCE_EVIDENCE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/avif",
+  "application/pdf",
+]);
 export const ALLOWED_WORKSPACE_FILE_TYPES = new Set([
   "application/pdf",
   "image/jpeg",
@@ -150,7 +211,25 @@ export const ALLOWED_WORKSPACE_FILE_TYPES = new Set([
   "image/vnd.dwg",
   "application/dxf",
   "image/vnd.dxf",
-  "application/octet-stream"
+  "application/octet-stream",
+]);
+export const ALLOWED_MESSAGE_ATTACHMENT_TYPES = new Set([
+  "audio/webm",
+  "audio/ogg",
+  "audio/mp4",
+  "audio/mpeg",
+  "audio/wav",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "application/pdf",
+  "text/plain",
+  "text/csv",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/zip",
 ]);
 
 export function getProductMediaStore() {
@@ -183,6 +262,10 @@ export function getWorklogEvidenceStore() {
 
 export function getWorkspaceFileStore() {
   return getMediaStore(WORKSPACE_FILE_STORE);
+}
+
+export function getMessageAttachmentStore() {
+  return getMediaStore(MESSAGE_ATTACHMENT_STORE);
 }
 
 export function sanitizeFileName(fileName: string) {
@@ -230,7 +313,11 @@ export function createServiceIconKey(fileName: string) {
   return `${SERVICE_ICON_PREFIX}/${crypto.randomUUID()}-${baseName}.${extension}`;
 }
 
-export function createProfessionalDocumentKey(profileId: string, type: string, fileName: string) {
+export function createProfessionalDocumentKey(
+  profileId: string,
+  type: string,
+  fileName: string,
+) {
   const safeName = sanitizeFileName(fileName) || "documento";
   const extension = safeName.includes(".") ? safeName.split(".").pop() : "bin";
   const baseName = safeName.replace(/\.[^.]+$/, "");
@@ -250,16 +337,33 @@ export function createWorklogEvidenceKey(worklogId: string, fileName: string) {
   return `${WORKLOG_EVIDENCE_PREFIX}/${worklogId}/${crypto.randomUUID()}-${baseName}.${extension}`;
 }
 
-export function createExperienceEvidenceKey(experienceId: string, fileName: string) {
+export function createExperienceEvidenceKey(
+  experienceId: string,
+  fileName: string,
+) {
   const safeName = sanitizeFileName(fileName) || "evidencia";
   const extension = safeName.includes(".") ? safeName.split(".").pop() : "bin";
   const baseName = safeName.replace(/\.[^.]+$/, "");
   return `${EXPERIENCE_EVIDENCE_PREFIX}/${experienceId}/${crypto.randomUUID()}-${baseName}.${extension}`;
 }
 
-export function createWorkspaceFileKey(workspaceId: string, userId: string, fileName: string) {
+export function createWorkspaceFileKey(
+  workspaceId: string,
+  userId: string,
+  fileName: string,
+) {
   const safeName = sanitizeFileName(fileName) || "archivo";
   const extension = safeName.includes(".") ? safeName.split(".").pop() : "bin";
   const baseName = safeName.replace(/\.[^.]+$/, "");
   return `${WORKSPACE_FILE_PREFIX}/${workspaceId}/${userId}/${crypto.randomUUID()}-${baseName}.${extension}`;
+}
+
+export function createMessageAttachmentKey(
+  conversationId: string,
+  fileName: string,
+) {
+  const safeName = sanitizeFileName(fileName) || "archivo";
+  const extension = safeName.includes(".") ? safeName.split(".").pop() : "bin";
+  const baseName = safeName.replace(/\.[^.]+$/, "");
+  return `${MESSAGE_ATTACHMENT_PREFIX}/${conversationId}/${crypto.randomUUID()}-${baseName}.${extension}`;
 }

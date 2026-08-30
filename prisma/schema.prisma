@@ -2242,19 +2242,36 @@ model TerraqoConversationParticipant {
 }
 
 model TerraqoDirectMessage {
-  id             String              @id @default(cuid())
-  conversationId String
-  conversation   TerraqoConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  senderId       String
-  sender         User                @relation("TerraqoDirectMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
-  body           String
-  attachments    String[]            @default([])
-  editedAt       DateTime?
-  deletedAt      DateTime?
-  createdAt      DateTime            @default(now())
+  id              String                     @id @default(cuid())
+  conversationId  String
+  conversation    TerraqoConversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId        String
+  sender          User                       @relation("TerraqoDirectMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  body            String
+  attachmentKeys  String[]                   @default([]) @map("attachments")
+  attachmentItems TerraqoMessageAttachment[]
+  editedAt        DateTime?
+  deletedAt       DateTime?
+  createdAt       DateTime                   @default(now())
 
   @@index([conversationId, createdAt])
   @@index([senderId, createdAt])
+  @@schema("icc")
+}
+
+model TerraqoMessageAttachment {
+  id          String               @id @default(cuid())
+  messageId   String
+  message     TerraqoDirectMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  storageKey  String               @unique
+  fileName    String
+  contentType String
+  size        Int
+  kind        String               @default("FILE")
+  durationMs  Int?
+  createdAt   DateTime             @default(now())
+
+  @@index([messageId, createdAt])
   @@schema("icc")
 }
 

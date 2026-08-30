@@ -1,6 +1,13 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { MessageSquare, Search, Send, X } from "lucide-react";
 import { UserAvatar } from "@/components/terraqo/user-avatar";
 
@@ -26,6 +33,13 @@ type Conversation = {
     body: string;
     createdAt: string;
     sender: Person;
+    attachmentItems: Array<{
+      id: string;
+      fileName: string;
+      contentType: string;
+      size: number;
+      kind: string;
+    }>;
   }>;
 };
 type Hub = { conversations: Conversation[]; selected: Conversation | null };
@@ -186,7 +200,20 @@ export function MessageDrawer({ currentUserId }: { currentUserId: string }) {
                     <div
                       className={`max-w-[82%] rounded-2xl px-3 py-2 text-sm ${message.senderId === currentUserId ? "bg-[#4374ba] text-white" : "bg-slate-100 text-slate-800"}`}
                     >
-                      {message.body}
+                      {message.body ? <p>{message.body}</p> : null}
+                      {message.attachmentItems?.map((attachment) =>
+                        attachment.kind === "AUDIO" ? (
+                          <DrawerAudio key={attachment.id} id={attachment.id} />
+                        ) : (
+                          <a
+                            key={attachment.id}
+                            href={`/api/terraqo/messages/attachments/${attachment.id}`}
+                            className="mt-2 block max-w-56 truncate rounded-lg border border-current/20 px-2 py-1.5 text-xs font-bold"
+                          >
+                            {attachment.fileName}
+                          </a>
+                        ),
+                      )}
                     </div>
                   </div>
                 ))}
@@ -255,5 +282,33 @@ export function MessageDrawer({ currentUserId }: { currentUserId: string }) {
         </div>
       </div>
     </>
+  );
+}
+
+function DrawerAudio({ id }: { id: string }) {
+  const ref = useRef<HTMLAudioElement>(null);
+  const [rate, setRate] = useState(1);
+  function cycleRate() {
+    const next = rate === 1 ? 1.5 : rate === 1.5 ? 2 : 1;
+    setRate(next);
+    if (ref.current) ref.current.playbackRate = next;
+  }
+  return (
+    <div className="mt-2 flex items-center gap-2 rounded-xl bg-white/15 p-2">
+      <audio
+        ref={ref}
+        src={`/api/terraqo/messages/attachments/${id}`}
+        controls
+        preload="metadata"
+        className="h-8 min-w-0 flex-1"
+      />
+      <button
+        type="button"
+        onClick={cycleRate}
+        className="rounded-md border border-current/20 px-1.5 py-1 text-[10px] font-bold"
+      >
+        {rate}×
+      </button>
+    </div>
   );
 }

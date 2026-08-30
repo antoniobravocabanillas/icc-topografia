@@ -1,5 +1,4 @@
 import { ConversationHub } from "@/components/terraqo/conversation-hub";
-import { PortalPageHeading } from "@/components/terraqo/portal-page-heading";
 import { getConversationHub } from "@/lib/terraqo/messaging";
 import { startConversation } from "@/lib/terraqo/messaging";
 import { redirect } from "next/navigation";
@@ -34,16 +33,10 @@ export default async function ProfessionalMessagesPage({
 
   return (
     <div className="min-w-0 space-y-6 py-6 lg:py-8">
-      <PortalPageHeading
-        eyebrow="Red profesional"
-        title="Mensajes"
-        description="Conversa con tus amigos y con profesionales o empresas dentro de espacios autorizados."
-      />
       <ConversationHub
         data={data}
         currentUserId={session.user.id}
         basePath="/portal/mensajes"
-        compactIntro
         projects={projects}
       />
     </div>
