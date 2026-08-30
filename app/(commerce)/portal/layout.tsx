@@ -8,7 +8,11 @@ import { resolveWorkspaceVisualIdentity } from "@/lib/terraqo/workspace-visual-i
 
 export const dynamic = "force-dynamic";
 
-export default async function PortalLayout({ children }: { children: ReactNode }) {
+export default async function PortalLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
   const session = await auth();
   const user = session?.user?.email
     ? await prisma.user.findUnique({
@@ -16,10 +20,15 @@ export default async function PortalLayout({ children }: { children: ReactNode }
         select: {
           name: true,
           image: true,
-          terraqoProfessionalProfile: { select: { headline: true, planTier: true } },
+          terraqoProfessionalProfile: {
+            select: { headline: true, planTier: true },
+          },
           terraqoBuilderAccount: { select: { premiumUntil: true } },
           terraqoMemberships: {
-            where: { active: true, workspace: { active: true, deletedAt: null } },
+            where: {
+              active: true,
+              workspace: { active: true, deletedAt: null },
+            },
             orderBy: { joinedAt: "desc" },
             take: 1,
             select: {
@@ -30,38 +39,60 @@ export default async function PortalLayout({ children }: { children: ReactNode }
                   brandName: true,
                   logoUrl: true,
                   settings: true,
-                  modules: { where: { code: "AI_WRITING_ASSISTANT", active: true }, select: { code: true } },
+                  modules: {
+                    where: { code: "AI_WRITING_ASSISTANT", active: true },
+                    select: { code: true },
+                  },
                   subscriptions: {
                     where: { status: { in: ["TRIALING", "ACTIVE"] } },
                     orderBy: { createdAt: "desc" },
                     take: 1,
-                    select: { tier: true }
-                  }
-                }
-              }
-            }
-          }
-        }
+                    select: { tier: true },
+                  },
+                },
+              },
+            },
+          },
+        },
       })
     : null;
   const membership = user?.terraqoMemberships[0];
-  const portalType = user?.terraqoProfessionalProfile ? "professional" : membership ? "client" : "professional";
+  const portalType = user?.terraqoProfessionalProfile
+    ? "professional"
+    : membership
+      ? "client"
+      : "professional";
   const writingAssistantEnabled = Boolean(membership?.workspace.modules.length);
-  const visualIdentity = resolveWorkspaceVisualIdentity(portalType === "professional" ? null : membership?.workspace.settings);
+  const visualIdentity = resolveWorkspaceVisualIdentity(
+    portalType === "professional" ? null : membership?.workspace.settings,
+  );
 
   return (
-    <><SessionPresence /><PortalShell
-      name={user?.name || session?.user?.name}
-      image={user?.image}
-      headline={user?.terraqoProfessionalProfile?.headline}
-      portalType={portalType}
-      workspaceBrand={membership?.workspace.brandName || membership?.workspace.name}
-      workspaceLogoUrl={membership?.workspace.logoUrl}
-      planTier={portalType === "professional" ? (user?.terraqoBuilderAccount?.premiumUntil && user.terraqoBuilderAccount.premiumUntil > new Date() ? "PREMIUM" : user?.terraqoProfessionalProfile?.planTier) : membership?.workspace.subscriptions[0]?.tier || "FREE"}
-      visualIdentity={visualIdentity}
-      writingAssistantEnabled={writingAssistantEnabled}
-    >
-      {children}
-    </PortalShell></>
+    <>
+      <SessionPresence />
+      <PortalShell
+        currentUserId={session?.user?.id || ""}
+        name={user?.name || session?.user?.name}
+        image={user?.image}
+        headline={user?.terraqoProfessionalProfile?.headline}
+        portalType={portalType}
+        workspaceBrand={
+          membership?.workspace.brandName || membership?.workspace.name
+        }
+        workspaceLogoUrl={membership?.workspace.logoUrl}
+        planTier={
+          portalType === "professional"
+            ? user?.terraqoBuilderAccount?.premiumUntil &&
+              user.terraqoBuilderAccount.premiumUntil > new Date()
+              ? "PREMIUM"
+              : user?.terraqoProfessionalProfile?.planTier
+            : membership?.workspace.subscriptions[0]?.tier || "FREE"
+        }
+        visualIdentity={visualIdentity}
+        writingAssistantEnabled={writingAssistantEnabled}
+      >
+        {children}
+      </PortalShell>
+    </>
   );
 }

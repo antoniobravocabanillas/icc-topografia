@@ -453,6 +453,15 @@ enum TerraqoMessagePrivacy {
   @@schema("icc")
 }
 
+enum TerraqoFriendshipStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  BLOCKED
+
+  @@schema("icc")
+}
+
 enum TerraqoWorklogType {
   FIELD_UPDATE
   DELIVERABLE
@@ -646,10 +655,29 @@ model User {
   terraqoAttendanceEvents     TerraqoAttendanceEvent[]
   terraqoBuilderAccount       TerraqoBuilderAccount?
   terraqoBuilderContributions TerraqoBuilderContribution[]
+  terraqoFriendshipsRequested TerraqoFriendship[]              @relation("TerraqoFriendshipRequester")
+  terraqoFriendshipsReceived  TerraqoFriendship[]              @relation("TerraqoFriendshipRecipient")
   createdAt                   DateTime                         @default(now())
   updatedAt                   DateTime                         @updatedAt
 
   @@index([onlineUntil])
+  @@schema("icc")
+}
+
+model TerraqoFriendship {
+  id          String                  @id @default(cuid())
+  pairKey     String                  @unique
+  requesterId String
+  requester   User                    @relation("TerraqoFriendshipRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  recipientId String
+  recipient   User                    @relation("TerraqoFriendshipRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  status      TerraqoFriendshipStatus @default(PENDING)
+  respondedAt DateTime?
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+
+  @@index([requesterId, status, updatedAt])
+  @@index([recipientId, status, updatedAt])
   @@schema("icc")
 }
 
