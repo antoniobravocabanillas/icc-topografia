@@ -4,6 +4,7 @@ import { BadgeCheck, Building2, CalendarDays, ExternalLink, FolderKanban, LockKe
 import type { WorklogWithContext } from "@/lib/terraqo/worklog";
 import { WorklogEngagement } from "@/components/terraqo/worklog-engagement";
 import { WorklogValidationControl } from "@/components/terraqo/worklog-validation-control";
+import { UserAvatar } from "@/components/terraqo/user-avatar";
 
 const typeLabels: Record<string, string> = {
   FIELD_UPDATE: "Avance de trabajo",
@@ -35,9 +36,7 @@ export function WorklogCard({ worklog, viewerId }: { worklog: WorklogWithContext
     <article className="min-w-0 rounded-2xl border bg-white p-4 shadow-technical sm:rounded-lg sm:p-6">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
-          <div className="grid h-11 w-11 shrink-0 place-items-center rounded-md bg-[#063D63] font-display font-bold text-white">
-            {(worklog.author.name || "T").slice(0, 1).toUpperCase()}
-          </div>
+          <UserAvatar name={worklog.author.name || "Profesional Terraqo"} image={worklog.author.image} size="md" className="h-11 w-11 border-[#4374ba]/30" />
           <div>
             <Link href={`/portal/profesionales/${worklog.professionalProfile.id}`} className="font-display text-lg font-bold hover:text-primary">{worklog.author.name || "Profesional Terraqo"}</Link>
             <p className="text-sm text-muted-foreground">{worklog.professionalProfile.headline || "Perfil profesional"}</p>
