@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, ArrowRight, BadgeCheck, BriefcaseBusiness, Building2, CalendarDays, ChevronDown, FolderKanban, Grid2X2, Heart, List, MapPin, MessageSquare, Plus, SlidersHorizontal, Sparkles, UserPlus, UsersRound, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, BadgeCheck, BriefcaseBusiness, Bug, Building2, CalendarDays, ChevronDown, FolderKanban, Gift, Grid2X2, Heart, Lightbulb, List, MapPin, MessageCircle, MessageSquare, Plus, Rocket, SlidersHorizontal, Sparkles, Trophy, UserPlus, UsersRound, X } from "lucide-react";
 import { UserAvatar } from "@/components/terraqo/user-avatar";
 
 type DirectoryMode = "professionals" | "companies" | "groups";
@@ -86,6 +86,10 @@ export function ProfessionalNetworkDirectory({ initialQuery = "", jobAds, profes
 }
 
 function JobHero({ jobs }: { jobs: JobAd[] }) {
+  return jobs.length ? <JobAdsHero jobs={jobs} /> : <BetaCommunityHero />;
+}
+
+function JobAdsHero({ jobs }: { jobs: JobAd[] }) {
   const [active, setActive] = useState(0);
   const total = Math.max(jobs.length, 1);
   useEffect(() => {
@@ -98,27 +102,59 @@ function JobHero({ jobs }: { jobs: JobAd[] }) {
   const previous = () => setActive((current) => (current - 1 + total) % total);
   const next = () => setActive((current) => (current + 1) % total);
 
-  return <section aria-roledescription="carrusel" aria-label="Oportunidades destacadas" className="relative min-h-[330px] overflow-hidden rounded-[26px] border border-[#cfe1e6] bg-[linear-gradient(116deg,#f8fcfc_0%,#edf8f7_56%,#e6f3f6_100%)] px-5 py-7 sm:px-8 lg:min-h-[350px] lg:px-10 lg:py-9">
-    <div className="pointer-events-none absolute inset-y-0 right-0 w-[46%] bg-[radial-gradient(circle_at_70%_45%,rgba(8,125,121,0.16),transparent_61%)]" />
-    <div className="pointer-events-none absolute -bottom-24 right-[8%] h-64 w-64 rotate-12 rounded-[32%] bg-[linear-gradient(145deg,rgba(8,125,121,0.08),rgba(67,116,186,0.08))] blur-2xl" />
+  return <section aria-roledescription="carrusel" aria-label="Oportunidades destacadas" className="relative min-h-[330px] overflow-hidden rounded-[26px] border border-[#4374ba]/20 bg-[linear-gradient(116deg,#fafcff_0%,#f0f5fb_56%,#e9f6fa_100%)] px-5 py-7 sm:px-8 lg:min-h-[350px] lg:px-10 lg:py-9">
+    <div className="pointer-events-none absolute inset-y-0 right-0 w-[46%] bg-[radial-gradient(circle_at_70%_45%,rgba(37,192,213,0.18),transparent_61%)]" />
+    <div className="pointer-events-none absolute -bottom-24 right-[8%] h-64 w-64 rotate-12 rounded-[32%] bg-[linear-gradient(145deg,rgba(72,138,201,0.12),rgba(37,192,213,0.1))] blur-2xl" />
     <div className="relative grid min-h-[270px] gap-8 lg:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.75fr)] lg:items-center">
       <div className="max-w-3xl">
-        <p className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-[#087d79]">{job ? "Oportunidad destacada" : "Red profesional Terraqo"}</p>
-        <h1 className="mt-3 font-display text-[clamp(2rem,4vw,3.55rem)] font-bold leading-[1.04] tracking-[-0.035em] text-[#0b1d2b]">{job ? job.title : <>Conecta con el talento que impulsa <span className="text-[#087d79]">grandes proyectos.</span></>}</h1>
-        {job ? <><p className="mt-3 text-sm font-bold text-[#087d79]">{job.company}</p><p className="mt-3 line-clamp-3 max-w-2xl text-sm leading-6 text-[#526878] sm:text-base">{job.summary}</p><div className="mt-4 flex flex-wrap gap-2">{job.location ? <HeroChip icon={<MapPin className="h-3.5 w-3.5" />}>{job.location}</HeroChip> : null}{job.modality ? <HeroChip icon={<BriefcaseBusiness className="h-3.5 w-3.5" />}>{job.modality}</HeroChip> : null}{job.skills.slice(0, 2).map((skill) => <HeroChip key={skill}>{skill}</HeroChip>)}</div></> : <p className="mt-4 max-w-2xl text-sm leading-6 text-[#526878] sm:text-base">Explora profesionales, empresas y equipos especializados. Compara experiencia, disponibilidad y habilidades antes de conectar.</p>}
-        <div className="mt-6 flex flex-wrap gap-3"><Link href={job ? "/portal/oportunidades" : "#directorio-red"} className="inline-flex h-11 items-center gap-2 rounded-xl bg-[linear-gradient(135deg,#087d79,#0aa19a)] px-5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(8,125,121,0.2)]">{job ? "Ver oportunidad" : "Explorar red"}<ArrowRight className="h-4 w-4" /></Link><Link href={job ? `/portal/empresas/${job.companySlug}` : "/portal/oportunidades"} className="inline-flex h-11 items-center gap-2 rounded-xl border border-[#bcd7db] bg-white/70 px-5 text-sm font-bold text-[#24505b]">{job ? "Ver empresa" : "Ver oportunidades"}</Link></div>
+        <p className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-[#4374ba]">Oportunidad destacada</p>
+        <h1 className="mt-3 font-display text-[clamp(2rem,4vw,3.55rem)] font-bold leading-[1.04] tracking-[-0.035em] text-[#0e1a26]">{job.title}</h1>
+        <><p className="mt-3 text-sm font-bold text-[#4374ba]">{job.company}</p><p className="mt-3 line-clamp-3 max-w-2xl text-sm leading-6 text-[#526878] sm:text-base">{job.summary}</p><div className="mt-4 flex flex-wrap gap-2">{job.location ? <HeroChip icon={<MapPin className="h-3.5 w-3.5" />}>{job.location}</HeroChip> : null}{job.modality ? <HeroChip icon={<BriefcaseBusiness className="h-3.5 w-3.5" />}>{job.modality}</HeroChip> : null}{job.skills.slice(0, 2).map((skill) => <HeroChip key={skill}>{skill}</HeroChip>)}</div></>
+        <div className="mt-6 flex flex-wrap gap-3"><Link href="/portal/oportunidades" className="inline-flex h-11 items-center gap-2 rounded-xl bg-[linear-gradient(135deg,#4374ba,#25c0d5)] px-5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(67,116,186,0.22)]">Ver oportunidad<ArrowRight className="h-4 w-4" /></Link><Link href={`/portal/empresas/${job.companySlug}`} className="inline-flex h-11 items-center gap-2 rounded-xl border border-[#b9cce5] bg-white/70 px-5 text-sm font-bold text-[#315c96]">Ver empresa</Link></div>
       </div>
       <div className="relative hidden min-h-[230px] place-items-center lg:grid">
-        <span className="grid h-40 w-40 place-items-center overflow-hidden rounded-[34px] border border-white/80 bg-white/76 shadow-[0_28px_70px_rgba(7,57,61,0.13)] backdrop-blur-xl">{job?.companyLogo ? <img src={job.companyLogo} alt={`Logo de ${job.company}`} className="h-full w-full object-contain p-7" /> : <BriefcaseBusiness className="h-16 w-16 text-[#087d79]" />}</span>
-        {job ? <span className="absolute bottom-2 right-2 rounded-full border border-white bg-white/90 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-[#087d79]">Publicado recientemente</span> : null}
+        <span className="grid h-40 w-40 place-items-center overflow-hidden rounded-[34px] border border-white/80 bg-white/76 shadow-[0_28px_70px_rgba(67,116,186,0.14)] backdrop-blur-xl">{job.companyLogo ? <img src={job.companyLogo} alt={`Logo de ${job.company}`} className="h-full w-full object-contain p-7" /> : <BriefcaseBusiness className="h-16 w-16 text-[#4374ba]" />}</span>
+        <span className="absolute bottom-2 right-2 rounded-full border border-white bg-white/90 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-[#4374ba]">Publicado recientemente</span>
       </div>
     </div>
     <div className="relative mt-3 flex items-center justify-between gap-3 border-t border-[#cfe1e6]/75 pt-4">
-      <div className="flex items-center gap-2">{Array.from({ length: total }, (_, index) => <button key={index} type="button" onClick={() => setActive(index)} aria-label={`Mostrar anuncio ${index + 1}`} aria-current={index === active ? "true" : undefined} className={`h-2 rounded-full transition-all ${index === active ? "w-8 bg-[#087d79]" : "w-2 bg-[#9ebdc0] hover:bg-[#5f9898]"}`} />)}</div>
+      <div className="flex items-center gap-2">{Array.from({ length: total }, (_, index) => <button key={index} type="button" onClick={() => setActive(index)} aria-label={`Mostrar anuncio ${index + 1}`} aria-current={index === active ? "true" : undefined} className={`h-2 rounded-full transition-all ${index === active ? "w-8 bg-[#4374ba]" : "w-2 bg-[#a9bdd8] hover:bg-[#6f95c9]"}`} />)}</div>
       {jobs.length > 1 ? <div className="flex gap-2"><CarouselButton label="Anuncio anterior" onClick={previous}><ArrowLeft className="h-4 w-4" /></CarouselButton><CarouselButton label="Anuncio siguiente" onClick={next}><ArrowRight className="h-4 w-4" /></CarouselButton></div> : null}
     </div>
   </section>;
 }
+
+function BetaCommunityHero() {
+  const whatsappHref = "https://wa.me/51926912607?text=Hola%2C%20quiero%20unirme%20al%20grupo%20de%20la%20comunidad%20Terraqo.";
+  return <section className="relative isolate overflow-hidden rounded-[26px] border border-[#4374ba]/25 bg-[#07111f] px-5 py-7 text-white shadow-[0_28px_70px_rgba(14,26,38,0.18)] sm:px-8 lg:min-h-[390px] lg:px-10 lg:py-10">
+    <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_57%_58%,rgba(37,192,213,0.18),transparent_25%),radial-gradient(circle_at_82%_20%,rgba(67,116,186,0.22),transparent_30%),linear-gradient(115deg,#07111f_0%,#0a1b30_55%,#0b2236_100%)]" />
+    <div className="pointer-events-none absolute inset-0 opacity-25 [background-image:linear-gradient(rgba(72,138,201,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(72,138,201,0.1)_1px,transparent_1px)] [background-size:54px_54px] [mask-image:linear-gradient(to_right,transparent,black_48%,black)]" />
+    <div className="relative grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_250px_310px] lg:items-center">
+      <div className="max-w-3xl">
+        <div className="flex flex-wrap items-center gap-3"><span className="rounded-full border border-[#25c0d5]/60 bg-[#25c0d5]/15 px-3 py-1 font-mono text-[11px] font-black uppercase tracking-[0.13em] text-[#80e8f4]">Beta</span><span className="text-xs font-semibold text-[#d8e6f5]">Estamos en versión beta</span></div>
+        <h1 className="mt-5 font-display text-[clamp(2rem,3.5vw,3.35rem)] font-black leading-[1.06] tracking-[-0.035em] text-white">Construyamos juntos la mejor <span className="bg-[linear-gradient(90deg,#488ac9,#25c0d5)] bg-clip-text text-transparent">red profesional</span> para la industria.</h1>
+        <p className="mt-5 max-w-2xl text-sm leading-7 text-[#c4d1df] sm:text-base">Tu feedback nos ayuda a mejorar cada día. Únete a nuestra comunidad de WhatsApp y sé parte de la transformación de Terraqo.</p>
+        <div className="mt-7 flex flex-wrap items-center gap-3"><a href={whatsappHref} target="_blank" rel="noreferrer" className="inline-flex h-12 items-center gap-2 rounded-xl bg-[linear-gradient(135deg,#4374ba,#25c0d5)] px-5 text-sm font-black text-white shadow-[0_14px_34px_rgba(37,192,213,0.2)] transition hover:-translate-y-0.5 hover:brightness-110"><MessageCircle className="h-5 w-5" />Unirme a la comunidad</a><Link href="/portal/bitacora" className="inline-flex h-12 items-center gap-2 rounded-xl px-4 text-sm font-bold text-[#9fc4ff] transition hover:bg-white/5 hover:text-white">Saber más<ArrowRight className="h-4 w-4" /></Link></div>
+      </div>
+
+      <div className="relative hidden min-h-[265px] place-items-center lg:grid" aria-hidden="true">
+        <div className="absolute h-56 w-40 rounded-[34px] border border-[#488ac9]/35 bg-[linear-gradient(155deg,rgba(72,138,201,0.24),rgba(7,17,31,0.38))] shadow-[inset_0_0_40px_rgba(37,192,213,0.08),0_28px_70px_rgba(0,0,0,0.35)]" />
+        <div className="absolute bottom-3 h-24 w-48 rounded-[50%] bg-[#25c0d5]/18 blur-2xl" />
+        <span className="relative grid h-28 w-28 place-items-center rounded-[30px] border border-[#25c0d5]/35 bg-[#0b2035]/85 text-[#80e8f4] shadow-[0_0_50px_rgba(37,192,213,0.2)]"><Rocket className="h-16 w-16 -rotate-12" /></span>
+        <span className="absolute left-2 top-16 grid h-10 w-10 place-items-center rounded-xl border border-[#488ac9]/35 bg-[#0d2034]/90 text-[#9fc4ff]"><Heart className="h-5 w-5" /></span>
+        <span className="absolute right-0 top-24 grid h-10 w-12 place-items-center rounded-xl border border-[#25c0d5]/35 bg-[#0d2034]/90 text-[#80e8f4]"><MessageSquare className="h-5 w-5" /></span>
+      </div>
+
+      <aside className="rounded-[20px] border border-[#488ac9]/25 bg-[#102338]/72 p-5 shadow-[0_20px_50px_rgba(0,0,0,0.18)] backdrop-blur-xl sm:p-6">
+        <div className="flex items-center gap-3 border-b border-white/10 pb-4"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#4374ba]/20 text-[#80e8f4]"><Gift className="h-5 w-5" /></span><h2 className="font-display text-lg font-black">Premiamos tu aporte</h2></div>
+        <div className="divide-y divide-white/10"><RewardItem icon={<Bug className="h-4 w-4" />} title="Reporta errores" copy="Gana puntos" /><RewardItem icon={<Lightbulb className="h-4 w-4" />} title="Comparte sugerencias" copy="Gana puntos" /><RewardItem icon={<Trophy className="h-4 w-4" />} title="Participa activamente" copy="Accede a beneficios exclusivos" /></div>
+        <Link href="/portal/bitacora" className="mt-4 flex items-center justify-between gap-3 text-xs font-black text-[#80e8f4] transition hover:text-white">Conoce el sistema de recompensas<ArrowRight className="h-4 w-4" /></Link>
+      </aside>
+    </div>
+  </section>;
+}
+
+function RewardItem({ icon, title, copy }: { icon: React.ReactNode; title: string; copy: string }) { return <div className="flex items-start gap-3 py-3"><span className="mt-0.5 text-[#9fc4ff]">{icon}</span><div><p className="text-sm font-bold text-white">{title}</p><p className="mt-0.5 text-[11px] text-[#aebdcb]">{copy}</p></div></div>; }
 
 function NetworkStories({ professionals, companies }: { professionals: ProfessionalItem[]; companies: CompanyItem[] }) {
   const [activeProfile, setActiveProfile] = useState<ProfessionalItem | null>(null);
@@ -198,8 +234,8 @@ function StoryModal({ profile, closing, onClose }: { profile: ProfessionalItem; 
 
 function StoryDetail({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) { return <span className="inline-flex items-center gap-1.5 rounded-full border border-[#d5e2e6] bg-[#f8fbfb] px-3 py-1.5 text-xs font-bold text-[#526878]">{icon}{children}</span>; }
 
-function HeroChip({ children, icon }: { children: React.ReactNode; icon?: React.ReactNode }) { return <span className="inline-flex items-center gap-1.5 rounded-full border border-[#c9dddf] bg-white/70 px-3 py-1.5 text-xs font-bold text-[#41616b]">{icon}{children}</span>; }
-function CarouselButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) { return <button type="button" onClick={onClick} aria-label={label} className="grid h-9 w-9 place-items-center rounded-full border border-[#c5dcdf] bg-white/75 text-[#087d79] transition hover:bg-white">{children}</button>; }
+function HeroChip({ children, icon }: { children: React.ReactNode; icon?: React.ReactNode }) { return <span className="inline-flex items-center gap-1.5 rounded-full border border-[#c9d7ea] bg-white/70 px-3 py-1.5 text-xs font-bold text-[#3c5f8d]">{icon}{children}</span>; }
+function CarouselButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) { return <button type="button" onClick={onClick} aria-label={label} className="grid h-9 w-9 place-items-center rounded-full border border-[#c5d4e7] bg-white/75 text-[#4374ba] transition hover:bg-white">{children}</button>; }
 
 function ProfessionalsList({ items, view }: { items: ProfessionalItem[]; view: ViewMode }) { if (!items.length) return <EmptyState text="No encontramos profesionales con esos criterios." />; return <div className={view === "grid" ? "grid gap-4 md:grid-cols-2 2xl:grid-cols-3" : "grid gap-4"}>{items.map((profile) => <ProfessionalCard key={profile.id} profile={profile} compact={view === "list"} />)}</div>; }
 
