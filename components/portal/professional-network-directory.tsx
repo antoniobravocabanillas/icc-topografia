@@ -127,7 +127,7 @@ function JobAdsHero({ jobs }: { jobs: JobAd[] }) {
 }
 
 function BetaCommunityHero() {
-  const whatsappHref = "https://wa.me/51926912607?text=Hola%2C%20quiero%20unirme%20al%20grupo%20de%20la%20comunidad%20Terraqo.";
+  const whatsappHref = "https://chat.whatsapp.com/JzGxQ59VC1X00qZqB1Qg2E";
   return <section className="relative isolate overflow-hidden rounded-[26px] border border-[#4374ba]/25 bg-[#07111f] px-5 py-7 text-white shadow-[0_28px_70px_rgba(14,26,38,0.18)] sm:px-8 lg:min-h-[390px] lg:px-10 lg:py-10">
     <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_57%_58%,rgba(37,192,213,0.18),transparent_25%),radial-gradient(circle_at_82%_20%,rgba(67,116,186,0.22),transparent_30%),linear-gradient(115deg,#07111f_0%,#0a1b30_55%,#0b2236_100%)]" />
     <div className="pointer-events-none absolute inset-0 opacity-25 [background-image:linear-gradient(rgba(72,138,201,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(72,138,201,0.1)_1px,transparent_1px)] [background-size:54px_54px] [mask-image:linear-gradient(to_right,transparent,black_48%,black)]" />
