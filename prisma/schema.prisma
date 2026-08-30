@@ -304,6 +304,56 @@ enum TerraqoModuleCode {
   AUTOMATIONS
   DOCUMENTS
   AI_WRITING_ASSISTANT
+  BUILDERS
+
+  @@schema("icc")
+}
+
+enum TerraqoBuilderContributionType {
+  BUG_REPORT
+  SUGGESTION
+  RESEARCH
+  REFERRAL
+  COMPANY_REFERRAL
+  FIRST_WORKLOG
+  EXPERIENCE_VALIDATION
+  BETA_PARTICIPATION
+
+  @@schema("icc")
+}
+
+enum TerraqoBuilderContributionStatus {
+  RECEIVED
+  IN_REVIEW
+  VALIDATED
+  IMPLEMENTED
+  REJECTED
+
+  @@schema("icc")
+}
+
+enum TerraqoBuilderLedgerType {
+  CREDIT
+  REDEMPTION
+  ADJUSTMENT
+  REVERSAL
+
+  @@schema("icc")
+}
+
+enum TerraqoBuilderRewardCategory {
+  PREMIUM
+  VALIDATION
+  VISIBILITY
+  EARLY_ACCESS
+  BADGE
+
+  @@schema("icc")
+}
+
+enum TerraqoBuilderRedemptionStatus {
+  FULFILLED
+  CANCELLED
 
   @@schema("icc")
 }
@@ -553,9 +603,9 @@ model User {
   passwordHash                String?
   lastSeenAt                  DateTime?
   onlineUntil                 DateTime?
-  identityType               String?
-  identityNumber             String?
-  identityKey                String?                          @unique
+  identityType                String?
+  identityNumber              String?
+  identityKey                 String?                          @unique
   role                        Role                             @default(CUSTOMER)
   accounts                    Account[]
   sessions                    Session[]
@@ -594,10 +644,120 @@ model User {
   terraqoValidationRequests   TerraqoWorklogValidation[]       @relation("TerraqoValidationRequester")
   terraqoValidationsAssigned  TerraqoWorklogValidation[]       @relation("TerraqoValidationSupervisor")
   terraqoAttendanceEvents     TerraqoAttendanceEvent[]
+  terraqoBuilderAccount       TerraqoBuilderAccount?
+  terraqoBuilderContributions TerraqoBuilderContribution[]
   createdAt                   DateTime                         @default(now())
   updatedAt                   DateTime                         @updatedAt
 
   @@index([onlineUntil])
+  @@schema("icc")
+}
+
+model TerraqoBuilderAccount {
+  id                String                     @id @default(cuid())
+  userId            String                     @unique
+  user              User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  availablePoints   Int                        @default(0)
+  contributionScore Int                        @default(0)
+  lifetimeEarned    Int                        @default(0)
+  validationCredits Int                        @default(0)
+  profileBoostUntil DateTime?
+  earlyAccessUntil  DateTime?
+  premiumUntil      DateTime?
+  foundingBuilder   Boolean                    @default(false)
+  foundingCompany   Boolean                    @default(false)
+  ledger            TerraqoBuilderLedger[]
+  redemptions       TerraqoBuilderRedemption[]
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+
+  @@index([contributionScore])
+  @@schema("icc")
+}
+
+model TerraqoBuilderContribution {
+  id              String                           @id @default(cuid())
+  userId          String
+  user            User                             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId     String?
+  type            TerraqoBuilderContributionType
+  status          TerraqoBuilderContributionStatus @default(RECEIVED)
+  title           String
+  detail          String
+  sourceKey       String?                          @unique
+  requestedPoints Int                              @default(0)
+  approvedPoints  Int                              @default(0)
+  reviewerId      String?
+  reviewNote      String?
+  reviewedAt      DateTime?
+  implementedAt   DateTime?
+  ledgerEntries   TerraqoBuilderLedger[]
+  createdAt       DateTime                         @default(now())
+  updatedAt       DateTime                         @updatedAt
+
+  @@index([userId, status, createdAt])
+  @@index([status, createdAt])
+  @@schema("icc")
+}
+
+model TerraqoBuilderReward {
+  id           String                       @id @default(cuid())
+  slug         String                       @unique
+  title        String
+  description  String
+  category     TerraqoBuilderRewardCategory
+  pointsCost   Int
+  benefitCode  String
+  durationDays Int?
+  quantity     Int                          @default(1)
+  active       Boolean                      @default(true)
+  inventory    Int?
+  redemptions  TerraqoBuilderRedemption[]
+  createdAt    DateTime                     @default(now())
+  updatedAt    DateTime                     @updatedAt
+
+  @@index([active, category, pointsCost])
+  @@schema("icc")
+}
+
+model TerraqoBuilderRedemption {
+  id             String                         @id @default(cuid())
+  accountId      String
+  account        TerraqoBuilderAccount          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  rewardId       String
+  reward         TerraqoBuilderReward           @relation(fields: [rewardId], references: [id], onDelete: Restrict)
+  pointsCost     Int
+  status         TerraqoBuilderRedemptionStatus @default(FULFILLED)
+  idempotencyKey String                         @unique
+  benefitEndsAt  DateTime?
+  ledgerEntries  TerraqoBuilderLedger[]
+  redeemedAt     DateTime                       @default(now())
+  cancelledAt    DateTime?
+
+  @@index([accountId, redeemedAt])
+  @@index([rewardId, status])
+  @@schema("icc")
+}
+
+model TerraqoBuilderLedger {
+  id             String                      @id @default(cuid())
+  accountId      String
+  account        TerraqoBuilderAccount       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  contributionId String?
+  contribution   TerraqoBuilderContribution? @relation(fields: [contributionId], references: [id], onDelete: SetNull)
+  redemptionId   String?
+  redemption     TerraqoBuilderRedemption?   @relation(fields: [redemptionId], references: [id], onDelete: SetNull)
+  type           TerraqoBuilderLedgerType
+  pointsDelta    Int
+  scoreDelta     Int                         @default(0)
+  balanceAfter   Int
+  description    String
+  idempotencyKey String                      @unique
+  createdAt      DateTime                    @default(now())
+
+  @@index([accountId, createdAt])
+  @@index([contributionId])
+  @@index([redemptionId])
   @@schema("icc")
 }
 
@@ -707,35 +867,35 @@ model ClientAccount {
 }
 
 model Client {
-  id                 String           @id @default(cuid())
-  userId             String?
-  user               User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
-  companyId          String?
-  companyRef         Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  account            ClientAccount?
-  name               String
-  company            String?
-  document           String?
-  email              String
-  phone              String?
-  address            String?
-  country            String           @default("PE")
-  region             String?
+  id                      String           @id @default(cuid())
+  userId                  String?
+  user                    User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  companyId               String?
+  companyRef              Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  account                 ClientAccount?
+  name                    String
+  company                 String?
+  document                String?
+  email                   String
+  phone                   String?
+  address                 String?
+  country                 String           @default("PE")
+  region                  String?
   locationSubdivisionCode String?
-  locationCity       String?
-  contactName        String?
-  status             String           @default("prospecto")
-  leads              Lead[]
-  quotes             Quote[]
-  projects           Project[]
-  tickets            Ticket[]
-  documents          ClientDocument[]
-  sales              Sale[]
-  terraqoWorkspaceId String
-  terraqoWorkspace   TerraqoWorkspace @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-  deletedAt          DateTime?
+  locationCity            String?
+  contactName             String?
+  status                  String           @default("prospecto")
+  leads                   Lead[]
+  quotes                  Quote[]
+  projects                Project[]
+  tickets                 Ticket[]
+  documents               ClientDocument[]
+  sales                   Sale[]
+  terraqoWorkspaceId      String
+  terraqoWorkspace        TerraqoWorkspace @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
+  deletedAt               DateTime?
 
   @@unique([terraqoWorkspaceId, userId])
   @@unique([terraqoWorkspaceId, email])
@@ -911,18 +1071,18 @@ model OrderItem {
 }
 
 model Address {
-  id         String  @id @default(cuid())
-  userId     String?
-  user       User?   @relation(fields: [userId], references: [id])
-  label      String?
-  line1      String
-  line2      String?
-  city       String
-  region     String?
+  id              String  @id @default(cuid())
+  userId          String?
+  user            User?   @relation(fields: [userId], references: [id])
+  label           String?
+  line1           String
+  line2           String?
+  city            String
+  region          String?
   subdivisionCode String?
-  country    String  @default("PE")
-  postalCode String?
-  orders     Order[]
+  country         String  @default("PE")
+  postalCode      String?
+  orders          Order[]
 
   @@schema("icc")
 }
@@ -2318,45 +2478,45 @@ model TerraqoProfessionalAffiliation {
   createdAt             DateTime                   @default(now())
   updatedAt             DateTime                   @updatedAt
 
+  @@unique([professionalProfileId, workspaceId])
   @@index([professionalProfileId, current])
   @@index([workspaceId, verificationStatus])
   @@index([companyId])
-  @@unique([professionalProfileId, workspaceId])
   @@schema("icc")
 }
 
 model TerraqoProfessionalExperience {
-  id                    String                     @id @default(cuid())
-  professionalProfileId String
-  professionalProfile   TerraqoProfessionalProfile @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
-  projectId             String?
-  project               Project?                   @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  workspaceId           String?
-  workspace             TerraqoWorkspace?          @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
-  title                 String
-  companyName           String?
-  role                  String?
-  summary               String?
-  highlights            String[]                   @default([])
-  location              String?
-  country               String?                    @default("PE")
+  id                      String                                @id @default(cuid())
+  professionalProfileId   String
+  professionalProfile     TerraqoProfessionalProfile            @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
+  projectId               String?
+  project                 Project?                              @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  workspaceId             String?
+  workspace               TerraqoWorkspace?                     @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  title                   String
+  companyName             String?
+  role                    String?
+  summary                 String?
+  highlights              String[]                              @default([])
+  location                String?
+  country                 String?                               @default("PE")
   locationSubdivisionCode String?
-  locationCity          String?
-  startedAt             DateTime?
-  endedAt               DateTime?
-  currentlyWorking      Boolean                    @default(false)
-  verifiedByTerraqo     Boolean                    @default(false)
-  verificationNote      String?
-  verificationStatus    TerraqoProfileEntryVerificationStatus @default(NOT_REQUESTED)
+  locationCity            String?
+  startedAt               DateTime?
+  endedAt                 DateTime?
+  currentlyWorking        Boolean                               @default(false)
+  verifiedByTerraqo       Boolean                               @default(false)
+  verificationNote        String?
+  verificationStatus      TerraqoProfileEntryVerificationStatus @default(NOT_REQUESTED)
   verificationRequestedAt DateTime?
-  validatorUserId       String?
-  validatorName         String?
-  validatorEmail        String?
-  visibility            TerraqoVisibility          @default(PRIVATE)
-  evidence              String[]                   @default([])
-  evidenceFiles         TerraqoExperienceEvidence[]
-  createdAt             DateTime                   @default(now())
-  updatedAt             DateTime                   @updatedAt
+  validatorUserId         String?
+  validatorName           String?
+  validatorEmail          String?
+  visibility              TerraqoVisibility                     @default(PRIVATE)
+  evidence                String[]                              @default([])
+  evidenceFiles           TerraqoExperienceEvidence[]
+  createdAt               DateTime                              @default(now())
+  updatedAt               DateTime                              @updatedAt
 
   @@index([professionalProfileId, startedAt])
   @@index([professionalProfileId, verificationStatus])
@@ -2385,27 +2545,27 @@ model TerraqoExperienceEvidence {
 }
 
 model TerraqoProfessionalEducation {
-  id                    String                     @id @default(cuid())
-  professionalProfileId String
-  professionalProfile   TerraqoProfessionalProfile @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
-  institution           String
-  degree                String
-  field                 String?
-  country               String?                    @default("PE")
+  id                      String                                @id @default(cuid())
+  professionalProfileId   String
+  professionalProfile     TerraqoProfessionalProfile            @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
+  institution             String
+  degree                  String
+  field                   String?
+  country                 String?                               @default("PE")
   locationSubdivisionCode String?
-  locationCity          String?
-  startedAt             DateTime?
-  endedAt               DateTime?
-  currentlyStudying     Boolean                    @default(false)
-  visibility            TerraqoVisibility          @default(PRIVATE)
-  verificationStatus    TerraqoProfileEntryVerificationStatus @default(NOT_REQUESTED)
+  locationCity            String?
+  startedAt               DateTime?
+  endedAt                 DateTime?
+  currentlyStudying       Boolean                               @default(false)
+  visibility              TerraqoVisibility                     @default(PRIVATE)
+  verificationStatus      TerraqoProfileEntryVerificationStatus @default(NOT_REQUESTED)
   verificationRequestedAt DateTime?
-  validatorUserId       String?
-  validatorName         String?
-  validatorEmail        String?
-  evidence              String[]                   @default([])
-  createdAt             DateTime                   @default(now())
-  updatedAt             DateTime                   @updatedAt
+  validatorUserId         String?
+  validatorName           String?
+  validatorEmail          String?
+  evidence                String[]                              @default([])
+  createdAt               DateTime                              @default(now())
+  updatedAt               DateTime                              @updatedAt
 
   @@index([professionalProfileId, startedAt])
   @@index([professionalProfileId, verificationStatus])

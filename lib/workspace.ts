@@ -112,6 +112,12 @@ export const terraqoModules: TerraqoModuleDefinition[] = [
     label: "Asistente de escritura con IA",
     description: "Corrección contextual de ortografía, gramática, sintaxis y claridad en los campos de redacción del workspace.",
     minimumTier: "PROFESSIONAL"
+  },
+  {
+    code: "BUILDERS",
+    label: "Terraqo Builders",
+    description: "Programa de contribución, reputación, niveles y beneficios internos de la comunidad Terraqo.",
+    minimumTier: "FREE"
   }
 ];
 

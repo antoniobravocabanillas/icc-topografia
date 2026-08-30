@@ -8,6 +8,7 @@ import {
 } from "@simplewebauthn/server";
 import type { Prisma, TerraqoAttendanceType, TerraqoMemberRole, TerraqoWebAuthnPurpose } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { awardAutomatedBuilderContribution, consumeBuilderValidationCredit } from "@/lib/terraqo/builders";
 
 const SUPERVISOR_ROLES: TerraqoMemberRole[] = ["OWNER", "ADMIN", "MANAGER"];
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
@@ -440,7 +441,7 @@ export async function requestWorklogValidation(input: {
     select: { id: true }
   });
   if (pending) throw new FieldVerificationError("Esta bitacora ya tiene una validacion pendiente.", 409);
-  return prisma.terraqoWorklogValidation.create({
+  const validation = await prisma.terraqoWorklogValidation.create({
     data: {
       worklogId: worklog.id,
       workspaceId: input.workspaceId,
@@ -451,6 +452,12 @@ export async function requestWorklogValidation(input: {
     },
     include: { validator: { select: { id: true, name: true, image: true } } }
   });
+  try {
+    await consumeBuilderValidationCredit(input.userId, validation.id);
+  } catch (error) {
+    console.warn("No se pudo aplicar el crédito Terraqo Builders a la validación.", error);
+  }
+  return validation;
 }
 
 export async function createWorklogValidationOptions(input: {
@@ -496,5 +503,10 @@ export async function verifyWorklogValidation(input: { userId: string; challenge
     }),
     prisma.terraqoWebAuthnChallenge.update({ where: { id: challenge.id }, data: { consumedAt: resolvedAt } })
   ]);
+  try {
+    await awardAutomatedBuilderContribution({ userId: input.userId, type: "EXPERIENCE_VALIDATION", sourceKey: `worklog-validation:${validation.id}`, title: "Validación profesional aprobada", detail: "Validaste con identidad digital la evidencia de otro profesional." });
+  } catch (error) {
+    console.warn("No se pudo acreditar la validación en Terraqo Builders.", error);
+  }
   return { verified: true, resolvedAt };
 }

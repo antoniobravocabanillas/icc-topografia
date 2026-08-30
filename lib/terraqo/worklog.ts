@@ -3,6 +3,7 @@ import type { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 import { terraqoWorklogCreateSchema } from "@/lib/validations/terraqo";
+import { awardAutomatedBuilderContribution } from "@/lib/terraqo/builders";
 
 export const worklogInclude = {
   author: { select: { id: true, name: true, image: true } },
@@ -171,7 +172,7 @@ export async function createProfessionalWorklog(input: {
     if (!project) throw new TerraqoWorklogError("El proyecto no esta asignado a tu perfil profesional.", 403);
   }
 
-  return prisma.terraqoWorklogEntry.create({
+  const worklog = await prisma.terraqoWorklogEntry.create({
     data: {
       professionalProfileId: profile.id,
       authorId: input.userId,
@@ -189,4 +190,13 @@ export async function createProfessionalWorklog(input: {
     },
     include: worklogInclude
   });
+  const priorWorklogs = await prisma.terraqoWorklogEntry.count({ where: { authorId: input.userId, deletedAt: null } });
+  if (priorWorklogs === 1) {
+    try {
+      await awardAutomatedBuilderContribution({ userId: input.userId, type: "FIRST_WORKLOG", sourceKey: `first-worklog:${input.userId}`, title: "Primera bitácora útil", detail: `Primera evidencia profesional registrada: ${worklog.title}.` });
+    } catch (error) {
+      console.warn("No se pudo acreditar la primera bitácora en Terraqo Builders.", error);
+    }
+  }
+  return worklog;
 }

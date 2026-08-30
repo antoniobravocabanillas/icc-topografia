@@ -17,7 +17,7 @@ export default async function ProfessionalNetworkDirectoryPage({ searchParams }:
           user: { terraqoMemberships: { some: { workspaceId: { in: workspaceIds }, active: true } } }
         },
         include: {
-          user: { select: { id: true, name: true, email: true, image: true, lastSeenAt: true, onlineUntil: true } },
+          user: { select: { id: true, name: true, email: true, image: true, lastSeenAt: true, onlineUntil: true, terraqoBuilderAccount: { select: { profileBoostUntil: true, foundingBuilder: true } } } },
           affiliations: {
             where: { workspaceId: { in: workspaceIds } },
             include: { workspace: { select: { name: true, brandName: true } } },
@@ -113,6 +113,8 @@ export default async function ProfessionalNetworkDirectoryPage({ searchParams }:
           verifiedExperiences: profile.experiences.filter((experience) => experience.verifiedByTerraqo).length,
           lastSeenAt: profile.user.lastSeenAt?.toISOString() || null,
           onlineUntil: profile.user.onlineUntil?.toISOString() || null,
+          profileBoostUntil: profile.user.terraqoBuilderAccount?.profileBoostUntil?.toISOString() || null,
+          foundingBuilder: profile.user.terraqoBuilderAccount?.foundingBuilder || false,
           latestWorklog: profile.worklogs[0] ? {
             id: profile.worklogs[0].id,
             title: profile.worklogs[0].title,

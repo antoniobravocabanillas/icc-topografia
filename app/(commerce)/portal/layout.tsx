@@ -17,6 +17,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
           name: true,
           image: true,
           terraqoProfessionalProfile: { select: { headline: true, planTier: true } },
+          terraqoBuilderAccount: { select: { premiumUntil: true } },
           terraqoMemberships: {
             where: { active: true, workspace: { active: true, deletedAt: null } },
             orderBy: { joinedAt: "desc" },
@@ -56,7 +57,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
       portalType={portalType}
       workspaceBrand={membership?.workspace.brandName || membership?.workspace.name}
       workspaceLogoUrl={membership?.workspace.logoUrl}
-      planTier={portalType === "professional" ? user?.terraqoProfessionalProfile?.planTier : membership?.workspace.subscriptions[0]?.tier || "FREE"}
+      planTier={portalType === "professional" ? (user?.terraqoBuilderAccount?.premiumUntil && user.terraqoBuilderAccount.premiumUntil > new Date() ? "PREMIUM" : user?.terraqoProfessionalProfile?.planTier) : membership?.workspace.subscriptions[0]?.tier || "FREE"}
       visualIdentity={visualIdentity}
       writingAssistantEnabled={writingAssistantEnabled}
     >

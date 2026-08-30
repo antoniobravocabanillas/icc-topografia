@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ElementType, type ReactNode } from "react";
 import {
+  Award,
   Bell,
   BriefcaseBusiness,
   Building2,
@@ -59,6 +60,7 @@ const professionalItems: PortalNavItem[] = [
   { href: "/portal", label: "Resumen", icon: LayoutDashboard },
   { href: "/portal/perfil", label: "Mi perfil", icon: UserRound },
   { href: "/portal/red", label: "Red profesional", icon: Search },
+  { href: "/portal/recompensas", label: "Terraqo Builders", icon: Award },
   { href: "/portal/operaciones", label: "Operaciones comerciales", icon: ReceiptText },
   { href: "/portal/experiencias", label: "Experiencias", icon: BriefcaseBusiness },
   { href: "/portal/postulaciones", label: "Postulaciones", icon: FileText },
