@@ -55,7 +55,7 @@ async function main() {
     });
 
     const outsider = await prisma.terraqoWorkspaceMember.findFirst({
-      where: { active: true, workspaceId: { not: workspace.id }, userId: { not: authorId } },
+      where: { active: true, workspaceId: { not: workspace.id }, userId: { not: authorId }, user: { terraqoMemberships: { none: { workspaceId: workspace.id, active: true } } } },
       select: { userId: true, workspaceId: true }
     });
     const visibleToOutsider = outsider
@@ -74,6 +74,13 @@ async function main() {
     console.log("Worklog and evidence isolation: OK");
   } finally {
     if (worklogId) {
+      const [testWorklog, contribution, account] = await Promise.all([
+        prisma.terraqoWorklogEntry.findUnique({ where: { id: worklogId }, select: { tqPointsAwarded: true, trustScoreAwarded: true } }),
+        prisma.terraqoBuilderContribution.findUnique({ where: { sourceKey: `worklog:${worklogId}` } }),
+        prisma.terraqoBuilderAccount.findUnique({ where: { userId: authorId } })
+      ]);
+      if (account && testWorklog) await prisma.terraqoBuilderAccount.update({ where: { id: account.id }, data: { pendingPoints: { decrement: Math.min(account.pendingPoints, testWorklog.tqPointsAwarded) }, trustScore: { decrement: Math.min(account.trustScore, testWorklog.trustScoreAwarded) } } });
+      if (contribution) await prisma.terraqoBuilderContribution.delete({ where: { id: contribution.id } });
       await prisma.terraqoWorklogEntry.delete({ where: { id: worklogId } });
       const orphanedMedia = await prisma.terraqoWorklogMedia.count({ where: { worklogId } });
       if (orphanedMedia) throw new Error("La evidencia no se elimino con su bitacora.");

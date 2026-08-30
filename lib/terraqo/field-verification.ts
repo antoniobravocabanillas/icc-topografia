@@ -8,7 +8,7 @@ import {
 } from "@simplewebauthn/server";
 import type { Prisma, TerraqoAttendanceType, TerraqoMemberRole, TerraqoWebAuthnPurpose } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { awardAutomatedBuilderContribution, consumeBuilderValidationCredit } from "@/lib/terraqo/builders";
+import { awardAutomatedBuilderContribution, consumeBuilderValidationCredit, syncWorklogReputation } from "@/lib/terraqo/builders";
 
 const SUPERVISOR_ROLES: TerraqoMemberRole[] = ["OWNER", "ADMIN", "MANAGER"];
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
@@ -488,7 +488,7 @@ export async function verifyWorklogValidation(input: { userId: string; challenge
   if (!challenge.workspaceId || !payload?.validationId) throw new FieldVerificationError("La solicitud de validacion esta incompleta.", 422);
   const validation = await prisma.terraqoWorklogValidation.findFirst({
     where: { id: payload.validationId, workspaceId: challenge.workspaceId, validatorUserId: input.userId, status: "REQUESTED" },
-    select: { id: true, worklogId: true }
+    select: { id: true, worklogId: true, worklog: { select: { authorId: true } } }
   });
   if (!validation) throw new FieldVerificationError("La solicitud ya fue resuelta o no te pertenece.", 409);
   const resolvedAt = new Date();
@@ -504,7 +504,10 @@ export async function verifyWorklogValidation(input: { userId: string; challenge
     prisma.terraqoWebAuthnChallenge.update({ where: { id: challenge.id }, data: { consumedAt: resolvedAt } })
   ]);
   try {
-    await awardAutomatedBuilderContribution({ userId: input.userId, type: "EXPERIENCE_VALIDATION", sourceKey: `worklog-validation:${validation.id}`, title: "Validación profesional aprobada", detail: "Validaste con identidad digital la evidencia de otro profesional." });
+    await syncWorklogReputation(validation.worklogId);
+    const recentPairValidations = await prisma.terraqoWorklogValidation.count({ where: { validatorUserId: input.userId, worklog: { authorId: validation.worklog.authorId }, status: "APPROVED", resolvedAt: { gte: new Date(Date.now() - 30 * 86_400_000) } } });
+    const validationPoints = recentPairValidations > 10 ? 0 : recentPairValidations > 5 ? 5 : 20;
+    if (validationPoints > 0) await awardAutomatedBuilderContribution({ userId: input.userId, type: "EXPERIENCE_VALIDATION", sourceKey: `worklog-validation:${validation.id}`, title: "Validación profesional aprobada", detail: "Validaste con identidad digital la evidencia de otro profesional.", points: validationPoints });
   } catch (error) {
     console.warn("No se pudo acreditar la validación en Terraqo Builders.", error);
   }

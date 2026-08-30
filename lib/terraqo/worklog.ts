@@ -1,9 +1,10 @@
 import type { Prisma } from "@prisma/client";
+import { createHash } from "node:crypto";
 import type { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 import { terraqoWorklogCreateSchema } from "@/lib/validations/terraqo";
-import { awardAutomatedBuilderContribution } from "@/lib/terraqo/builders";
+import { awardAutomatedBuilderContribution, syncWorklogReputation } from "@/lib/terraqo/builders";
 
 export const worklogInclude = {
   author: { select: { id: true, name: true, image: true } },
@@ -172,6 +173,8 @@ export async function createProfessionalWorklog(input: {
     if (!project) throw new TerraqoWorklogError("El proyecto no esta asignado a tu perfil profesional.", 403);
   }
 
+  const fingerprintSource = `${input.payload.title}|${input.payload.summary}|${input.payload.projectId || ""}`.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+  const contentFingerprint = createHash("sha256").update(fingerprintSource).digest("hex");
   const worklog = await prisma.terraqoWorklogEntry.create({
     data: {
       professionalProfileId: profile.id,
@@ -185,6 +188,7 @@ export async function createProfessionalWorklog(input: {
       visibility: input.payload.visibility,
       skills: input.payload.skills,
       evidenceUrls: input.payload.evidenceUrls,
+      contentFingerprint,
       occurredAt: new Date(),
       evidenceStatus: input.payload.projectId ? "LINKED" : "DECLARED"
     },
@@ -197,6 +201,11 @@ export async function createProfessionalWorklog(input: {
     } catch (error) {
       console.warn("No se pudo acreditar la primera bitácora en Terraqo Builders.", error);
     }
+  }
+  try {
+    await syncWorklogReputation(worklog.id);
+  } catch (error) {
+    console.warn("No se pudo calcular la confianza inicial de la bitácora.", error);
   }
   return worklog;
 }

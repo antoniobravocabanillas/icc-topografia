@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { createHash } from "node:crypto";
 import { fail, handleApiError, ok } from "@/lib/server/api";
 import {
   ALLOWED_WORKLOG_EVIDENCE_TYPES,
@@ -7,6 +8,7 @@ import {
   MAX_WORKLOG_EVIDENCE_SIZE,
 } from "@/lib/server/media";
 import { canViewWorklog } from "@/lib/terraqo/worklog";
+import { syncWorklogReputation } from "@/lib/terraqo/builders";
 
 export const MAX_WORKLOG_EVIDENCE_FILES = 6;
 
@@ -38,7 +40,7 @@ export async function uploadWorklogEvidence(
         deletedAt: null,
         ...(requiredWorkspaceId ? { workspaceId: requiredWorkspaceId } : {}),
       },
-      select: { id: true, workspaceId: true, _count: { select: { media: true } } },
+      select: { id: true, authorId: true, workspaceId: true, _count: { select: { media: true } } },
     });
     if (!worklog) return fail("No tienes permiso para agregar evidencia a esta bitacora.", 403);
 
@@ -54,14 +56,20 @@ export async function uploadWorklogEvidence(
       if (validationError) return fail(validationError, 400);
     }
 
+    const prepared = await Promise.all(photos.map(async (file) => { const bytes = await file.arrayBuffer(); return { file, bytes, sha256: createHash("sha256").update(Buffer.from(bytes)).digest("hex") }; }));
+    const hashes = prepared.map((item) => item.sha256);
+    const duplicate = await prisma.terraqoWorklogMedia.findFirst({ where: { sha256: { in: hashes }, worklog: { authorId: worklog.authorId, deletedAt: null } }, select: { id: true } });
+    if (duplicate) return fail("Esta evidencia visual ya fue utilizada en otra bitácora. Adjunta una foto original del trabajo.", 409);
+
     const store = getWorklogEvidenceStore();
-    const stored: Array<{ file: File; storageKey: string; sortOrder: number }> = [];
+    const stored: Array<{ file: File; storageKey: string; sortOrder: number; sha256: string }> = [];
 
     try {
-      for (const [index, photo] of photos.entries()) {
+      for (const [index, preparedPhoto] of prepared.entries()) {
+        const photo = preparedPhoto.file;
         const storageKey = createWorklogEvidenceKey(worklog.id, photo.name);
         const sortOrder = worklog._count.media + index;
-        await store.set(storageKey, await photo.arrayBuffer(), {
+        await store.set(storageKey, preparedPhoto.bytes, {
           metadata: {
             contentType: photo.type,
             originalName: photo.name,
@@ -72,7 +80,7 @@ export async function uploadWorklogEvidence(
             uploadedAt: new Date().toISOString(),
           },
         });
-        stored.push({ file: photo, storageKey, sortOrder });
+        stored.push({ file: photo, storageKey, sortOrder, sha256: preparedPhoto.sha256 });
       }
 
       const media = await prisma.$transaction(
@@ -83,11 +91,14 @@ export async function uploadWorklogEvidence(
             fileName: item.file.name,
             contentType: item.file.type,
             size: item.file.size,
+            sha256: item.sha256,
             sortOrder: item.sortOrder,
           },
           select: { id: true, fileName: true, contentType: true, size: true, sortOrder: true, createdAt: true },
         })),
       );
+
+      await syncWorklogReputation(worklog.id).catch((error) => console.warn("No se pudo recalcular la confianza de la bitácora.", error));
 
       return ok({ media, message: photos.length === 1 ? "Foto agregada a tu bitacora." : "Fotos agregadas a tu bitacora." });
     } catch (error) {

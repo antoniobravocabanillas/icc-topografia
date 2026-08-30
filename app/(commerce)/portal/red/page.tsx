@@ -30,7 +30,7 @@ export default async function ProfessionalNetworkDirectoryPage({ searchParams }:
             orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
             take: 1,
             select: {
-              id: true, title: true, summary: true, outcome: true, type: true, evidenceStatus: true,
+              id: true, title: true, summary: true, outcome: true, type: true, evidenceStatus: true, moderationStatus: true, tqPointsAwarded: true, trustScoreAwarded: true,
               skills: true, occurredAt: true,
               workspace: { select: { name: true, brandName: true } },
               project: { select: { title: true } },
@@ -122,6 +122,9 @@ export default async function ProfessionalNetworkDirectoryPage({ searchParams }:
             outcome: profile.worklogs[0].outcome,
             type: profile.worklogs[0].type,
             evidenceStatus: profile.worklogs[0].evidenceStatus,
+            moderationStatus: profile.worklogs[0].moderationStatus,
+            tqPointsAwarded: profile.worklogs[0].tqPointsAwarded,
+            trustScoreAwarded: profile.worklogs[0].trustScoreAwarded,
             skills: profile.worklogs[0].skills,
             occurredAt: profile.worklogs[0].occurredAt.toISOString(),
             workspaceName: profile.worklogs[0].workspace?.brandName || profile.worklogs[0].workspace?.name || null,

@@ -654,24 +654,28 @@ model User {
 }
 
 model TerraqoBuilderAccount {
-  id                String                     @id @default(cuid())
-  userId            String                     @unique
-  user              User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  availablePoints   Int                        @default(0)
-  contributionScore Int                        @default(0)
-  lifetimeEarned    Int                        @default(0)
-  validationCredits Int                        @default(0)
-  profileBoostUntil DateTime?
-  earlyAccessUntil  DateTime?
-  premiumUntil      DateTime?
-  foundingBuilder   Boolean                    @default(false)
-  foundingCompany   Boolean                    @default(false)
-  ledger            TerraqoBuilderLedger[]
-  redemptions       TerraqoBuilderRedemption[]
-  createdAt         DateTime                   @default(now())
-  updatedAt         DateTime                   @updatedAt
+  id                 String                     @id @default(cuid())
+  userId             String                     @unique
+  user               User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  availablePoints    Int                        @default(0)
+  contributionScore  Int                        @default(0)
+  trustScore         Int                        @default(0)
+  pendingPoints      Int                        @default(0)
+  lifetimeEarned     Int                        @default(0)
+  validationCredits  Int                        @default(0)
+  profileBoostUntil  DateTime?
+  earlyAccessUntil   DateTime?
+  premiumUntil       DateTime?
+  foundingBuilder    Boolean                    @default(false)
+  foundingCompany    Boolean                    @default(false)
+  rewardsFrozenUntil DateTime?
+  ledger             TerraqoBuilderLedger[]
+  redemptions        TerraqoBuilderRedemption[]
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
 
   @@index([contributionScore])
+  @@index([trustScore])
   @@schema("icc")
 }
 
@@ -687,6 +691,9 @@ model TerraqoBuilderContribution {
   sourceKey       String?                          @unique
   requestedPoints Int                              @default(0)
   approvedPoints  Int                              @default(0)
+  availableAt     DateTime?
+  releasedAt      DateTime?
+  riskScore       Int                              @default(0)
   reviewerId      String?
   reviewNote      String?
   reviewedAt      DateTime?
@@ -2589,6 +2596,12 @@ model TerraqoWorklogEntry {
   outcome               String?
   type                  TerraqoWorklogType         @default(FIELD_UPDATE)
   evidenceStatus        TerraqoEvidenceStatus      @default(DECLARED)
+  qualityScore          Int                        @default(0)
+  trustScoreAwarded     Int                        @default(0)
+  tqPointsAwarded       Int                        @default(0)
+  contentFingerprint    String?
+  moderationStatus      String                     @default("DECLARED")
+  moderationNote        String?
   visibility            TerraqoVisibility          @default(PRIVATE)
   skills                String[]                   @default([])
   evidenceUrls          String[]                   @default([])
@@ -2605,6 +2618,8 @@ model TerraqoWorklogEntry {
   @@index([workspaceId, visibility, occurredAt])
   @@index([projectId])
   @@index([evidenceStatus])
+  @@index([moderationStatus, createdAt])
+  @@index([contentFingerprint])
   @@index([deletedAt])
   @@schema("icc")
 }
@@ -2710,10 +2725,12 @@ model TerraqoWorklogMedia {
   fileName    String
   contentType String
   size        Int
+  sha256      String?
   sortOrder   Int                 @default(0)
   createdAt   DateTime            @default(now())
 
   @@index([worklogId, sortOrder])
+  @@index([sha256])
   @@schema("icc")
 }
 

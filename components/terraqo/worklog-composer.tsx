@@ -44,6 +44,13 @@ export function WorklogComposer({ workspaces }: { workspaces: WorkspaceOption[] 
     setSubmitting(true);
     setMessage("");
 
+    const evidenceLinks = String(data.get("evidenceUrls") || "").split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+    if (!photoFiles.length && !evidenceLinks.length) {
+      setMessage("Agrega al menos una foto o un enlace de evidencia para documentar trabajo verificable.");
+      setSubmitting(false);
+      return;
+    }
+
     try {
       const response = await fetch("/api/terraqo/worklog", {
         method: "POST",
@@ -57,7 +64,7 @@ export function WorklogComposer({ workspaces }: { workspaces: WorkspaceOption[] 
           type: String(data.get("type") || "FIELD_UPDATE"),
           visibility: String(data.get("visibility") || "PRIVATE"),
           skills: String(data.get("skills") || "").split(",").map((item) => item.trim()).filter(Boolean),
-          evidenceUrls: String(data.get("evidenceUrls") || "").split(/\r?\n/).map((item) => item.trim()).filter(Boolean)
+          evidenceUrls: evidenceLinks
         })
       });
       const payload = await response.json().catch(() => ({}));
@@ -115,7 +122,7 @@ export function WorklogComposer({ workspaces }: { workspaces: WorkspaceOption[] 
           <input name="title" className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm" placeholder="Ej. Control de ejes completado en torre B" required minLength={4} maxLength={180} />
         </label>
         <div className="grid gap-2 text-sm font-semibold md:col-span-2"><span>Qué hiciste y qué problema resolviste</span><AiWritingTextarea name="summary" purpose="worklog" className="min-h-32" placeholder="Describe el trabajo, la decisión técnica y el contexto necesario para entenderlo." required minLength={20} maxLength={2400} /></div>
-        <div className="grid gap-2 text-sm font-semibold md:col-span-2"><span>Resultado observable</span><AiWritingTextarea name="outcome" purpose="worklog" className="min-h-20" placeholder="Ej. Se liberaron los frentes sin observaciones y se entregó el reporte de control." maxLength={800} /></div>
+        <div className="grid gap-2 text-sm font-semibold md:col-span-2"><span>Resultado observable</span><AiWritingTextarea name="outcome" purpose="worklog" className="min-h-20" placeholder="Ej. Se liberaron los frentes sin observaciones y se entregó el reporte de control." required minLength={10} maxLength={800} /></div>
         <label className="grid gap-2 text-sm font-semibold">Tipo de evidencia
           <select name="type" className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm">
             <option value="FIELD_UPDATE">Avance de trabajo</option>
@@ -158,6 +165,8 @@ export function WorklogComposer({ workspaces }: { workspaces: WorkspaceOption[] 
           </figure>)}
         </div> : null}
       </div>
+
+      <div className="mt-5 rounded-xl border border-[#cbd7e6] bg-[#f7fafc] p-4"><p className="text-xs font-bold uppercase tracking-[0.12em] text-[#4374ba]">Cómo aumenta tu confianza</p><div className="mt-3 grid gap-2 text-xs text-[#52657a] sm:grid-cols-3"><span>1. Describe trabajo y resultado</span><span>2. Adjunta evidencia real</span><span>3. Solicita validación responsable</span></div><p className="mt-3 text-xs leading-5 text-[#607083]">Los TQ permanecen 7 días en espera. Duplicados, evidencia falsa o validaciones coordinadas no generan reputación.</p></div>
 
       <div className="sticky bottom-[4.8rem] z-20 -mx-4 mt-5 flex flex-col gap-3 border-t bg-white/95 px-4 py-4 backdrop-blur-xl sm:static sm:mx-0 sm:flex-row sm:items-center sm:justify-between sm:bg-transparent sm:px-0 sm:pb-0 sm:pt-5">
         <p className="flex items-center gap-2 text-sm text-muted-foreground"><CheckCircle2 className="h-4 w-4 text-primary" /> Privada por defecto. Tu decides cuando compartirla.</p>

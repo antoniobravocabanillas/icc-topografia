@@ -27,6 +27,8 @@ const visibilityLabels: Record<string, string> = {
   PUBLIC: "Publica"
 };
 
+const moderationLabels: Record<string, string> = { DECLARED: "Declarada", COMPLETE: "Completa con evidencia", VALIDATED: "Validada", STRONG_VERIFIED: "Validada con evidencia fuerte", PRIVATE_VALIDATED: "Privada validada", DUPLICATE: "En revisión por duplicado", REJECTED: "Rechazada", OBSERVED: "Observada" };
+
 export function WorklogCard({ worklog, viewerId }: { worklog: WorklogWithContext; viewerId: string }) {
   const ownReaction = worklog.reactions.find((reaction) => reaction.userId === viewerId)?.type;
   return (
@@ -58,10 +60,13 @@ export function WorklogCard({ worklog, viewerId }: { worklog: WorklogWithContext
         {worklog.workspace ? <Link href={`/portal/empresas/${worklog.workspace.slug}`} className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold hover:bg-muted"><Building2 className="h-3.5 w-3.5" />{worklog.workspace.brandName || worklog.workspace.name}</Link> : null}
         {worklog.project ? <span className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold"><FolderKanban className="h-3.5 w-3.5" />{worklog.project.title}</span> : null}
         <span className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary"><BadgeCheck className="h-3.5 w-3.5" />{evidenceLabels[worklog.evidenceStatus]}</span>
+        <span className="inline-flex items-center gap-1 rounded-md bg-[#edf4fd] px-2.5 py-1 text-xs font-bold text-[#4374ba]">{moderationLabels[worklog.moderationStatus] || worklog.moderationStatus}</span>
         {worklog.skills.map((skill) => <span key={skill} className="rounded-md bg-muted px-2.5 py-1 text-xs font-semibold">#{skill}</span>)}
       </div>
 
       {worklog.evidenceUrls.length ? <div className="mt-4 flex flex-wrap gap-2">{worklog.evidenceUrls.map((url) => <a key={url} href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"><ExternalLink className="h-3.5 w-3.5" />Ver evidencia</a>)}</div> : null}
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-3"><TrustMetric label="Calidad" value={`${worklog.qualityScore}%`} /><TrustMetric label="Confianza aportada" value={`+${worklog.trustScoreAwarded}`} /><TrustMetric label="TQ en espera" value={`+${worklog.tqPointsAwarded}`} /></div>
 
       {worklog.media.length ? <div className={`mt-5 grid gap-2 ${worklog.media.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
         {worklog.media.map((media, index) => <a key={media.id} href={`/api/terraqo/worklog/evidence/${media.id}`} target="_blank" rel="noreferrer" className={`relative overflow-hidden rounded-md border bg-muted ${worklog.media.length === 3 && index === 0 ? "col-span-2 aspect-[16/8]" : "aspect-[4/3]"}`}>
@@ -75,3 +80,5 @@ export function WorklogCard({ worklog, viewerId }: { worklog: WorklogWithContext
     </article>
   );
 }
+
+function TrustMetric({ label, value }: { label: string; value: string }) { return <div className="rounded-lg border bg-muted/20 px-3 py-2"><span className="block text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">{label}</span><strong className="mt-1 block text-sm text-primary">{value}</strong></div>; }
