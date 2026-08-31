@@ -9,24 +9,19 @@ import {
   ArrowRight,
   BadgeCheck,
   BriefcaseBusiness,
-  Bug,
   Building2,
   CalendarDays,
   ChevronDown,
   FolderKanban,
-  Gift,
   Grid2X2,
   Heart,
-  Lightbulb,
   List,
   MapPin,
   MessageCircle,
   MessageSquare,
   Plus,
-  Rocket,
   SlidersHorizontal,
   Sparkles,
-  Trophy,
   UserPlus,
   UsersRound,
   X,
@@ -549,18 +544,14 @@ function JobAdsHero({ jobs }: { jobs: JobAd[] }) {
 function BetaCommunityHero() {
   const whatsappHref = "https://chat.whatsapp.com/JzGxQ59VC1X00qZqB1Qg2E";
   return (
-    <section className="relative isolate overflow-hidden rounded-[26px] border border-[#4374ba]/25 bg-[#07111f] px-5 py-7 text-white shadow-[0_28px_70px_rgba(14,26,38,0.18)] sm:px-8 lg:min-h-[390px] lg:px-10 lg:py-10">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_57%_58%,rgba(37,192,213,0.18),transparent_25%),radial-gradient(circle_at_82%_20%,rgba(67,116,186,0.22),transparent_30%),linear-gradient(115deg,#07111f_0%,#0a1b30_55%,#0b2236_100%)]" />
-      <div className="pointer-events-none absolute inset-0 opacity-25 [background-image:linear-gradient(rgba(72,138,201,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(72,138,201,0.1)_1px,transparent_1px)] [background-size:54px_54px] [mask-image:linear-gradient(to_right,transparent,black_48%,black)]" />
-      <div className="relative grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_250px_310px] lg:items-center">
+    <section className="relative isolate overflow-hidden bg-[#071522] px-5 py-9 text-white sm:px-8 lg:min-h-[390px] lg:px-12 lg:py-12">
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(110deg,#071522_0%,#0b2137_62%,#123a50_100%)]" />
+      <div className="pointer-events-none absolute -right-24 top-0 h-full w-2/5 skew-x-[-14deg] bg-[linear-gradient(180deg,rgba(72,138,201,.16),rgba(37,192,213,.03))]" />
+      <div className="relative flex min-h-[294px] flex-col justify-between gap-10">
         <div className="max-w-3xl">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="rounded-full border border-[#25c0d5]/60 bg-[#25c0d5]/15 px-3 py-1 font-mono text-[11px] font-black uppercase tracking-[0.13em] text-[#80e8f4]">
-              Beta
-            </span>
-            <span className="text-xs font-semibold text-[#d8e6f5]">
-              Estamos en versión beta
-            </span>
+          <div className="flex items-center gap-3 text-[11px] font-bold uppercase tracking-[0.18em] text-[#80e8f4]">
+            <span className="h-px w-8 bg-[#25c0d5]" />
+            Terraqo beta
           </div>
           <h1 className="mt-5 font-display text-[clamp(2rem,3.5vw,3.35rem)] font-black leading-[1.06] tracking-[-0.035em] text-white">
             Construyamos juntos la mejor{" "}
@@ -578,14 +569,14 @@ function BetaCommunityHero() {
               href={whatsappHref}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex h-12 items-center gap-2 rounded-xl bg-[linear-gradient(135deg,#4374ba,#25c0d5)] px-5 text-sm font-black text-white shadow-[0_14px_34px_rgba(37,192,213,0.2)] transition hover:-translate-y-0.5 hover:brightness-110"
+              className="inline-flex h-12 items-center gap-2 bg-[#4374ba] px-5 text-sm font-black text-white transition hover:bg-[#4e82c5]"
             >
               <MessageCircle className="h-5 w-5" />
               Unirme a la comunidad
             </a>
             <Link
               href="/portal/recompensas"
-              className="inline-flex h-12 items-center gap-2 rounded-xl px-4 text-sm font-bold text-[#9fc4ff] transition hover:bg-white/5 hover:text-white"
+              className="inline-flex h-12 items-center gap-2 px-4 text-sm font-bold text-[#9fc4ff] transition hover:text-white"
             >
               Cómo funciona
               <ArrowRight className="h-4 w-4" />
@@ -593,52 +584,16 @@ function BetaCommunityHero() {
           </div>
         </div>
 
-        <div
-          className="relative hidden min-h-[265px] place-items-center lg:grid"
-          aria-hidden="true"
-        >
-          <div className="absolute h-56 w-40 rounded-[34px] border border-[#488ac9]/35 bg-[linear-gradient(155deg,rgba(72,138,201,0.24),rgba(7,17,31,0.38))] shadow-[inset_0_0_40px_rgba(37,192,213,0.08),0_28px_70px_rgba(0,0,0,0.35)]" />
-          <div className="absolute bottom-3 h-24 w-48 rounded-[50%] bg-[#25c0d5]/18 blur-2xl" />
-          <span className="relative grid h-28 w-28 place-items-center rounded-[30px] border border-[#25c0d5]/35 bg-[#0b2035]/85 text-[#80e8f4] shadow-[0_0_50px_rgba(37,192,213,0.2)]">
-            <Rocket className="h-16 w-16 -rotate-12" />
-          </span>
-          <span className="absolute left-2 top-16 grid h-10 w-10 place-items-center rounded-xl border border-[#488ac9]/35 bg-[#0d2034]/90 text-[#9fc4ff]">
-            <Heart className="h-5 w-5" />
-          </span>
-          <span className="absolute right-0 top-24 grid h-10 w-12 place-items-center rounded-xl border border-[#25c0d5]/35 bg-[#0d2034]/90 text-[#80e8f4]">
-            <MessageSquare className="h-5 w-5" />
-          </span>
-        </div>
-
-        <aside className="rounded-[20px] border border-[#488ac9]/25 bg-[#102338]/72 p-5 shadow-[0_20px_50px_rgba(0,0,0,0.18)] backdrop-blur-xl sm:p-6">
-          <div className="flex items-center gap-3 border-b border-white/10 pb-4">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#4374ba]/20 text-[#80e8f4]">
-              <Gift className="h-5 w-5" />
-            </span>
-            <h2 className="font-display text-lg font-black">
-              Premiamos tu aporte
-            </h2>
-          </div>
-          <div className="divide-y divide-white/10">
-            <RewardItem
-              icon={<Bug className="h-4 w-4" />}
-              title="Reporta errores"
-              copy="Gana puntos"
-            />
-            <RewardItem
-              icon={<Lightbulb className="h-4 w-4" />}
-              title="Comparte sugerencias"
-              copy="Gana puntos"
-            />
-            <RewardItem
-              icon={<Trophy className="h-4 w-4" />}
-              title="Participa activamente"
-              copy="Accede a beneficios exclusivos"
-            />
-          </div>
+        <aside className="grid border-t border-white/15 pt-5 sm:grid-cols-3 lg:max-w-4xl">
+          <RewardItem title="Reporta errores" copy="Gana puntos" />
+          <RewardItem title="Comparte sugerencias" copy="Mejora Terraqo" />
+          <RewardItem
+            title="Participa activamente"
+            copy="Accede a beneficios"
+          />
           <Link
             href="/portal/recompensas"
-            className="mt-4 flex items-center justify-between gap-3 text-xs font-black text-[#80e8f4] transition hover:text-white"
+            className="mt-5 flex items-center gap-3 text-xs font-black text-[#80e8f4] transition hover:text-white sm:col-span-3"
           >
             Conoce el sistema de recompensas
             <ArrowRight className="h-4 w-4" />
@@ -649,22 +604,11 @@ function BetaCommunityHero() {
   );
 }
 
-function RewardItem({
-  icon,
-  title,
-  copy,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  copy: string;
-}) {
+function RewardItem({ title, copy }: { title: string; copy: string }) {
   return (
-    <div className="flex items-start gap-3 py-3">
-      <span className="mt-0.5 text-[#9fc4ff]">{icon}</span>
-      <div>
-        <p className="text-sm font-bold text-white">{title}</p>
-        <p className="mt-0.5 text-[11px] text-[#aebdcb]">{copy}</p>
-      </div>
+    <div className="py-3 sm:border-r sm:border-white/10 sm:px-5 sm:first:pl-0 sm:last:border-r-0">
+      <p className="text-sm font-bold text-white">{title}</p>
+      <p className="mt-1 text-[11px] text-[#aebdcb]">{copy}</p>
     </div>
   );
 }
@@ -708,7 +652,7 @@ function NetworkStories({
     <>
       <section
         aria-label="Trabajo documentado"
-        className="mt-5 rounded-[22px] border border-[#d7e3e8] bg-white px-4 py-4 shadow-[0_10px_30px_rgba(11,35,48,0.045)] sm:px-6"
+        className="mt-6 border-y border-[#d7e3e8] bg-white/45 px-1 py-5 sm:px-0"
       >
         <div className="flex items-center justify-between gap-4">
           <div>

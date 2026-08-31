@@ -182,8 +182,8 @@ export function ProfessionalProfileView({
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
         <main className="min-w-0 space-y-4">
-          <section className="relative overflow-hidden rounded-[24px] border border-[#1f4770] bg-[radial-gradient(circle_at_82%_22%,rgba(65,121,182,.24),transparent_36%),linear-gradient(135deg,#071827,#0c2239_58%,#102d4a)] p-5 text-white shadow-[0_24px_60px_rgba(10,29,48,.18)] sm:p-7">
-            <div className="absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(89,147,202,.12)_1px,transparent_1px),linear-gradient(90deg,rgba(89,147,202,.1)_1px,transparent_1px)] [background-size:42px_42px]" />
+          <section className="relative overflow-hidden bg-[linear-gradient(115deg,#071827,#0c2239_62%,#163d59)] p-5 text-white sm:p-7">
+            <div className="pointer-events-none absolute -right-20 top-0 h-full w-2/5 skew-x-[-14deg] bg-white/[0.035]" />
             <div className="relative grid gap-6 lg:grid-cols-[1fr_auto]">
               <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center">
                 <div className="relative w-fit">
@@ -271,7 +271,7 @@ export function ProfessionalProfileView({
                 </Link>
               )}
             </div>
-            <div className="relative mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-white/10 bg-white/10 sm:grid-cols-4">
+            <div className="relative mt-7 grid grid-cols-2 border-t border-white/15 sm:grid-cols-4">
               <Metric
                 value={profile.metrics.experiences}
                 label="Experiencias"
@@ -295,7 +295,7 @@ export function ProfessionalProfileView({
             </div>
           </section>
 
-          <div className="overflow-x-auto rounded-2xl border bg-white px-2 shadow-sm">
+          <div className="overflow-x-auto border-b bg-transparent px-0">
             <div className="flex min-w-max">
               {tabs.map((item) => (
                 <button
@@ -313,7 +313,7 @@ export function ProfessionalProfileView({
           </div>
 
           {tab === "Bitácora" ? (
-            <section className="rounded-[22px] border bg-white p-4 shadow-sm sm:p-5">
+            <section className="bg-white/55 px-0 py-5 sm:px-1">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="font-display text-xl font-bold">
@@ -384,7 +384,7 @@ export function ProfessionalProfileView({
                   <Link
                     key={item.id}
                     href={`/empresas/${item.slug}`}
-                    className="rounded-2xl border p-4 transition hover:border-[#4374ba]/40"
+                    className="border-t px-0 py-4 transition hover:border-[#4374ba]/50"
                   >
                     <Building2 className="h-5 w-5 text-[#4374ba]" />
                     <b className="mt-3 block text-sm">{item.company}</b>
@@ -413,7 +413,7 @@ export function ProfessionalProfileView({
             <Section title="Educación y certificaciones">
               <div className="grid gap-3 sm:grid-cols-2">
                 {profile.education.map((item) => (
-                  <article key={item.id} className="rounded-2xl border p-4">
+                  <article key={item.id} className="border-t px-0 py-4">
                     <FileCheck2 className="h-5 w-5 text-[#4374ba]" />
                     <b className="mt-3 block text-sm">{item.degree}</b>
                     <p className="mt-1 text-xs text-slate-500">
@@ -591,7 +591,7 @@ function Metric({
   icon: typeof BriefcaseBusiness;
 }) {
   return (
-    <div className="bg-[#0b2238]/70 p-3 text-center">
+    <div className="border-r border-white/10 p-3 text-center last:border-r-0">
       <Icon className="mx-auto h-4 w-4 text-[#72d9ef]" />
       <b className="mt-1 block text-lg">{value}</b>
       <span className="text-[10px] text-white/60">{label}</span>
@@ -608,8 +608,8 @@ function SideCard({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-[20px] border bg-white p-4 shadow-sm">
-      <h2 className="mb-4 flex items-center gap-2 text-sm font-bold">
+    <section className="border-b border-slate-200 px-1 py-5 first:pt-1 last:border-b-0">
+      <h2 className="mb-4 flex items-center gap-2 text-sm font-bold text-[#102535]">
         {Icon ? <Icon className="h-4 w-4 text-[#4374ba]" /> : null}
         {title}
       </h2>
@@ -625,7 +625,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-[22px] border bg-white p-5 shadow-sm">
+    <section className="border-t border-slate-200 bg-white/45 px-0 py-6">
       <h2 className="mb-5 font-display text-xl font-bold">{title}</h2>
       {children}
     </section>
@@ -633,7 +633,7 @@ function Section({
 }
 function Empty({ icon: Icon, text }: { icon: typeof BookOpen; text: string }) {
   return (
-    <div className="col-span-full grid place-items-center rounded-2xl border border-dashed p-8 text-center">
+    <div className="col-span-full grid min-h-44 place-items-center px-6 py-10 text-center">
       <Icon className="h-6 w-6 text-slate-300" />
       <p className="mt-2 text-xs text-slate-500">{text}</p>
     </div>
@@ -641,7 +641,7 @@ function Empty({ icon: Icon, text }: { icon: typeof BookOpen; text: string }) {
 }
 function InfoCard({ title, value }: { title: string; value: string }) {
   return (
-    <div className="rounded-2xl border bg-slate-50 p-4">
+    <div className="border-t py-4">
       <span className="text-xs text-slate-500">{title}</span>
       <b className="mt-2 block text-lg">{value}</b>
     </div>
@@ -649,7 +649,7 @@ function InfoCard({ title, value }: { title: string; value: string }) {
 }
 function ExperienceItem({ item }: { item: Experience }) {
   return (
-    <article className="rounded-2xl border p-4">
+    <article className="border-t px-0 py-4">
       <div className="flex justify-between gap-3">
         <div>
           <b className="text-sm">{item.title}</b>
