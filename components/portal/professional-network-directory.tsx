@@ -857,7 +857,11 @@ function StoryModal({
             </div>
           )}
           <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/45 to-transparent" />
-          <div className="absolute left-4 right-16 top-4 flex items-center gap-3 text-white">
+          <Link
+            href={`/portal/profesionales/${profile.id}`}
+            className="absolute left-4 right-16 top-4 flex items-center gap-3 text-white transition hover:text-[#80e8f4]"
+            aria-label={`Abrir perfil de ${profile.name}`}
+          >
             <UserAvatar
               name={profile.name}
               image={profile.image}
@@ -870,7 +874,7 @@ function StoryModal({
                 {profile.roleTitle || profile.headline || "Profesional Terraqo"}
               </p>
             </div>
-          </div>
+          </Link>
           {mediaIds.length > 1 ? (
             <>
               <button
@@ -1116,7 +1120,11 @@ function ProfessionalCard({
       className={`group relative overflow-hidden rounded-[22px] border border-[#d8e4e8] bg-white p-5 shadow-[0_12px_38px_rgba(11,35,48,0.055)] transition duration-300 hover:-translate-y-1 hover:border-[#13a8a4]/50 hover:shadow-[0_20px_48px_rgba(8,125,121,0.12)] ${compact ? "lg:grid lg:grid-cols-[minmax(280px,1.15fr)_minmax(220px,1fr)_auto] lg:items-center lg:gap-6" : "flex min-h-[330px] flex-col"}`}
     >
       <div className="flex min-w-0 items-start gap-4">
-        <div className="relative shrink-0">
+        <Link
+          href={`/portal/profesionales/${profile.id}`}
+          className="relative shrink-0 rounded-full outline-none ring-offset-2 transition hover:scale-[1.03] focus-visible:ring-2 focus-visible:ring-[#087d79]"
+          aria-label={`Abrir perfil de ${profile.name}`}
+        >
           <UserAvatar
             name={profile.name}
             image={profile.image}
@@ -1127,11 +1135,16 @@ function ProfessionalCard({
             className={`absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-[3px] border-white ${online ? "bg-emerald-500" : "bg-slate-400"}`}
             title={online ? "En línea" : "Fuera de línea"}
           />
-        </div>
+        </Link>
         <div className="min-w-0 flex-1">
           <div className="flex items-start gap-2">
             <h2 className="font-display text-lg font-bold leading-6 text-[#102535]">
-              {profile.name}
+              <Link
+                href={`/portal/profesionales/${profile.id}`}
+                className="transition hover:text-[#087d79] hover:underline hover:underline-offset-4"
+              >
+                {profile.name}
+              </Link>
             </h2>
             {profile.verified ? (
               <BadgeCheck
