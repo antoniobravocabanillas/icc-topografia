@@ -12,15 +12,32 @@ export async function GET(request: Request) {
     return NextResponse.redirect(destination);
   }
   const token = await prisma.verificationToken.findFirst({
-    where: { identifier: `email:${email}`, token: tokenValue, expires: { gt: new Date() } }
+    where: {
+      identifier: `email:${email}`,
+      token: tokenValue,
+      expires: { gt: new Date() },
+    },
   });
   if (!token) {
     destination.searchParams.set("verification", "invalid");
     return NextResponse.redirect(destination);
   }
   await prisma.$transaction([
-    prisma.user.update({ where: { email }, data: { emailVerified: new Date() } }),
-    prisma.verificationToken.deleteMany({ where: { identifier: `email:${email}` } })
+    prisma.user.update({
+      where: { email },
+      data: { emailVerified: new Date() },
+    }),
+    prisma.terraqoProfessionalProfile.updateMany({
+      where: {
+        user: { email },
+        onboardingSource: "TERRAQO_PUBLIC_REGISTRATION",
+        visibility: "PRIVATE",
+      },
+      data: { visibility: "COMMUNITY" },
+    }),
+    prisma.verificationToken.deleteMany({
+      where: { identifier: `email:${email}` },
+    }),
   ]);
   destination.searchParams.set("verification", "success");
   destination.searchParams.set("email", email);

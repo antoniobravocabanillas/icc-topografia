@@ -15,74 +15,85 @@ export default async function ProfessionalNetworkDirectoryPage({
   const params = await searchParams;
   const workspaceIds = memberships.map((membership) => membership.workspaceId);
   const profiles = await prisma.terraqoProfessionalProfile.findMany({
+    where: {
+      userId: { not: session.user.id },
+      user: { emailVerified: { not: null } },
+      friendDiscoveryEnabled: true,
+      OR: [
+        { visibility: { in: ["PUBLIC", "COMMUNITY"] } },
+        ...(workspaceIds.length
+          ? [
+              {
+                user: {
+                  terraqoMemberships: {
+                    some: { workspaceId: { in: workspaceIds }, active: true },
+                  },
+                },
+              },
+            ]
+          : []),
+      ],
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          image: true,
+          lastSeenAt: true,
+          onlineUntil: true,
+          terraqoBuilderAccount: {
+            select: { profileBoostUntil: true, foundingBuilder: true },
+          },
+        },
+      },
+      affiliations: {
+        where: { workspaceId: { in: workspaceIds } },
+        include: { workspace: { select: { name: true, brandName: true } } },
+        orderBy: [{ current: "desc" }, { updatedAt: "desc" }],
+        take: 1,
+      },
+      experiences: {
         where: {
-          userId: { not: session.user.id },
-          friendDiscoveryEnabled: true,
           OR: [
-            { visibility: { in: ["PUBLIC", "COMMUNITY"] } },
-            ...(workspaceIds.length ? [{ user: { terraqoMemberships: { some: { workspaceId: { in: workspaceIds }, active: true } } } }] : []),
+            { verifiedByTerraqo: true },
+            { visibility: { in: ["PUBLIC", "COMMUNITY", "WORKSPACE"] } },
           ],
         },
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              image: true,
-              lastSeenAt: true,
-              onlineUntil: true,
-              terraqoBuilderAccount: {
-                select: { profileBoostUntil: true, foundingBuilder: true },
-              },
-            },
+        select: { id: true, verifiedByTerraqo: true },
+        take: 20,
+      },
+      worklogs: {
+        where: visibleWorklogWhere(session.user.id, workspaceIds),
+        orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
+        take: 1,
+        select: {
+          id: true,
+          title: true,
+          summary: true,
+          outcome: true,
+          type: true,
+          evidenceStatus: true,
+          moderationStatus: true,
+          tqPointsAwarded: true,
+          trustScoreAwarded: true,
+          skills: true,
+          occurredAt: true,
+          workspace: { select: { name: true, brandName: true } },
+          project: { select: { title: true } },
+          media: {
+            orderBy: { sortOrder: "asc" },
+            take: 10,
+            select: { id: true, contentType: true },
           },
-          affiliations: {
-            where: { workspaceId: { in: workspaceIds } },
-            include: { workspace: { select: { name: true, brandName: true } } },
-            orderBy: [{ current: "desc" }, { updatedAt: "desc" }],
-            take: 1,
-          },
-          experiences: {
-            where: {
-              OR: [
-                { verifiedByTerraqo: true },
-                { visibility: { in: ["PUBLIC", "COMMUNITY", "WORKSPACE"] } },
-              ],
-            },
-            select: { id: true, verifiedByTerraqo: true },
-            take: 20,
-          },
-          worklogs: {
-            where: visibleWorklogWhere(session.user.id, workspaceIds),
-            orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
-            take: 1,
-            select: {
-              id: true,
-              title: true,
-              summary: true,
-              outcome: true,
-              type: true,
-              evidenceStatus: true,
-              moderationStatus: true,
-              tqPointsAwarded: true,
-              trustScoreAwarded: true,
-              skills: true,
-              occurredAt: true,
-              workspace: { select: { name: true, brandName: true } },
-              project: { select: { title: true } },
-              media: {
-                orderBy: { sortOrder: "asc" },
-                take: 10,
-                select: { id: true, contentType: true },
-              },
-              _count: { select: { comments: true, reactions: true } },
-            },
-          },
+          _count: { select: { comments: true, reactions: true } },
         },
-        orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
-        take: 80,
-      });
+      },
+    },
+    orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
+    take: 80,
+  });
   const friendships = await prisma.terraqoFriendship.findMany({
     where: {
       OR: [{ requesterId: session.user.id }, { recipientId: session.user.id }],

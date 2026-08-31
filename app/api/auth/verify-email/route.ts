@@ -3,8 +3,14 @@ import { prisma } from "@/lib/prisma";
 import { fail, handleApiError, ok, parseJson } from "@/lib/server/api";
 
 const verifyEmailSchema = z.object({
-  email: z.string().email().transform((value) => value.toLowerCase()),
-  code: z.string().trim().regex(/^\d{6}$/, "Codigo invalido"),
+  email: z
+    .string()
+    .email()
+    .transform((value) => value.toLowerCase()),
+  code: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/, "Codigo invalido"),
 });
 
 export async function POST(request: Request) {
@@ -26,6 +32,14 @@ export async function POST(request: Request) {
       prisma.user.update({
         where: { email: payload.email },
         data: { emailVerified: new Date() },
+      }),
+      prisma.terraqoProfessionalProfile.updateMany({
+        where: {
+          user: { email: payload.email },
+          onboardingSource: "TERRAQO_PUBLIC_REGISTRATION",
+          visibility: "PRIVATE",
+        },
+        data: { visibility: "COMMUNITY" },
       }),
       prisma.verificationToken.deleteMany({ where: { identifier } }),
     ]);
