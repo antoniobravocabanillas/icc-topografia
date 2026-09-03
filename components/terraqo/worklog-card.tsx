@@ -272,8 +272,6 @@ export function WorklogCard({
         <WorklogContinuityControl
           worklogId={worklog.id}
           previousWorklogId={worklog.previousWorklog?.id || null}
-          workspaceId={worklog.workspaceId}
-          projectId={worklog.projectId}
           options={continuityOptions}
         />
       ) : null}

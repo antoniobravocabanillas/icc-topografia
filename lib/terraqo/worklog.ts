@@ -256,8 +256,6 @@ export async function createProfessionalWorklog(input: {
         id: input.payload.previousWorklogId,
         professionalProfileId: profile.id,
         authorId: input.userId,
-        workspaceId: workspaceId || null,
-        projectId: input.payload.projectId || null,
         deletedAt: null,
         nextWorklog: null,
       },
@@ -265,7 +263,7 @@ export async function createProfessionalWorklog(input: {
     });
     if (!previous) {
       throw new TerraqoWorklogError(
-        "La bitacora anterior debe ser tuya, compartir workspace y proyecto, y no tener otra continuacion.",
+        "La bitacora anterior debe ser tuya y no tener otra continuacion.",
         422,
       );
     }
@@ -370,15 +368,13 @@ export async function setWorklogContinuity(input: {
     where: {
       id: input.previousWorklogId,
       authorId: input.userId,
-      workspaceId: current.workspaceId,
-      projectId: current.projectId,
       deletedAt: null,
     },
     select: { id: true, nextWorklog: { select: { id: true } } },
   });
   if (!previous) {
     throw new TerraqoWorklogError(
-      "Solo puedes enlazar bitacoras propias del mismo workspace y proyecto.",
+      "Solo puedes enlazar bitacoras de tu propio perfil.",
       422,
     );
   }

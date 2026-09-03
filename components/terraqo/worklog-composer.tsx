@@ -41,6 +41,7 @@ export function WorklogComposer({
   const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id || "");
   const [projectId, setProjectId] = useState("");
   const [previousWorklogId, setPreviousWorklogId] = useState("");
+  const [continuityQuery, setContinuityQuery] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
@@ -55,11 +56,10 @@ export function WorklogComposer({
     () =>
       previousWorklogs.filter(
         (item) =>
-          item.workspaceId === workspaceId &&
-          (item.projectId || "") === projectId &&
-          !item.hasNext,
+          !item.hasNext &&
+          (!continuityQuery.trim() || `${item.title} ${item.id}`.toLocaleLowerCase("es").includes(continuityQuery.trim().toLocaleLowerCase("es"))),
       ),
-    [previousWorklogs, workspaceId, projectId],
+    [previousWorklogs, continuityQuery],
   );
 
   useEffect(() => {
@@ -255,6 +255,13 @@ export function WorklogComposer({
         </label>
         <label className="grid gap-2 text-sm font-semibold md:col-span-2">
           Continuidad del trabajo
+          <input
+            type="search"
+            value={continuityQuery}
+            onChange={(event) => setContinuityQuery(event.target.value)}
+            className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm"
+            placeholder="Buscar registro anterior por título o ID"
+          />
           <select
             name="previousWorklogId"
             value={previousWorklogId}
@@ -268,12 +275,12 @@ export function WorklogComposer({
                 {new Intl.DateTimeFormat("es-PE", {
                   dateStyle: "medium",
                 }).format(new Date(item.occurredAt))}
+                {" "}· ID {item.id}
               </option>
             ))}
           </select>
           <span className="text-xs font-normal text-muted-foreground">
-            Enlaza avances del mismo workspace y proyecto para construir una
-            secuencia navegable.
+            Puedes enlazar cualquier registro de tu perfil. Los registros que ya tienen una continuación no se muestran para evitar cadenas duplicadas.
           </span>
         </label>
         <label className="grid gap-2 text-sm font-semibold md:col-span-2">
