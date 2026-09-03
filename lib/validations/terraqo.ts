@@ -3,8 +3,13 @@ import { professionalCategories } from "@/lib/terraqo/professional-categories";
 
 export const terraqoWorkspaceCreateSchema = z.object({
   name: z.string().min(2),
-  slug: z.string().min(2).regex(/^[a-z0-9-]+$/),
-  type: z.enum(["CLIENT_COMPANY", "INTERNAL_UNIT", "PRODUCT_ADMIN"]).default("CLIENT_COMPANY"),
+  slug: z
+    .string()
+    .min(2)
+    .regex(/^[a-z0-9-]+$/),
+  type: z
+    .enum(["CLIENT_COMPANY", "INTERNAL_UNIT", "PRODUCT_ADMIN"])
+    .default("CLIENT_COMPANY"),
   industry: z.string().optional(),
   description: z.string().optional(),
   companyId: z.string().optional(),
@@ -12,7 +17,9 @@ export const terraqoWorkspaceCreateSchema = z.object({
   brandName: z.string().optional(),
   domain: z.string().optional(),
   logoUrl: z.string().optional(),
-  plan: z.enum(["FREE", "BASIC", "PROFESSIONAL", "PREMIUM", "ENTERPRISE"]).default("BASIC")
+  plan: z
+    .enum(["FREE", "BASIC", "PROFESSIONAL", "PREMIUM", "ENTERPRISE"])
+    .default("BASIC"),
 });
 
 export const terraqoModuleUpdateSchema = z.object({
@@ -31,10 +38,10 @@ export const terraqoModuleUpdateSchema = z.object({
     "COLLABORATION_TEAMS",
     "ANALYTICS",
     "AUTOMATIONS",
-    "DOCUMENTS"
+    "DOCUMENTS",
   ]),
   active: z.boolean(),
-  config: z.unknown().optional()
+  config: z.unknown().optional(),
 });
 
 export const terraqoProfessionalProfileSchema = z.object({
@@ -42,8 +49,12 @@ export const terraqoProfessionalProfileSchema = z.object({
   bio: z.string().max(1400).optional(),
   city: z.string().max(120).optional(),
   country: z.string().max(2).default("PE"),
-  status: z.enum(["AVAILABLE", "WORKING", "OPEN_TO_PROJECTS", "NOT_AVAILABLE"]).default("OPEN_TO_PROJECTS"),
-  visibility: z.enum(["PUBLIC", "COMMUNITY", "WORKSPACE", "PRIVATE"]).default("PRIVATE"),
+  status: z
+    .enum(["AVAILABLE", "WORKING", "OPEN_TO_PROJECTS", "NOT_AVAILABLE"])
+    .default("OPEN_TO_PROJECTS"),
+  visibility: z
+    .enum(["PUBLIC", "COMMUNITY", "WORKSPACE", "PRIVATE"])
+    .default("PRIVATE"),
   yearsExperience: z.number().int().min(0).max(80).optional(),
   professionalCategories: z.array(z.enum(professionalCategories)).default([]),
   specialties: z.array(z.string().min(1)).default([]),
@@ -53,26 +64,47 @@ export const terraqoProfessionalProfileSchema = z.object({
   portfolioUrl: z.string().url().optional(),
   cvUrl: z.string().url().optional(),
   liveCvEnabled: z.boolean().default(false),
-  liveCvVisibility: z.enum(["PUBLIC", "COMMUNITY", "WORKSPACE", "PRIVATE"]).default("PRIVATE")
+  liveCvVisibility: z
+    .enum(["PUBLIC", "COMMUNITY", "WORKSPACE", "PRIVATE"])
+    .default("PRIVATE"),
 });
 
-const worklogVisibility = z.enum(["PUBLIC", "COMMUNITY", "WORKSPACE", "PRIVATE"]);
+const worklogVisibility = z.enum([
+  "PUBLIC",
+  "COMMUNITY",
+  "WORKSPACE",
+  "PRIVATE",
+]);
 
 export const terraqoWorklogCreateSchema = z.object({
   workspaceId: z.string().cuid().optional(),
   projectId: z.string().cuid().optional(),
+  previousWorklogId: z.string().cuid().optional(),
   title: z.string().trim().min(4).max(180),
   summary: z.string().trim().min(20).max(2400),
   outcome: z.string().trim().max(800).optional(),
-  type: z.enum(["FIELD_UPDATE", "DELIVERABLE", "PROBLEM_SOLVED", "LEARNING", "MILESTONE"]).default("FIELD_UPDATE"),
+  type: z
+    .enum([
+      "FIELD_UPDATE",
+      "DELIVERABLE",
+      "PROBLEM_SOLVED",
+      "LEARNING",
+      "MILESTONE",
+    ])
+    .default("FIELD_UPDATE"),
   visibility: worklogVisibility.default("PRIVATE"),
   skills: z.array(z.string().trim().min(1).max(80)).max(20).default([]),
-  evidenceUrls: z.array(z.string().url()).max(10).default([])
+  evidenceUrls: z.array(z.string().url()).max(10).default([]),
+});
+
+export const terraqoWorklogContinuitySchema = z.object({
+  worklogId: z.string().cuid(),
+  previousWorklogId: z.string().cuid().nullable(),
 });
 
 export const terraqoWorklogValidationRequestSchema = z.object({
   validatorUserId: z.string().cuid(),
-  note: z.string().trim().max(500).optional()
+  note: z.string().trim().max(500).optional(),
 });
 
 export const terraqoAttendanceOptionsSchema = z.object({
@@ -80,30 +112,30 @@ export const terraqoAttendanceOptionsSchema = z.object({
   type: z.enum(["CHECK_IN", "CHECK_OUT"]),
   latitude: z.number().finite().min(-90).max(90),
   longitude: z.number().finite().min(-180).max(180),
-  accuracyMeters: z.number().finite().positive().max(5000)
+  accuracyMeters: z.number().finite().positive().max(5000),
 });
 
 export const terraqoWorklogEngagementSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("comment"),
-    body: z.string().trim().min(2).max(800)
+    body: z.string().trim().min(2).max(800),
   }),
   z.object({
     action: z.literal("react"),
-    type: z.enum(["USEFUL", "INSIGHTFUL", "RESPECT"])
-  })
+    type: z.enum(["USEFUL", "INSIGHTFUL", "RESPECT"]),
+  }),
 ]);
 
 export const terraqoForumPostCreateSchema = z.object({
   channelId: z.string().cuid(),
   title: z.string().trim().min(8).max(180),
   body: z.string().trim().min(30).max(6000),
-  tags: z.array(z.string().trim().min(1).max(40)).max(8).default([])
+  tags: z.array(z.string().trim().min(1).max(40)).max(8).default([]),
 });
 
 export const terraqoForumReplyCreateSchema = z.object({
   postId: z.string().cuid(),
-  body: z.string().trim().min(4).max(3000)
+  body: z.string().trim().min(4).max(3000),
 });
 
 export const terraqoTeamCreateSchema = z.object({
@@ -111,22 +143,31 @@ export const terraqoTeamCreateSchema = z.object({
   name: z.string().trim().min(3).max(120),
   purpose: z.string().trim().min(20).max(1200),
   projectId: z.string().cuid().optional(),
-  memberUserIds: z.array(z.string().cuid()).min(1).max(12)
+  memberUserIds: z.array(z.string().cuid()).min(1).max(12),
 });
 
 export const terraqoTeamInvitationSchema = z.object({
   teamId: z.string().cuid(),
-  action: z.enum(["accept", "decline"])
+  action: z.enum(["accept", "decline"]),
 });
 
 const optionalUrl = z.union([z.string().url(), z.literal("")]).optional();
-const customCareerAnswer = z.union([z.string(), z.number(), z.boolean(), z.array(z.string())]);
+const customCareerAnswer = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.array(z.string()),
+]);
 
 export const publicCareerApplicationSchema = z.object({
   jobPostId: z.string().min(1).optional(),
   formConfigVersion: z.string().trim().max(120).optional(),
   name: z.string().trim().min(3).max(160),
-  email: z.string().trim().email().transform((value) => value.toLowerCase()),
+  email: z
+    .string()
+    .trim()
+    .email()
+    .transform((value) => value.toLowerCase()),
   phone: z.string().trim().min(7).max(40),
   password: z.string().min(8).max(100),
   category: z.enum(professionalCategories),
@@ -144,5 +185,5 @@ export const publicCareerApplicationSchema = z.object({
   availabilityNote: z.string().trim().max(600).optional(),
   customAnswers: z.record(customCareerAnswer).default({}),
   termsAccepted: z.literal(true),
-  privacyAccepted: z.literal(true)
+  privacyAccepted: z.literal(true),
 });

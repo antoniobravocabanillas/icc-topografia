@@ -2636,6 +2636,9 @@ model TerraqoWorklogEntry {
   workspace             TerraqoWorkspace?          @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
   projectId             String?
   project               Project?                   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  previousWorklogId     String?                    @unique
+  previousWorklog       TerraqoWorklogEntry?       @relation("TerraqoWorklogContinuity", fields: [previousWorklogId], references: [id], onDelete: SetNull)
+  nextWorklog           TerraqoWorklogEntry?       @relation("TerraqoWorklogContinuity")
   title                 String
   summary               String
   outcome               String?
@@ -2662,6 +2665,7 @@ model TerraqoWorklogEntry {
   @@index([professionalProfileId, occurredAt])
   @@index([workspaceId, visibility, occurredAt])
   @@index([projectId])
+  @@index([previousWorklogId])
   @@index([evidenceStatus])
   @@index([moderationStatus, createdAt])
   @@index([contentFingerprint])
