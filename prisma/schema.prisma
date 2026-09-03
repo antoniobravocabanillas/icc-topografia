@@ -2653,6 +2653,11 @@ model TerraqoWorklogEntry {
   visibility            TerraqoVisibility          @default(PRIVATE)
   skills                String[]                   @default([])
   evidenceUrls          String[]                   @default([])
+  locationLabel         String?
+  latitude              Float?
+  longitude             Float?
+  locationAccuracyMeters Float?
+  locationCapturedAt    DateTime?
   occurredAt            DateTime                   @default(now())
   comments              TerraqoWorklogComment[]
   reactions             TerraqoWorklogReaction[]

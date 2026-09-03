@@ -9,6 +9,7 @@ import {
   ExternalLink,
   FolderKanban,
   LockKeyhole,
+  MapPin,
 } from "lucide-react";
 import type { WorklogWithContext } from "@/lib/terraqo/worklog";
 import { WorklogEngagement } from "@/components/terraqo/worklog-engagement";
@@ -134,6 +135,12 @@ export function WorklogCard({
           <span className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold">
             <FolderKanban className="h-3.5 w-3.5" />
             {worklog.project.title}
+          </span>
+        ) : null}
+        {worklog.locationLabel || worklog.locationCapturedAt ? (
+          <span className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold">
+            <MapPin className="h-3.5 w-3.5" />
+            {worklog.locationLabel || "Ubicación registrada"}
           </span>
         ) : null}
         <span className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary">

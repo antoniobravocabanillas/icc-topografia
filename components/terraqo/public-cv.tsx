@@ -1116,12 +1116,16 @@ function EvidenceSection({ worklogs, username, extended = false }: { worklogs: P
 }
 
 function EvidenceCard({ worklog, username }: { worklog: PublicCvProfile["worklogs"][number]; username?: string }) {
-  const src = worklog.evidenceUrls.find((url) => url.startsWith("http") || url.startsWith("/")) || projectImage(worklog.project);
+  const uploadedPhoto = username && worklog.media[0]
+    ? `/api/public/cv/${encodeURIComponent(username)}/worklogs/${encodeURIComponent(worklog.media[0].id)}`
+    : undefined;
+  const src = uploadedPhoto || worklog.evidenceUrls.find((url) => url.startsWith("http") || url.startsWith("/")) || projectImage(worklog.project);
   const content = (
     <article className="group overflow-hidden rounded-[14px] border border-white/10 bg-[#07111f]/74 transition hover:border-[#488ac9]/45">
       <VisualFrame src={src} label={worklog.title} compact />
       <div className="p-3">
         <h3 className="line-clamp-2 min-h-[36px] text-sm font-black text-white">{normalizeSpanishCopy(worklog.title) || worklog.title}</h3>
+        {worklog.locationLabel ? <p className="mt-2 flex items-center gap-1.5 text-xs font-bold text-[#9fc4ff]"><MapPin className="h-3.5 w-3.5" />{worklog.locationLabel}</p> : null}
         <p className="mt-2 font-mono text-xs text-white/40">{formatDate(worklog.occurredAt, { year: "numeric" })}</p>
       </div>
     </article>
@@ -1269,13 +1273,13 @@ function VisualFrame({ src, label, compact = false }: { src?: string; label: str
   return (
     <div className={compact ? "relative h-28 overflow-hidden bg-[#0e1a26]" : "relative h-36 overflow-hidden bg-[#0e1a26]"}>
       {src ? (
-        <img src={src} alt={label} className="h-full w-full object-cover" />
+        <img src={src} alt={label} loading="lazy" className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]" />
       ) : (
         <div className="grid h-full w-full place-items-center bg-[radial-gradient(circle_at_45%_35%,rgba(72,138,201,0.24),transparent_35%),linear-gradient(135deg,#0e1a26,#07111f)]">
           <Gauge className="h-8 w-8 text-[#488ac9]" />
         </div>
       )}
-      <div className="absolute inset-0 bg-gradient-to-t from-[#0e1a26]/35 to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-t from-[#07111f]/75 via-[#07111f]/5 to-transparent" />
     </div>
   );
 }

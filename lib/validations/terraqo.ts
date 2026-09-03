@@ -95,6 +95,16 @@ export const terraqoWorklogCreateSchema = z.object({
   visibility: worklogVisibility.default("PRIVATE"),
   skills: z.array(z.string().trim().min(1).max(80)).max(20).default([]),
   evidenceUrls: z.array(z.string().url()).max(10).default([]),
+  locationLabel: z.string().trim().max(180).optional(),
+  latitude: z.number().finite().min(-90).max(90).optional(),
+  longitude: z.number().finite().min(-180).max(180).optional(),
+  locationAccuracyMeters: z.number().finite().positive().max(10000).optional(),
+  locationCapturedAt: z.coerce.date().optional(),
+}).superRefine((value, context) => {
+  const coordinates = [value.latitude, value.longitude];
+  if (coordinates.some((item) => item !== undefined) && coordinates.some((item) => item === undefined)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "La ubicación debe incluir latitud y longitud.", path: ["latitude"] });
+  }
 });
 
 export const terraqoWorklogContinuitySchema = z.object({

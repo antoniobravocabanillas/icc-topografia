@@ -7,6 +7,8 @@ import {
   CheckCircle2,
   ImagePlus,
   Link2,
+  LocateFixed,
+  MapPin,
   NotebookPen,
   X,
 } from "lucide-react";
@@ -43,6 +45,8 @@ export function WorklogComposer({
   const [message, setMessage] = useState("");
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
+  const [locating, setLocating] = useState(false);
+  const [location, setLocation] = useState<{ latitude: number; longitude: number; accuracy: number; capturedAt: string } | null>(null);
   const projects = useMemo(
     () => workspaces.find((item) => item.id === workspaceId)?.projects || [],
     [workspaceId, workspaces],
@@ -74,6 +78,26 @@ export function WorklogComposer({
   function removePhoto(index: number) {
     setPhotoFiles((current) =>
       current.filter((_, photoIndex) => photoIndex !== index),
+    );
+  }
+
+  function captureLocation() {
+    if (!navigator.geolocation) {
+      setMessage("Este dispositivo no permite capturar la ubicación.");
+      return;
+    }
+    setLocating(true);
+    setMessage("");
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setLocation({ latitude: coords.latitude, longitude: coords.longitude, accuracy: coords.accuracy, capturedAt: new Date().toISOString() });
+        setLocating(false);
+      },
+      (error) => {
+        setMessage(error.code === error.PERMISSION_DENIED ? "No se concedió permiso de ubicación. Puedes escribir el lugar manualmente." : "No pudimos obtener una ubicación precisa. Inténtalo nuevamente o escribe el lugar.");
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
     );
   }
 
@@ -115,6 +139,11 @@ export function WorklogComposer({
             .map((item) => item.trim())
             .filter(Boolean),
           evidenceUrls: evidenceLinks,
+          locationLabel: String(data.get("locationLabel") || "") || undefined,
+          latitude: location?.latitude,
+          longitude: location?.longitude,
+          locationAccuracyMeters: location?.accuracy,
+          locationCapturedAt: location?.capturedAt,
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -147,6 +176,7 @@ export function WorklogComposer({
       setProjectId("");
       setPreviousWorklogId("");
       setPhotoFiles([]);
+      setLocation(null);
       setMessage(
         "Bitacora registrada. Tu trabajo ya suma evidencia a tu perfil.",
       );
@@ -321,6 +351,22 @@ export function WorklogComposer({
             <b>Fecha y hora automáticas.</b> Se registran al guardar y no podrán
             modificarse.
           </span>
+        </div>
+        <div className="grid gap-3 rounded-xl border bg-[#f7fafc] p-4 md:col-span-2">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <label className="grid min-w-0 flex-1 gap-2 text-sm font-semibold">
+              <span className="flex items-center gap-2"><MapPin className="h-4 w-4" /> Lugar de la evidencia</span>
+              <input name="locationLabel" maxLength={180} className="h-12 min-w-0 rounded-xl border bg-white px-3 text-base sm:h-11 sm:rounded-md sm:text-sm" placeholder="Ej. Santa Rosa de Asia, Cañete" />
+            </label>
+            <Button type="button" variant="outline" onClick={captureLocation} disabled={locating} className="min-h-12 rounded-xl sm:min-h-11 sm:rounded-md">
+              <LocateFixed className="mr-2 h-4 w-4" /> {locating ? "Ubicando..." : location ? "Actualizar ubicación" : "Usar mi ubicación"}
+            </Button>
+          </div>
+          <div className="flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <span>{location ? `Ubicación capturada · precisión aproximada ${Math.round(location.accuracy)} m` : "Opcional. La captura requiere tu permiso y ayuda a contextualizar el trabajo."}</span>
+            {location ? <button type="button" onClick={() => setLocation(null)} className="w-fit font-bold text-primary hover:underline">Quitar ubicación capturada</button> : null}
+          </div>
+          <p className="text-xs leading-5 text-muted-foreground">En el perfil público se muestra únicamente el nombre del lugar. Las coordenadas exactas no se publican.</p>
         </div>
         <label className="grid gap-2 text-sm font-semibold md:col-span-2">
           <span className="flex items-center gap-2">
