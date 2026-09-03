@@ -32,7 +32,7 @@ export function TerraqoMemberships() {
   return (
     <section className="tq-memberships" id="membresias">
       <div className="tq-public-wrap">
-        <p className="tq-section-number">07 / Membresias</p>
+        <p className="tq-section-number">06 / Membresías</p>
         <div className="tq-membership-heading">
           <h2>Entra gratis.<br />Activa capacidad cuando la necesitas.</h2>
           <p>Terraqo combina membresias profesionales y software por suscripcion para empresas. Cada plan amplia permisos, automatizacion y visibilidad sin mezclar los datos de distintos workspaces.</p>

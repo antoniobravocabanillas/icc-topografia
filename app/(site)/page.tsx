@@ -5,7 +5,6 @@ import {
   ArrowUpRight,
   BriefcaseBusiness,
   Check,
-  CircleDot,
   MessagesSquare,
   Network,
   Play,
@@ -19,23 +18,21 @@ import { TerraqoProductShowcase } from "@/components/terraqo/terraqo-product-sho
 const layers = [
   { skill: "Estrategia de marca", source: "Worklog", tone: "rust" },
   { skill: "Sistema de diseño", source: "Proyecto", tone: "slate" },
-  { skill: "Automatizacion", source: "Validado", tone: "ochre" },
-  { skill: "Liderazgo tecnico", source: "Equipo", tone: "moss" },
+  { skill: "Automatización", source: "Validado", tone: "ochre" },
+  { skill: "Liderazgo técnico", source: "Equipo", tone: "moss" },
   { skill: "Producto digital", source: "Evidencia", tone: "rust" }
 ];
 
 const modules = [
-  ["01", "Workspace operativo", "Clientes, proyectos, documentos, permisos y actividad bajo una misma organizacion."],
-  ["02", "CRM y relacion comercial", "Leads, oportunidades, cotizaciones y seguimiento sin perder el contexto del trabajo."],
-  ["03", "Proyectos y evidencia", "Tareas, avances, entregables y trazabilidad que tambien pueden alimentar experiencia validada."],
-  ["04", "Comunicacion conectada", "Chat, equipos, foros y Terraqo Meet integrados a personas, empresas y proyectos."],
-  ["05", "Red y marketplace", "Perfiles, oportunidades, postulaciones, retos y alianzas entre profesionales y empresas."],
-  ["06", "API y productos activables", "Cada capacidad se habilita por plan, rol y workspace para convertirse en software vendible."]
+  ["Operar", "Workspace, CRM y proyectos", "La empresa organiza clientes, responsables, documentos y decisiones con permisos propios."],
+  ["Documentar", "Worklog y evidencia", "Cada avance conserva autor, fecha, contexto, archivos y relación con el trabajo que lo originó."],
+  ["Validar", "Confianza verificable", "Empresas y responsables autorizados revisan resultados sin apropiarse del perfil profesional."],
+  ["Conectar", "Red y oportunidades", "La capacidad demostrada se convierte en descubrimiento, conversación y nuevas relaciones de trabajo."]
 ];
 
 const evidence = [
-  { time: "08:42", label: "Proceso documentado", title: "Nueva iteracion del sistema de reportes", skill: "#ProductDesign" },
-  { time: "11:10", label: "Hito validado", title: "Flujo de aprobacion puesto en produccion", skill: "#Automation" },
+  { time: "08:42", label: "Proceso documentado", title: "Nueva iteración del sistema de reportes", skill: "#ProductDesign" },
+  { time: "11:10", label: "Hito validado", title: "Flujo de aprobación puesto en producción", skill: "#Automation" },
   { time: "16:25", label: "Equipo conectado", title: "Entrega aprobada por la empresa contratante", skill: "#ProjectOps" }
 ];
 
@@ -43,27 +40,27 @@ export const dynamic = "force-static";
 
 export default function TerraqoHomePage() {
   return (
-    <main className="tq-public-site">
+    <div className="tq-public-site">
       <section className="tq-hero">
         <div className="tq-public-wrap tq-hero-layout">
           <div className="tq-hero-copy">
             <p className="tq-kicker">La infraestructura del trabajo real</p>
             <h1>Tu empresa opera.<br />Tu trabajo <em>deja evidencia.</em></h1>
             <p className="tq-hero-lede">
-              Terraqo conecta software modular, proyectos, empresas y profesionales. La operacion diaria se convierte en trazabilidad para el negocio y en experiencia verificable para las personas.
+              Terraqo conecta software modular, proyectos, empresas y profesionales. La operación diaria se convierte en trazabilidad para el negocio y en experiencia verificable para las personas.
             </p>
             <div className="tq-hero-actions">
               <Link href="/registro" className="tq-button tq-button-dark">Empezar en Terraqo <ArrowUpRight /></Link>
               <Link href="#plataforma" className="tq-text-link">Conocer la plataforma <ArrowDown /></Link>
             </div>
             <div className="tq-hero-proof" aria-label="Principios Terraqo">
-              <span><Check /> Modulos activables</span>
+              <span><Check /> Módulos activables</span>
               <span><Check /> Privacidad por workspace</span>
               <span><Check /> Evidencia verificable</span>
             </div>
           </div>
 
-          <div className="tq-core-visual" aria-label="Representacion de un perfil Terraqo alimentado por trabajo real">
+          <div className="tq-core-visual" aria-label="Representación de un perfil Terraqo alimentado por trabajo real">
             <div className="tq-core-meta">
               <span>Muestra de perfil</span>
               <b>Actualizado hoy</b>
@@ -102,45 +99,40 @@ export default function TerraqoHomePage() {
       <section className="tq-manifesto" id="plataforma">
         <div className="tq-public-wrap">
           <p className="tq-section-number">01 / Plataforma</p>
-          <div className="tq-manifesto-line">
-            <h2>Un sistema para operar.<br />Una red para crecer.</h2>
-            <p>Terraqo no obliga a todas las organizaciones a trabajar igual. Cada empresa activa las capacidades que necesita y conserva sus datos, usuarios y procesos dentro de su propio workspace.</p>
+          <div className="tq-platform-heading">
+            <h2>La operación y la trayectoria profesional comparten contexto, <em>no propiedad.</em></h2>
+            <p>Terraqo conecta dos espacios independientes. La empresa conserva su operación privada; cada persona conserva su identidad, su experiencia y las evidencias que tiene permiso para publicar.</p>
           </div>
-          <div className="tq-two-paths">
-            <article id="empresas">
+          <div className="tq-platform-system">
+            <article className="tq-platform-side" id="empresas">
+              <span className="tq-platform-label">Workspace empresarial</span>
               <BriefcaseBusiness aria-hidden="true" />
-              <p className="tq-kicker">Para empresas</p>
-              <h3>Software que se adapta al negocio, no al reves.</h3>
-              <p>Desde CRM y proyectos hasta portales, contenidos, comercio, talento y comunicacion. Terraqo funciona como una base operativa modular, activable por suscripcion.</p>
-              <Link href="#demo">Diseñar mi workspace <ArrowRight /></Link>
+              <h3>La empresa opera.</h3>
+              <p>Clientes, proyectos, permisos, archivos y conversaciones permanecen dentro de su organización.</p>
+              <Link href="#demo">Configurar un workspace <ArrowRight /></Link>
             </article>
-            <article>
+            <div className="tq-platform-core" aria-label="Flujo verificable de Terraqo">
+              <span className="tq-platform-label">Núcleo Terraqo</span>
+              <ol>
+                {modules.map(([step, title, description], index) => (
+                  <li key={step}>
+                    <span>{String(index + 1).padStart(2, "0")}</span>
+                    <div><small>{step}</small><h3>{title}</h3><p>{description}</p></div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+            <article className="tq-platform-side tq-platform-side-professional">
+              <span className="tq-platform-label">Workspace personal</span>
               <UsersRound aria-hidden="true" />
-              <p className="tq-kicker">Para profesionales</p>
-              <h3>Una trayectoria que se actualiza mientras trabajas.</h3>
-              <p>Experiencias, evidencias, validaciones y colaboraciones alimentan un CV vivo privado. El profesional decide su disponibilidad y quien puede acceder a su perfil completo.</p>
-              <Link href="/registro">Crear perfil profesional <ArrowRight /></Link>
+              <h3>La persona progresa.</h3>
+              <p>Su CV vivo reúne experiencia, validaciones y evidencia pública bajo su propio control.</p>
+              <Link href="/registro">Crear un perfil profesional <ArrowRight /></Link>
             </article>
           </div>
-        </div>
-      </section>
-
-      <section className="tq-module-story">
-        <div className="tq-public-wrap tq-module-layout">
-          <div className="tq-module-intro">
-            <p className="tq-section-number">02 / Sistema modular</p>
-            <h2>Activa solo lo que mueve tu operacion.</h2>
-            <p>El mismo nucleo puede servir a una constructora, un estudio creativo, una firma legal o una empresa tecnologica. Los modulos cambian; la trazabilidad permanece.</p>
-            <span className="tq-plan-signal"><CircleDot /> Escala por plan, permisos y uso</span>
-          </div>
-          <div className="tq-module-rail">
-            {modules.map(([number, title, description]) => (
-              <article key={number}>
-                <span>{number}</span>
-                <div><h3>{title}</h3><p>{description}</p></div>
-                <ArrowUpRight aria-hidden="true" />
-              </article>
-            ))}
+          <div className="tq-platform-footnote">
+            <span><ShieldCheck /> Privacidad por diseño</span>
+            <p>Compartir una evidencia no abre el workspace. Validar una experiencia no transfiere la identidad profesional.</p>
           </div>
         </div>
       </section>
@@ -149,7 +141,7 @@ export default function TerraqoHomePage() {
 
       <section className="tq-network" id="red">
         <div className="tq-public-wrap">
-          <p className="tq-section-number tq-section-number-light">04 / Red Terraqo</p>
+          <p className="tq-section-number tq-section-number-light">03 / Red Terraqo</p>
           <div className="tq-network-heading">
             <h2>El mercado laboral deja de ser una lista de vacantes.</h2>
             <p>Empresas, proyectos y profesionales conviven en el mismo contexto. Se encuentran por necesidades reales, evidencia reciente y capacidad de colaborar.</p>
@@ -165,7 +157,7 @@ export default function TerraqoHomePage() {
           </div>
           <div className="tq-network-note">
             <MessagesSquare />
-            <p><b>La conversacion nace del trabajo.</b> Chat, foros, equipos y videollamadas se conectan a proyectos y oportunidades, reduciendo mensajes frios y ruido comercial.</p>
+            <p><b>La conversación nace del trabajo.</b> Chat, foros, equipos y videollamadas se conectan a proyectos y oportunidades, reduciendo mensajes fríos y ruido comercial.</p>
           </div>
           <div className="mt-8 flex justify-end">
             <Link href="/red" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-white/25 bg-white px-6 text-sm font-black text-[#083b38] transition hover:-translate-y-0.5 hover:bg-[#dff7f1]">
@@ -178,12 +170,12 @@ export default function TerraqoHomePage() {
       <section className="tq-worklog" id="worklog">
         <div className="tq-public-wrap tq-worklog-layout">
           <div className="tq-worklog-copy">
-            <p className="tq-section-number">05 / CV vivo</p>
+            <p className="tq-section-number">04 / CV vivo</p>
             <h2>El trabajo habla por ti.</h2>
-            <p>El Worklog convierte procesos, entregas y aprendizajes en una bitacora profesional. Cada entrada conserva contexto, habilidades y nivel de verificacion.</p>
+            <p>El Worklog convierte procesos, entregas y aprendizajes en una bitácora profesional. Cada entrada conserva contexto, habilidades y nivel de verificación.</p>
             <ul>
               <li><ShieldCheck /> La identidad y la experiencia se validan por etapas.</li>
-              <li><Play /> La evidencia puede incluir documentos, imagenes o avances.</li>
+              <li><Play /> La evidencia puede incluir documentos, imágenes o avances.</li>
               <li><Network /> El profesional controla la visibilidad de su CV vivo.</li>
             </ul>
           </div>
@@ -196,18 +188,18 @@ export default function TerraqoHomePage() {
                 <div><small>{item.label}</small><h3>{item.title}</h3><p>{item.skill}</p></div>
               </article>
             ))}
-            <footer><ShieldCheck /> 2 evidencias validadas por una organizacion</footer>
+            <footer><ShieldCheck /> 2 evidencias validadas por una organización</footer>
           </div>
         </div>
       </section>
 
       <section className="tq-principle">
         <div className="tq-public-wrap">
-          <p className="tq-section-number">06 / La diferencia</p>
-          <blockquote>“En Terraqo, decir que sabes abre una conversacion. Mostrar lo que hiciste abre una oportunidad.”</blockquote>
+          <p className="tq-section-number">05 / La diferencia</p>
+          <blockquote>“En Terraqo, decir que sabes abre una conversación. Mostrar lo que hiciste abre una oportunidad.”</blockquote>
           <div className="tq-principle-detail">
-            <p>No buscamos otro feed de autopromocion. La relevancia nace de evidencia, proyectos, validaciones y afinidad profesional.</p>
-            <p>La informacion privada no se vuelve publica por defecto. Empresas y profesionales controlan permisos, visibilidad y relaciones.</p>
+            <p>No buscamos otro feed de autopromoción. La relevancia nace de evidencia, proyectos, validaciones y afinidad profesional.</p>
+            <p>La información privada no se vuelve pública por defecto. Empresas y profesionales controlan permisos, visibilidad y relaciones.</p>
           </div>
         </div>
       </section>
@@ -217,13 +209,13 @@ export default function TerraqoHomePage() {
       <section className="tq-final-cta" id="demo">
         <div className="tq-public-wrap">
           <p className="tq-kicker tq-kicker-light">Para quienes construyen</p>
-          <h2>Convierte tu operacion en un sistema que tambien crea oportunidades.</h2>
+          <h2>Convierte tu operación en un sistema que también crea oportunidades.</h2>
           <div>
             <Link href="/registro" className="tq-button tq-button-light">Crear una cuenta <ArrowUpRight /></Link>
             <a href="mailto:hola@terraqo.com?subject=Quiero%20conocer%20Terraqo" className="tq-text-link tq-text-link-light">Solicitar una demo <ArrowRight /></a>
           </div>
         </div>
       </section>
-    </main>
+    </div>
   );
 }

@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { terraqoDomains } from "@/lib/terraqo-domains";
 
 type TerraqoLogoProps = {
   src?: string | null;
@@ -15,14 +14,14 @@ type TerraqoLogoProps = {
 
 const officialAssets = {
   light: {
-    mark: `${terraqoDomains.public}/brand/terraqo-3/isotipo-icono.svg`,
-    horizontal: `${terraqoDomains.public}/brand/terraqo-3/withbackground/LH%20compact%20bg%20white.svg`,
-    vertical: `${terraqoDomains.public}/brand/terraqo-3/withbackground/LV%20wordbran%20bg%20white.svg`,
+    mark: "/brand/terraqo-3/isotipo-icono.svg",
+    horizontal: "/brand/terraqo-3/logo-horizontal.svg",
+    vertical: "/brand/terraqo-3/logo-vertical.svg",
   },
   dark: {
-    mark: `${terraqoDomains.public}/brand/terraqo-3/withbackground/icon%20bg%20dark.svg`,
-    horizontal: `${terraqoDomains.public}/brand/terraqo-3/logo-horizontal-dark-transparent.svg`,
-    vertical: `${terraqoDomains.public}/brand/terraqo-3/withbackground/LV%20wordbran%20bg%20dark.svg`,
+    mark: "/brand/terraqo-3/withoutbackground/icon%20bg%20white.svg",
+    horizontal: "/brand/terraqo-3/logo-horizontal-dark-transparent.svg",
+    vertical: "/brand/terraqo-3/withbackground/LV%20wordbran%20bg%20dark.svg",
   },
 } as const;
 
