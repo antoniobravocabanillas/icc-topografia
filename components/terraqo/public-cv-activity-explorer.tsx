@@ -258,7 +258,7 @@ export function PublicCvActivityExplorer({ username, profileName, records }: { u
             </div>
           </section>
 
-          <section id="detalle-registro" className="min-w-0 scroll-mt-6 border-t border-[#1d344d] pt-8 xl:sticky xl:top-24 xl:max-h-[calc(100vh-112px)] xl:overflow-y-auto xl:border-l xl:border-t-0 xl:pl-10 xl:pt-0 2xl:pl-14">
+          <section id="detalle-registro" className="min-w-0 scroll-mt-6 self-start border-t border-[#1d344d] pt-8 xl:border-l xl:border-t-0 xl:pl-10 xl:pt-0 2xl:pl-14">
             {selected ? <ActivityDetail record={selected} copied={copied} onCopy={copySelectedLink} /> : <ActivityEmpty />}
           </section>
         </div>
