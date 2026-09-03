@@ -15,37 +15,46 @@ export type WorklogContinuityOption = {
 
 export function WorklogContinuityControl({
   worklogId,
+  occurredAt,
   previousWorklogId,
+  nextWorklogId,
   options,
 }: {
   worklogId: string;
+  occurredAt: string;
   previousWorklogId: string | null;
+  nextWorklogId: string | null;
   options: WorklogContinuityOption[];
 }) {
   const router = useRouter();
-  const [value, setValue] = useState(previousWorklogId || "");
+  const initialValue = previousWorklogId || nextWorklogId || "";
+  const [value, setValue] = useState(initialValue);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [query, setQuery] = useState("");
   const filtered = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("es");
     return options.filter((item) => {
-      const eligible = item.id !== worklogId && (!item.hasNext || item.id === previousWorklogId);
       const matches = !normalized || `${item.title} ${item.id}`.toLocaleLowerCase("es").includes(normalized);
-      return eligible && (matches || item.id === value);
+      return item.id !== worklogId && (matches || item.id === value);
     });
-  }, [options, previousWorklogId, query, value, worklogId]);
+  }, [options, query, value, worklogId]);
 
   async function save() {
     setBusy(true);
     setMessage("");
     try {
+      const selected = options.find((item) => item.id === value);
+      const selectedIsLater = selected && new Date(selected.occurredAt).getTime() > new Date(occurredAt).getTime();
+      const targetWorklogId = selectedIsLater ? selected.id : worklogId;
+      const targetPreviousId = selectedIsLater ? worklogId : value || null;
+      const unlinkWorklogId = !value && nextWorklogId ? nextWorklogId : worklogId;
       const response = await fetch("/api/terraqo/worklog", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          worklogId,
-          previousWorklogId: value || null,
+          worklogId: value ? targetWorklogId : unlinkWorklogId,
+          previousWorklogId: value ? targetPreviousId : null,
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -53,7 +62,7 @@ export function WorklogContinuityControl({
         throw new Error(
           payload?.error?.message || "No pudimos enlazar las bitacoras.",
         );
-      setMessage(value ? "Bitacoras enlazadas." : "Enlace eliminado.");
+      setMessage(value ? "Bitácoras enlazadas en orden cronológico." : "Enlace eliminado.");
       router.refresh();
     } catch (error) {
       setMessage(
@@ -87,7 +96,7 @@ export function WorklogContinuityControl({
           onChange={(event) => setValue(event.target.value)}
           className="h-10 min-w-0 flex-1 rounded-md border bg-white px-3 text-xs"
         >
-          <option value="">Sin registro anterior</option>
+          <option value="">Sin registro vinculado</option>
           {filtered.map((item) => (
             <option key={item.id} value={item.id}>
               {item.title} ·{" "}
@@ -100,12 +109,13 @@ export function WorklogContinuityControl({
         <button
           type="button"
           onClick={save}
-          disabled={busy || value === (previousWorklogId || "")}
+          disabled={busy || value === initialValue}
           className="h-10 rounded-md bg-primary px-4 text-xs font-bold text-white disabled:opacity-50"
         >
           {busy ? "Guardando…" : "Enlazar"}
         </button>
       </div>
+      <p className="mt-2 text-xs text-muted-foreground">Puedes elegir una bitácora anterior o posterior; Terraqo ordenará la continuidad por fecha.</p>
       {query && !filtered.length ? <p className="mt-2 text-xs text-muted-foreground">No hay registros disponibles que coincidan con “{query}”.</p> : null}
       {message ? (
         <p role="status" className="mt-2 text-xs text-muted-foreground">

@@ -271,7 +271,9 @@ export function WorklogCard({
       {worklog.authorId === viewerId ? (
         <WorklogContinuityControl
           worklogId={worklog.id}
+          occurredAt={worklog.occurredAt.toISOString()}
           previousWorklogId={worklog.previousWorklog?.id || null}
+          nextWorklogId={worklog.nextWorklog?.id || null}
           options={continuityOptions}
         />
       ) : null}
