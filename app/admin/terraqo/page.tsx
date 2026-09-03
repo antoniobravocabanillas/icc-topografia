@@ -11,7 +11,7 @@ import { requireAdminPage } from "@/lib/server/admin-page-auth";
 import { getTerraqoIndustryLabel, terraqoIndustries } from "@/lib/terraqo/industries";
 import { createTerraqoWorkspace } from "@/lib/terraqo/workspace-repository";
 import { setWorkspaceModuleState, type WorkspaceProvisioningMode } from "@/lib/terraqo/workspace-modules";
-import { terraqoModules } from "@/lib/workspace";
+import { getDefaultModulesForTier, terraqoModules } from "@/lib/workspace";
 
 function textField(formData: FormData, key: string) {
   return String(formData.get(key) || "").trim();
@@ -103,6 +103,20 @@ async function updateWorkspaceAction(formData: FormData) {
       await tx.terraqoSubscription.update({ where: { id: latestSubscription.id }, data: { tier, status, seats } });
     } else {
       await tx.terraqoSubscription.create({ data: { workspaceId, tier, status, seats } });
+    }
+    const entitledModules = new Set(getDefaultModulesForTier(tier));
+    const currentModules = await tx.terraqoWorkspaceModule.findMany({ where: { workspaceId }, select: { code: true, active: true } });
+    for (const code of entitledModules) {
+      await tx.terraqoWorkspaceModule.upsert({
+        where: { workspaceId_code: { workspaceId, code } },
+        update: { active: true, enabledAt: new Date(), disabledAt: null },
+        create: { workspaceId, code, active: true, enabledAt: new Date(), config: { provisioning: { mode: "blank", version: 1, provisionedAt: new Date().toISOString() } } }
+      });
+    }
+    for (const workspaceModule of currentModules) {
+      if (!entitledModules.has(workspaceModule.code) && workspaceModule.active) {
+        await tx.terraqoWorkspaceModule.update({ where: { workspaceId_code: { workspaceId, code: workspaceModule.code } }, data: { active: false, disabledAt: new Date() } });
+      }
     }
   });
   revalidatePath("/admin/terraqo");

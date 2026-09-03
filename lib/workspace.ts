@@ -99,7 +99,7 @@ export const terraqoModules: TerraqoModuleDefinition[] = [
     code: "AUTOMATIONS",
     label: "Automatizaciones",
     description: "Alertas, asignaciones, flujos CRM, emails y operaciones conectadas.",
-    minimumTier: "ENTERPRISE"
+    minimumTier: "PROFESSIONAL"
   },
   {
     code: "DOCUMENTS",

@@ -20,8 +20,11 @@ export function TerraqoPublicFooter() {
             <p>Software modular, red profesional y evidencia de trabajo en un solo ecosistema.</p>
           </div>
           <div className="tq-footer-links">
-            <Link href="/#plataforma">Plataforma</Link>
-          <Link href="/red">Red operativa</Link>
+            <Link href="/plataforma">Plataforma</Link>
+            <Link href="/producto">Producto</Link>
+            <Link href="/automatizacion">Automatización</Link>
+            <Link href="/membresias">Membresías</Link>
+            <Link href="/red">Red operativa</Link>
             <a href={terraqoDomains.portal}>Ingresar</a>
             <Link href="/privacidad">Privacidad</Link>
             <Link href="/terminos">Términos</Link>

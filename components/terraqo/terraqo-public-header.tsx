@@ -7,11 +7,11 @@ import { usePathname } from "next/navigation";
 import { TerraqoLogo } from "@/components/terraqo/terraqo-logo";
 
 const navItems = [
-  { label: "Plataforma", href: "/#plataforma" },
-  { label: "Producto", href: "/#producto" },
+  { label: "Plataforma", href: "/plataforma" },
+  { label: "Producto", href: "/producto" },
   { label: "Red operativa", href: "/red" },
-  { label: "Worklog", href: "/#worklog" },
-  { label: "Membresías", href: "/#membresias" }
+  { label: "Automatización", href: "/automatizacion" },
+  { label: "Membresías", href: "/membresias" }
 ];
 
 export function TerraqoPublicHeader({ tone = "light" }: { tone?: "light" | "dark" }) {
@@ -49,7 +49,7 @@ export function TerraqoPublicHeader({ tone = "light" }: { tone?: "light" | "dark
 
         <div className="tq-header-actions">
           <Link href="/cuenta" prefetch={false} className="tq-login-link"><LogIn aria-hidden="true" /> Entrar</Link>
-          <Link href="/#demo" className="tq-header-cta">Solicitar acceso <ArrowUpRight aria-hidden="true" /></Link>
+          <Link href="/contacto?asunto=demo-terraqo" className="tq-header-cta">Solicitar acceso <ArrowUpRight aria-hidden="true" /></Link>
           <button type="button" className="tq-menu-button" aria-label={open ? "Cerrar menú" : "Abrir menú"} aria-expanded={open} aria-controls="terraqo-mobile-navigation" onClick={() => setOpen((value) => !value)}>
             {open ? <X /> : <Menu />}
           </button>

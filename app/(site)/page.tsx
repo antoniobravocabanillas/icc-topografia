@@ -1,6 +1,5 @@
 import Link from "next/link";
 import {
-  ArrowDown,
   ArrowRight,
   ArrowUpRight,
   BriefcaseBusiness,
@@ -51,7 +50,7 @@ export default function TerraqoHomePage() {
             </p>
             <div className="tq-hero-actions">
               <Link href="/registro" className="tq-button tq-button-dark">Empezar en Terraqo <ArrowUpRight /></Link>
-              <Link href="#plataforma" className="tq-text-link">Conocer la plataforma <ArrowDown /></Link>
+              <Link href="/plataforma" className="tq-text-link">Conocer la plataforma <ArrowRight /></Link>
             </div>
             <div className="tq-hero-proof" aria-label="Principios Terraqo">
               <span><Check /> Módulos activables</span>
@@ -109,7 +108,7 @@ export default function TerraqoHomePage() {
               <BriefcaseBusiness aria-hidden="true" />
               <h3>La empresa opera.</h3>
               <p>Clientes, proyectos, permisos, archivos y conversaciones permanecen dentro de su organización.</p>
-              <Link href="#demo">Configurar un workspace <ArrowRight /></Link>
+              <Link href="/producto">Conocer el producto <ArrowRight /></Link>
             </article>
             <div className="tq-platform-core" aria-label="Flujo verificable de Terraqo">
               <span className="tq-platform-label">Núcleo Terraqo</span>
@@ -212,7 +211,7 @@ export default function TerraqoHomePage() {
           <h2>Convierte tu operación en un sistema que también crea oportunidades.</h2>
           <div>
             <Link href="/registro" className="tq-button tq-button-light">Crear una cuenta <ArrowUpRight /></Link>
-            <a href="mailto:hola@terraqo.com?subject=Quiero%20conocer%20Terraqo" className="tq-text-link tq-text-link-light">Solicitar una demo <ArrowRight /></a>
+            <Link href="/contacto?asunto=demo-terraqo" className="tq-text-link tq-text-link-light">Solicitar una demo <ArrowRight /></Link>
           </div>
         </div>
       </section>

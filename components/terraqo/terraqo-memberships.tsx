@@ -6,7 +6,7 @@ const memberships = [
     audience: "Profesionales",
     name: "Free + Terraqo Pro",
     price: "Desde S/ 29 al mes",
-    description: "Empieza con un perfil gratuito y activa CV vivo, portafolio, metricas y mas postulaciones cuando lo necesites.",
+    description: "Empieza con un perfil gratuito y activa CV vivo, portafolio, métricas y más postulaciones cuando lo necesites.",
     features: ["Perfil y acceso a la red", "CV vivo y Worklog", "Oportunidades y validaciones"],
     href: "/registro"
   },
@@ -14,17 +14,17 @@ const memberships = [
     audience: "Empresas",
     name: "Workspace Lite",
     price: "Desde S/ 199 al mes",
-    description: "Un espacio privado para proyectos, equipo, evidencias, reportes y seguimiento con modulos activables.",
-    features: ["Proyectos y usuarios internos", "Bitacora, archivos y reportes", "Soporte y configuracion inicial"],
-    href: "/#demo"
+    description: "Un espacio privado para proyectos, equipo, evidencias, reportes y seguimiento con módulos activables.",
+    features: ["Proyectos y usuarios internos", "Bitácora, archivos y reportes", "Automatización desde Professional"],
+    href: "/contacto?asunto=workspace-terraqo"
   },
   {
     audience: "Operaciones complejas",
     name: "Pro + Enterprise",
-    price: "Configuracion a medida",
-    description: "Permisos avanzados, multiples equipos, automatizaciones, integraciones, API y marca blanca.",
+    price: "Configuración a medida",
+    description: "Permisos avanzados, múltiples equipos, automatizaciones, integraciones, API y marca blanca.",
     features: ["Arquitectura por workspace", "Integraciones y API", "Onboarding y soporte dedicado"],
-    href: "/#demo"
+    href: "/contacto?asunto=enterprise-terraqo"
   }
 ];
 
@@ -35,7 +35,7 @@ export function TerraqoMemberships() {
         <p className="tq-section-number">06 / Membresías</p>
         <div className="tq-membership-heading">
           <h2>Entra gratis.<br />Activa capacidad cuando la necesitas.</h2>
-          <p>Terraqo combina membresias profesionales y software por suscripcion para empresas. Cada plan amplia permisos, automatizacion y visibilidad sin mezclar los datos de distintos workspaces.</p>
+          <p>Terraqo combina membresías profesionales y software por suscripción para empresas. Cada plan amplía permisos, automatización y visibilidad sin mezclar los datos de distintos workspaces.</p>
         </div>
 
         <div className="tq-membership-list">
@@ -49,7 +49,7 @@ export function TerraqoMemberships() {
             </article>
           ))}
         </div>
-        <p className="tq-membership-note"><Sparkles /> Certificaciones, Academy y servicios complementarios se activaran progresivamente dentro del mismo ecosistema.</p>
+        <p className="tq-membership-note"><Sparkles /> Automatización, certificaciones, Academy y servicios complementarios se activan dentro del mismo ecosistema según el plan contratado.</p>
       </div>
     </section>
   );
