@@ -1717,6 +1717,121 @@ body:has(.tq-auth-surface) .tq-public-header--dark .tq-header-cta {
   .tq-demo-profile-head h4, .tq-demo-title h4, .tq-demo-network-head h4 { overflow-wrap: anywhere; }
 }
 
+@media (max-width: 767px) {
+  .tq-public-site *, .tq-detail-page * { box-sizing: border-box; min-width: 0; }
+  .tq-public-site h1, .tq-public-site h2, .tq-public-site h3, .tq-public-site h4,
+  .tq-detail-page h1, .tq-detail-page h2, .tq-detail-page h3, .tq-detail-page h4 {
+    writing-mode: horizontal-tb;
+    word-break: normal;
+    overflow-wrap: break-word;
+    hyphens: none;
+  }
+  .tq-public-header { width: 100%; }
+  .tq-header-inner { width: calc(100% - 28px); gap: 12px; }
+  .tq-wordmark img { width: 132px; height: auto; }
+  .tq-menu-button { display: inline-flex; flex: 0 0 42px; }
+  .tq-desktop-nav, .tq-login-link, .tq-header-cta { display: none; }
+  .tq-manifesto, .tq-product-showcase, .tq-network, .tq-worklog, .tq-principle, .tq-memberships { padding-block: 72px; }
+  .tq-platform-heading, .tq-product-heading, .tq-membership-heading, .tq-network-heading, .tq-worklog-layout { display: block; }
+  .tq-platform-heading > p, .tq-product-heading > p, .tq-membership-heading > p, .tq-network-heading > p { margin-top: 24px; }
+  .tq-platform-system { display: block; margin-top: 48px; }
+  .tq-platform-side, .tq-platform-side-professional { display: block; min-height: 0; padding: 30px 18px; background: #f3f3f3; color: var(--tq-ink); }
+  .tq-platform-side > svg { margin-top: 44px; }
+  .tq-platform-core { padding: 30px 18px; background: #e8eef7; color: var(--tq-ink); }
+  .tq-platform-core li { grid-template-columns: 28px minmax(0,1fr); gap: 12px; }
+  .tq-platform-core h3 { font-size: 1.05rem; line-height: 1.25; }
+  .tq-platform-footnote { display: block; }
+  .tq-platform-footnote p { margin-top: 12px; }
+  .tq-product-console { margin-top: 46px; }
+  .tq-product-tabs button { grid-template-columns: 28px minmax(0,1fr); min-height: 88px; padding: 18px 14px; }
+  .tq-product-tabs small { margin-top: 5px; }
+  .tq-product-stage { box-shadow: 0 18px 44px rgba(14,26,38,.13); }
+  .tq-product-stage > header { display: flex; min-height: 58px; justify-content: space-between; padding: 0 14px; }
+  .tq-product-stage > header label { display: none; }
+  .tq-stage-user > span { display: none; }
+  .tq-stage-content { padding: 10px; background: #f7f9fc; color: var(--tq-ink); }
+  .tq-demo-profile-head { display: grid; grid-template-columns: 46px minmax(0,1fr); gap: 12px; padding: 18px 14px; background: #0e1a26; color: #fff; }
+  .tq-demo-avatar { width: 46px; height: 46px; }
+  .tq-demo-profile-head h4 { font-size: 1.05rem; line-height: 1.16; }
+  .tq-demo-profile-head p { color: rgba(255,255,255,.72); }
+  .tq-demo-metrics { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .tq-demo-metrics span { min-height: 70px; padding: 14px 7px; font-size: .6rem; overflow-wrap: break-word; }
+  .tq-demo-metrics b { font-size: 1.15rem; }
+  .tq-demo-worklog { display: block; min-height: 0; margin-top: 10px; background: #fff; color: var(--tq-ink); }
+  .tq-demo-worklog > div:first-child { padding: 22px 16px; }
+  .tq-demo-worklog h5 { font-size: 1.16rem; }
+  .tq-demo-photo { min-height: 120px; }
+  .tq-demo-title { display: block; padding: 12px 4px 20px; color: var(--tq-ink); }
+  .tq-demo-title > strong { display: block; margin-top: 18px; }
+  .tq-demo-columns { display: block; margin-top: 24px; }
+  .tq-demo-summary { margin-top: 24px; padding: 22px 0 0; }
+  .tq-demo-network-head { display: block; color: var(--tq-ink); }
+  .tq-demo-people { display: block; margin-top: 22px; }
+  .tq-demo-people article { margin-bottom: 10px; padding: 16px; background: #fff; color: var(--tq-ink); }
+  .tq-product-caption { display: block; margin: 24px 0 0; }
+  .tq-product-caption div { margin-top: 8px; }
+  .tq-network-flow { display: block; }
+  .tq-network-flow > div { min-height: 0; padding: 28px 18px; }
+  .tq-network-flow > i { display: none !important; }
+  .tq-network-note { display: grid; grid-template-columns: 28px minmax(0,1fr); margin: 34px 0 0; }
+  .tq-evidence-stream { margin-top: 44px; }
+  .tq-evidence-stream article { grid-template-columns: 42px 12px minmax(0,1fr); }
+  .tq-principle blockquote { font-size: clamp(2rem,10vw,3rem); }
+  .tq-principle-detail { display: block; }
+  .tq-principle-detail p + p { margin-top: 22px; }
+  .tq-membership-list { margin-top: 48px; }
+  .tq-membership-list article { display: block; padding: 30px 4px; background: transparent; color: var(--tq-ink); }
+  .tq-membership-name { margin-top: 12px; }
+  .tq-membership-list article > p, .tq-membership-list article > ul, .tq-membership-action { margin-top: 22px; }
+  .tq-membership-list article > ul { display: grid; }
+  .tq-membership-action { display: flex; align-items: flex-start; }
+  .tq-footer-bottom, .tq-footer-legal { display: block; }
+  .tq-footer-links { grid-template-columns: 1fr; gap: 0; margin-top: 32px; }
+  .tq-footer-links a { border-top: 1px solid rgba(255,255,255,.12); padding-block: 14px; }
+  .tq-footer-legal span { display: block; margin-top: 10px; line-height: 1.5; }
+  .tq-detail-hero h1 { font-size: clamp(2.55rem,12vw,3.7rem); }
+  .tq-detail-grid .tq-public-wrap { display: block; }
+  .tq-detail-grid article { min-height: 0; padding: 30px 8px 42px; background: var(--tq-paper); color: var(--tq-ink); }
+  .tq-detail-grid article > svg { margin: 42px 0 20px; }
+  .tq-detail-closing .tq-public-wrap { display: block; }
+  .tq-detail-closing h2 { margin-top: 24px; }
+  .tq-detail-closing a { margin-top: 34px; color: #fff; }
+  .tq-flow-line { display: block; }
+  .tq-flow-line article { min-height: 0; padding: 28px 8px 34px; background: var(--tq-ink); color: #fff; }
+  .tq-flow-line small { margin-top: 34px; }
+  .tq-plan-grid { display: block; }
+  .tq-plan-grid article { min-height: 0; padding: 34px 8px 44px; background: var(--tq-paper); color: var(--tq-ink); }
+}
+
+/* Explicit surface contrast: prevents inherited light text on light cards. */
+.tq-hero, .tq-manifesto, .tq-product-showcase, .tq-worklog, .tq-principle,
+.tq-memberships, .tq-detail-hero, .tq-detail-grid, .tq-plan-comparison {
+  color: var(--tq-ink);
+}
+.tq-platform-side, .tq-platform-core, .tq-product-stage, .tq-demo-metrics,
+.tq-demo-worklog, .tq-demo-people article, .tq-membership-list article,
+.tq-detail-grid article, .tq-plan-grid article {
+  color: var(--tq-ink);
+}
+.tq-network, .tq-final-cta, .tq-public-footer, .tq-detail-closing, .tq-automation-flow,
+.tq-demo-profile-head, .tq-product-tabs button[aria-pressed="true"] {
+  color: #fff;
+}
+
+@media (max-width: 480px) {
+  .tq-hero h1 em { display: block; }
+  .tq-core-visual { display: none; }
+  .tq-hero-layout { padding-bottom: 64px; }
+  .tq-hero-ribbon { display: none; }
+  .tq-kicker, .tq-section-number { font-size: .64rem; line-height: 1.5; letter-spacing: .09em; }
+  .tq-product-tabs small { display: none; }
+  .tq-product-tabs button { min-height: 62px; }
+  .tq-demo-network-note { align-items: flex-start; }
+  .tq-membership-note { display: grid; grid-template-columns: 18px minmax(0,1fr); }
+  .tq-detail-actions { align-items: stretch; flex-direction: column; }
+  .tq-detail-actions a { width: 100%; justify-content: center; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tq-core-layer,
   .tq-core-labels > div { animation: none; }
