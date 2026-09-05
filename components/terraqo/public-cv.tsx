@@ -1121,7 +1121,7 @@ function EvidenceCard({ worklog, username }: { worklog: PublicCvProfile["worklog
     : undefined;
   const src = uploadedPhoto || worklog.evidenceUrls.find((url) => url.startsWith("http") || url.startsWith("/")) || projectImage(worklog.project);
   const content = (
-    <article className="group overflow-hidden rounded-[14px] border border-white/10 bg-[#07111f]/74 transition hover:border-[#488ac9]/45">
+    <article id={worklog.id} className="group scroll-mt-24 overflow-hidden rounded-[14px] border border-white/10 bg-[#07111f]/74 transition hover:border-[#488ac9]/45">
       <VisualFrame src={src} label={worklog.title} compact />
       <div className="p-3">
         <h3 className="line-clamp-2 min-h-[36px] text-sm font-black text-white">{normalizeSpanishCopy(worklog.title) || worklog.title}</h3>
@@ -1130,7 +1130,7 @@ function EvidenceCard({ worklog, username }: { worklog: PublicCvProfile["worklog
       </div>
     </article>
   );
-  return username ? <Link href={publicCvPath(username, "evidencias")} aria-label={`Ver actividad: ${worklog.title}`}>{content}</Link> : content;
+  return username ? <Link href={`${publicCvPath(username, "evidencias")}#${worklog.id}`} aria-label={`Ver actividad: ${worklog.title}`}>{content}</Link> : content;
 }
 
 function SkillsAndTools({ profile, username, extended = false }: { profile: PublicCvProfile; username?: string; extended?: boolean }) {
