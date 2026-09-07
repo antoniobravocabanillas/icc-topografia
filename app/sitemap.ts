@@ -2,9 +2,14 @@ import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/prisma";
 import { safeDb } from "@/lib/server/safe-db";
 import { absoluteUrl } from "@/lib/utils";
+import { companyPublication } from "@/lib/terraqo/public-company-seo";
+
+// Refresh newly published profiles without requiring a code deployment.
+export const revalidate = 3600;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const staticRoutes = ["", "/plataforma", "/producto", "/automatizacion", "/membresias", "/red", "/cuenta", "/registro", "/privacidad", "/terminos"];
+  const staticRoutes = ["", "/plataforma", "/producto", "/automatizacion", "/membresias", "/red", "/contacto", "/privacidad", "/terminos"];
+  const companies=await safeDb("sitemap:companies",prisma.terraqoWorkspace.findMany({where:{active:true,deletedAt:null},select:{slug:true,publicSlug:true,settings:true,updatedAt:true}}),[]);
   const profiles = await safeDb(
     "sitemap:public-cv-profiles",
     prisma.terraqoProfessionalProfile.findMany({
@@ -21,6 +26,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const sections = ["experiencias", "educacion", "proyectos", "evidencias", "capacidades", "documentos"];
 
   return [
+    ...companies.filter(company=>companyPublication(company.settings)).map(company=>({url:absoluteUrl(`/empresas/${company.publicSlug||company.slug}`),lastModified:company.updatedAt,changeFrequency:"weekly" as const,priority:0.8})),
     ...staticRoutes.map((route) => ({
       url: absoluteUrl(route),
       lastModified: new Date(),

@@ -1,6 +1,8 @@
 import { TerraqoHomeExperience } from "@/components/terraqo/terraqo-home-experience";
 import { prisma } from "@/lib/prisma";
 import { safeDb } from "@/lib/server/safe-db";
+import { createMetadata } from "@/lib/seo";
+export const metadata=createMetadata({title:"Terraqo",description:"Tu trabajo deja huella. Conecta tu identidad, evidencia y oportunidades en la red del trabajo real.",path:"/"});
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;

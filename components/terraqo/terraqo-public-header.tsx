@@ -44,7 +44,7 @@ export function TerraqoPublicHeader({ tone = "light" }: { tone?: "light" | "dark
         </Link>
 
         <nav className="tq-desktop-nav" aria-label="Navegación principal de Terraqo">
-          {navItems.map((item) => <Link key={item.href} href={item.href}>{item.label}</Link>)}
+          {navItems.map((item) => <Link key={item.href} href={item.href} aria-current={pathname === item.href ? "page" : undefined}>{item.label}</Link>)}
         </nav>
 
         <div className="tq-header-actions">

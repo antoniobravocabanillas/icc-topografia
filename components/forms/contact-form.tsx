@@ -25,9 +25,14 @@ export function ContactForm({ intent = "contact", context, subject }: ContactFor
     if (context) formData.set("context", context);
     if (subject) formData.set("subject", subject);
 
-    const response = await fetch(endpoint, { method: "POST", body: formData });
-    setStatus(response.ok ? "success" : "error");
-    if (!response.ok) submittedRef.current = false;
+    try {
+      const response = await fetch(endpoint, { method: "POST", body: formData });
+      setStatus(response.ok ? "success" : "error");
+      if (!response.ok) submittedRef.current = false;
+    } catch {
+      setStatus("error");
+      submittedRef.current = false;
+    }
   }
 
   return (
@@ -38,19 +43,19 @@ export function ContactForm({ intent = "contact", context, subject }: ContactFor
         </div>
       ) : null}
       <div className="grid gap-3 sm:grid-cols-2">
-        <Input required name="name" placeholder="Nombre y apellido" autoComplete="name" />
-        <Input required name="email" type="email" placeholder="Correo corporativo" autoComplete="email" />
+        <Input required name="name" aria-label="Nombre y apellido" placeholder="Nombre y apellido" autoComplete="name" maxLength={120}/>
+        <Input required name="email" aria-label="Correo electrónico" type="email" placeholder="Correo electrónico" autoComplete="email" maxLength={254}/>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Input name="company" placeholder="Empresa" autoComplete="organization" />
-        <Input name="phone" placeholder="Telefono / WhatsApp" autoComplete="tel" />
+        <Input name="company" aria-label="Empresa (opcional)" placeholder="Empresa (opcional)" autoComplete="organization" maxLength={160}/>
+        <Input name="phone" aria-label="Teléfono o WhatsApp" placeholder="Teléfono / WhatsApp" autoComplete="tel" maxLength={40}/>
       </div>
-      <Textarea required name="message" placeholder="Cuentanos el equipo, servicio o alcance que necesitas" />
+      <Textarea required name="message" aria-label="Describe tu solicitud" minLength={10} maxLength={5000} placeholder="Cuéntanos qué necesitas y el alcance de tu solicitud" />
       <Button disabled={status === "loading" || status === "success"} type="submit">
         {status === "loading" ? "Enviando..." : status === "success" ? "Solicitud enviada" : "Enviar solicitud"}
       </Button>
-      {status === "success" ? <p className="text-sm font-medium text-accent">Solicitud registrada. Un asesor tecnico la revisara.</p> : null}
-      {status === "error" ? <p className="text-sm font-medium text-destructive">No pudimos registrar la solicitud. Intentalo nuevamente.</p> : null}
+      {status === "success" ? <p role="status" className="text-sm font-medium text-accent">Solicitud registrada. El equipo de Terraqo la revisará.</p> : null}
+      {status === "error" ? <p role="alert" className="text-sm font-medium text-destructive">No pudimos registrar la solicitud. Inténtalo nuevamente.</p> : null}
     </form>
   );
 }

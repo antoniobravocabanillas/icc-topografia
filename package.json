@@ -36,8 +36,8 @@
     "demo:create-accesses": "tsx prisma/create-demo-accesses.ts"
   },
   "dependencies": {
-    "@auth/prisma-adapter": "^2.7.4",
-    "@netlify/blobs": "^10.7.4",
+    "@auth/prisma-adapter": "^2.11.3",
+    "@netlify/blobs": "^10.7.13",
     "@prisma/client": "^6.5.0",
     "@prisma/extension-accelerate": "^3.0.1",
     "@radix-ui/react-slot": "^1.1.2",
@@ -49,8 +49,8 @@
     "clsx": "^2.1.1",
     "country-region-data": "^4.1.0",
     "lucide-react": "^0.468.0",
-    "next": "^15.2.4",
-    "next-auth": "5.0.0-beta.25",
+    "next": "^15.5.25",
+    "next-auth": "^5.0.0-beta.32",
     "pdf-lib": "^1.17.1",
     "qrcode": "^1.5.4",
     "react": "^19.0.0",
@@ -58,6 +58,10 @@
     "tailwind-merge": "^2.5.5",
     "three": "^0.184.0",
     "zod": "^3.24.2"
+  },
+  "overrides": {
+    "postcss": "$postcss",
+    "@prisma/config": { "deepmerge-ts": "^8.0.0" }
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -69,7 +73,7 @@
     "autoprefixer": "^10.4.21",
     "eslint": "^9.22.0",
     "eslint-config-next": "^15.2.4",
-    "postcss": "^8.5.3",
+    "postcss": "^8.5.28",
     "prisma": "^6.5.0",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.19.3",

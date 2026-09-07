@@ -2,6 +2,31 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Public navigation and directory: Terraqo blue, clear focus, intentional motion. */
+.tq-skip-link{position:fixed;left:16px;top:-100px;z-index:9999;background:#fff;color:#102238;padding:14px 20px;border:2px solid #245db7;border-radius:8px}
+.tq-skip-link:focus{top:12px}
+.tq-public-header a[aria-current=page]{color:#245db7;text-decoration:underline;text-underline-offset:9px;text-decoration-thickness:2px}
+.tq-public-header :is(a,button):focus-visible,.tq-network-public :is(a,button,input,select,summary):focus-visible{outline:3px solid #245db7;outline-offset:4px}
+.tq-network-public{background:#f7f9fc!important;color:#102238!important}
+.tq-network-public h1,.tq-network-public h2{color:#102238!important}
+.tq-network-public h1{font-size:clamp(36px,4.5vw,62px);line-height:1.08}
+.tq-network-public [class*="text-[#08746d]"],.tq-network-public [class*="text-[#07534e]"]{color:#245db7}
+.tq-network-public a[class*="bg-[#07534e]"]{background:#245db7;color:#fff}
+.tq-network-results{display:grid;gap:20px;animation:tq-network-enter .35s ease}
+.tq-network-sort{max-width:320px;margin-left:auto;width:100%}
+.tq-network-profile{border:1px solid #d6e0ec;border-radius:14px;background:#fff;transition:border-color .2s,box-shadow .2s,transform .2s}
+.tq-network-profile:hover{border-color:#8fb1e2;box-shadow:0 14px 32px #14233a0a;transform:translateY(-2px)}
+.tq-network-bio{margin-top:18px;font-size:14px;line-height:1.8;color:#526479}
+.tq-network-bio summary{cursor:pointer;color:#245db7;font-weight:650;min-height:44px;padding:10px 0}
+.tq-network-bio p{max-width:760px;overflow-wrap:anywhere}
+.tq-network-bio a{display:inline-block;padding:12px 0;color:#245db7}
+.tq-network-public [class*="text-[#657773]"],.tq-network-public [class*="text-[#7a8986]"]{color:#526479!important}
+.tq-public-footer .tq-footer-legal{color:#abb9c8!important}
+.tq-contact-surface{max-width:780px;color:#102238;background:#fff;border:1px solid #d6e0ec;padding:clamp(20px,4vw,40px);border-radius:16px}
+.tq-contact-surface form{display:grid;gap:20px}.tq-contact-surface label{display:grid;gap:10px;font-size:15px;font-weight:650}.tq-contact-surface :is(input,textarea){width:100%;background:#fff;border:1px solid #aebed0;border-radius:8px;color:#102238;padding:12px;font-size:16px}.tq-contact-surface textarea{min-height:150px;resize:vertical}.tq-contact-surface p{font-size:14px;line-height:1.7;color:#526479!important}
+@keyframes tq-network-enter{from{opacity:.4;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.tq-network-results,.tq-network-profile{animation:none;transition:none}.tq-network-profile:hover{transform:none}}
+
 @font-face {
   font-family: "Satoshi";
   src: url("/fonts/satoshi/satoshi-regular.woff2") format("woff2");

@@ -1,0 +1,23 @@
+"use client";
+import { useEffect, useState } from "react";
+import { ExperienceCta, ExperienceShell, Reveal, SectionNav } from "./public-experience";
+import s from "./public-experience.module.css";
+const steps = [
+  { id: "identidad", label: "Identidad", title: "Tu trayectoria tiene un lugar propio.", text: "Construye un perfil profesional independiente. Reúne experiencia, formación y capacidades; decide qué compartir y con quién.", screen: "Un perfil que evoluciona contigo", rows: ["Experiencia y formación organizadas", "Especialidades y disponibilidad", "Enlace público para compartir tu CV"], result: "Tu identidad profesional te pertenece, también cuando cambias de empresa." },
+  { id: "evidencia", label: "Evidencia", title: "Haz visible el trabajo de cada día.", text: "Registra avances, fotografías y resultados en una bitácora. Enlaza las entradas de un mismo trabajo para conservar su contexto de principio a fin.", screen: "Replanteo de luminarias", rows: ["Avance · Registro del trabajo en campo", "Evidencia · Fotografías y documentos", "Entregable · Resultado y continuidad"], result: "Cada registro conserva autor, fecha y nivel de visibilidad." },
+  { id: "validacion", label: "Validación", title: "La confianza se construye con contexto.", text: "Solicita una revisión a quienes participaron en el trabajo. Distingue una experiencia declarada de una confirmada por una empresa o revisada por Terraqo.", screen: "De la evidencia a la confianza", rows: ["Declarada por el profesional", "Confirmada por la empresa", "Revisada según el proceso de validación"], result: "Los estados explican qué fue revisado y quién lo confirmó." },
+  { id: "oportunidad", label: "Oportunidad", title: "Conecta a partir de lo que sabes hacer.", text: "Explora perfiles por especialidad, ubicación y disponibilidad. Abre una conversación con el contexto necesario para evaluar una colaboración.", screen: "Capacidad visible en la red", rows: ["Encuentra la especialidad que necesitas", "Revisa experiencia y evidencia pública", "Conecta y continúa la conversación"], result: "Solo se descubre la información que cada profesional habilita para su publicación." },
+];
+const navigation = steps.map(({ id, label }) => ({ id, label }));
+export function ProductJourney() {
+  const [active, setActive] = useState(0);
+  useEffect(() => {
+    const observer = new IntersectionObserver(entries => {
+      if (matchMedia("(max-width: 800px)").matches) return;
+      entries.forEach(entry => { if(entry.isIntersecting) setActive(steps.findIndex(step => step.id === entry.target.id)); });
+    }, { rootMargin: "-25% 0px -45% 0px" });
+    steps.forEach(step => { const element = document.getElementById(step.id); if(element) observer.observe(element); });
+    return () => observer.disconnect();
+  }, []);
+  return <ExperienceShell eyebrow="El producto Terraqo" title="Tu trabajo, conectado con lo que viene." intro="De una actividad en campo a una nueva colaboración. Descubre cómo tu identidad, el trabajo documentado y la confianza se conectan en Terraqo."><SectionNav items={navigation}/><div className={s.journey}><div className={s.steps}>{steps.map((step,index) => <Reveal key={step.id}><section tabIndex={-1} id={step.id} className={s.step}><p className={s.eyebrow}>0{index+1} / {step.label}</p><h2>{step.title}</h2><p>{step.text}</p><button type="button" onClick={() => { setActive(index); if(matchMedia("(max-width: 800px)").matches) document.getElementById("product-demo")?.scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth"}); }}>Explorar {step.label.toLowerCase()} <span aria-hidden>→</span></button></section></Reveal>)}</div><aside id="product-demo" className={s.stage} aria-label="Demostración del producto"><div className={s.stageTop}><span>TERRAQO / PRODUCTO</span><span>Vista ilustrativa</span></div><div key={active} className={s.stageBody} aria-live="polite"><h3>{steps[active].screen}</h3><div className={s.stageRows}>{steps[active].rows.map((row,index) => <div key={row}><span>0{index+1}</span>{row}</div>)}</div><p style={{marginTop:24,fontSize:14}}>{steps[active].result}</p></div><div className={s.stageControls} aria-label="Etapas de la demostración">{steps.map((step,index) => <button type="button" key={step.id} aria-label={step.label} aria-pressed={active===index} onClick={() => setActive(index)}>{index+1}</button>)}</div></aside></div><ExperienceCta title="Empieza por tu propia trayectoria." description="Crea tu perfil y documenta el primer trabajo. Puedes colaborar con empresas desde tu espacio profesional independiente." href="/registro" label="Crear mi identidad"/></ExperienceShell>;
+}

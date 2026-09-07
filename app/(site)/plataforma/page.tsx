@@ -1,7 +1,8 @@
 import { BriefcaseBusiness, Fingerprint, Network, ShieldCheck } from "lucide-react";
 import { TerraqoSectionPage } from "@/components/terraqo/terraqo-section-page";
+import { createMetadata } from "@/lib/seo";
 
-export const metadata = { title: "Plataforma | Terraqo", description: "La arquitectura que conecta operación empresarial y trayectoria profesional sin mezclar su propiedad." };
+export const metadata = createMetadata({ title: "Plataforma", description: "La arquitectura que conecta operación empresarial y trayectoria profesional sin mezclar su propiedad.", path: "/plataforma" });
 
 export default function PlataformaPage() {
   return <TerraqoSectionPage eyebrow="Plataforma Terraqo" title="Una infraestructura común para operar, demostrar y conectar." intro="Terraqo mantiene separados los datos privados de cada empresa y la identidad independiente de cada profesional. Sólo comparte el contexto autorizado que permite trabajar mejor." sections={[

@@ -14,6 +14,6 @@ export function formatCurrency(value: number, currency = "USD") {
 }
 
 export function absoluteUrl(path = "") {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+  const baseUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://terraqoglobal.com").replace(/\/$/, "");
   return `${baseUrl}${path}`;
 }

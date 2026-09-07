@@ -27,8 +27,23 @@ import { fontClassName, resolveWorkspaceVisualIdentity } from "@/lib/terraqo/wor
 import { cn } from "@/lib/utils";
 import { TerraqoLogo } from "@/components/terraqo/terraqo-logo";
 import { CompanyProfileRail } from "@/components/terraqo/company-profile-rail";
+import { getPublicCompanySeo } from "@/lib/terraqo/public-company-seo";
+import { createMetadata } from "@/lib/seo";
+import { absoluteUrl } from "@/lib/utils";
+import type { Metadata } from "next";
 
 type PageProps = { params: Promise<{ slug: string }> };
+
+export async function generateMetadata({params}:PageProps):Promise<Metadata>{
+ const {slug}=await params;const company=await getPublicCompanySeo(slug);
+ if(!company)return {title:"Perfil empresarial | Terraqo",robots:{index:false,follow:false}};
+ const path=`/empresas/${company.publicSlug||company.slug}`;
+ const name=company.brandName||company.name;
+ const description=(company.description||`Conoce los servicios, proyectos y actividad pública de ${name} en Terraqo.`).slice(0,180);
+ const metadata=createMetadata({title:name,description,path});
+ const image=absoluteUrl(`${path}/opengraph-image?v=${company.updatedAt.getTime()}`);
+ return {...metadata,robots:{index:true,follow:true},openGraph:{...metadata.openGraph,images:[{url:image,width:1200,height:630,alt:name}]},twitter:{card:"summary_large_image",title:name,description,images:[image]}};
+}
 
 type CompanyLiveProfile = {
   headline?: string;
@@ -181,7 +196,8 @@ export default async function PublicCompanyProfilePage({ params }: PageProps) {
   return (
     <main className={cn("min-h-screen overflow-x-hidden bg-[#f7f8f7] text-[#102b28]", fontClassName(visualIdentity.fontFamily))} style={primaryStyle}>
       <div className="mx-auto w-full max-w-[1680px] px-4 py-7 sm:px-7 lg:px-10">
-        <Link href="/empresas" className="inline-flex items-center gap-2 text-sm font-bold" style={{ color: visualIdentity.primaryColor }}>← Volver a explorar empresas</Link>
+        {profile.publicEnabled===true&&<script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify({"@context":"https://schema.org","@type":"Organization",name,url:absoluteUrl(`/empresas/${workspace.publicSlug||workspace.slug}`),description:headline,address:{"@type":"PostalAddress",addressLocality:workspace.locationCity||undefined,addressCountry:workspace.country}}).replace(/</g,"\\u003c")}}/>}
+        <Link href="/red" className="inline-flex items-center gap-2 text-sm font-bold" style={{ color: visualIdentity.primaryColor }}>← Volver a la red operativa</Link>
 
         <section className="mt-6 grid overflow-hidden rounded-[24px] border border-[#dfe5e3] bg-white shadow-[0_24px_80px_-60px_rgba(16,43,40,.28)] lg:grid-cols-[minmax(430px,.82fr)_minmax(620px,1.18fr)]">
           <div className="flex flex-col justify-center p-7 sm:p-10 xl:p-12">

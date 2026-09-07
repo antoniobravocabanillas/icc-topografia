@@ -1,9 +1,9 @@
 /* eslint-disable @next/next/no-img-element */
 import { ImageResponse } from "next/og";
-import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { getPublicCvSeoProfile, publicCvSeoFacts } from "@/lib/terraqo/public-cv-seo";
 import { absoluteUrl } from "@/lib/utils";
+import { isTrustedSocialImage } from "@/lib/terraqo/social-image-policy";
 
 export const runtime = "nodejs";
 export const alt = "Terraqo CV Vivo: trayectoria profesional verificable";
@@ -19,11 +19,16 @@ async function imageDataUrl(src?: string | null, baseUrl = absoluteUrl("/")) {
   if (!src) return null;
   try {
     const url = new URL(src, baseUrl);
-    const response = await fetch(url, { signal: AbortSignal.timeout(2400) });
+    if(!isTrustedSocialImage(url))return null;
+    const response = await fetch(url, { signal: AbortSignal.timeout(2400), redirect: "error" });
     if (!response.ok) return null;
     const type = response.headers.get("content-type");
     if (!type?.startsWith("image/")) return null;
-    const bytes = Buffer.from(await response.arrayBuffer());
+    if(Number(response.headers.get("content-length")||0)>3000000) return null;
+    const reader=response.body?.getReader();if(!reader)return null;
+    const chunks:Uint8Array[]=[];let total=0;
+    while(true){const {done,value}=await reader.read();if(done)break;total+=value.length;if(total>3000000){await reader.cancel();return null;}chunks.push(value);}
+    const bytes = Buffer.concat(chunks);
     return `data:${type};base64,${bytes.toString("base64")}`;
   } catch {
     return null;
@@ -41,11 +46,7 @@ function initials(name: string) {
 
 export default async function OpenGraphImage({ params }: OpenGraphImageProps) {
   const { username } = await params;
-  const requestHeaders = await headers();
-  const forwardedProtocol = requestHeaders.get("x-forwarded-proto")?.split(",")[0]?.trim();
-  const forwardedHost = requestHeaders.get("x-forwarded-host")?.split(",")[0]?.trim();
-  const host = forwardedHost || requestHeaders.get("host");
-  const origin = host ? `${forwardedProtocol || (host.includes("localhost") ? "http" : "https")}://${host}` : absoluteUrl("/");
+  const origin = "https://terraqoglobal.com";
   const profile = await getPublicCvSeoProfile(username);
   if (!profile || !profile.liveCvEnabled) notFound();
 
