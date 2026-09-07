@@ -33,4 +33,14 @@ Culqi sandbox respondió HTTP 200 a una consulta de planes, sin cargos. El propi
 
 Los precios son referencias, no tarifas confirmadas. No se activan beneficios por una selección del navegador. Los documentos privados no se publican por cambios de SEO.
 
-La validación de la publicación remota se debe realizar después del despliegue; este documento no presupone que una compilación local ya esté publicada.
+## Publicación verificada
+
+Despliegue Netlify `6a9effc7512a423747ae0eca`, código `a10973b`, confirmado en https://terraqoglobal.com.
+
+- Siete rutas públicas: HTTP 200, canonical público y metadatos sociales correctos.
+- Siete imágenes PNG 1200×630 con hashes distintos. Se corrigió una colisión de caché mediante `Netlify-Vary: query=path`; la prueba comprueba explícitamente que cada sección recibe su propia imagen.
+- Parámetro de vista previa no permitido: HTTP 404. Sitemap sin localhost ni registro.
+- En producción: cero incidencias detectadas por Axe en las siete páginas a 390 px (ejecuciones por grupos). Inicio y Producto se volvieron a verificar tras las correcciones finales de contraste y pestañas móviles.
+- Simulador: éxito y condición incumplida verificados en producción. Comparación: 16 módulos. Cuatro etapas de Producto legibles sin desborde del botón.
+
+Comprobación reproducible de metadatos y caché: `npx tsx scripts/audit-public-deployment.ts`. Esta prueba es de solo lectura y no crea datos ni realiza pagos.
