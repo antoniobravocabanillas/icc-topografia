@@ -19,6 +19,7 @@ async function main(){
   try{
     const token=await encode({secret:process.env.AUTH_SECRET||process.env.NEXTAUTH_SECRET!,salt:cookieName,token:{sub:user.id,name:user.name,email:user.email,role:"CUSTOMER"},maxAge:3600});
     await context.addCookies([{name:cookieName,value:token,url:origin,httpOnly:true,secure:origin.startsWith("https:"),sameSite:"Lax"}]);
+    if(origin==="https://terraqoglobal.com")await context.addCookies([{name:cookieName,value:token,url:"https://portal.terraqoglobal.com",httpOnly:true,secure:true,sameSite:"Lax"}]);
     await mkdir("output",{recursive:true});
     await page.goto(`${origin}/portal/membresia?plan=personal-pro&cycle=MONTHLY`);
     await page.getByRole("heading",{name:"Datos de facturación"}).waitFor({timeout:60000});

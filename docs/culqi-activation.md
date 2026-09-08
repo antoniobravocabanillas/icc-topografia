@@ -2,6 +2,10 @@
 
 ## Estado comprobado
 
+- Publicado el 8 de septiembre de 2026: commit `47a1e19`, despliegue Netlify `6a9f964a86adf6980391ca6e`. Migración de facturación aplicada y registrada.
+- Auditoría sobre producción: membresías y checkout a 360/390/1440 px sin desbordes ni incidencias Axe detectadas; API sin sesión 401, origen externo 403, cuenta ajena 404. Login conserva plan y periodicidad al pasar al subdominio del portal. SDK alojado de Culqi cargado; función `billing-reconcile` desplegada.
+- Culqi en modo test y cobros live expresamente deshabilitados. La auditoría de producción no efectuó otro cargo.
+
 - Catálogo central en `lib/terraqo/billing/catalog.ts`: gratis, dos planes personales y cuatro empresariales, mensual/anual.
 - Diez combinaciones provisionadas y verificadas en Culqi sandbox. La API rechaza importes superiores a 500000 céntimos: Premium y Enterprise anual no están habilitados. No se fraccionan cobros.
 - Flujo de navegador real probado con el iframe de Culqi, tarjeta oficial de prueba, tokenización, cliente, tarjeta validada, suscripción, cargo de S/29 verificado y cancelación de renovación. El ledger quedó ACTIVE con fecha pagada y `cancelAtPeriodEnd=true`; el perfil conservó FREE.
