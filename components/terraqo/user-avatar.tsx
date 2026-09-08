@@ -33,7 +33,7 @@ export function UserAvatar({ name, image, size = "md", className = "" }: UserAva
 
   return (
     <span
-      className={`relative grid shrink-0 place-items-center overflow-hidden rounded-full border border-primary/20 bg-primary/10 font-display font-bold text-primary ${sizeClasses[size]} ${className}`}
+      className={`relative grid shrink-0 place-items-center overflow-hidden rounded-full border border-primary/20 bg-primary/10 font-display font-bold text-[#245da7] ${sizeClasses[size]} ${className}`}
       aria-label={label}
     >
       {image && !imageFailed ? (

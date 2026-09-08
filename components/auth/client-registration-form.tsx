@@ -8,8 +8,8 @@ import { companyIndustries, professionalIdentityTypes, professionalRoles } from 
 
 type AccountType = "client" | "professional";
 
-export function ClientRegistrationForm({ embedded = false, onSignIn }: { embedded?: boolean; onSignIn?: () => void }) {
-  const [accountType, setAccountType] = useState<AccountType>("client");
+export function ClientRegistrationForm({ embedded = false, onSignIn, initialType = "professional" }: { embedded?: boolean; onSignIn?: () => void; initialType?: AccountType }) {
+  const [accountType, setAccountType] = useState<AccountType>(initialType);
   const [identityType, setIdentityType] = useState("DNI");
   const [showPassword, setShowPassword] = useState(false);
   const [emailDelivered, setEmailDelivered] = useState(true);

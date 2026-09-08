@@ -149,6 +149,7 @@ export function MessageDrawer({ currentUserId }: { currentUserId: string }) {
       <div
         className={`fixed inset-y-0 right-0 z-[70] w-full max-w-[390px] border-l bg-white shadow-[-24px_0_70px_rgba(14,26,38,0.18)] transition-transform duration-300 ${open ? "translate-x-0" : "translate-x-full"}`}
         aria-hidden={!open}
+        inert={!open}
       >
         <header className="flex h-16 items-center justify-between border-b px-4">
           <h2 className="font-display text-xl font-bold">Mensajes</h2>

@@ -3,6 +3,8 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { generateTerraqoText, hasConfiguredAiProvider } from "@/lib/terraqo/ai-provider";
 import { getSessionWorkspaceWithModule } from "@/lib/terraqo/workspace-scope";
+import { prisma } from "@/lib/prisma";
+import { reserveMonthlyUsage } from "@/lib/terraqo/billing/entitlements";
 
 const requestSchema = z.object({
   text: z.string().trim().min(3).max(6000),
@@ -29,13 +31,16 @@ export async function POST(request: Request) {
   if (!session?.user?.id) return NextResponse.json({ error: "Debes iniciar sesión." }, { status: 401 });
 
   const workspace = await getSessionWorkspaceWithModule("AI_WRITING_ASSISTANT").catch(() => null);
-  if (!workspace) {
+  const profile=await prisma.terraqoProfessionalProfile.findUnique({where:{userId:session.user.id},select:{id:true}});
+  if (!workspace && !profile) {
     return NextResponse.json({ error: "El módulo Asistente de escritura con IA no está activo en este workspace." }, { status: 403 });
   }
 
   const parsed = requestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Escribe al menos una idea breve para mejorarla." }, { status: 400 });
   if (!hasConfiguredAiProvider()) return NextResponse.json({ error: "El asistente de redacción no está configurado." }, { status: 503 });
+  let reservation:Awaited<ReturnType<typeof reserveMonthlyUsage>>;
+  try{reservation=await reserveMonthlyUsage(session.user.id,"ai",profile?undefined:workspace?.id);}catch{return NextResponse.json({error:"Alcanzaste el límite mensual de tu plan. Puedes revisar tu membresía sin cargos adicionales automáticos.",upgradeUrl:"/membresia"},{status:429});}
 
   const purposeCopy = {
     experience: "una experiencia profesional verificable",
@@ -55,6 +60,7 @@ export async function POST(request: Request) {
   ], 2400);
 
   if (!result.ok) {
+    await reservation.release();
     console.warn("Terraqo writing assistant upstream error", { status: result.status, code: result.code, provider: result.provider || "none" });
     if (result.code === "insufficient_quota") return NextResponse.json({ error: "El asistente está temporalmente sin cuota disponible." }, { status: 503 });
     if (result.status === 401 || result.status === 403) return NextResponse.json({ error: "La credencial del asistente necesita ser renovada." }, { status: 503 });
@@ -68,6 +74,6 @@ export async function POST(request: Request) {
   } catch {
     suggestions = null;
   }
-  if (!suggestions) return NextResponse.json({ error: "El asistente no devolvió alternativas válidas. Inténtalo nuevamente." }, { status: 502 });
+  if (!suggestions) {await reservation.release();return NextResponse.json({ error: "El asistente no devolvió alternativas válidas. Inténtalo nuevamente." }, { status: 502 });}
   return NextResponse.json({ data: suggestions });
 }

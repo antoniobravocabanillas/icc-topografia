@@ -99,9 +99,9 @@ export async function POST(request: Request) {
           region: getSubdivisionName(payload.country, payload.subdivision) || undefined,
           locationSubdivisionCode: payload.subdivision || undefined,
           locationCity: payload.city || undefined,
-          subscriptions: { create: { tier: "BASIC", status: "TRIALING", seats: 5 } },
+          subscriptions: { create: { tier: "FREE", status: "ACTIVE", seats: 1 } },
           modules: {
-            create: getDefaultModulesForTier("BASIC").map((code) => ({
+            create: getDefaultModulesForTier("FREE").map((code) => ({
               code,
               active: true,
               enabledAt: new Date(),

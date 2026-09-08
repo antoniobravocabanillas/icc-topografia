@@ -3,7 +3,8 @@ import type { Role, TerraqoModuleCode } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getWorkspaceForUser } from "@/lib/terraqo/workspace-access";
-import { workspace } from "@/lib/workspace";
+import { workspace, getDefaultModulesForTier } from "@/lib/workspace";
+import { getBillingPlan } from "@/lib/terraqo/billing/catalog";
 
 export const getDefaultTerraqoWorkspace = cache(async () => {
   return prisma.terraqoWorkspace.findUnique({
@@ -68,7 +69,7 @@ export async function getSessionWorkspaceWithModule(code: TerraqoModuleCode) {
     }
   });
 
-  return membership?.workspace ?? null;
+  return membership?.workspace && await hasWorkspaceModule(code,membership.workspace.id) ? membership.workspace : null;
 }
 
 export const getDefaultWorkspaceEntitlements = cache(async () => {
@@ -93,6 +94,11 @@ export const getDefaultWorkspaceEntitlements = cache(async () => {
 
 export async function hasWorkspaceModule(code: TerraqoModuleCode, workspaceId?: string | null) {
   if (workspaceId) {
+    const billing=await prisma.terraqoBillingAccount.findUnique({where:{ownerKey_mode:{ownerKey:`workspace:${workspaceId}`,mode:"live"}},select:{planCode:true,paidThrough:true}});
+    if(billing){
+      const tier=billing.paidThrough&&billing.paidThrough>new Date()?getBillingPlan(billing.planCode).tier:"FREE";
+      if(!getDefaultModulesForTier(tier).includes(code))return false;
+    }
     const workspaceModule = await prisma.terraqoWorkspaceModule.findUnique({
       where: { workspaceId_code: { workspaceId, code } },
       select: { active: true }

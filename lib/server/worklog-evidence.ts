@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { reserveStorage } from "@/lib/terraqo/billing/storage-quota";
 import { createHash } from "node:crypto";
 import { fail, handleApiError, ok } from "@/lib/server/api";
 import {
@@ -63,6 +64,7 @@ export async function uploadWorklogEvidence(
 
     const store = getWorklogEvidenceStore();
     const stored: Array<{ file: File; storageKey: string; sortOrder: number; sha256: string }> = [];
+    const reservation=await reserveStorage(userId,photos.reduce((sum,file)=>sum+file.size,0));
 
     try {
       for (const [index, preparedPhoto] of prepared.entries()) {
@@ -102,6 +104,7 @@ export async function uploadWorklogEvidence(
 
       return ok({ media, message: photos.length === 1 ? "Foto agregada a tu bitacora." : "Fotos agregadas a tu bitacora." });
     } catch (error) {
+      await reservation.release();
       await Promise.all(stored.map((item) => store.delete(item.storageKey).catch(() => undefined)));
       throw error;
     }

@@ -1,5 +1,6 @@
 import type { TerraqoFileCategory, TerraqoFileVisibility, TerraqoNoteKind } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { reserveStorage, releaseWorkspaceStorage } from "@/lib/terraqo/billing/storage-quota";
 import { fail, handleApiError, ok } from "@/lib/server/api";
 import {
   ALLOWED_WORKSPACE_FILE_TYPES,
@@ -131,8 +132,9 @@ export async function uploadWorkspaceFile(request: Request, userId: string, requ
 
     const storageKey = createWorkspaceFileKey(workspaceId, userId, file.name);
     const store = getWorkspaceFileStore();
-    await store.set(storageKey, await file.arrayBuffer(), { metadata: { workspaceId, userId, originalName: file.name, contentType: file.type, size: file.size } });
+    const reservation=await reserveStorage(userId,file.size,workspaceId);
     try {
+      await store.set(storageKey, await file.arrayBuffer(), { metadata: { workspaceId, userId, originalName: file.name, contentType: file.type, size: file.size } });
       const created = await prisma.terraqoWorkspaceFile.create({
         data: { userId, workspaceId, category, visibility, title, description: description || null, projectName: projectName || null, storageKey, fileName: file.name, contentType: file.type || "application/octet-stream", size: file.size },
         select: { id: true, category: true, visibility: true, title: true, description: true, projectName: true, fileName: true, contentType: true, size: true, createdAt: true }
@@ -140,6 +142,7 @@ export async function uploadWorkspaceFile(request: Request, userId: string, requ
       return ok(created, { status: 201 });
     } catch (error) {
       await store.delete(storageKey).catch(() => undefined);
+      await reservation.release();
       throw error;
     }
   } catch (error) {
@@ -181,5 +184,6 @@ export async function deleteWorkspaceFile(userId: string, id: string, requiredWo
   if (!file) return fail("Archivo no encontrado.", 404);
   await prisma.terraqoWorkspaceFile.delete({ where: { id } });
   await getWorkspaceFileStore().delete(file.storageKey).catch(() => undefined);
+  await releaseWorkspaceStorage(file.workspaceId,file.size);
   return ok({ deleted: true });
 }

@@ -62,7 +62,7 @@ export default async function PortalLayout({
     : membership
       ? "client"
       : "professional";
-  const writingAssistantEnabled = Boolean(membership?.workspace.modules.length);
+  const writingAssistantEnabled = Boolean(user?.terraqoProfessionalProfile || membership?.workspace.modules.length);
   const visualIdentity = resolveWorkspaceVisualIdentity(
     portalType === "professional" ? null : membership?.workspace.settings,
   );

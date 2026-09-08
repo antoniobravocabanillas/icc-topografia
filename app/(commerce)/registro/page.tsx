@@ -11,7 +11,8 @@ export const metadata = createMetadata({
   path: "/registro"
 });
 
-export default function ClientRegisterPage() {
+export default async function ClientRegisterPage({ searchParams }: { searchParams: Promise<{tipo?: string}> }) {
+  const { tipo } = await searchParams;
   return (
     <section className="tq-auth-surface relative isolate overflow-hidden bg-[#0e1a26] text-white">
       <div className="container relative grid min-h-[calc(100vh-4rem)] items-center gap-10 py-16 lg:grid-cols-[1fr_480px]">
@@ -50,7 +51,7 @@ export default function ClientRegisterPage() {
           </Button>
         </div>
 
-        <ClientRegistrationForm />
+        <ClientRegistrationForm initialType={tipo === "client" ? "client" : "professional"} />
       </div>
     </section>
   );

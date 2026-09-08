@@ -1,22 +1,40 @@
 "use client";
 import Link from "next/link";
-import {useState} from "react";
-import {getDefaultModulesForTier,terraqoModules} from "@/lib/workspace";
-import {ExperienceCta,ExperienceShell,Reveal} from "./public-experience";
+import { useState } from "react";
+import { BILLING_PLANS, money, planAmount, supportsBillingCycle, type BillingAudience, type BillingCycle } from "@/lib/terraqo/billing/catalog";
+import { getDefaultModulesForTier, terraqoModules } from "@/lib/workspace";
+import { ExperienceShell } from "./public-experience";
 import s from "./public-experience.module.css";
-type Plan={name:string;price:string;description:string;features:string[];href:string;cta:string};
-const personal:Plan[]=[
-  {name:"Free",price:"Sin costo",description:"Empieza a construir tu identidad y participa en la comunidad profesional.",features:["Perfil profesional independiente","Registro de experiencia","Acceso inicial a Terraqo"],href:"/registro",cta:"Crear mi cuenta"},
-  {name:"Terraqo Pro",price:"Desde S/ 29",description:"Amplía las capacidades de tu trayectoria y las herramientas de tu perfil.",features:["Plan personal, sin empresa vinculada","Herramientas según el plan contratado","Acompañamiento en la activación"],href:"/contacto?asunto=terraqo-pro",cta:"Consultar activación"},
-];
-const business:Plan[]=[
-  {name:"Workspace Lite",price:"Desde S/ 199",description:"Centraliza los primeros procesos comerciales y proyectos de tu equipo.",features:["CRM y seguimiento comercial","Gestión de proyectos","Permisos por workspace"],href:"/contacto?asunto=workspace-lite",cta:"Elegir Workspace Lite"},
-  {name:"Professional",price:"Consultar",description:"Conecta la operación con documentos, automatización y comunicación.",features:["Todo el alcance de Workspace Lite","Automatización y documentos","Sitio público y herramientas comerciales"],href:"/contacto?asunto=workspace-professional",cta:"Evaluar Professional"},
-  {name:"Enterprise",price:"A medida",description:"Define el alcance para una operación con múltiples equipos e integraciones.",features:["Analítica ejecutiva","Capacidades del plan Premium","Alcance y acompañamiento acordados"],href:"/contacto?asunto=workspace-enterprise",cta:"Diseñar mi solución"},
-];
-const tiers=["BASIC","PROFESSIONAL","PREMIUM","ENTERPRISE"] as const;
-export function MembershipExplorer(){
-  const [audience,setAudience]=useState<"personal"|"business">("personal");
-  const plans=audience==="personal"?personal:business;
-  return <ExperienceShell eyebrow="Membresías" title="El espacio adecuado para tu siguiente etapa." intro="Tu trayectoria personal y la operación de tu empresa tienen necesidades distintas. Elige desde dónde quieres empezar y compara el alcance."><div className={s.segmented} aria-label="Tipo de membresía"><button type="button" aria-pressed={audience==="personal"} onClick={()=>setAudience("personal")}>Soy profesional</button><button type="button" aria-pressed={audience==="business"} onClick={()=>setAudience("business")}>Somos empresa</button></div><div key={audience} className={s.stageBody} style={{paddingTop:0}}><div className={s.plans} style={audience==="personal"?{gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,320px),1fr))"}:undefined}>{plans.map(plan=><article className={s.plan} key={plan.name}><h2>{plan.name}</h2><p>{plan.description}</p><div className={s.price}>{plan.price}{plan.price.startsWith("Desde")&&<small> / mes</small>}</div><ul>{plan.features.map(feature=><li key={feature}>{feature}</li>)}</ul><Link className={s.primary} href={plan.href}>{plan.cta}<span aria-hidden>↗</span></Link></article>)}</div></div><p className={s.disclaimer}>Los importes publicados son referenciales de entrada. La propuesta confirma precio total, impuestos, límites y condiciones antes de contratar. No se realizará ningún cobro desde esta comparación.</p>{audience==="business"?<details className={s.comparison}><summary>Comparar todos los módulos y niveles de empresa</summary><div className={s.tableScroll} tabIndex={0} role="region" aria-label="Comparación de módulos por plan"><table><caption>Disponibilidad por nivel del producto. Los módulos deben activarse en la suscripción del workspace; las integraciones a medida se acuerdan por separado.</caption><thead><tr><th scope="col">Módulo</th>{["Lite","Professional","Premium","Enterprise"].map(t=><th scope="col" key={t}>{t}</th>)}</tr></thead><tbody>{terraqoModules.filter(module=>module.code!=="BUILDERS").map(module=><tr key={module.code}><th scope="row">{module.label}</th>{tiers.map(tier=><td key={tier}>{getDefaultModulesForTier(tier).includes(module.code)?"Disponible":"—"}</td>)}</tr>)}</tbody></table></div></details>:<Reveal><div className={s.notes}><section><h2>Tu perfil es independiente.</h2><p>Puedes desarrollar tu trayectoria sin pertenecer al workspace de una empresa. Las relaciones laborales agregan contexto y conservan los permisos de cada parte.</p></section><section><h2>Publicar sigue siendo tu decisión.</h2><p>El perfil y su vista previa para redes se actualizan con tu información pública. Los documentos privados y la operación de una empresa conservan sus controles de acceso.</p></section></div></Reveal>}<ExperienceCta title="¿Qué necesita tu siguiente etapa?" description="Revisamos contigo el número de personas, los procesos y las capacidades necesarias para recomendar un alcance concreto." href="/contacto?asunto=asesoria-membresias" label="Hablar con Terraqo"/></ExperienceShell>;
+
+export function MembershipExplorer() {
+  const [audience, setAudience] = useState<BillingAudience>("PERSONAL");
+  const [cycle, setCycle] = useState<BillingCycle>("MONTHLY");
+  const plans = BILLING_PLANS.filter(plan => plan.audience === audience);
+  return <ExperienceShell eyebrow="Membresías" title="Empieza libre. Crece con capacidad." intro="Una identidad propia para cada profesional. Un espacio independiente para cada empresa. Elige el alcance que necesitas y gestiona tu suscripción dentro de Terraqo.">
+    <div className={s.segmented} aria-label="Tipo de membresía">
+      <button type="button" aria-pressed={audience === "PERSONAL"} onClick={() => setAudience("PERSONAL")}>Profesionales</button>
+      <button type="button" aria-pressed={audience === "WORKSPACE"} onClick={() => setAudience("WORKSPACE")}>Empresas</button>
+    </div>
+    <div className={s.segmented} aria-label="Periodo de facturación">
+      <button type="button" aria-pressed={cycle === "MONTHLY"} onClick={() => setCycle("MONTHLY")}>Mensual</button>
+      <button type="button" aria-pressed={cycle === "ANNUAL"} onClick={() => setCycle("ANNUAL")}>Anual · ahorra 2 meses</button>
+    </div>
+    <div className={s.plans}>{plans.map(plan => <article className={s.plan} key={plan.code}>
+      <h2>{plan.name}</h2><p>{plan.description}</p>
+      <div className={s.price}>{plan.monthlyMinor ? money(planAmount(plan, cycle)) : "Sin costo"}<small>{plan.monthlyMinor ? cycle === "ANNUAL" ? " / año" : " / mes" : " · sin tarjeta"}</small></div>
+      {cycle === "ANNUAL" && plan.monthlyMinor > 0 && <p>Un pago anual. Ahorras {money(plan.monthlyMinor * 12 - plan.annualMinor)} frente al pago mensual.</p>}
+      <ul>
+        <li>{audience === "PERSONAL" ? "Perfil y trayectoria independientes" : `${plan.seats} ${plan.seats === 1 ? "integrante incluido" : "integrantes incluidos"}`}</li>
+        <li>{plan.storageMb < 1000 ? `${plan.storageMb} MB` : `${plan.storageMb / 1000} GB`} de almacenamiento</li>
+        <li>{plan.aiActions.toLocaleString("es-PE")} asistencias de redacción / mes</li>
+        {plan.automationRuns > 0 && <li>{plan.automationRuns.toLocaleString("es-PE")} ejecuciones de automatización / mes</li>}
+        {audience === "WORKSPACE" && <li>{plan.tier === "FREE" ? "Identidad empresarial y comunidad" : "Módulos detallados en la comparación"}</li>}
+      </ul>
+      {!supportsBillingCycle(plan,cycle) && <p>El pago anual excede el límite de la pasarela para esta cuenta. Puedes contratar este plan mensualmente; no dividimos el cobro anual en operaciones adicionales.</p>}
+      <Link className={s.primary} href={plan.monthlyMinor ? `https://portal.terraqoglobal.com/membresia?plan=${plan.code}&cycle=${supportsBillingCycle(plan,cycle)?cycle:"MONTHLY"}` : `/registro?tipo=${audience === "PERSONAL" ? "professional" : "client"}`}>{plan.monthlyMinor ? supportsBillingCycle(plan,cycle)?`Elegir ${plan.name}`:"Contratar mensual" : "Crear cuenta gratis"}<span aria-hidden>↗</span></Link>
+    </article>)}</div>
+    <p className={s.disclaimer}>Precios en soles; incluyen IGV cuando corresponde. Renovación por el periodo elegido, con cancelación desde tu cuenta. Los límites de uso se renuevan cada mes también en el plan anual. No hay cargos automáticos por excedentes. Integraciones a medida, revisión humana y servicios de terceros no están incluidos.</p>
+    {audience === "WORKSPACE" && <details className={s.comparison}><summary>Comparar los módulos de cada plan</summary><div className={s.tableScroll} tabIndex={0} role="region" aria-label="Comparación de planes empresariales"><table><caption>Capacidades estándar. Cada empresa conserva sus propios datos y permisos. El simulador de automatización es una demostración; no se incluye ejecución de flujos productivos.</caption><thead><tr><th scope="col">Módulo</th>{plans.map(plan => <th scope="col" key={plan.code}>{plan.name}</th>)}</tr></thead><tbody>{terraqoModules.filter(module=>module.code!=="AUTOMATIONS").map(module => <tr key={module.code}><th scope="row">{module.label}</th>{plans.map(plan => <td key={plan.code}>{getDefaultModulesForTier(plan.tier).includes(module.code) ? "Incluido" : "—"}</td>)}</tr>)}</tbody></table></div></details>}
+    <div className={s.notes}><section><h2>Tu cuenta, tu decisión.</h2><p>El plan gratuito no caduca y no necesita tarjeta. Los documentos privados nunca pasan a ser públicos por contratar una membresía.</p></section><section><h2>Sin salir de Terraqo.</h2><p>Revisa el total, autoriza el pago seguro y consulta la activación y tus comprobantes de operación en un solo lugar.</p><Link href="https://portal.terraqoglobal.com/membresia">Gestionar mi membresía →</Link></section></div>
+  </ExperienceShell>;
 }

@@ -604,6 +604,7 @@ enum TerraqoFileCategory {
 }
 
 model User {
+  billingAccounts             TerraqoBillingAccount[]
   id                          String                           @id @default(cuid())
   name                        String?
   email                       String                           @unique
@@ -2071,6 +2072,7 @@ model ActivityLog {
 }
 
 model TerraqoWorkspace {
+  billingAccounts          TerraqoBillingAccount[]
   id                       String                           @id @default(cuid())
   name                     String
   slug                     String                           @unique
@@ -2349,6 +2351,111 @@ model TerraqoSubscription {
 
   @@index([workspaceId, status])
   @@index([tier, status])
+  @@schema("icc")
+}
+
+// Platform-owned billing ledger, independent of commercial tenant accounting.
+model TerraqoBillingAccount {
+  id                     String @id @default(cuid())
+  ownerKey               String
+  mode                   String @default("test")
+  userId                 String
+  user                   User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  workspaceId            String?
+  workspace              TerraqoWorkspace? @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  planCode               String
+  cycle                  String @default("MONTHLY")
+  status                 String @default("FREE")
+  customerId             String?
+  subscriptionId         String? @unique
+  currentAttemptId       String?
+  paidThrough            DateTime?
+  cancelAtPeriodEnd      Boolean @default(false)
+  nextReconcileAt        DateTime?
+  lastReconciledAt        DateTime?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  attempts               TerraqoBillingAttempt[]
+  payments               TerraqoBillingPayment[]
+  @@unique([ownerKey, mode])
+  @@index([status, nextReconcileAt])
+  @@schema("icc")
+}
+
+model TerraqoBillingPlan {
+  id                String @id @default(cuid())
+  code              String
+  version           String
+  cycle             String
+  mode              String
+  amountMinor       Int
+  currency          String @default("PEN")
+  providerId        String @unique
+  enabled           Boolean @default(false)
+  createdAt         DateTime @default(now())
+  @@unique([code, version, cycle, mode])
+  @@schema("icc")
+}
+
+model TerraqoBillingAttempt {
+  id                String @id @default(cuid())
+  accountId         String
+  account           TerraqoBillingAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  idempotencyKey    String
+  tokenFingerprint String? @unique
+  planCode          String
+  planVersion       String
+  cycle             String
+  amountMinor       Int
+  currency          String @default("PEN")
+  providerPlanId    String
+  status            String @default("PREPARED")
+  stage             String @default("CUSTOMER")
+  providerCardId    String?
+  providerSubscriptionId String? @unique
+  errorCode         String?
+  termsVersion      String
+  consentedAt       DateTime
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  @@unique([accountId, idempotencyKey])
+  @@index([status, updatedAt])
+  @@schema("icc")
+}
+
+model TerraqoBillingPayment {
+  id                String @id @default(cuid())
+  accountId         String
+  account           TerraqoBillingAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  providerChargeId  String @unique
+  amountMinor       Int
+  currency          String @default("PEN")
+  paidAt            DateTime
+  periodEnd         DateTime
+  refundedMinor     Int @default(0)
+  createdAt         DateTime @default(now())
+  @@index([accountId, paidAt])
+  @@schema("icc")
+}
+
+model TerraqoBillingAudit {
+  id        String @id @default(cuid())
+  actorId   String?
+  accountId String?
+  action    String
+  detail    Json?
+  createdAt DateTime @default(now())
+  @@index([accountId, createdAt])
+  @@schema("icc")
+}
+
+model TerraqoUsageBucket {
+  id       String @id @default(cuid())
+  ownerKey String
+  period   String
+  metric   String
+  used     Int @default(0)
+  @@unique([ownerKey, period, metric])
   @@schema("icc")
 }
 

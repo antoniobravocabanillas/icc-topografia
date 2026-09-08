@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/server/api";
 import { getSessionTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 import { getWorkspaceForUser, hasWorkspaceAdminAccess } from "@/lib/terraqo/workspace-access";
+import { effectivePlan } from "@/lib/terraqo/billing/entitlements";
 
 function value(formData: FormData, key: string) {
   const input = formData.get(key);
@@ -2086,6 +2087,7 @@ export async function upsertStaffAccessAction(profileId: string, formData: FormD
   const email = value(formData, "accessEmail") || profile.email;
   const temporaryPassword = value(formData, "temporaryPassword");
   const role = roleFromForm(formData);
+  if(role==="SUPER_ADMIN"||profile.user?.role==="SUPER_ADMIN")throw new Error("Los administradores de Terraqo se gestionan exclusivamente desde la administración de la plataforma.");
   if (!email) throw new Error("El correo de acceso es obligatorio.");
 
   const data: Prisma.UserUpdateInput = {
@@ -2098,9 +2100,19 @@ export async function upsertStaffAccessAction(profileId: string, formData: FormD
     data.passwordHash = await bcrypt.hash(temporaryPassword, 12);
   }
 
+  const seatPlan=await effectivePlan(profile.userId||"",workspaceId);
+  await prisma.$transaction(async tx=>{
+  // Serialize internal-seat admission with the user/profile writes: a rejected admission
+  // must not leave a new login account or a partially linked staff profile behind.
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${workspaceId}, 0))`;
+  const existingSeat=profile.userId?await tx.terraqoWorkspaceMember.findUnique({where:{workspaceId_userId:{workspaceId,userId:profile.userId}},select:{active:true,role:true}}):null;
+  if(!existingSeat?.active||!["OWNER","ADMIN","MANAGER","MEMBER"].includes(existingSeat.role)){
+    const occupied=await tx.terraqoWorkspaceMember.count({where:{workspaceId,active:true,role:{in:["OWNER","ADMIN","MANAGER","MEMBER"]}}});
+    if(occupied>=seatPlan.seats)throw new Error(`Tu plan admite ${seatPlan.seats} usuarios internos. Libera un acceso o actualiza la membresía antes de agregar otro.`);
+  }
   let userId = profile.userId;
   if (profile.userId) {
-    const memberships = await prisma.terraqoWorkspaceMember.findMany({
+    const memberships = await tx.terraqoWorkspaceMember.findMany({
       where: { userId: profile.userId, active: true },
       select: { workspaceId: true }
     });
@@ -2110,18 +2122,18 @@ export async function upsertStaffAccessAction(profileId: string, formData: FormD
     if (memberships.some((membership) => membership.workspaceId !== workspaceId)) {
       throw new Error("La identidad pertenece a varios workspaces y solo puede editarla un administrador Terraqo.");
     }
-    await prisma.user.update({ where: { id: profile.userId }, data });
+    await tx.user.update({ where: { id: profile.userId }, data });
   } else {
-    const existingUser = await prisma.user.findUnique({ where: { email } });
+    const existingUser = await tx.user.findUnique({ where: { email } });
     if (existingUser) {
       throw new Error("Este correo ya pertenece a una identidad Terraqo. Solicita al administrador Terraqo que la incorpore al workspace.");
     } else {
       if (!temporaryPassword) throw new Error("La contraseña temporal es obligatoria para crear un acceso nuevo.");
-      const user = await prisma.user.create({
+      const user = await tx.user.create({
         data: {
           name: profile.displayName,
           email,
-          passwordHash: await bcrypt.hash(temporaryPassword, 12),
+          passwordHash: data.passwordHash as string,
           role
         }
       });
@@ -2129,7 +2141,7 @@ export async function upsertStaffAccessAction(profileId: string, formData: FormD
     }
   }
 
-  await prisma.staffProfile.update({
+  await tx.staffProfile.update({
     where: { id: profileId },
     data: {
       userId,
@@ -2137,7 +2149,7 @@ export async function upsertStaffAccessAction(profileId: string, formData: FormD
     }
   });
   if (userId) {
-    await prisma.terraqoWorkspaceMember.upsert({
+    await tx.terraqoWorkspaceMember.upsert({
       where: { workspaceId_userId: { workspaceId, userId } },
       update: { active: true, joinedAt: new Date() },
       create: {
@@ -2150,6 +2162,7 @@ export async function upsertStaffAccessAction(profileId: string, formData: FormD
       }
     });
   }
+  },{maxWait:15000,timeout:15000});
   revalidatePath("/admin/equipo");
   revalidatePath("/admin/chat");
 }

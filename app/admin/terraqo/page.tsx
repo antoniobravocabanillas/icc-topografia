@@ -196,6 +196,7 @@ export default async function TerraqoAdminPage() {
         <div>
           <p className="text-sm font-semibold uppercase text-primary">Terraqo producto</p>
           <h1 className="font-display text-3xl font-bold">Workspaces y modulos activables</h1>
+          <Link href="/admin/terraqo/facturacion" className="mt-3 inline-flex rounded-lg border px-4 py-2 font-semibold">Facturación de Terraqo →</Link>
           <p className="mt-2 max-w-3xl text-muted-foreground">
             Terraqo opera como plataforma multi-cliente. Cada empresa tiene su workspace, plan,
             modulos habilitados y permisos separados para CRM, proyectos, tienda, red profesional,

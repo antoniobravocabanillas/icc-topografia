@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { reserveStorage } from "@/lib/terraqo/billing/storage-quota";
 import { fail, handleApiError, ok } from "@/lib/server/api";
 import {
   ALLOWED_CV_FILE_TYPES,
@@ -96,6 +97,7 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
 
     const store = getProfessionalDocumentStore();
     const stored: Array<{ type: DocumentType; file: File; storageKey: string }> = [];
+    const reservation=await reserveStorage(userId,requestedFiles.reduce((sum,item)=>sum+item.file.size,0));
 
     try {
       for (const item of requestedFiles) {
@@ -172,6 +174,7 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
             : "Documento agregado a tu expediente privado.",
       });
     } catch (error) {
+      await reservation.release();
       await Promise.all(stored.map((item) => store.delete(item.storageKey).catch(() => undefined)));
       throw error;
     }

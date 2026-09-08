@@ -4,6 +4,7 @@ import { AccountAccessPanel } from "@/components/auth/account-access-panel";
 import { prisma } from "@/lib/prisma";
 import { createMetadata } from "@/lib/seo";
 import { terraqoDomains } from "@/lib/terraqo-domains";
+import { billingContinuation } from "@/lib/terraqo/billing/continuation";
 
 export const metadata = createMetadata({ title: "Portal Terraqo", description: "Acceso a clientes, profesionales y equipo operativo de Terraqo.", path: "/cuenta" });
 
@@ -16,13 +17,13 @@ function resolveAccessDestination(role?: string | null) {
 }
 
 type AccountPageProps = {
-  searchParams: Promise<{ workspace?: string }>;
+  searchParams: Promise<{ workspace?: string; callbackUrl?: string }>;
 };
 
 export default async function AccountPage({ searchParams }: AccountPageProps) {
   const params = await searchParams;
   const session = await auth();
-  if (session?.user) redirect(resolveAccessDestination(session.user.role));
+  if (session?.user) redirect(billingContinuation(params.callbackUrl)?`${terraqoDomains.portal}${billingContinuation(params.callbackUrl)}`:resolveAccessDestination(session.user.role));
 
   const workspaceSlug = params.workspace?.trim();
   const workspace = workspaceSlug

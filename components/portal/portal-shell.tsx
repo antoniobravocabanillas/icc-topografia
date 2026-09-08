@@ -62,6 +62,7 @@ type PortalNavItem = {
 const professionalItems: PortalNavItem[] = [
   { href: "/portal", label: "Resumen", icon: LayoutDashboard },
   { href: "/portal/perfil", label: "Mi perfil", icon: UserRound },
+  { href: "/portal/membresia", label: "Mi membresía", icon: ReceiptText },
   { href: "/portal/red", label: "Red profesional", icon: Search },
   { href: "/portal/amigos", label: "Amigos", icon: UserRoundPlus },
   { href: "/portal/recompensas", label: "Terraqo Builders", icon: Award },
@@ -90,6 +91,7 @@ const professionalItems: PortalNavItem[] = [
 
 const clientItems: PortalNavItem[] = [
   { href: "/portal", label: "Resumen", icon: LayoutDashboard },
+  { href: "/portal/membresia", label: "Mi membresía", icon: ReceiptText },
   {
     href: "/portal/operaciones",
     label: "Operaciones comerciales",
@@ -119,7 +121,6 @@ function normalizePortalPath(path: string) {
 function PortalNavigation({
   items,
   pathname,
-  primaryColor,
   accentColor,
   variant = "stack",
   collapsed = false,
@@ -156,7 +157,7 @@ function PortalNavigation({
               active
                 ? {
                     backgroundColor: withAlpha(accentColor, "22"),
-                    color: primaryColor,
+                    color: "#245da7",
                   }
                 : undefined
             }
@@ -391,7 +392,7 @@ export function PortalShell({
       <div className="mx-auto max-w-[1720px] px-4 sm:px-6 xl:px-8">
         <div className="sticky top-[76px] z-40 -mx-4 hidden border-b border-[#d8e0ec] bg-white/88 px-4 py-3 shadow-[0_14px_28px_rgba(15,59,67,0.06)] backdrop-blur-xl sm:-mx-6 sm:px-6 md:block xl:hidden">
           <div className="mb-2 flex items-center justify-between gap-4">
-            <p className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-[#4374ba]">
+            <p className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-[#245da7]">
               Navegación
             </p>
             <span className="truncate text-xs font-semibold text-[#607083]">
@@ -423,7 +424,7 @@ export function PortalShell({
                   className={
                     sidebarCollapsed
                       ? "sr-only"
-                      : "font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-[#4374ba]"
+                      : "font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-[#245da7]"
                   }
                 >
                   Navegación
@@ -496,7 +497,7 @@ export function PortalShell({
             </div>
           </aside>
 
-          <main className="min-w-0">{children}</main>
+          <main className="min-w-0">{(!planTier||planTier==="FREE")&&<aside className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-200 bg-white p-4 text-slate-900" aria-label="Mejorar mi plan"><div><p className="font-semibold">Tu cuenta gratuita es solo el comienzo.</p><p className="text-sm text-slate-600">Compara capacidades y elige cuándo ampliar tu plan.</p></div><Link href="/portal/membresia" className="rounded-lg bg-blue-700 px-4 py-2 font-semibold text-white hover:bg-blue-800">Explorar membresías</Link></aside>}{children}</main>
         </div>
       </div>
 

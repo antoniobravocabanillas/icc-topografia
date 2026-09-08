@@ -1,26 +1,39 @@
-# Culqi: sandbox verificado, cobros deshabilitados
+# Facturación Terraqo: puesta en marcha
 
-El 7 de septiembre de 2026 la consulta autenticada de solo lectura a `/v2/recurrent/plans` respondió HTTP 200 con las llaves de prueba del proyecto. No devolvió planes. El propietario indicó que necesita definir los planes antes de cobrar: no se crearon planes, cargos ni suscripciones. No existe un checkout de suscripciones habilitado. Las consultas continúan por el canal comercial de Terraqo.
+## Estado comprobado
 
-Los precios publicados son referencias comerciales, no instrucciones de cobro. Antes de activarlos deben confirmarse importes, impuestos, beneficios, periodicidad, renovaciones y cancelación.
+- Catálogo central en `lib/terraqo/billing/catalog.ts`: gratis, dos planes personales y cuatro empresariales, mensual/anual.
+- Diez combinaciones provisionadas y verificadas en Culqi sandbox. La API rechaza importes superiores a 500000 céntimos: Premium y Enterprise anual no están habilitados. No se fraccionan cobros.
+- Flujo de navegador real probado con el iframe de Culqi, tarjeta oficial de prueba, tokenización, cliente, tarjeta validada, suscripción, cargo de S/29 verificado y cancelación de renovación. El ledger quedó ACTIVE con fecha pagada y `cancelAtPeriodEnd=true`; el perfil conservó FREE.
+- Los planes de sandbox tienen tres ciclos porque la API de prueba no admite duración indefinida. Producción utiliza cero ciclos (indefinido hasta cancelación).
+- Pruebas automatizadas: concurrencia de checkout, clave de idempotencia, unicidad de cargo, aislamiento test/live, autorización de propietario, cancelación conservando acceso, cuota atómica, fechas fin de mes/bisiesto, cuerpo limitado y redirecciones permitidas.
+- La evidencia sintética del pago sandbox se conserva privada para auditoría. Las demás cuentas temporales sin pagos se eliminan al terminar las pruebas.
 
-## Configuración preparada
+## Configuración
 
-Variables exclusivamente del servidor: CULQI_MODE, CULQI_PUBLIC_KEY, CULQI_SECRET_KEY, CULQI_PROFESSIONAL_PLAN_ID y CULQI_WORKSPACE_PLAN_ID. Las llaves se configuran en el entorno del proyecto y Netlify; nunca se incluyen en Git ni en mensajes. Ejecutar `npx tsx scripts/check-culqi-config.ts` verifica presencia, formato y separación test/live sin mostrar valores.
+Servidor: `CULQI_MODE=test|live`, `CULQI_PUBLIC_KEY`, `CULQI_SECRET_KEY`. No usar prefijo NEXT_PUBLIC para la llave privada. El API autenticado devuelve únicamente la pública. Los IDs de planes se guardan en la tabla versionada TerraqoBillingPlan, no en `.env.example`.
 
-## Requisitos antes del desarrollo y habilitación del checkout
+`BILLING_LIVE_ENABLED=false` protege producción aunque se configuren accidentalmente llaves live. `BILLING_RECONCILE_SECRET` es un secreto aleatorio de al menos 32 caracteres, compartido solamente por el endpoint interno y la función programada de Netlify. No se registra en logs.
 
-1. Confirmar planes, precios, impuestos, beneficios, periodicidad y política de cancelación con el propietario; verificar capacidades de recurrencia de la cuenta.
-2. Configurar las llaves y planes de prueba. Probar tokenización con Culqi Checkout; los datos de tarjeta no deben atravesar Terraqo.
-3. Implementar cliente → tarjeta tokenizada → suscripción con el contrato vigente de Culqi. Registrar intentos durables y bloqueo por suscriptor. Un timeout incierto debe reconciliarse antes de intentar crear otra suscripción.
-4. Verificar cada evento con el proveedor. No activar acceso por parámetros del navegador ni por el contenido de un webhook no autenticado.
-5. Aplicar confirmación de pago y permisos en una transacción con deduplicación por ID de evento/cargo. Prevenir carreras, cobros duplicados y cambios de precio desde el cliente.
-6. Completar alta, renovación, rechazo, reintento, cancelación, devolución y conciliación. Ejecutar pruebas de sandbox e integración antes de habilitar producción.
+Desde **Administración de la plataforma → Facturación** un SUPER_ADMIN puede sincronizar planes, pausar nuevas ventas y conciliar cuentas. El administrador de una empresa no tiene esta autorización. Pausar ventas no cancela suscripciones existentes.
 
-La creación de la cuenta no autoriza publicar perfiles privados. SEO y pagos conservan decisiones independientes.
+## Operación y recuperación
 
-## Diagnóstico y tarjetas de prueba
+- Precio y periodicidad se validan en servidor contra catálogo y plan verificado del proveedor; el navegador no fija importes.
+- El intento y consentimiento se guardan antes de contactar a Culqi. No se almacenan PAN/CVV ni tokens completos.
+- Ante un POST ambiguo no se repite la compra. La conciliación busca la referencia exacta del intento y consulta el cargo antes de activar permisos.
+- Una autenticación 3DS incompleta puede descartarse únicamente antes de crear una suscripción. No se permite abandonar un cargo incierto para volver a cobrar.
+- La función Netlify revisa cuentas pendientes cada cinco minutos. El navegador también consulta durante un periodo acotado; el administrador dispone de conciliación manual.
+- La fecha pagada se verifica en permisos de módulos y cuotas, sin depender solamente del scheduler. Los contratos anteriores concedidos manualmente se preservan.
+- La cancelación detiene renovación; el periodo pagado no se elimina. Las devoluciones verificadas del proveedor se reflejan en el ledger. La tramitación de devoluciones sigue el canal de soporte; no se promete devolución automática.
 
-`npx tsx scripts/check-culqi-account.ts` consulta únicamente el listado de planes en sandbox, sin imprimir claves. Las tarjetas de prueba se introducen en el checkout del proveedor durante las pruebas; no se guardan PAN ni CVV en `.env.local`, `.env.example` o la base de datos. Las claves privadas no se envían al navegador. La configuración de producción y las pruebas de cobro, 3DS, renovación y cancelación siguen pendientes.
+## Antes de cobrar dinero real
 
-Fuentes verificadas: https://docs.culqi.com/es/documentacion/pagos-online/recurrencia/suscripciones/suscripciones/ y https://docs.culqi.com/es/documentacion/checkout/checkout-custom/.
+1. Cuenta comercial Culqi habilitada y llaves **live** configuradas de forma segura; las actuales son **test**.
+2. Identidad fiscal del operador, emisión del comprobante tributario y condiciones comerciales aprobadas. La constancia de operación del portal no es factura tributaria.
+3. Cambiar `CULQI_MODE=live`, configurar llaves live y habilitación explícita. Sincronizar el catálogo desde el administrador de Terraqo.
+4. Verificar el primer cobro live autorizado, liquidación, cancelación y atención de devoluciones; no usar tarjetas reales durante QA sandbox.
+
+No se afirma certificación ISO ni que una auditoría de código sustituya una auditoría formal de seguridad o cumplimiento. Los formatos de moneda y fecha están internacionalizados; el cobro inicial se limita a PEN/Perú.
+
+Contrato del proveedor consultado: https://apidocs.culqi.com/apiculqi.yaml . Checkout: https://docs.culqi.com/es/documentacion/checkout/checkout-custom/ . Autenticación: https://docs.culqi.com/es/documentacion/culqi-3ds/v1/configuracion/ . Costos y supuestos: `billing-pricing-model.md`.

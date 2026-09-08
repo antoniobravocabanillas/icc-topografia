@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
+import { billingContinuation } from "@/lib/terraqo/billing/continuation";
 import { startAuthentication } from "@simplewebauthn/browser";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
@@ -15,6 +16,9 @@ function safeRelativeCallback(value: string | null) {
 }
 
 function destinationForRole(role: string | undefined, callbackUrl: string | null) {
+  let billing=billingContinuation(callbackUrl);
+  try{const saved=JSON.parse(sessionStorage.getItem("terraqo-membership-continuation")||"null");if(!billing&&saved?.expires>Date.now())billing=billingContinuation(saved.path);if(billing)sessionStorage.removeItem("terraqo-membership-continuation");}catch{}
+  if(billing)return `${terraqoDomains.portal}${billing}`;
   if (role === "SUPER_ADMIN") return `${terraqoDomains.admin}/admin/terraqo`;
   if (role === "ADMIN" || role === "COMMERCIAL_ADMIN" || role === "EDITOR") return `${terraqoDomains.admin}${callbackUrl?.startsWith("/admin") ? callbackUrl : "/admin"}`;
   if (callbackUrl?.startsWith("/portal")) return `${terraqoDomains.portal}${callbackUrl}`;
@@ -35,6 +39,7 @@ export function SignInForm({
   const searchParams = useSearchParams();
   const explicitCallbackUrl = searchParams.get("callbackUrl");
   const callbackUrl = safeRelativeCallback(explicitCallbackUrl);
+  useEffect(()=>{const path=billingContinuation(callbackUrl);if(path)try{sessionStorage.setItem("terraqo-membership-continuation",JSON.stringify({path,expires:Date.now()+3600000}));}catch{}},[callbackUrl]);
   const verification = searchParams.get("verification");
   const sessionReason = searchParams.get("reason");
   const audience = searchParams.get("audience");

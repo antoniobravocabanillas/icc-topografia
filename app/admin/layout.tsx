@@ -1,4 +1,7 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
+import Link from "next/link";
+import { SignOutButton } from "@/components/auth/sign-out-button";
 import type { Role } from "@prisma/client";
 import { auth } from "@/auth";
 import { SessionPresence } from "@/components/auth/session-presence";
@@ -17,6 +20,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (!session?.user) redirect("/cuenta?callbackUrl=/admin");
   const role = session.user.role as Role | undefined;
   if (!role || !allowedAdminRoles.has(role)) redirect("/");
+  if((await headers()).get("x-terraqo-pathname")?.startsWith("/admin/terraqo")){
+    const actor=await prisma.user.findUnique({where:{id:session.user.id},select:{role:true}});
+    if(actor?.role!=="SUPER_ADMIN")redirect("/admin");
+    return <div className="min-h-screen bg-slate-50 text-slate-900"><SessionPresence/><header className="flex flex-wrap items-center justify-between gap-4 border-b bg-white px-6 py-5"><Link href="/admin/terraqo" className="text-xl font-bold">Terraqo <span className="text-sm font-normal text-slate-500">Administración de la plataforma</span></Link><nav className="flex flex-wrap items-center gap-5 text-sm font-semibold" aria-label="Administración de Terraqo"><Link href="/admin/terraqo">Workspaces</Link><Link href="/admin/terraqo/usuarios">Usuarios</Link><Link href="/admin/terraqo/facturacion">Facturación</Link><Link href="/admin">Entrar a un workspace</Link><SignOutButton/></nav></header>{children}</div>;
+  }
   if (!(await hasWorkspaceAdminAccess(session.user.id, role))) {
     redirect("/cuenta?error=workspace-access");
   }

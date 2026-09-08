@@ -59,6 +59,7 @@ function rewrite(request: NextRequest, pathname: string, surface: string) {
   url.pathname = pathname;
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-terraqo-surface", surface);
+  requestHeaders.set("x-terraqo-pathname", pathname);
   const response = NextResponse.rewrite(url, { request: { headers: requestHeaders } });
   response.headers.set("X-Terraqo-Surface", surface);
   return secure(response, request);
@@ -116,7 +117,9 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  return secure(NextResponse.next(), request);
+  const requestHeaders=new Headers(request.headers);
+  requestHeaders.set("x-terraqo-pathname",pathname);
+  return secure(NextResponse.next({request:{headers:requestHeaders}}), request);
 }
 
 export const config = {

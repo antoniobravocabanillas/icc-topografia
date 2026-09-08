@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { reserveStorage } from "@/lib/terraqo/billing/storage-quota";
 import {
   ALLOWED_MESSAGE_ATTACHMENT_TYPES,
   createMessageAttachmentKey,
@@ -72,6 +73,8 @@ export async function uploadMessageAttachment(
       : "FILE";
   const storageKey = createMessageAttachmentKey(conversationId, file.name);
   const store = getMessageAttachmentStore();
+  const reservation=await reserveStorage(userId,file.size);
+  try {
   await store.set(storageKey, await file.arrayBuffer(), {
     metadata: {
       conversationId,
@@ -83,7 +86,6 @@ export async function uploadMessageAttachment(
     },
   });
 
-  try {
     return await prisma.$transaction(async (tx) => {
       const message = await tx.terraqoDirectMessage.create({
         data: {
@@ -114,6 +116,7 @@ export async function uploadMessageAttachment(
       return message;
     });
   } catch (error) {
+    await reservation.release();
     await store.delete(storageKey).catch(() => undefined);
     throw error;
   }
