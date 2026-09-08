@@ -14,10 +14,11 @@ async function main(){
   await db.terraqoProfessionalProfile.create({data:{userId:user.id}});
   const browser=await chromium.launch({channel:"chrome",headless:true});
   const context=await browser.newContext();const page=await context.newPage();
-  const origin="http://127.0.0.1:3100";
+  const origin=process.env.BILLING_AUDIT_ORIGIN||"http://127.0.0.1:3100";
+  const cookieName=origin.startsWith("https:")?"__Secure-authjs.session-token":"authjs.session-token";
   try{
-    const token=await encode({secret:process.env.AUTH_SECRET||process.env.NEXTAUTH_SECRET!,salt:"authjs.session-token",token:{sub:user.id,name:user.name,email:user.email,role:"CUSTOMER"},maxAge:3600});
-    await context.addCookies([{name:"authjs.session-token",value:token,url:origin,httpOnly:true,sameSite:"Lax"}]);
+    const token=await encode({secret:process.env.AUTH_SECRET||process.env.NEXTAUTH_SECRET!,salt:cookieName,token:{sub:user.id,name:user.name,email:user.email,role:"CUSTOMER"},maxAge:3600});
+    await context.addCookies([{name:cookieName,value:token,url:origin,httpOnly:true,secure:origin.startsWith("https:"),sameSite:"Lax"}]);
     await mkdir("output",{recursive:true});
     await page.goto(`${origin}/portal/membresia?plan=personal-pro&cycle=MONTHLY`);
     await page.getByRole("heading",{name:"Datos de facturación"}).waitFor({timeout:60000});

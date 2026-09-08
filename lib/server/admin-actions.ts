@@ -2155,7 +2155,7 @@ export async function upsertStaffAccessAction(profileId: string, formData: FormD
       create: {
         workspaceId,
         userId,
-        role: role === "ADMIN" || role === "SUPER_ADMIN" ? "ADMIN" : "MEMBER",
+        role: role === "ADMIN" ? "ADMIN" : "MEMBER",
         title: profile.roleTitle,
         active: true,
         joinedAt: new Date()
