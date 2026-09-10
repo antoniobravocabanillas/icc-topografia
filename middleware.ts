@@ -90,7 +90,7 @@ export function middleware(request: NextRequest) {
   if (host === HOSTS.portal) {
     // Public content must not be rewritten into authenticated portal pages.
     // /red remains the professional network here; its public nav uses an absolute URL.
-    const publicRoutes = ["/plataforma", "/producto", "/automatizacion", "/membresias", "/contacto", "/privacidad", "/terminos", "/cv"];
+    const publicRoutes = ["/plataforma", "/producto", "/automatizacion", "/membresias", "/contacto", "/privacidad", "/terminos", "/legal", "/devoluciones", "/libro-de-reclamaciones", "/cv"];
     if (publicRoutes.some(route => pathname === route || pathname.startsWith(`${route}/`))) {
       return redirectToHost(request, HOSTS.public, pathname);
     }

@@ -1,3 +1,47 @@
+model TerraqoComplaint {
+  id Int @id @default(autoincrement())
+  keyHash String @unique
+  payloadHash String
+  payload Json
+  createdAt DateTime @default(now())
+  dueAt DateTime
+  response String?
+  respondedAt DateTime?
+  responseActor String?
+  postalEvidence String?
+  events TerraqoComplaintEvent[]
+  mail TerraqoComplaintMail[]
+  @@schema("icc")
+}
+
+model TerraqoComplaintEvent {
+  id String @id @default(cuid())
+  complaintId Int
+  complaint TerraqoComplaint @relation(fields:[complaintId], references:[id], onDelete:Restrict)
+  action String
+  actor String?
+  createdAt DateTime @default(now())
+  @@index([complaintId, createdAt])
+  @@schema("icc")
+}
+
+model TerraqoComplaintMail {
+  id String @id @default(cuid())
+  complaintId Int
+  complaint TerraqoComplaint @relation(fields:[complaintId], references:[id], onDelete:Restrict)
+  kind String
+  recipient String
+  text String
+  sentAt DateTime?
+  providerId String?
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now())
+  lastError String?
+  @@unique([complaintId,kind])
+  @@index([sentAt,nextAttemptAt])
+  @@schema("icc")
+}
+
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "rhel-openssl-3.0.x"]

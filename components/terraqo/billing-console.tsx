@@ -556,6 +556,12 @@ export function BillingConsole({
                     .
                   </label>
                   <p className={s.disclaimer}>
+                    Proveedor: VRILLA S.A.C. · RUC 20616279841. Consulta{" "}
+                    <Link href="https://terraqoglobal.com/devoluciones" target="_blank">cambios y devoluciones</Link>,{" "}
+                    <Link href="https://terraqoglobal.com/privacidad" target="_blank">privacidad</Link> y el{" "}
+                    <Link href="https://terraqoglobal.com/libro-de-reclamaciones" target="_blank">Libro de Reclamaciones</Link>.
+                  </p>
+                  <p className={s.disclaimer}>
                     Culqi puede validar la tarjeta con S/3 y devolverlos.
                     Terraqo no recibe ni almacena el número de tarjeta o CVV.
                   </p>
@@ -571,7 +577,7 @@ export function BillingConsole({
                   >
                     {busy
                       ? "Procesando…"
-                      : `Continuar al pago · ${money(amount)}`}
+                      : `Pagar · ${money(amount)}`}
                   </button>
                   {!ready && (
                     <p className={s.disclaimer}>

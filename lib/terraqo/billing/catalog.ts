@@ -2,7 +2,7 @@ export type BillingAudience = "PERSONAL" | "WORKSPACE";
 export type BillingCycle = "MONTHLY" | "ANNUAL";
 export type BillingMode = "test" | "live";
 export const CATALOG_VERSION = "2026-09-v1";
-export const BILLING_TERMS_VERSION = "2026-09-v1";
+export const BILLING_TERMS_VERSION = "2026-09-09";
 // Verified merchant API limit. Do not split a subscription into several charges to bypass it.
 export const CULQI_MAX_PLAN_MINOR = 500000;
 export function supportsBillingCycle(plan: BillingPlan, cycle: BillingCycle) {

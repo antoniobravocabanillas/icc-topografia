@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { terraqoDomains } from "@/lib/terraqo-domains";
 import { TerraqoLogo } from "@/components/terraqo/terraqo-logo";
+import {legalOperator as op} from "@/lib/terraqo/legal";
 
 export function TerraqoPublicFooter() {
   return (
@@ -28,11 +29,14 @@ export function TerraqoPublicFooter() {
             <a href={terraqoDomains.portal}>Ingresar</a>
             <Link href={`${terraqoDomains.public}/privacidad`}>Privacidad</Link>
             <Link href={`${terraqoDomains.public}/terminos`}>Términos</Link>
+            <Link href={`${terraqoDomains.public}/legal`}>Centro legal</Link>
+            <Link href={`${terraqoDomains.public}/devoluciones`}>Cambios y devoluciones</Link>
+            <Link href={`${terraqoDomains.public}/libro-de-reclamaciones`}>Libro de Reclamaciones</Link>
           </div>
         </div>
         <div className="tq-footer-legal">
-          <span>© 2026 Terraqo. Todos los derechos reservados.</span>
-          <span>Construido para empresas y profesionales que hacen.</span>
+          <span>© 2026 Terraqo, producto de {op.name} · RUC {op.ruc}<br/>{op.address}</span>
+          <span><a href={`mailto:${op.email}`}>{op.email}</a><br/><a href={op.phoneHref}>{op.phone}</a></span>
         </div>
       </div>
     </footer>

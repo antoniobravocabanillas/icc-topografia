@@ -8,7 +8,7 @@ import { companyPublication } from "@/lib/terraqo/public-company-seo";
 export const revalidate = 3600;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const staticRoutes = ["", "/plataforma", "/producto", "/automatizacion", "/membresias", "/red", "/contacto", "/privacidad", "/terminos"];
+  const staticRoutes = ["", "/plataforma", "/producto", "/automatizacion", "/membresias", "/red", "/contacto", "/privacidad", "/terminos", "/legal", "/devoluciones", "/libro-de-reclamaciones"];
   const companies=await safeDb("sitemap:companies",prisma.terraqoWorkspace.findMany({where:{active:true,deletedAt:null},select:{slug:true,publicSlug:true,settings:true,updatedAt:true}}),[]);
   const profiles = await safeDb(
     "sitemap:public-cv-profiles",

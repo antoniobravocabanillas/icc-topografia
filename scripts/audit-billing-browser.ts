@@ -27,7 +27,7 @@ async function main(){
     if(process.env.CULQI_INSPECT_CHECKOUT==="true"){
       for(const [name,value] of Object.entries({firstName:"Prueba",lastName:"Terraqo",address:"Direccion de pruebas 123",city:"Lima",phone:"999999999"}))await page.locator(`input[name=${name}]`).fill(value);
       await page.getByRole("checkbox").check();
-      await page.getByRole("button",{name:/Continuar al pago/}).click();
+      await page.getByRole("button",{name:/Pagar/}).click();
       await page.waitForTimeout(4000);
       if(process.env.CULQI_E2E==="true"){
         assert.equal(process.env.CULQI_MODE,"test");

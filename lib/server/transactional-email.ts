@@ -4,6 +4,8 @@ type TransactionalEmailInput = {
   html: string;
   text: string;
   tags?: Array<{ name: string; value: string }>;
+  replyTo?: string;
+  idempotencyKey?: string;
 };
 
 function senderAddress() {
@@ -19,14 +21,15 @@ export async function sendTransactionalEmail(input: TransactionalEmailInput) {
 
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", ...(input.idempotencyKey?{"Idempotency-Key":input.idempotencyKey}:{}) },
+    signal: AbortSignal.timeout(15000),
     body: JSON.stringify({
       from,
       to: input.to,
       subject: input.subject,
       html: input.html,
       text: input.text,
-      reply_to: process.env.TERRAQO_EMAIL_REPLY_TO || undefined,
+      reply_to: input.replyTo || process.env.TERRAQO_EMAIL_REPLY_TO || undefined,
       tags: input.tags
     })
   });
