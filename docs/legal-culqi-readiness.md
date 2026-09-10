@@ -39,6 +39,15 @@ El proyecto de modificación publicado en 2026 no se trata como norma ya aprobad
 
 ## Pruebas
 
+### Verificación de producción — 9 de septiembre de 2026
+
+- Código publicado: `3fb859d`; despliegue Netlify `6aa1f7a54254d8d25ac66d14`.
+- Las cinco páginas legales pasan el análisis Axe sin incidencias detectadas y sin desborde horizontal en 390 y 1440 px; inspección visual móvil del libro realizada.
+- Solicitud de API desde origen externo rechazada con HTTP 403. En producción no se generaron reclamaciones ficticias.
+- Correo de prueba a `hola@vrilla.solutions` aceptado por el proveedor; esto no certifica recepción en bandeja ni lectura.
+- Función programada `complaints-mail` desplegada. Acceso con contraseña de la cuenta ordinaria de revisión hasta checkout comprobado.
+- Culqi continúa en modo de pruebas. Su aprobación comercial y la revisión legal/operativa no se sustituyen por estas pruebas técnicas.
+
 scripts/test-complaints.ts: validación, menor/representante, canal postal, plazo en Perú, idempotencia concurrente, consulta privada y reintento de copia con proveedor simulado (sin correos reales de consumidores).
 
 scripts/audit-legal-browser.ts: responsive, Axe, registro y descarga, seguimiento, respuesta administrativa, revocación del rol y rechazo de origen externo. En producción omite crear hojas y respuestas ficticias.
