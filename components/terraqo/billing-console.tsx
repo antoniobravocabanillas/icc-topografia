@@ -2,6 +2,7 @@
 import Script from "next/script";
 import Link from "next/link";
 import { PortalPlanCatalog } from "./portal-plan-catalog";
+import { LocationSelect } from "@/components/location/location-select";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BILLING_PLANS,
@@ -281,7 +282,7 @@ export function BillingConsole({
         lastName: form.get("lastName"),
         address: form.get("address"),
         city: form.get("city"),
-        country: "PE",
+        country: form.get("country"),
         phone: form.get("phone"),
       },
     };
@@ -535,7 +536,6 @@ export function BillingConsole({
                       { name: "firstName", label: "Nombres", max: 50 },
                       { name: "lastName", label: "Apellidos", max: 50 },
                       { name: "address", label: "Dirección", max: 100 },
-                      { name: "city", label: "Ciudad", max: 30 },
                       { name: "phone", label: "Teléfono", max: 15 },
                     ].map((field) => (
                       <label key={field.name}>
@@ -557,6 +557,7 @@ export function BillingConsole({
                         />
                       </label>
                     ))}
+                    <LocationSelect required cityMaxLength={30} />
                   </div>
                   <label>
                     <input

@@ -16,6 +16,7 @@ type LocationSelectProps = {
   defaultCity?: string;
   required?: boolean;
   className?: string;
+  cityMaxLength?: number;
 };
 
 async function loadOptions(url: string): Promise<LocationOption[]> {
@@ -34,6 +35,7 @@ export function LocationSelect({
   defaultCity = "",
   required = false,
   className = "",
+  cityMaxLength,
 }: LocationSelectProps) {
   const id = useId();
   const [countries, setCountries] = useState<LocationOption[]>([]);
@@ -45,7 +47,9 @@ export function LocationSelect({
   const manualCity = city === "OTHER";
 
   useEffect(() => {
-    loadOptions("/api/locations/countries").then(setCountries);
+    let active = true;
+    loadOptions("/api/locations/countries").then(options => { if(active) setCountries(options); }).catch(()=>{});
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {
@@ -53,10 +57,13 @@ export function LocationSelect({
     setCities([]);
     if (!country) return;
 
+    let active = true;
     loadOptions(`/api/locations/subdivisions?country=${encodeURIComponent(country)}`).then((next) => {
+      if(!active) return;
       setSubdivisions(next);
       setSubdivision((current) => current && !next.some((option) => option.value === current) ? "" : current);
-    });
+    }).catch(()=>{});
+    return () => { active = false; };
   }, [country]);
 
   useEffect(() => {
@@ -65,10 +72,13 @@ export function LocationSelect({
 
     const query = new URLSearchParams({ country });
     if (subdivision) query.set("subdivision", subdivision);
+    let active = true;
     loadOptions(`/api/locations/cities?${query.toString()}`).then((next) => {
+      if(!active) return;
       setCities(next);
       setCity((current) => current && !next.some((option) => option.value === current) ? "" : current);
-    });
+    }).catch(()=>{});
+    return () => { active = false; };
   }, [country, subdivision]);
 
   const selectClass =
@@ -107,7 +117,7 @@ export function LocationSelect({
           <option value="OTHER">Otra ciudad o distrito</option>
         </select>
         {manualCity || (!cities.length && country) ? (
-          <input name={cityName} required={required} placeholder="Escribe la ciudad o distrito" className={selectClass} />
+          <input name={cityName} required={required} minLength={required ? 2 : undefined} maxLength={cityMaxLength} placeholder="Escribe la ciudad o distrito" className={selectClass} />
         ) : (
           <input type="hidden" name={cityName} value={city} />
         )}
