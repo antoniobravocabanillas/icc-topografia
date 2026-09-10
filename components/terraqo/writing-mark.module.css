@@ -1,0 +1,11 @@
+.orb { display:inline-block; flex-shrink:0; overflow:visible; vertical-align:middle; }
+.front,.back { transform-origin:32px 32px; transition:opacity 220ms ease-out; animation:wave 3.8s ease-in-out infinite; animation-play-state:paused; }
+.back { animation-name:counterwave; animation-delay:-1.4s; }
+.orb[data-visible="true"][data-thinking="true"] .front,
+.orb[data-visible="true"][data-thinking="true"] .back { animation-play-state:running; animation-duration:1.35s; }
+:global(button:hover) .orb[data-visible="true"] .front,
+:global(button:focus-visible) .orb[data-visible="true"] .front { animation-play-state:running; }
+.orb[data-thinking="true"] .back { opacity:.9; }
+@keyframes wave { 0%,100% {transform:scaleY(.7)} 50% {transform:scaleY(1.6)} }
+@keyframes counterwave { 0%,100% {transform:scaleY(1) rotate(-5deg)} 50% {transform:scaleY(.6) rotate(8deg)} }
+@media(prefers-reduced-motion:reduce) { .front,.back {animation:none;transform:none;} }

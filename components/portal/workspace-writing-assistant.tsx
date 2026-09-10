@@ -247,8 +247,8 @@ export function WorkspaceWritingAssistant() {
           className="fixed z-[82] flex h-9 items-center gap-2 rounded-full border border-[#85a9d8]/60 bg-[#10253d]/95 px-2.5 text-[11px] font-bold text-white shadow-[0_10px_28px_rgba(16,37,61,.28)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-[#183b63]"
           aria-label="Abrir Pulso de redacción"
         >
-          <span className="grid h-6 w-6 place-items-center rounded-full bg-gradient-to-br from-[#5d8fd1] to-[#43bed0]">
-            <TerraqoWritingMark className="h-4 w-4" />
+          <span className="grid h-7 w-7 place-items-center">
+            <TerraqoWritingMark className="h-7 w-7" />
           </span>
           Pulir
         </button>
@@ -262,7 +262,7 @@ export function WorkspaceWritingAssistant() {
         >
           <header className="flex items-start gap-3 border-b border-slate-100 pb-3">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-[#10253d] text-white">
-              <TerraqoWritingMark className="h-5 w-5" />
+              <TerraqoWritingMark thinking={working} className="h-10 w-10" />
             </span>
             <span className="min-w-0 flex-1">
               <b className="block text-sm text-[#0e1a26]">Pulso de redacción</b>
