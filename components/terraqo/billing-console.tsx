@@ -1,6 +1,7 @@
 "use client";
 import Script from "next/script";
 import Link from "next/link";
+import { PortalPlanCatalog } from "./portal-plan-catalog";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BILLING_PLANS,
@@ -59,6 +60,7 @@ declare global {
   }
 }
 const messages: Record<string, string> = {
+  BILLING_NOT_CONFIGURED: "Los pagos todavía no están configurados. Puedes comparar los planes; no se realizará ningún cargo.",
   VERIFY_EMAIL_FIRST: "Verifica tu correo antes de contratar.",
   PLAN_NOT_READY:
     "Este plan todavía no está habilitado para cobro en este entorno.",
@@ -112,6 +114,7 @@ export function BillingConsole({
       const body = await r.json();
       if (!r.ok) throw new Error(body.error);
       setData(body);
+      setNotice("");
       setWorkspaceId((current) => current || body.workspaces[0]?.id || "");
     } catch (e) {
       setNotice(
@@ -359,13 +362,15 @@ export function BillingConsole({
       <p role="status" style={{ padding: "16px 0", lineHeight: 1.6 }}>
         {notice}
       </p>
+      <PortalPlanCatalog cycle={cycle} busy={busy} onCycle={(value)=>{setCycle(value);setConsent(false);}} onSelect={(value)=>{setCode(value);setConsent(false);}} />
+      <div id="facturacion" className="scroll-mt-24" />
       {!data ? (
         <button className={s.primary} onClick={() => void load()}>
           Volver a cargar
         </button>
       ) : (
         <>
-          <section className={s.simulator}>
+          <section className={s.simulator} aria-label="Confirmar plan y facturación">
             <div className={s.config}>
               <h2>Plan y facturación</h2>
               <label>

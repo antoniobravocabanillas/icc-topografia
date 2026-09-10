@@ -497,7 +497,7 @@ export function PortalShell({
             </div>
           </aside>
 
-          <main className="min-w-0">{(!planTier||planTier==="FREE")&&<aside className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-200 bg-white p-4 text-slate-900" aria-label="Mejorar mi plan"><div><p className="font-semibold">Tu cuenta gratuita es solo el comienzo.</p><p className="text-sm text-slate-600">Compara capacidades y elige cuándo ampliar tu plan.</p></div><Link href="/portal/membresia" className="rounded-lg bg-blue-700 px-4 py-2 font-semibold text-white hover:bg-blue-800">Explorar membresías</Link></aside>}{children}</main>
+          <main className="min-w-0">{(!planTier||planTier==="FREE")&&<aside className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-200 bg-white p-4 text-slate-900" aria-label="Mejorar mi plan"><div><p className="font-semibold">Tu cuenta gratuita es solo el comienzo.</p><p className="text-sm text-slate-600">Compara capacidades y elige cuándo ampliar tu plan.</p></div><Link href="/portal/membresia#planes" className="rounded-lg bg-blue-700 px-4 py-2 font-semibold text-white hover:bg-blue-800">Explorar membresías</Link></aside>}{children}</main>
         </div>
       </div>
 
