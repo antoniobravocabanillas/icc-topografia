@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 
-const credentialsSchema = z.object({ email: z.string().email(), password: z.string().optional(), passkeyToken: z.string().optional() });
+const credentialsSchema = z.object({ email: z.string().trim().toLowerCase().email(), password: z.string().optional(), passkeyToken: z.string().optional() });
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   adapter: PrismaAdapter(prisma),

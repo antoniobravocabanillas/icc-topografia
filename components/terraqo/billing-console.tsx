@@ -93,6 +93,9 @@ export function BillingConsole({
   );
   const [cycle, setCycle] = useState(initialCycle);
   const [workspaceId, setWorkspaceId] = useState("");
+  const [companyName,setCompanyName]=useState("");
+  const companyKey=useRef<string|null>(null);
+  const [creatingCompany,setCreatingCompany]=useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [consent, setConsent] = useState(false);
@@ -406,6 +409,7 @@ export function BillingConsole({
                 </select>
               </label>
               {plan.audience === "WORKSPACE" && (
+                <div>
                 <label>
                   Empresa a facturar
                   <select
@@ -415,7 +419,7 @@ export function BillingConsole({
                       setConsent(false);
                     }}
                   >
-                    <option value="">Seleccionar empresa</option>
+                    <option value="">{data.workspaces.length ? "Seleccionar empresa" : "No tienes empresas propias registradas"}</option>
                     {data.workspaces.map((w) => (
                       <option key={w.id} value={w.id}>
                         {w.name}
@@ -423,6 +427,18 @@ export function BillingConsole({
                     ))}
                   </select>
                 </label>
+                <p className={s.disclaimer}>Selecciona la empresa que recibirá el plan. Solo su propietario puede contratar. No necesitas empresa para una membresía personal.</p>
+                <details open={data.workspaces.length===0}>
+                  <summary>Registrar una empresa nueva</summary>
+                  <label>Nombre o razón social<input value={companyName} maxLength={120} disabled={creatingCompany||busy} onChange={e=>setCompanyName(e.target.value)}/></label>
+                  <p className={s.disclaimer}>Se creará un espacio gratuito independiente. Este paso no cobra ni activa una suscripción de pago.</p>
+                  <button type="button" className={s.primary} disabled={creatingCompany||busy||companyName.trim().length<2} onClick={async()=>{
+                    setCreatingCompany(true);companyKey.current ||= crypto.randomUUID();
+                    try{const response=await fetch("/api/terraqo/billing/workspace",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:companyName.trim(),key:companyKey.current})});const result=await response.json();if(!response.ok)throw new Error(result.error);await load();setWorkspaceId(result.id);setCompanyName("");companyKey.current=null;setNotice("Empresa registrada y seleccionada. Revisa los datos antes de pagar.");}
+                    catch(error){setNotice(messages[error instanceof Error?error.message:""]||"No se pudo registrar la empresa. Puedes reintentar sin duplicarla.");}finally{setCreatingCompany(false);}
+                  }}>{creatingCompany?"Registrando…":"Crear y seleccionar empresa"}</button>
+                </details>
+                </div>
               )}
               <p>{plan.description}</p>
               <div className={s.price}>
