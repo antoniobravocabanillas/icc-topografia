@@ -10,6 +10,8 @@ import {
 } from "react";
 import { MessageSquare, Search, Send, X } from "lucide-react";
 import { UserAvatar } from "@/components/terraqo/user-avatar";
+import { AutoGrowTextarea } from "@/components/ui/auto-grow-textarea";
+import { WritingAssistantTrigger } from "@/components/terraqo/composer-tools";
 
 type Person = {
   id: string;
@@ -55,6 +57,8 @@ export function MessageDrawer({ currentUserId }: { currentUserId: string }) {
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const sendingRef = useRef(false);
   const load = useCallback(async (id?: string) => {
     const response = await fetch(
       `/api/terraqo/messages${id ? `?conversation=${id}` : ""}`,
@@ -96,9 +100,11 @@ export function MessageDrawer({ currentUserId }: { currentUserId: string }) {
   const selectedPerson = selected ? other(selected, currentUserId) : null;
   async function send(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selected) return;
+    if (!selected || sendingRef.current) return;
     const form = event.currentTarget;
     const data = new FormData(form);
+    if (!String(data.get("body") || "").trim()) return;
+    sendingRef.current = true;
     setBusy(true);
     setError("");
     try {
@@ -125,6 +131,7 @@ export function MessageDrawer({ currentUserId }: { currentUserId: string }) {
           : "No pudimos enviar el mensaje.",
       );
     } finally {
+      sendingRef.current = false;
       setBusy(false);
     }
   }
@@ -147,7 +154,7 @@ export function MessageDrawer({ currentUserId }: { currentUserId: string }) {
         />
       ) : null}
       <div
-        className={`fixed inset-y-0 right-0 z-[70] w-full max-w-[390px] border-l bg-white shadow-[-24px_0_70px_rgba(14,26,38,0.18)] transition-transform duration-300 ${open ? "translate-x-0" : "translate-x-full"}`}
+        className={`fixed inset-y-0 right-0 z-[70] w-full max-w-[390px] border-l bg-white shadow-[-24px_0_70px_rgba(14,26,38,0.18)] transition-transform duration-200 motion-reduce:transition-none ${open ? "translate-x-0" : "translate-x-full"}`}
         aria-hidden={!open}
         inert={!open}
       >
@@ -219,21 +226,47 @@ export function MessageDrawer({ currentUserId }: { currentUserId: string }) {
                   </div>
                 ))}
               </div>
-              <form onSubmit={send} className="flex gap-2 border-t pt-3">
-                <input
+              <form key={selected.id} onSubmit={send} className="border-t pt-3">
+                <AutoGrowTextarea
+                  ref={composerRef}
+                  disabled={busy}
+                  data-ai-writing="manual"
+                  aria-label="Escribe un mensaje"
                   name="body"
                   required
                   maxLength={4000}
                   placeholder="Escribe un mensaje..."
-                  className="h-11 min-w-0 flex-1 rounded-xl border px-3 text-sm"
+                  className="rounded-xl border px-3 py-2 focus-visible:outline-teal-700"
+                  onKeyDown={(event) => {
+                    if (
+                      event.key === "Enter" &&
+                      !event.shiftKey &&
+                      !event.nativeEvent.isComposing
+                    ) {
+                      event.preventDefault();
+                      event.currentTarget.form?.requestSubmit();
+                    }
+                  }}
                 />
-                <button
-                  disabled={busy}
-                  className="grid h-11 w-11 place-items-center rounded-xl bg-[#4374ba] text-white"
-                  aria-label="Enviar"
-                >
-                  <Send className="h-4 w-4" />
-                </button>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <WritingAssistantTrigger
+                    field={composerRef}
+                    disabled={busy}
+                  />
+                  <a
+                    href={`/portal/mensajes?conversation=${selected.id}`}
+                    className="text-sm font-semibold text-[#315f9f]"
+                  >
+                    Abrir chat completo
+                  </a>
+                  <button
+                    disabled={busy}
+                    className="grid h-11 w-11 place-items-center rounded-xl bg-[#4374ba] text-white"
+                    aria-label="Enviar"
+                  >
+                    <Send className="h-4 w-4" />
+                  </button>
+                </div>
               </form>
             </div>
           ) : (

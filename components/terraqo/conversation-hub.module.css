@@ -1,0 +1,55 @@
+.workspace {
+  display: grid;
+  height: clamp(520px, calc(100dvh - 210px), 960px);
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #d8e2e8;
+  border-radius: 16px;
+  background: #fff;
+  color: #142536;
+  scrollbar-width: thin;
+  scrollbar-color: #bdccd5 transparent;
+}
+.workspace :is(button, a, input):focus-visible {
+  outline: 2px solid #0b6f68;
+  outline-offset: -2px;
+}
+.workspace ::selection {
+  background: #c6e9e5;
+  color: #142536;
+}
+.workspace > aside:last-child {
+  min-height: 0;
+  overflow-y: auto;
+}
+.composer {
+  padding: 8px;
+  border: 1px solid #ccd9e3;
+  border-radius: 16px;
+  background: white;
+}
+.composer:focus-within {
+  border-color: #0b6f68;
+}
+.composer textarea {
+  caret-color: #0b6f68;
+}
+@media (min-width: 1024px) {
+  .workspace {
+    grid-template-columns: 280px minmax(0, 1fr);
+  }
+}
+@media (min-width: 1536px) {
+  .workspace[data-contact-open="true"] {
+    grid-template-columns: 290px minmax(0, 1fr) 280px;
+  }
+  .workspace[data-contact-open="false"] > aside:last-child {
+    display: none;
+  }
+}
+@media (max-width: 639px) {
+  .workspace {
+    height: max(440px, calc(100dvh - 200px));
+    border-radius: 12px;
+  }
+}

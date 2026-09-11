@@ -7,6 +7,7 @@ import {
   useState,
   type CSSProperties,
 } from "react";
+import { createPortal } from "react-dom";
 import { Check, LoaderCircle, RotateCcw, X } from "lucide-react";
 import { TerraqoWritingMark } from "@/components/terraqo/writing-mark";
 
@@ -87,6 +88,9 @@ function updateField(field: EditableField, value: string) {
 export function WorkspaceWritingAssistant() {
   const fieldRef = useRef<EditableField | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
+  const anchorRef = useRef<HTMLElement | null>(null);
+  const requestRef = useRef<AbortController | null>(null);
+  const sourceRef = useRef<{ field: EditableField; text: string } | null>(null);
   const [visible, setVisible] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [working, setWorking] = useState(false);
@@ -104,13 +108,21 @@ export function WorkspaceWritingAssistant() {
   const reposition = useCallback(() => {
     const field = fieldRef.current;
     if (!field || !document.contains(field)) return setVisible(false);
-    const rect = field.getBoundingClientRect();
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
+    const fieldRect = field.getBoundingClientRect();
+    const anchorRect = (anchorRef.current || field).getBoundingClientRect();
+    const rect = {
+      top: fieldRect.top,
+      bottom: anchorRect.bottom,
+      left: anchorRect.left,
+      right: anchorRect.right,
+    };
+    const viewportWidth = window.visualViewport?.width || window.innerWidth;
+    const viewportHeight = window.visualViewport?.height || window.innerHeight;
+    const offsetTop = window.visualViewport?.offsetTop || 0;
     const mobile = viewportWidth < 768;
     const width = mobile
       ? viewportWidth - 24
-      : Math.min(680, viewportWidth - 32);
+      : Math.min(440, viewportWidth - 32);
     const panelHeight = Math.min(
       panelRef.current?.offsetHeight || 430,
       viewportHeight - 32,
@@ -130,7 +142,7 @@ export function WorkspaceWritingAssistant() {
         : Math.min(rect.bottom + 12, viewportHeight - panelHeight - 16);
     setPlacement({
       left,
-      top,
+      top: Math.max(offsetTop + 12, top + offsetTop),
       width,
       launcherLeft: Math.max(
         12,
@@ -145,21 +157,47 @@ export function WorkspaceWritingAssistant() {
   }, []);
 
   useEffect(() => {
+    const open = (event: Event) => {
+      const detail = (
+        event as CustomEvent<{ field: EditableField; anchor: HTMLElement }>
+      ).detail;
+      if (!isEditableProseField(detail?.field)) return;
+      requestRef.current?.abort();
+      fieldRef.current = detail.field;
+      anchorRef.current = detail.anchor;
+      setWorking(false);
+      setMessage("");
+      setSuggestions(null);
+      setVisible(true);
+      setExpanded(true);
+      requestAnimationFrame(reposition);
+    };
     const focus = (event: FocusEvent) => {
       if (!isEditableProseField(event.target)) return;
+      if (event.target === fieldRef.current) return;
+      requestRef.current?.abort();
+      setWorking(false);
+      anchorRef.current = null;
       fieldRef.current = event.target;
       setMessage("");
       setSuggestions(null);
       setExpanded(false);
-      setVisible(true);
+      setVisible(event.target.dataset.aiWriting !== "manual");
       requestAnimationFrame(reposition);
     };
     const move = () => requestAnimationFrame(reposition);
     document.addEventListener("focusin", focus);
+    document.addEventListener("terraqo:open-writing-assistant", open);
+    window.visualViewport?.addEventListener("resize", move);
+    window.visualViewport?.addEventListener("scroll", move);
     window.addEventListener("resize", move);
     window.addEventListener("scroll", move, true);
     return () => {
       document.removeEventListener("focusin", focus);
+      document.removeEventListener("terraqo:open-writing-assistant", open);
+      window.visualViewport?.removeEventListener("resize", move);
+      window.visualViewport?.removeEventListener("scroll", move);
+      requestRef.current?.abort();
       window.removeEventListener("resize", move);
       window.removeEventListener("scroll", move, true);
     };
@@ -172,16 +210,35 @@ export function WorkspaceWritingAssistant() {
       const target = event.target as Node;
       if (
         panelRef.current?.contains(target) ||
+        anchorRef.current?.contains(target) ||
         fieldRef.current?.contains(target)
       )
         return;
       setExpanded(false);
     };
     document.addEventListener("pointerdown", outside);
-    return () => document.removeEventListener("pointerdown", outside);
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setExpanded(false);
+        anchorRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", escape);
+    const resize = new ResizeObserver(reposition);
+    if (panelRef.current) resize.observe(panelRef.current);
+    panelRef.current
+      ?.querySelector<HTMLButtonElement>("button")
+      ?.focus({ preventScroll: true });
+    return () => {
+      document.removeEventListener("pointerdown", outside);
+      document.removeEventListener("keydown", escape);
+      resize.disconnect();
+    };
   }, [expanded, reposition, suggestions]);
 
   async function improve() {
+    if (working) return;
     const field = fieldRef.current;
     const text = field?.value.trim() || "";
     if (!field || !document.contains(field)) return setVisible(false);
@@ -191,13 +248,19 @@ export function WorkspaceWritingAssistant() {
     setWorking(true);
     setMessage("");
     setSuggestions(null);
+    requestRef.current?.abort();
+    const request = new AbortController();
+    requestRef.current = request;
+    sourceRef.current = { field, text: field.value };
     try {
       const response = await fetch("/api/terraqo/writing-assistant", {
+        signal: request.signal,
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, purpose: inferPurpose(field) }),
       });
       const payload = await response.json();
+      if (request.signal.aborted || fieldRef.current !== field) return;
       if (!response.ok)
         throw new Error(payload?.error || "No pudimos revisar el texto.");
       setSuggestions(payload.data);
@@ -205,11 +268,12 @@ export function WorkspaceWritingAssistant() {
         `${payload.data.language} detectado · elige el acabado que prefieras`,
       );
     } catch (error) {
+      if (request.signal.aborted) return;
       setMessage(
         error instanceof Error ? error.message : "No pudimos revisar el texto.",
       );
     } finally {
-      setWorking(false);
+      if (requestRef.current === request) setWorking(false);
       requestAnimationFrame(reposition);
     }
   }
@@ -217,6 +281,25 @@ export function WorkspaceWritingAssistant() {
   function applySuggestion(text: string) {
     const field = fieldRef.current;
     if (!field || !document.contains(field)) return setVisible(false);
+    // Suggestions belong to the exact draft used for generation, never a newer edit.
+    if (
+      field.disabled ||
+      sourceRef.current?.field !== field ||
+      sourceRef.current.text !== field.value
+    ) {
+      setMessage(
+        "Tu texto cambió. Vuelve a preparar las versiones para no sobrescribir tus cambios.",
+      );
+      setSuggestions(null);
+      return;
+    }
+    if (field.maxLength > 0 && text.length > field.maxLength) {
+      setMessage(
+        `La versión supera los ${field.maxLength} caracteres permitidos. Acorta tu idea y vuelve a intentarlo.`,
+      );
+      setSuggestions(null);
+      return;
+    }
     updateField(field, text);
     setSuggestions(null);
     setExpanded(false);
@@ -231,11 +314,15 @@ export function WorkspaceWritingAssistant() {
     left: placement.left,
     top: placement.top,
     width: placement.width,
+    maxHeight:
+      (typeof window !== "undefined"
+        ? window.visualViewport?.height || window.innerHeight
+        : 600) - 24,
   } as CSSProperties;
 
-  return (
+  return createPortal(
     <>
-      {!expanded ? (
+      {!expanded && fieldRef.current?.dataset.aiWriting !== "manual" ? (
         <button
           type="button"
           style={launcherStyle}
@@ -257,8 +344,9 @@ export function WorkspaceWritingAssistant() {
         <aside
           ref={panelRef}
           style={panelStyle}
-          className="fixed z-[90] max-h-[calc(100dvh-24px)] overflow-y-auto rounded-[22px] border border-[#c7d6e5] bg-white/97 p-3 shadow-[0_24px_80px_rgba(9,28,49,.25)] backdrop-blur-2xl"
+          className="fixed z-[90] max-h-[calc(100dvh-24px)] overflow-y-auto rounded-2xl border border-[#c7d6e5] bg-white p-3 shadow-[0_24px_80px_rgba(9,28,49,.25)]"
           aria-label="Pulso de redacción Terraqo"
+          role="dialog"
         >
           <header className="flex items-start gap-3 border-b border-slate-100 pb-3">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-[#10253d] text-white">
@@ -273,8 +361,11 @@ export function WorkspaceWritingAssistant() {
             <button
               type="button"
               onPointerDown={(event) => event.preventDefault()}
-              onClick={() => setExpanded(false)}
-              className="grid h-9 w-9 place-items-center rounded-xl text-[#607083] hover:bg-slate-100"
+              onClick={() => {
+                setExpanded(false);
+                anchorRef.current?.focus();
+              }}
+              className="grid h-11 w-11 place-items-center rounded-xl text-[#607083] hover:bg-slate-100 focus-visible:outline-teal-700"
               aria-label="Cerrar"
             >
               <X className="h-4 w-4" />
@@ -283,8 +374,9 @@ export function WorkspaceWritingAssistant() {
           {!suggestions ? (
             <div className="py-4">
               <p className="text-sm leading-6 text-[#43566a]">
-                Analizo el idioma y preparo dos acabados: uno fiel a tu idea y
-                otro más profesional, sin inventar información.
+                Revisa únicamente el texto de este mensaje: una versión fiel a
+                tu idea y otra más profesional. Tú decides cuál usar; no se
+                envía automáticamente.
               </p>
               {message ? (
                 <p
@@ -306,9 +398,7 @@ export function WorkspaceWritingAssistant() {
                 ) : (
                   <TerraqoWritingMark className="h-4 w-4" />
                 )}
-                {working
-                  ? "Leyendo intención y contexto…"
-                  : "Preparar dos versiones"}
+                {working ? "Revisando tu texto…" : "Preparar dos versiones"}
               </button>
             </div>
           ) : (
@@ -326,16 +416,14 @@ export function WorkspaceWritingAssistant() {
                   <RotateCcw className="h-3.5 w-3.5" /> Rehacer
                 </button>
               </div>
-              <div className="grid gap-2 md:grid-cols-2">
+              <div className="grid gap-3">
                 <AssistantSuggestion
-                  eyebrow="Precisión"
                   title="Corrección fiel"
                   description="Ortografía, gramática y sintaxis; conserva tu forma de expresarte."
                   text={suggestions.corrected}
                   onApply={() => applySuggestion(suggestions.corrected)}
                 />
                 <AssistantSuggestion
-                  eyebrow="Proyección"
                   title="Versión profesional"
                   description="Más clara y sólida; mantiene hechos y esencia."
                   text={suggestions.improved}
@@ -358,18 +446,17 @@ export function WorkspaceWritingAssistant() {
           />
         </aside>
       ) : null}
-    </>
+    </>,
+    document.body,
   );
 }
 
 function AssistantSuggestion({
-  eyebrow,
   title,
   description,
   text,
   onApply,
 }: {
-  eyebrow: string;
   title: string;
   description: string;
   text: string;
@@ -377,9 +464,6 @@ function AssistantSuggestion({
 }) {
   return (
     <article className="flex min-h-0 flex-col rounded-2xl border border-[#d8e2e8] bg-[#f7fafc] p-3">
-      <span className="text-[10px] font-extrabold uppercase tracking-[.16em] text-[#4374ba]">
-        {eyebrow}
-      </span>
       <p className="mt-1 text-sm font-bold text-[#0e1a26]">{title}</p>
       <p className="mt-1 text-xs leading-5 text-[#607083]">{description}</p>
       <p className="mt-3 max-h-40 flex-1 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-[#35485b]">

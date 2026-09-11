@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -8,6 +9,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   BadgeCheck,
@@ -20,8 +22,6 @@ import {
   MessageSquareText,
   Mic,
   Paperclip,
-  Pause,
-  Play,
   Plus,
   Search,
   Send,
@@ -35,6 +35,13 @@ import type { ConversationHubData } from "@/lib/terraqo/messaging";
 import { createMeetingAction } from "@/lib/terraqo/meet-actions";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/terraqo/user-avatar";
+import { AutoGrowTextarea } from "@/components/ui/auto-grow-textarea";
+import {
+  ComposerEmojiPicker,
+  WritingAssistantTrigger,
+  composerToolClass,
+} from "@/components/terraqo/composer-tools";
+import styles from "./conversation-hub.module.css";
 
 type Conversation = ConversationHubData["conversations"][number];
 type Message = Conversation["messages"][number];
@@ -116,7 +123,17 @@ function formatBytes(value: number) {
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function ConversationHub({
+export function ConversationHub(props: ConversationHubProps) {
+  // Never carry an attachment or pending recording to a different recipient.
+  return (
+    <ConversationWorkspace
+      key={props.data.selected?.id || "inbox"}
+      {...props}
+    />
+  );
+}
+
+function ConversationWorkspace({
   data,
   currentUserId,
   basePath,
@@ -139,6 +156,82 @@ export function ConversationHub({
   const recorderRef = useRef<MediaRecorder | null>(null);
   const recordingStartedRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const messagesRef = useRef<HTMLDivElement>(null);
+  const sendingRef = useRef(false);
+  const mountedRef = useRef(true);
+  const acquiringRef = useRef(false);
+  const streamRef = useRef<MediaStream | null>(null);
+  const recordingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [contactOpen, setContactOpen] = useState(true);
+  const [showConversation, setShowConversation] = useState(Boolean(selected));
+  const newMessageRef = useRef<HTMLDialogElement>(null);
+  const [starting, setStarting] = useState(false);
+  const startingRef = useRef(false);
+  const [imagePreview, setImagePreview] = useState("");
+  useEffect(() => {
+    if (newMessageOpen) newMessageRef.current?.showModal();
+    else newMessageRef.current?.close();
+  }, [newMessageOpen]);
+  useEffect(() => {
+    if (!file?.type.startsWith("image/")) {
+      setImagePreview("");
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setImagePreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (recordingTimerRef.current) clearTimeout(recordingTimerRef.current);
+      if (recorderRef.current?.state === "recording")
+        recorderRef.current.stop();
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+    };
+  }, []);
+  useEffect(
+    () => () => {
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
+    },
+    [audioUrl],
+  );
+  useEffect(() => {
+    const list = messagesRef.current;
+    if (list && detailTab === "chat") list.scrollTop = list.scrollHeight;
+  }, [selected?.id, selected?.messages.length, detailTab]);
+
+  function selectFile(next: File | null) {
+    if (!next) return;
+    if (next.size > 20 * 1024 * 1024) {
+      setError("El archivo supera los 20 MB. Selecciona uno más pequeño.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (imageInputRef.current) imageInputRef.current.value = "";
+      return;
+    }
+    clearAttachment();
+    setError("");
+    setFile(next);
+  }
+
+  function insertEmoji(emoji: string) {
+    const field = composerRef.current;
+    if (!field) return;
+    const start = field.selectionStart;
+    const end = field.selectionEnd;
+    const next = body.slice(0, start) + emoji + body.slice(end);
+    if (next.length > 4000)
+      return setError("El mensaje admite hasta 4000 caracteres.");
+    setBody(next);
+    requestAnimationFrame(() => {
+      field.focus();
+      field.setSelectionRange(start + emoji.length, start + emoji.length);
+    });
+  }
 
   const conversations = useMemo(
     () =>
@@ -182,24 +275,36 @@ export function ConversationHub({
     recipientUserId: string,
     workspaceId?: string,
   ) {
+    if (startingRef.current) return;
+    startingRef.current = true;
+    setStarting(true);
     setError("");
-    const response = await fetch("/api/terraqo/messages", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        action: "start",
-        recipientUserId,
-        workspaceId: workspaceId || undefined,
-      }),
-    });
-    const payload = await response.json();
-    if (!response.ok)
-      return setError(
-        payload?.error?.message || "No pudimos iniciar la conversación.",
+    try {
+      const response = await fetch("/api/terraqo/messages", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "start",
+          recipientUserId,
+          workspaceId: workspaceId || undefined,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok)
+        return setError(
+          payload?.error?.message || "No pudimos iniciar la conversación.",
+        );
+      setNewMessageOpen(false);
+      router.push(`${basePath}?conversation=${payload.data.id}`);
+      router.refresh();
+    } catch {
+      setError(
+        "No se pudo conectar. Revisa tu conexión y vuelve a iniciar la conversación.",
       );
-    setNewMessageOpen(false);
-    router.push(`${basePath}?conversation=${payload.data.id}`);
-    router.refresh();
+    } finally {
+      startingRef.current = false;
+      setStarting(false);
+    }
   }
 
   function clearAttachment() {
@@ -208,11 +313,14 @@ export function ConversationHub({
     if (audioUrl) URL.revokeObjectURL(audioUrl);
     setAudioUrl("");
     if (fileInputRef.current) fileInputRef.current.value = "";
+    if (imageInputRef.current) imageInputRef.current.value = "";
   }
 
   async function send(event?: FormEvent) {
     event?.preventDefault();
-    if (!selected || sending || (!body.trim() && !file)) return;
+    if (!selected || sendingRef.current || recording || (!body.trim() && !file))
+      return;
+    sendingRef.current = true;
     setSending(true);
     setError("");
     try {
@@ -252,13 +360,16 @@ export function ConversationHub({
           : "No pudimos enviar el mensaje.",
       );
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   }
 
   async function toggleRecording() {
+    if (sendingRef.current || acquiringRef.current) return;
     if (recording) {
-      recorderRef.current?.stop();
+      if (recorderRef.current?.state === "recording")
+        recorderRef.current.stop();
       return;
     }
     setError("");
@@ -267,16 +378,32 @@ export function ConversationHub({
         "La grabación de audio no está disponible en este navegador.",
       );
     try {
+      acquiringRef.current = true;
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-        ? "audio/webm;codecs=opus"
-        : "audio/webm";
-      const recorder = new MediaRecorder(stream, { mimeType });
+      if (!mountedRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      streamRef.current = stream;
+      const mimeType = [
+        "audio/webm;codecs=opus",
+        "audio/mp4",
+        "audio/ogg;codecs=opus",
+        "audio/webm",
+      ].find((type) => MediaRecorder.isTypeSupported(type));
+      const recorder = new MediaRecorder(
+        stream,
+        mimeType ? { mimeType } : undefined,
+      );
+      clearAttachment();
       const chunks: BlobPart[] = [];
       recorder.ondataavailable = (event) => {
         if (event.data.size) chunks.push(event.data);
       };
       recorder.onstop = () => {
+        stream.getTracks().forEach((track) => track.stop());
+        if (recordingTimerRef.current) clearTimeout(recordingTimerRef.current);
+        if (!mountedRef.current) return;
         const blob = new Blob(chunks, {
           type: recorder.mimeType || "audio/webm",
         });
@@ -290,6 +417,11 @@ export function ConversationHub({
           `audio-terraqo-${Date.now()}.${extension}`,
           { type: blob.type },
         );
+        if (audio.size > 20 * 1024 * 1024) {
+          setRecording(false);
+          setError("El audio supera los 20 MB. Graba uno más corto.");
+          return;
+        }
         setFile(audio);
         setAudioUrl(URL.createObjectURL(blob));
         setDurationMs(Date.now() - recordingStartedRef.current);
@@ -299,16 +431,26 @@ export function ConversationHub({
       recorderRef.current = recorder;
       recordingStartedRef.current = Date.now();
       recorder.start(250);
+      recordingTimerRef.current = setTimeout(() => {
+        if (recorder.state === "recording") recorder.stop();
+      }, 180_000);
       setRecording(true);
     } catch {
+      streamRef.current?.getTracks().forEach((track) => track.stop());
       setError(
         "Necesitamos permiso para usar el micrófono. Puedes habilitarlo desde el navegador.",
       );
+    } finally {
+      acquiringRef.current = false;
     }
   }
 
   function handleComposerKey(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === "Enter" && !event.shiftKey) {
+    if (
+      event.key === "Enter" &&
+      !event.shiftKey &&
+      !event.nativeEvent.isComposing
+    ) {
       event.preventDefault();
       void send();
     }
@@ -319,9 +461,6 @@ export function ConversationHub({
       {!compactIntro ? (
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[.16em] text-[#4374ba]">
-              Red profesional
-            </p>
             <h2 className="mt-2 font-display text-3xl font-bold">Mensajes</h2>
             <p className="mt-1 text-sm text-slate-500">
               Comunicación privada con personas y equipos autorizados.
@@ -337,12 +476,12 @@ export function ConversationHub({
         </header>
       ) : null}
 
-      <div className="grid min-h-[720px] overflow-hidden rounded-[22px] border border-[#d8e2e8] bg-white shadow-[0_24px_70px_rgba(11,35,55,.08)] lg:grid-cols-[310px_minmax(0,1fr)] 2xl:grid-cols-[310px_minmax(0,1fr)_285px]">
+      <div data-contact-open={contactOpen} className={styles.workspace}>
         <aside
-          className={`${selected ? "max-lg:hidden" : ""} min-w-0 border-r bg-white`}
+          className={`${selected && showConversation ? "max-lg:hidden" : ""} flex min-h-0 min-w-0 flex-col border-r bg-white`}
         >
           <div className="border-b p-4">
-            <div className="flex gap-1.5 overflow-x-auto pb-1">
+            <div className="flex flex-wrap gap-1.5 pb-1">
               {(
                 [
                   ["all", "Todos"],
@@ -353,8 +492,9 @@ export function ConversationHub({
               ).map(([value, label]) => (
                 <button
                   key={value}
+                  aria-pressed={filter === value}
                   onClick={() => setFilter(value)}
-                  className={`h-9 shrink-0 rounded-xl px-3 text-[11px] font-bold ${filter === value ? "bg-[#0b6f68] text-white" : "border bg-white text-slate-600"}`}
+                  className={`min-h-11 shrink-0 rounded-xl px-3 text-xs font-bold ${filter === value ? "bg-[#0b6f68] text-white" : "border bg-white text-slate-600"}`}
                 >
                   {label}
                 </button>
@@ -363,6 +503,7 @@ export function ConversationHub({
             <label className="relative mt-3 block">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
+                aria-label="Buscar conversaciones"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Buscar conversaciones"
@@ -379,7 +520,7 @@ export function ConversationHub({
           </div>
           <nav
             aria-label="Conversaciones"
-            className="max-h-[580px] overflow-y-auto p-2"
+            className="min-h-0 flex-1 overflow-y-auto p-2"
           >
             {conversations.map((conversation) => {
               const active = selected?.id === conversation.id;
@@ -390,6 +531,8 @@ export function ConversationHub({
                 <Link
                   key={conversation.id}
                   href={`${basePath}?conversation=${conversation.id}`}
+                  onClick={() => setShowConversation(true)}
+                  aria-current={active ? "page" : undefined}
                   className={`mb-1 flex gap-3 rounded-2xl p-3 transition ${active ? "bg-[#e9f6f5]" : "hover:bg-slate-50"}`}
                 >
                   <div className="relative">
@@ -437,14 +580,21 @@ export function ConversationHub({
           </nav>
         </aside>
 
-        <section className="flex min-h-[720px] min-w-0 flex-col bg-[#f7f9fb]">
+        <section
+          className={`${!selected || !showConversation ? "max-lg:hidden" : ""} flex min-h-0 min-w-0 flex-col bg-[#f7f9fb]`}
+        >
           {selected ? (
             <>
               <header className="flex min-h-[76px] items-center justify-between gap-3 border-b bg-white px-4 sm:px-5">
                 <div className="flex min-w-0 items-center gap-3">
-                  <Link href={basePath} className="lg:hidden">
+                  <button
+                    type="button"
+                    onClick={() => setShowConversation(false)}
+                    aria-label="Volver a conversaciones"
+                    className="grid h-11 w-11 shrink-0 place-items-center lg:hidden"
+                  >
                     ←
-                  </Link>
+                  </button>
                   <UserAvatar {...selectedAvatar} size="md" />
                   <div className="min-w-0">
                     <h3 className="truncate text-sm font-bold">
@@ -491,10 +641,16 @@ export function ConversationHub({
                     )
                   ) : null}
                   <button
-                    onClick={() =>
-                      setDetailTab(detailTab === "profile" ? "chat" : "profile")
-                    }
-                    className="grid h-10 w-10 place-items-center rounded-xl border 2xl:hidden"
+                    onClick={() => {
+                      if (window.matchMedia("(min-width: 1536px)").matches)
+                        setContactOpen(!contactOpen);
+                      else
+                        setDetailTab(
+                          detailTab === "profile" ? "chat" : "profile",
+                        );
+                    }}
+                    className="grid h-11 w-11 place-items-center rounded-xl border"
+                    aria-label="Información del contacto"
                     title="Información"
                   >
                     <SlidersHorizontal className="h-4 w-4" />
@@ -514,6 +670,7 @@ export function ConversationHub({
                 ).map(([value, label]) => (
                   <button
                     key={value}
+                    aria-pressed={detailTab === value}
                     onClick={() => setDetailTab(value)}
                     className={`relative min-h-11 px-4 text-xs font-bold ${detailTab === value ? "text-[#0b6f68]" : "text-slate-500"}`}
                   >
@@ -527,7 +684,11 @@ export function ConversationHub({
 
               {detailTab === "chat" ? (
                 <>
-                  <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-6 sm:px-6">
+                  <div
+                    ref={messagesRef}
+                    aria-label="Historial de mensajes"
+                    className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-6 sm:px-6"
+                  >
                     <div className="text-center">
                       <span className="rounded-full bg-white px-3 py-1 text-[10px] font-semibold text-slate-500 shadow-sm">
                         Conversación privada
@@ -569,8 +730,15 @@ export function ConversationHub({
                             controls
                             className="h-9 min-w-0 flex-1"
                           />
-                        ) : file.type.startsWith("image/") ? (
-                          <ImageIcon className="h-5 w-5 text-[#4374ba]" />
+                        ) : imagePreview ? (
+                          <Image
+                            src={imagePreview}
+                            alt="Vista previa del adjunto"
+                            width={56}
+                            height={56}
+                            unoptimized
+                            className="h-14 w-14 shrink-0 rounded-lg object-cover"
+                          />
                         ) : (
                           <FileText className="h-5 w-5 text-[#4374ba]" />
                         )}
@@ -580,51 +748,90 @@ export function ConversationHub({
                             {formatBytes(file.size)}
                           </small>
                         </span>
-                        <button type="button" onClick={clearAttachment}>
+                        <button
+                          type="button"
+                          disabled={sending}
+                          aria-label="Quitar adjunto"
+                          className={composerToolClass}
+                          onClick={clearAttachment}
+                        >
                           <X className="h-4 w-4" />
                         </button>
                       </div>
                     ) : null}
-                    <div className="rounded-2xl border bg-white p-2 shadow-[0_12px_32px_rgba(15,35,55,.06)]">
-                      <textarea
+                    <div className={styles.composer}>
+                      <AutoGrowTextarea
+                        ref={composerRef}
+                        name="message"
+                        data-ai-writing="manual"
+                        aria-label="Escribe un mensaje"
+                        disabled={sending}
                         value={body}
                         onChange={(event) => setBody(event.target.value)}
                         onKeyDown={handleComposerKey}
                         rows={2}
                         maxLength={4000}
                         placeholder="Escribe un mensaje…"
-                        className="w-full resize-none border-0 px-2 py-1 text-sm outline-none"
+                        className="border-0 bg-transparent px-2 py-2 text-slate-900 placeholder:text-slate-500 focus-visible:outline-none"
                       />
-                      <div className="flex items-center justify-between gap-2 border-t pt-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-2">
                         <div className="flex gap-1">
                           <input
                             ref={fileInputRef}
                             type="file"
                             className="hidden"
                             accept="image/jpeg,image/png,image/webp,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip,audio/*"
-                            onChange={(event) => {
-                              const next = event.target.files?.[0] || null;
-                              if (next && next.size > 20 * 1024 * 1024) {
-                                setError("El archivo supera los 20 MB.");
-                                event.target.value = "";
-                                return;
-                              }
-                              clearAttachment();
-                              setFile(next);
-                            }}
+                            disabled={sending || recording}
+                            onChange={(event) =>
+                              selectFile(event.target.files?.[0] || null)
+                            }
+                          />
+                          <input
+                            ref={imageInputRef}
+                            type="file"
+                            className="hidden"
+                            accept="image/jpeg,image/png,image/webp"
+                            disabled={sending || recording}
+                            onChange={(event) =>
+                              selectFile(event.target.files?.[0] || null)
+                            }
                           />
                           <button
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
-                            className="grid h-9 w-9 place-items-center rounded-xl text-slate-500 hover:bg-slate-100"
+                            className={composerToolClass}
+                            disabled={sending || recording}
+                            aria-label="Adjuntar archivo"
                             title="Adjuntar archivo"
                           >
                             <Paperclip className="h-4 w-4" />
                           </button>
                           <button
                             type="button"
+                            disabled={sending || recording}
+                            className={composerToolClass}
+                            aria-label="Adjuntar imagen"
+                            title="Adjuntar imagen"
+                            onClick={() => imageInputRef.current?.click()}
+                          >
+                            <ImageIcon className="h-5 w-5" />
+                          </button>
+                          <ComposerEmojiPicker
+                            disabled={sending}
+                            onSelect={insertEmoji}
+                          />
+                          <WritingAssistantTrigger
+                            disabled={sending || recording}
+                            field={composerRef}
+                          />
+                          <button
+                            type="button"
                             onClick={toggleRecording}
-                            className={`grid h-9 w-9 place-items-center rounded-xl ${recording ? "animate-pulse bg-rose-50 text-rose-600" : "text-slate-500 hover:bg-slate-100"}`}
+                            className={`${composerToolClass} ${recording ? "bg-rose-50 text-rose-700" : ""}`}
+                            disabled={sending}
+                            aria-label={
+                              recording ? "Detener grabación" : "Grabar audio"
+                            }
                             title={
                               recording ? "Detener grabación" : "Grabar audio"
                             }
@@ -636,26 +843,34 @@ export function ConversationHub({
                             )}
                           </button>
                           {recording ? (
-                            <span className="self-center text-[10px] font-bold text-rose-600">
+                            <span
+                              role="status"
+                              className="self-center text-xs font-bold text-rose-700"
+                            >
                               Grabando…
                             </span>
                           ) : null}
                         </div>
                         <button
-                          disabled={sending || (!body.trim() && !file)}
-                          className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#0b6f68] px-4 text-xs font-bold text-white disabled:opacity-45"
+                          disabled={
+                            sending || recording || (!body.trim() && !file)
+                          }
+                          className="ml-auto inline-flex h-11 items-center gap-2 rounded-xl bg-[#0b6f68] px-4 text-sm font-bold text-white disabled:opacity-45"
                         >
                           <Send className="h-4 w-4" />
                           {sending ? "Enviando…" : "Enviar"}
                         </button>
                       </div>
                     </div>
-                    <p className="mt-2 text-[10px] text-slate-400">
+                    <p className="mt-2 text-xs text-slate-500">
                       Enter para enviar · Shift + Enter para nueva línea ·
                       máximo 20 MB
                     </p>
                     {error ? (
-                      <p className="mt-2 text-xs font-medium text-rose-600">
+                      <p
+                        role="alert"
+                        className="mt-2 text-sm font-medium text-rose-700"
+                      >
                         {error}
                       </p>
                     ) : null}
@@ -713,8 +928,11 @@ export function ConversationHub({
       </div>
 
       {newMessageOpen ? (
-        <div
-          className="fixed inset-0 z-[120] grid place-items-center bg-slate-950/45 p-3 backdrop-blur-sm"
+        <dialog
+          ref={newMessageRef}
+          aria-label="Nuevo mensaje"
+          onCancel={() => setNewMessageOpen(false)}
+          className="m-auto max-h-[86dvh] w-[calc(100%-24px)] max-w-lg rounded-2xl bg-white p-0 text-slate-900 shadow-2xl backdrop:bg-slate-950/40"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) setNewMessageOpen(false);
           }}
@@ -730,6 +948,7 @@ export function ConversationHub({
                 </p>
               </div>
               <button
+                aria-label="Cerrar nuevo mensaje"
                 onClick={() => setNewMessageOpen(false)}
                 className="grid h-9 w-9 place-items-center rounded-xl border"
               >
@@ -740,6 +959,7 @@ export function ConversationHub({
               <label className="relative block">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
+                  aria-label="Buscar persona o empresa"
                   value={recipientQuery}
                   onChange={(event) => setRecipientQuery(event.target.value)}
                   autoFocus
@@ -759,6 +979,7 @@ export function ConversationHub({
                   )
                   .map((recipient) => (
                     <button
+                      disabled={starting}
                       key={`${recipient.userId}:${recipient.workspaceId}`}
                       onClick={() =>
                         startConversation(
@@ -792,7 +1013,7 @@ export function ConversationHub({
               </div>
             </div>
           </section>
-        </div>
+        </dialog>
       ) : null}
     </div>
   );
@@ -819,10 +1040,10 @@ function MessageBubble({
         />
       ) : null}
       <div
-        className={`max-w-[86%] rounded-2xl px-3.5 py-2.5 shadow-sm sm:max-w-[72%] ${mine ? "rounded-br-md bg-gradient-to-br from-[#0b6f68] to-[#118b81] text-white" : "rounded-bl-md border bg-white text-slate-800"}`}
+        className={`min-w-0 max-w-[86%] rounded-2xl px-3.5 py-2.5 sm:max-w-[80%] ${mine ? "rounded-br-md bg-[#e0f2ef] text-[#163b39]" : "rounded-bl-md border bg-white text-slate-800"}`}
       >
         {message.body ? (
-          <p className="whitespace-pre-wrap text-sm leading-6">
+          <p className="whitespace-pre-wrap break-words text-sm leading-6 [overflow-wrap:anywhere]">
             {message.body}
           </p>
         ) : null}
@@ -833,13 +1054,12 @@ function MessageBubble({
             mine={mine}
           />
         ))}
-        <div
-          className={`mt-1.5 flex items-center justify-end gap-1 text-[9px] ${mine ? "text-white/70" : "text-slate-400"}`}
-        >
+        <div className="mt-1.5 flex items-center justify-end gap-1 text-xs text-slate-600">
           <time>{formatTime(message.createdAt)}</time>
           {mine ? (
             <CheckCheck
-              className={`h-3.5 w-3.5 ${read ? "text-cyan-200" : ""}`}
+              aria-label={read ? "Leído" : "Enviado"}
+              className={`h-3.5 w-3.5 ${read ? "text-teal-700" : ""}`}
             />
           ) : null}
         </div>
@@ -865,9 +1085,12 @@ function MessageAttachment({
         rel="noreferrer"
         className="mt-2 block overflow-hidden rounded-xl"
       >
-        <img
+        <Image
           src={`/api/terraqo/messages/attachments/${attachment.id}`}
           alt={attachment.fileName}
+          width={640}
+          height={480}
+          unoptimized
           className="max-h-72 w-full object-cover"
         />
       </a>
@@ -880,9 +1103,7 @@ function MessageAttachment({
       <FileText className="h-5 w-5 shrink-0" />
       <span className="min-w-0 flex-1">
         <b className="block truncate text-xs">{attachment.fileName}</b>
-        <small className={mine ? "text-white/60" : "text-slate-500"}>
-          {formatBytes(attachment.size)}
-        </small>
+        <small className="text-slate-600">{formatBytes(attachment.size)}</small>
       </span>
       <Download className="h-4 w-4" />
     </a>
@@ -897,14 +1118,7 @@ function AudioMessage({
   mine: boolean;
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const [playing, setPlaying] = useState(false);
   const [rate, setRate] = useState(1);
-  function toggle() {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (audio.paused) void audio.play();
-    else audio.pause();
-  }
   function changeRate() {
     const next = rate === 1 ? 1.5 : rate === 1.5 ? 2 : 1;
     setRate(next);
@@ -912,40 +1126,21 @@ function AudioMessage({
   }
   return (
     <div
-      className={`mt-1 flex min-w-[230px] items-center gap-2 rounded-xl p-2 ${mine ? "bg-white/10" : "bg-slate-50"}`}
+      className={`mt-1 flex w-full min-w-0 flex-wrap items-center gap-2 rounded-xl p-2 ${mine ? "bg-white/40" : "bg-slate-50"}`}
     >
       <audio
         ref={audioRef}
         src={`/api/terraqo/messages/attachments/${attachment.id}`}
         preload="metadata"
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
-        onEnded={() => setPlaying(false)}
+        controls
+        aria-label="Mensaje de voz"
+        className="h-10 min-w-0 max-w-full flex-1"
       />
       <button
         type="button"
-        onClick={toggle}
-        className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${mine ? "bg-white text-[#0b6f68]" : "bg-[#0b6f68] text-white"}`}
-      >
-        {playing ? (
-          <Pause className="h-4 w-4 fill-current" />
-        ) : (
-          <Play className="h-4 w-4 fill-current" />
-        )}
-      </button>
-      <div className="flex flex-1 items-center gap-1">
-        {Array.from({ length: 18 }).map((_, index) => (
-          <i
-            key={index}
-            className={`w-0.5 rounded-full ${mine ? "bg-white/65" : "bg-[#0b6f68]/55"}`}
-            style={{ height: `${8 + ((index * 7) % 16)}px` }}
-          />
-        ))}
-      </div>
-      <button
-        type="button"
         onClick={changeRate}
-        className={`rounded-lg px-2 py-1 text-[10px] font-extrabold ${mine ? "bg-white/15" : "bg-white"}`}
+        aria-label={`Velocidad de audio ${rate} por. Cambiar velocidad`}
+        className="h-11 min-w-11 rounded-lg bg-white px-2 text-sm font-semibold text-teal-800"
       >
         {rate}×
       </button>
@@ -1029,7 +1224,7 @@ function ContactPanel({
     <div
       className={`space-y-5 ${compact ? "" : "min-h-0 flex-1 overflow-y-auto p-5"}`}
     >
-      <section className="rounded-2xl border p-4">
+      <section className="pb-4">
         <h3 className="text-sm font-bold">Información del contacto</h3>
         <div className="mt-4 flex items-center gap-3">
           <UserAvatar {...avatar} size="lg" />
@@ -1068,8 +1263,10 @@ function ContactPanel({
           ) : null}
         </div>
       </section>
-      <section className="rounded-2xl border p-4">
-        <h3 className="text-sm font-bold">Contexto profesional</h3>
+      <details open className="border-t pt-4">
+        <summary className="min-h-11 cursor-pointer text-sm font-bold">
+          Contexto profesional
+        </summary>
         <div className="mt-3 space-y-2 text-xs text-slate-500">
           <p>Contacto habilitado dentro de Terraqo</p>
           {profile?.locationCity || profile?.city ? (
@@ -1085,14 +1282,14 @@ function ContactPanel({
             </p>
           ) : null}
         </div>
-      </section>
-      <section className="rounded-2xl border p-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold">Archivos</h3>
+      </details>
+      <details open className="border-t pt-4">
+        <summary className="min-h-11 cursor-pointer text-sm font-bold">
+          Archivos compartidos ·{" "}
           <span className="text-xs font-bold text-[#0b6f68]">
             {attachments.length}
           </span>
-        </div>
+        </summary>
         <div className="mt-3 space-y-2">
           {attachments
             .slice(-4)
@@ -1112,8 +1309,8 @@ function ContactPanel({
             <p className="text-xs text-slate-500">Sin archivos compartidos.</p>
           ) : null}
         </div>
-      </section>
-      <section className="rounded-2xl border p-4 text-xs text-slate-500">
+      </details>
+      <section className="border-t pt-4 text-xs text-slate-500">
         <div className="flex justify-between">
           <span>Tipo</span>
           <b className="text-slate-700">
