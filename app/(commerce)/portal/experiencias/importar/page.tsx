@@ -22,7 +22,11 @@ export default async function CvImportPage() {
       <CvImportWorkbench
         cv={cv ? { id: cv.id, fileName: cv.fileName, uploadedAt: new Date(cv.uploadedAt).toISOString() } : null}
         initialImport={latestImport ? JSON.parse(JSON.stringify(serializeCvImport(latestImport))) : null}
-        serviceAvailable={Boolean(process.env.TERRAQO_DOCUMENT_AI_URL && process.env.TERRAQO_DOCUMENT_AI_TOKEN)}
+        serviceAvailable={Boolean(
+          process.env.TERRAQO_DOCUMENT_AI_URL &&
+          process.env.TERRAQO_DOCUMENT_AI_TOKEN &&
+          (process.env.NETLIFY !== "true" || process.env.CV_IMPORT_DISPATCH_SECRET)
+        )}
       />
     </div>
   );

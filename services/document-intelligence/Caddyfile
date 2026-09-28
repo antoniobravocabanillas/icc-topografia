@@ -1,0 +1,33 @@
+{$DOCUMENT_AI_DOMAIN} {
+  encode zstd gzip
+
+  @extract path /v1/cv/extract
+  handle @extract {
+    request_body {
+      max_size 11MB
+    }
+    reverse_proxy extractor:8080
+  }
+
+  @health path /health
+  handle @health {
+    reverse_proxy extractor:8080
+  }
+
+  handle {
+    respond "Not found" 404
+  }
+
+  header {
+    -Server
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    X-Content-Type-Options "nosniff"
+    Referrer-Policy "no-referrer"
+    Cache-Control "no-store"
+  }
+
+  log {
+    output stdout
+    format json
+  }
+}

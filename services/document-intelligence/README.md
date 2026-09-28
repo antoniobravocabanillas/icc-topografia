@@ -28,6 +28,19 @@ El contenedor se ejecuta sin privilegios, con filesystem de solo lectura, sin ca
 
 No se guardan archivos en el contenedor. Cada documento se procesa en un directorio temporal que se elimina al terminar.
 
+## Despliegue productivo
+
+Requiere una VM Linux dedicada con Docker Compose, DNS y puertos 80/443. No expongas Ollama ni el extractor directamente.
+
+1. Crea un subdominio privado para el servicio y apunta su DNS a la VM.
+2. Copia `.env.production.example` a `.env` y reemplaza el dominio y token. Usa `openssl rand -hex 32` para el token.
+3. Ejecuta `docker compose -f compose.production.yaml config` y revisa que solo `gateway` publique puertos.
+4. Inicia con `docker compose -f compose.production.yaml up -d --build`.
+5. Verifica `https://<dominio>/health`; Caddy obtiene y renueva TLS automáticamente.
+6. Configura en Netlify el mismo token, la URL HTTPS y un secreto independiente para despacho de trabajos.
+
+La red `private` impide acceso externo a Ollama y al extractor. Caddy limita el cuerpo, publica únicamente `/health` y `/v1/cv/extract`, fuerza cabeceras defensivas y no almacena respuestas. El endpoint de extracción continúa protegido por comparación constante del token.
+
 ## Mejora del modelo
 
 Las correcciones con consentimiento se almacenan en `TerraqoCvImportCorrection`. Deben exportarse a un conjunto anonimizado, dividirse en entrenamiento/evaluación y evaluarse fuera de producción. Un modelo nuevo solo se promueve si mejora exactitud por campo, cobertura y tasa de duplicados sin degradar el conjunto de control. No se admite entrenamiento automático directo desde tráfico de producción.

@@ -9,11 +9,12 @@ Reducir la carga manual de experiencias, estudios y capacidades sin entregar doc
 1. El usuario carga un CV en Documentos y datos. Netlify Blobs conserva el archivo privado.
 2. `/portal/experiencias/importar` solicita una lectura del documento.
 3. El backend verifica propiedad, tipo y disponibilidad, calcula SHA-256 e impide procesamientos duplicados para la misma versión del parser.
-4. El servicio privado usa Docling para extraer el documento y Ollama para transformarlo al esquema estricto de Terraqo.
-5. El backend valida el JSON, busca coincidencias con experiencias y estudios existentes y guarda resultados auditables.
-6. El profesional corrige, acepta o rechaza cada dato. Los posibles duplicados quedan desmarcados.
-7. Una transacción crea entradas privadas con estado `NOT_REQUESTED`; nunca asigna checks, publicación o validación.
-8. Se recalculan los años de experiencia y el extracto del perfil.
+4. Una Netlify Background Function reclama el trabajo de forma atómica y lo ejecuta fuera de la petición del navegador.
+5. El servicio privado usa Docling para extraer el documento y Ollama para transformarlo al esquema estricto de Terraqo.
+6. El backend valida el JSON, busca coincidencias con experiencias y estudios existentes y guarda resultados auditables.
+7. El navegador consulta el estado sin mantener abierta una petición larga. El profesional puede corregir, aceptar o rechazar cada dato.
+8. Una transacción crea entradas privadas con estado `NOT_REQUESTED`; nunca asigna checks, publicación o validación.
+9. Se recalculan los años de experiencia y el extracto del perfil.
 
 ## Seguridad y privacidad
 
@@ -24,6 +25,8 @@ Reducir la carga manual de experiencias, estudios y capacidades sin entregar doc
 - El servicio no sigue URLs ni dispone de herramientas externas.
 - Toda salida vuelve a validarse con Zod antes de tocar la base de datos.
 - La autorización se comprueba por usuario, perfil, documento, importación e ítem.
+- Cada ejecución reclama el trabajo con un token atómico. Reintentos y dobles clics no duplican el procesamiento.
+- Un trabajo abandonado puede retomarse después de 20 minutos; una ejecución activa no puede ser reemplazada.
 - Las altas se aplican en una transacción idempotente y siempre privadas.
 
 ## Ciclo de mejora
@@ -45,8 +48,10 @@ No se entrena directamente con tráfico de producción: evita envenenamiento de 
 
 1. Ejecutar la migración `20260927110000_terraqo_cv_import`.
 2. Desplegar `services/document-intelligence` junto a Ollama en una red privada.
-3. Configurar en Next.js `TERRAQO_DOCUMENT_AI_URL`, `TERRAQO_DOCUMENT_AI_TOKEN` y `TERRAQO_DOCUMENT_AI_TIMEOUT_MS`.
+3. Configurar en Netlify `TERRAQO_DOCUMENT_AI_URL` (HTTPS), `TERRAQO_DOCUMENT_AI_TOKEN`, `TERRAQO_DOCUMENT_AI_TIMEOUT_MS` y un `CV_IMPORT_DISPATCH_SECRET` aleatorio de al menos 32 bytes.
 4. Configurar el mismo `TERRAQO_DOCUMENT_AI_TOKEN`, `OLLAMA_BASE_URL` y `OLLAMA_CV_MODEL` en el worker.
 5. Verificar `/health`, procesar un CV sintético y comprobar que ningún dato se publica automáticamente.
+
+En desarrollo local el endpoint procesa la tarea directamente. En Netlify la API responde `202`, la función `cv-import-background` continúa hasta completar la extracción y la interfaz consulta el estado cada 2,5 segundos. No se debe sustituir este flujo por una petición síncrona larga.
 
 Esta arquitectura elimina la tarifa por llamada, pero no vuelve el cómputo literalmente gratuito o ilimitado: la capacidad depende de CPU/GPU, memoria, almacenamiento y concurrencia del host privado.

@@ -2680,6 +2680,9 @@ model TerraqoCvImport {
   consentForTraining    Boolean                     @default(false)
   errorCode             String?
   errorMessage          String?
+  processingToken       String?
+  heartbeatAt           DateTime?
+  processingAttempts    Int                         @default(0)
   startedAt             DateTime                    @default(now())
   completedAt           DateTime?
   createdAt             DateTime                    @default(now())
@@ -2689,6 +2692,7 @@ model TerraqoCvImport {
   @@unique([professionalProfileId, fileHash, parserVersion])
   @@index([professionalProfileId, createdAt])
   @@index([status, createdAt])
+  @@index([status, heartbeatAt])
   @@schema("icc")
 }
 

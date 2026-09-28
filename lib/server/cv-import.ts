@@ -4,22 +4,12 @@ import { createHash } from "node:crypto";
 import { Prisma, TerraqoCvImportItemType } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { CvImportError, processCvImportJob } from "@/lib/server/cv-import-extraction";
 import { getProfessionalDocumentStore } from "@/lib/server/media";
-import { cvExtractionSchema, type CvExtraction } from "@/lib/terraqo/cv-import-schema";
 import { monthsBetween, refreshProfessionalGeneratedSummary } from "@/lib/terraqo/profile-summary";
 
 const PARSER_VERSION = "terraqo-cv-v1";
-const DOCUMENT_AI_TIMEOUT_MS = Number(process.env.TERRAQO_DOCUMENT_AI_TIMEOUT_MS || 300_000);
-
-export class CvImportError extends Error {
-  constructor(public readonly code: string, message: string, public readonly status = 400) {
-    super(message);
-  }
-}
-
-function normalizedKey(...parts: Array<string | null | undefined>) {
-  return parts.filter(Boolean).join("|").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9|]/g, "");
-}
+export { CvImportError } from "@/lib/server/cv-import-extraction";
 
 function parseDate(value?: string | null) {
   if (!value) return null;
@@ -77,59 +67,7 @@ async function ownerProfile(userId: string) {
   return profile;
 }
 
-async function callDocumentIntelligence(input: { data: ArrayBuffer; fileName: string; contentType: string }) {
-  const endpoint = process.env.TERRAQO_DOCUMENT_AI_URL?.trim();
-  if (!endpoint) throw new CvImportError("DOCUMENT_AI_NOT_CONFIGURED", "La lectura local de CV todavía no está configurada.", 503);
-  const url = new URL("/v1/cv/extract", endpoint.endsWith("/") ? endpoint : `${endpoint}/`);
-  if (!['http:', 'https:'].includes(url.protocol)) throw new CvImportError("DOCUMENT_AI_INVALID_URL", "La dirección del servicio documental no es válida.", 503);
-
-  const form = new FormData();
-  form.set("file", new File([input.data], input.fileName, { type: input.contentType }));
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), DOCUMENT_AI_TIMEOUT_MS);
-  try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: process.env.TERRAQO_DOCUMENT_AI_TOKEN ? { authorization: `Bearer ${process.env.TERRAQO_DOCUMENT_AI_TOKEN}` } : undefined,
-      body: form,
-      signal: controller.signal,
-      cache: "no-store",
-    });
-    const payload = await response.json().catch(() => null);
-    if (!response.ok) throw new CvImportError("DOCUMENT_AI_UNAVAILABLE", payload?.detail || "El lector local no pudo procesar el CV.", response.status >= 500 ? 503 : 422);
-    return cvExtractionSchema.parse(payload);
-  } catch (error) {
-    if (error instanceof CvImportError) throw error;
-    if (error instanceof Error && error.name === "AbortError") throw new CvImportError("DOCUMENT_AI_TIMEOUT", "La lectura del CV superó el tiempo máximo.", 504);
-    throw new CvImportError("DOCUMENT_AI_UNAVAILABLE", "No pudimos comunicarnos con el lector local de CV.", 503);
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-async function detectMatches(profileId: string, extraction: CvExtraction) {
-  const [experiences, education] = await Promise.all([
-    prisma.terraqoProfessionalExperience.findMany({ where: { professionalProfileId: profileId }, select: { id: true, title: true, companyName: true, role: true, startedAt: true } }),
-    prisma.terraqoProfessionalEducation.findMany({ where: { professionalProfileId: profileId }, select: { id: true, institution: true, degree: true, field: true, startedAt: true } }),
-  ]);
-  const experienceKeys = new Map(experiences.map((item) => [normalizedKey(item.companyName, item.title, item.role, item.startedAt?.toISOString().slice(0, 7)), item.id]));
-  const educationKeys = new Map(education.map((item) => [normalizedKey(item.institution, item.degree, item.field, item.startedAt?.toISOString().slice(0, 7)), item.id]));
-  return {
-    experiences: extraction.experiences.map((item) => experienceKeys.get(normalizedKey(item.companyName, item.title, item.role, item.startedAt?.slice(0, 7))) || null),
-    education: extraction.education.map((item) => educationKeys.get(normalizedKey(item.institution, item.degree, item.field, item.startedAt?.slice(0, 7))) || null),
-  };
-}
-
-function extractedItems(extraction: CvExtraction, matches: Awaited<ReturnType<typeof detectMatches>>) {
-  const items: Array<{ type: TerraqoCvImportItemType; position: number; rawData: Prisma.InputJsonValue; normalizedData: Prisma.InputJsonValue; confidence: number; sourcePage?: number | null; sourceText?: string | null; candidateMatchId?: string | null }> = [];
-  const profileHasData = Object.values(extraction.profile).some((value) => Array.isArray(value) ? value.length > 0 : Boolean(value));
-  if (profileHasData) items.push({ type: "PROFILE", position: 0, rawData: json(extraction.profile), normalizedData: json(extraction.profile), confidence: 1 });
-  extraction.experiences.forEach((item, index) => items.push({ type: "EXPERIENCE", position: index, rawData: json(item), normalizedData: json(item), confidence: item.confidence, sourcePage: item.sourcePage, sourceText: item.sourceText, candidateMatchId: matches.experiences[index] }));
-  extraction.education.forEach((item, index) => items.push({ type: "EDUCATION", position: index, rawData: json(item), normalizedData: json(item), confidence: item.confidence, sourcePage: item.sourcePage, sourceText: item.sourceText, candidateMatchId: matches.education[index] }));
-  return items;
-}
-
-export async function startCvImport(userId: string, documentId: string, consentForTraining: boolean) {
+export async function queueCvImport(userId: string, documentId: string, consentForTraining: boolean) {
   const profile = await ownerProfile(userId);
   const document = await prisma.terraqoProfessionalDocument.findFirst({ where: { id: documentId, professionalProfileId: profile.id, type: "CV" } });
   if (!document) throw new CvImportError("CV_NOT_FOUND", "El CV no existe o no pertenece a tu perfil.", 404);
@@ -140,30 +78,45 @@ export async function startCvImport(userId: string, documentId: string, consentF
     where: { professionalProfileId_fileHash_parserVersion: { professionalProfileId: profile.id, fileHash, parserVersion: PARSER_VERSION } },
     include: { items: { orderBy: [{ type: "asc" }, { position: "asc" }] } },
   });
-  if (existing && existing.status !== "FAILED") return serializeCvImport(existing);
+  if (existing && existing.status !== "FAILED" && existing.status !== "PROCESSING") {
+    return { record: serializeCvImport(existing), shouldDispatch: false };
+  }
+  if (existing?.status === "PROCESSING") {
+    return { record: serializeCvImport(existing), shouldDispatch: true };
+  }
 
   const cvImport = existing
-    ? await prisma.terraqoCvImport.update({ where: { id: existing.id }, data: { status: "PROCESSING", consentForTraining, errorCode: null, errorMessage: null, startedAt: new Date(), completedAt: null } })
+    ? await prisma.terraqoCvImport.update({ where: { id: existing.id }, data: { status: "PROCESSING", consentForTraining, errorCode: null, errorMessage: null, processingToken: null, heartbeatAt: null, startedAt: new Date(), completedAt: null } })
     : await prisma.terraqoCvImport.create({ data: { professionalProfileId: profile.id, documentId, fileHash, parserVersion: PARSER_VERSION, extractor: "docling+ollama", consentForTraining } });
+  return { record: serializeCvImport({ ...cvImport, items: [] }), shouldDispatch: true };
+}
 
-  try {
-    const extraction = await callDocumentIntelligence({ data: stored.data, fileName: document.fileName, contentType: document.contentType });
-    const matches = await detectMatches(profile.id, extraction);
-    const result = await prisma.terraqoCvImport.update({
-      where: { id: cvImport.id },
-      data: {
-        status: "READY_FOR_REVIEW",
-        completedAt: new Date(),
-        items: { deleteMany: {}, create: extractedItems(extraction, matches) },
-      },
-      include: { items: { orderBy: [{ type: "asc" }, { position: "asc" }] } },
-    });
-    return serializeCvImport(result);
-  } catch (error) {
-    const safe = error instanceof CvImportError ? error : new CvImportError("EXTRACTION_FAILED", "No pudimos interpretar el CV.", 422);
-    await prisma.terraqoCvImport.update({ where: { id: cvImport.id }, data: { status: "FAILED", errorCode: safe.code, errorMessage: safe.message, completedAt: new Date() } });
-    throw safe;
+export async function dispatchCvImport(importId: string) {
+  if (process.env.NETLIFY !== "true") {
+    await processCvImportJob(importId);
+    return;
   }
+  const secret = process.env.CV_IMPORT_DISPATCH_SECRET?.trim();
+  const siteUrl = (process.env.DEPLOY_PRIME_URL || process.env.URL)?.trim();
+  if (!secret || !siteUrl) throw new CvImportError("CV_IMPORT_DISPATCH_NOT_CONFIGURED", "El procesamiento en segundo plano no está configurado.", 503);
+  const target = new URL("/.netlify/functions/cv-import-background", siteUrl);
+  if (target.protocol !== "https:") throw new CvImportError("CV_IMPORT_DISPATCH_INSECURE", "El procesamiento en segundo plano requiere HTTPS.", 503);
+  const response = await fetch(target, {
+    method: "POST",
+    headers: { authorization: `Bearer ${secret}`, "content-type": "application/json" },
+    body: JSON.stringify({ importId }),
+    redirect: "error",
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (response.status !== 202) throw new CvImportError("CV_IMPORT_DISPATCH_FAILED", "No pudimos iniciar la lectura del CV. Inténtalo nuevamente.", 503);
+}
+
+export async function failCvImportDispatch(importId: string, error: unknown) {
+  const safe = error instanceof CvImportError ? error : new CvImportError("CV_IMPORT_DISPATCH_FAILED", "No pudimos iniciar la lectura del CV.", 503);
+  await prisma.terraqoCvImport.updateMany({
+    where: { id: importId, status: "PROCESSING", processingToken: null },
+    data: { status: "FAILED", errorCode: safe.code, errorMessage: safe.message, completedAt: new Date() },
+  });
 }
 
 export async function getCvImport(userId: string, importId: string) {

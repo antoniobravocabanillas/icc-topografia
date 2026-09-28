@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, ArrowRight, Check, FileSearch, Loader2, LockKeyhole, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -55,7 +55,55 @@ export function CvImportWorkbench({ cv, initialImport, serviceAvailable }: CvImp
   const [consent, setConsent] = useState(initialImport?.consentForTraining || false);
   const [busy, setBusy] = useState<"reading" | "saving" | "applying" | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const dispatchedImport = useRef<string | null>(null);
   const acceptedCount = useMemo(() => items.filter((item) => item.decision !== "REJECTED" && !item.candidateMatchId).length, [items]);
+  const activeImportId = record?.status === "PROCESSING" ? record.id : null;
+
+  useEffect(() => {
+    if (!activeImportId || !cv || !serviceAvailable || dispatchedImport.current === activeImportId) return;
+    dispatchedImport.current = activeImportId;
+    void fetch("/api/terraqo/cv-imports", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ documentId: cv.id, consentForTraining: consent }),
+    }).then(async (response) => {
+      if (response.ok) return;
+      const payload = await response.json().catch(() => null);
+      throw new Error(payload?.error?.message || "No pudimos reanudar la lectura del CV.");
+    }).catch((error) => {
+      dispatchedImport.current = null;
+      setFeedback(error instanceof Error ? error.message : "No pudimos reanudar la lectura del CV.");
+    });
+  }, [activeImportId, consent, cv, serviceAvailable]);
+
+  useEffect(() => {
+    if (!activeImportId || !serviceAvailable) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const response = await fetch(`/api/terraqo/cv-imports/${activeImportId}`, { cache: "no-store" });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(payload?.error?.message || "No pudimos consultar el avance.");
+        if (cancelled) return;
+        const next = payload.data as CvImport;
+        setRecord(next);
+        if (next.status === "READY_FOR_REVIEW") {
+          setItems(next.items.map((item) => ({ ...item, decision: item.candidateMatchId ? "REJECTED" : "ACCEPTED" })));
+          setFeedback("Lectura terminada. Revisa cada dato antes de incorporarlo.");
+        } else if (next.status === "FAILED") {
+          setFeedback(next.errorMessage || "No pudimos interpretar el CV. Puedes volver a intentarlo.");
+        }
+      } catch (error) {
+        if (!cancelled) setFeedback(error instanceof Error ? error.message : "No pudimos consultar el avance.");
+      }
+    };
+    const timer = window.setInterval(poll, 2500);
+    void poll();
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [activeImportId, serviceAvailable]);
 
   async function request(url: string, init: RequestInit) {
     const response = await fetch(url, { ...init, headers: { "content-type": "application/json", ...(init.headers || {}) } });
@@ -70,8 +118,14 @@ export function CvImportWorkbench({ cv, initialImport, serviceAvailable }: CvImp
     setFeedback(null);
     try {
       const next = await request("/api/terraqo/cv-imports", { method: "POST", body: JSON.stringify({ documentId: cv.id, consentForTraining: consent }) });
+      dispatchedImport.current = next.id;
       setRecord(next);
-      setItems(next.items.map((item: ImportItem) => ({ ...item, decision: item.candidateMatchId ? "REJECTED" : "ACCEPTED" })));
+      if (next.status === "READY_FOR_REVIEW") {
+        setItems(next.items.map((item: ImportItem) => ({ ...item, decision: item.candidateMatchId ? "REJECTED" : "ACCEPTED" })));
+      } else {
+        setItems([]);
+        setFeedback("Tu CV está en análisis privado. Puedes salir de esta página: el proceso continuará y la revisión quedará disponible aquí.");
+      }
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : "No pudimos leer el CV.");
     } finally {
@@ -132,22 +186,24 @@ export function CvImportWorkbench({ cv, initialImport, serviceAvailable }: CvImp
   }
 
   const ready = record?.status === "READY_FOR_REVIEW";
+  const processing = record?.status === "PROCESSING";
+  const failed = record?.status === "FAILED";
   const completed = record?.status === "COMPLETED" || record?.status === "PARTIAL";
   const visibleItems = items.filter((item) => ["PROFILE", "EXPERIENCE", "EDUCATION"].includes(item.type));
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_18px_60px_-42px_rgba(15,48,70,.4)]">
+      <section aria-busy={processing} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_18px_60px_-42px_rgba(15,48,70,.4)]">
         <div className="grid gap-5 border-b bg-[linear-gradient(125deg,#06283a,#0d5363)] px-5 py-6 text-white md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:px-7">
           <div>
             <div className="flex items-center gap-2 text-sm font-semibold text-cyan-100"><LockKeyhole className="h-4 w-4" /> Procesamiento privado</div>
             <h2 className="mt-3 break-words font-display text-2xl font-bold sm:text-3xl">{cv.fileName}</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-200">Docling extrae el contenido y Ollama lo estructura dentro de la infraestructura configurada por Terraqo. Nada se publica al terminar.</p>
           </div>
-          {completed ? <Button onClick={() => router.push("/portal/experiencias")} className="h-12 bg-white text-slate-950 hover:bg-white/90"><Check className="mr-2 h-4 w-4" /> Ver perfil actualizado</Button> : !ready ? <Button onClick={start} disabled={busy !== null || !serviceAvailable} className="h-12 bg-white text-slate-950 hover:bg-white/90">{busy === "reading" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSearch className="mr-2 h-4 w-4" />}{serviceAvailable ? "Leer mi CV" : "Lector no configurado"}</Button> : <div className="rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-bold"><Check className="mr-2 inline h-4 w-4" /> Listo para revisar</div>}
+          {completed ? <Button onClick={() => router.push("/portal/experiencias")} className="h-12 bg-white text-slate-950 hover:bg-white/90"><Check aria-hidden="true" className="mr-2 h-4 w-4" /> Ver perfil actualizado</Button> : processing ? <div role="status" aria-atomic="true" className="rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-bold"><Loader2 aria-hidden="true" className="mr-2 inline h-4 w-4 animate-spin motion-reduce:animate-none" /> Analizando de forma privada</div> : !ready ? <Button onClick={start} disabled={busy !== null || !serviceAvailable} className="h-12 bg-white text-slate-950 hover:bg-white/90">{busy === "reading" ? <Loader2 aria-hidden="true" className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" /> : <FileSearch aria-hidden="true" className="mr-2 h-4 w-4" />}{serviceAvailable ? failed ? "Volver a intentar" : "Leer mi CV" : "Lector no configurado"}</Button> : <div role="status" className="rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-bold"><Check aria-hidden="true" className="mr-2 inline h-4 w-4" /> Listo para revisar</div>}
         </div>
         <div className="grid gap-4 px-5 py-5 text-sm md:grid-cols-3 md:px-7">
-          <p><b>1. Lectura local</b><br /><span className="text-muted-foreground">Texto, tablas y secciones.</span></p>
+          <p><b>1. Lectura privada</b><br /><span className="text-muted-foreground">Texto, tablas y secciones.</span></p>
           <p><b>2. Revisión humana</b><br /><span className="text-muted-foreground">Corrige y elige qué importar.</span></p>
           <p><b>3. Borradores privados</b><br /><span className="text-muted-foreground">Sin checks ni publicación automática.</span></p>
         </div>
