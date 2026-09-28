@@ -60,7 +60,7 @@ type PortalNavItem = {
 };
 
 const professionalItems: PortalNavItem[] = [
-  { href: "/portal", label: "Resumen", icon: LayoutDashboard },
+  { href: "/portal", label: "Inicio", icon: LayoutDashboard },
   { href: "/portal/perfil", label: "Mi perfil", icon: UserRound },
   { href: "/portal/membresia", label: "Mi membresía", icon: ReceiptText },
   { href: "/portal/red", label: "Red profesional", icon: Search },

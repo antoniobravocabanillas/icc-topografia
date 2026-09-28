@@ -2,7 +2,7 @@ import Link from "next/link";
 import { BriefcaseBusiness, Compass, LayoutDashboard, MessagesSquare, NotebookPen, UsersRound } from "lucide-react";
 
 const items = [
-  { href: "/portal", label: "Resumen", icon: LayoutDashboard },
+  { href: "/portal", label: "Inicio", icon: LayoutDashboard },
   { href: "/portal/bitacora", label: "Bitacora", icon: NotebookPen },
   { href: "/portal/commons", label: "Commons", icon: Compass },
   { href: "/portal/equipos", label: "Equipos", icon: UsersRound },

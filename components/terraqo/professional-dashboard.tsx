@@ -1,57 +1,122 @@
+import Image from "next/image";
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import type { ElementType } from "react";
 import {
+  ArrowRight,
   BadgeCheck,
   BriefcaseBusiness,
-  CalendarDays,
+  Building2,
+  CheckCircle2,
   ChevronRight,
-  ExternalLink,
+  CircleUserRound,
+  FileCheck2,
   FileText,
+  FolderKanban,
   MapPin,
+  MessageSquareText,
   NotebookPen,
-  PlusCircle,
-  ShieldCheck
+  ShieldCheck,
+  Sparkles,
+  UserRoundPlus,
 } from "lucide-react";
 
-
-
-import { ProfessionalPhotoUploader } from "@/components/portal/professional-photo-uploader";
-import { ProfessionalDocumentUploader } from "@/components/portal/professional-document-uploader";
-import { ExpandableSummary } from "@/components/portal/expandable-summary";
-import { WorklogCard } from "@/components/terraqo/worklog-card";
 import { FieldVerificationPanel } from "@/components/terraqo/field-verification-panel";
 import { Button } from "@/components/ui/button";
-import { updateProfessionalAvailabilityAction } from "@/lib/server/professional-actions";
 import { terraqoDomains } from "@/lib/terraqo-domains";
-import { formatExperienceDuration, monthsBetween } from "@/lib/terraqo/profile-summary";
 import { worklogInclude } from "@/lib/terraqo/worklog";
 
-export type ProfessionalDashboardProfile = Prisma.TerraqoProfessionalProfileGetPayload<{
-  include: {
-    user: { select: { name: true; email: true; image: true } };
-    experiences: { include: { project: { select: { title: true; slug: true; location: true; images: { select: { url: true } } } } } };
-    affiliations: true;
-    applications: { include: { workspace: { select: { name: true } }; jobPost: { select: { title: true } } } };
-    documents: { select: { id: true; type: true; fileName: true; contentType: true; size: true; reviewStatus: true; reviewNote: true; uploadedAt: true } };
-    worklogs: { include: typeof worklogInclude };
-  };
-}>;
+export type ProfessionalDashboardProfile =
+  Prisma.TerraqoProfessionalProfileGetPayload<{
+    include: {
+      user: { select: { name: true; email: true; image: true } };
+      experiences: {
+        include: {
+          project: {
+            select: {
+              title: true;
+              slug: true;
+              location: true;
+              images: { select: { url: true } };
+            };
+          };
+        };
+      };
+      affiliations: true;
+      applications: {
+        include: {
+          workspace: { select: { name: true } };
+          jobPost: { select: { title: true } };
+        };
+      };
+      documents: {
+        select: {
+          id: true;
+          type: true;
+          fileName: true;
+          contentType: true;
+          size: true;
+          reviewStatus: true;
+          reviewNote: true;
+          uploadedAt: true;
+        };
+      };
+      worklogs: { include: typeof worklogInclude };
+    };
+  }>;
+
+export type ProfessionalDashboardData = {
+  unreadMessages: number;
+  pendingTeamInvitations: number;
+  pendingExperienceValidations: number;
+  weekWorklogs: number;
+  weekValidatedWorklogs: number;
+  weekTrust: number;
+  newConnections: number;
+  totalWorklogs: number;
+  verifiedExperiences: number;
+  validationBackings: number;
+  opportunities: Array<{
+    id: string;
+    title: string;
+    company: string;
+    location: string | null;
+    modality: string | null;
+    relatedTags: string[];
+  }>;
+  networkUpdates: Array<{
+    id: string;
+    kind: "evidence" | "opportunity" | "validation" | "conversation";
+    actor: string;
+    action: string;
+    title: string;
+    context: string | null;
+    date: Date;
+    href: string;
+  }>;
+};
 
 const statusCopy = {
   AVAILABLE: "Disponible",
   WORKING: "Trabajando actualmente",
-  OPEN_TO_PROJECTS: "Abierto a proyectos",
-  NOT_AVAILABLE: "No disponible"
+  OPEN_TO_PROJECTS: "Disponible para proyectos",
+  NOT_AVAILABLE: "No disponible",
 } as const;
 
-const applicationStatusCopy: Record<string, string> = {
-  SUBMITTED: "Recibida",
-  REVIEWING: "En revision",
-  SHORTLISTED: "Preseleccionada",
-  ACCEPTED: "Aceptada",
-  REJECTED: "No seleccionada"
-};
+const planCopy = {
+  FREE: "Free",
+  BASIC: "Básico",
+  PROFESSIONAL: "Profesional",
+  PREMIUM: "Premium",
+  ENTERPRISE: "Enterprise",
+} as const;
+
+const updateIcon = {
+  evidence: NotebookPen,
+  opportunity: BriefcaseBusiness,
+  validation: BadgeCheck,
+  conversation: MessageSquareText,
+} as const;
 
 function completion(profile: ProfessionalDashboardProfile) {
   const values = [
@@ -59,189 +124,372 @@ function completion(profile: ProfessionalDashboardProfile) {
     profile.user.image,
     profile.headline,
     profile.bio,
-    profile.city,
+    profile.city || profile.locationCity,
     profile.yearsExperience !== null,
     profile.professionalCategories.length,
     profile.specialties.length,
     profile.equipment.length || profile.software.length,
     profile.documents.some((document) => document.type === "CV"),
-    profile.identityVerificationStatus === "VERIFIED"
+    profile.identityVerificationStatus === "VERIFIED",
   ];
   return Math.round((values.filter(Boolean).length / values.length) * 100);
 }
 
-function ProfileMetric({ icon: Icon, value, label, detail }: { icon: ElementType; value: number; label: string; detail: string }) {
+function greeting() {
+  const hour = Number(
+    new Intl.DateTimeFormat("en-US", {
+      hour: "2-digit",
+      hour12: false,
+      timeZone: "America/Lima",
+    }).format(new Date()),
+  );
+  if (hour < 12) return "Buenos días";
+  if (hour < 19) return "Buenas tardes";
+  return "Buenas noches";
+}
+
+function relativeDate(date: Date) {
+  const elapsed = date.getTime() - Date.now();
+  const hours = Math.round(elapsed / 3_600_000);
+  if (Math.abs(hours) < 24) {
+    return new Intl.RelativeTimeFormat("es", { numeric: "auto" }).format(
+      hours,
+      "hour",
+    );
+  }
+  const days = Math.round(elapsed / 86_400_000);
+  return new Intl.RelativeTimeFormat("es", { numeric: "auto" }).format(
+    days,
+    "day",
+  );
+}
+
+function SectionHeading({
+  title,
+  href,
+  action,
+}: {
+  title: string;
+  href?: string;
+  action?: string;
+}) {
   return (
-    <div className="flex min-h-28 items-center gap-4 rounded-lg border bg-white p-5 shadow-[0_12px_32px_rgba(1,45,56,0.06)]">
-      <span className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary"><Icon className="h-5 w-5" /></span>
-      <div><p className="font-display text-3xl font-bold text-[#0e1a26]">{value}</p><p className="text-sm font-semibold text-[#2f4154]">{label}</p><p className="text-xs text-muted-foreground">{detail}</p></div>
+    <div className="flex items-center justify-between gap-4">
+      <h2 className="font-display text-xl font-bold tracking-[-0.02em] text-[#0e1a26] sm:text-[1.35rem]">
+        {title}
+      </h2>
+      {href && action ? (
+        <Link
+          href={href}
+          className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg px-2 text-sm font-bold text-[#1768b0] transition hover:bg-[#edf5ff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1768b0] focus-visible:ring-offset-2"
+        >
+          {action} <ArrowRight className="h-4 w-4" />
+        </Link>
+      ) : null}
     </div>
   );
 }
 
-function ActivityRow({ icon: Icon, title, detail }: { icon: ElementType; title: string; detail: string }) {
+function AttentionCard({
+  icon: Icon,
+  value,
+  label,
+  href,
+  tone,
+}: {
+  icon: ElementType;
+  value: number;
+  label: string;
+  href: string;
+  tone: "red" | "blue" | "teal" | "amber";
+}) {
+  const tones = {
+    red: "border-[#f6d4d2] bg-[#fff7f6] text-[#b42318]",
+    blue: "border-[#dbe9fb] bg-[#f5f9ff] text-[#1768b0]",
+    teal: "border-[#d6eee9] bg-[#f2fbf8] text-[#087b70]",
+    amber: "border-[#f3e5bd] bg-[#fffbef] text-[#9a6700]",
+  };
   return (
-    <div className="flex gap-3 border-b py-3 last:border-0">
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"><Icon className="h-4 w-4" /></span>
-      <div className="min-w-0"><p className="truncate text-sm font-semibold text-[#0e1a26]">{title}</p><p className="mt-0.5 text-xs text-muted-foreground">{detail}</p></div>
+    <Link
+      href={href}
+      className={`group flex min-h-[92px] items-center gap-3 rounded-xl border p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(14,26,38,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1768b0] focus-visible:ring-offset-2 ${tones[tone]}`}
+    >
+      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white/85 shadow-sm">
+        <Icon className="h-5 w-5" aria-hidden="true" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <strong className="block font-display text-2xl leading-none text-[#0e1a26]">
+          {value}
+        </strong>
+        <span className="mt-1 block text-xs font-semibold leading-4 text-[#52677a]">
+          {label}
+        </span>
+      </span>
+      <ChevronRight className="h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5" />
+    </Link>
+  );
+}
+
+function WeeklyMetric({
+  icon: Icon,
+  value,
+  label,
+}: {
+  icon: ElementType;
+  value: string | number;
+  label: string;
+}) {
+  return (
+    <div className="flex min-h-[78px] items-center gap-3 rounded-xl border border-[#e1e8ef] bg-[#fbfcfd] px-4 py-3">
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#e9f4ff] text-[#1768b0]">
+        <Icon className="h-5 w-5" aria-hidden="true" />
+      </span>
+      <span>
+        <strong className="block font-display text-xl leading-none text-[#0e1a26]">
+          {value}
+        </strong>
+        <span className="mt-1 block text-xs font-medium text-[#607083]">
+          {label}
+        </span>
+      </span>
     </div>
   );
 }
 
-type CommunityUpdates = {
-  posts: Array<{ id: string; title: string; body: string; date: Date; author: string; context: string }>;
-  worklogs: Array<{ id: string; title: string; body: string; date: Date; author: string; context: string }>;
-};
+function WorklogPreview({
+  worklog,
+}: {
+  worklog: ProfessionalDashboardProfile["worklogs"][number];
+}) {
+  const media = worklog.media[0];
+  const validated =
+    worklog.evidenceStatus === "VERIFIED" ||
+    worklog.validations.some((validation) => validation.status === "APPROVED");
+  return (
+    <Link
+      href="/portal/bitacora"
+      className="group grid min-h-[138px] overflow-hidden rounded-xl border border-[#dfe7ef] bg-white transition duration-200 hover:-translate-y-0.5 hover:border-[#b9d4ee] hover:shadow-[0_16px_34px_rgba(14,26,38,0.09)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1768b0] focus-visible:ring-offset-2 sm:grid-cols-[132px_minmax(0,1fr)]"
+    >
+      <div className="relative min-h-36 overflow-hidden bg-[linear-gradient(145deg,#dce7ef,#edf3f6)] sm:min-h-0">
+        {media ? (
+          <Image
+            src={`/api/terraqo/worklog/evidence/${media.id}`}
+            alt=""
+            fill
+            sizes="(max-width: 640px) 100vw, 132px"
+            className="object-cover transition duration-500 group-hover:scale-[1.03]"
+            unoptimized
+          />
+        ) : (
+          <span className="absolute inset-0 grid place-items-center text-[#6b8497]">
+            <NotebookPen className="h-7 w-7" aria-hidden="true" />
+          </span>
+        )}
+      </div>
+      <div className="min-w-0 p-4">
+        <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[#1768b0]">
+          <span>Bitácora</span>
+          <span className="text-[#8392a1]">· {relativeDate(worklog.occurredAt)}</span>
+          {validated ? (
+            <span className="rounded-full bg-[#e8f7f1] px-2 py-1 text-[#087b70]">
+              Validada
+            </span>
+          ) : null}
+        </div>
+        <h3 className="mt-2 line-clamp-2 font-display text-base font-bold leading-5 text-[#0e1a26]">
+          {worklog.title}
+        </h3>
+        <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[#607083]">
+          {worklog.locationLabel ? (
+            <span className="inline-flex items-center gap-1">
+              <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+              {worklog.locationLabel}
+            </span>
+          ) : null}
+          {worklog.workspace ? <span>{worklog.workspace.brandName || worklog.workspace.name}</span> : null}
+        </div>
+      </div>
+    </Link>
+  );
+}
 
-export function ProfessionalDashboard({ profile, workspaceId, communityUpdates }: { profile: ProfessionalDashboardProfile; workspaceId?: string | null; communityUpdates?: CommunityUpdates }) {
-  const name = profile.user.name || profile.user.email;
+export function ProfessionalDashboard({
+  profile,
+  workspaceId,
+  dashboard,
+}: {
+  profile: ProfessionalDashboardProfile;
+  workspaceId?: string | null;
+  dashboard: ProfessionalDashboardData;
+}) {
+  const displayName = profile.user.name || profile.user.email;
+  const firstName = displayName.trim().split(/\s+/)[0] || "profesional";
   const percent = completion(profile);
-  const verifiedExperiences = profile.experiences.filter((experience) => experience.verifiedByTerraqo).length;
   const hasCv = profile.documents.some((document) => document.type === "CV");
   const identityComplete = profile.identityVerificationStatus === "VERIFIED";
-  const publicCvHref = profile.username ? `${terraqoDomains.public}/cv/${profile.username}` : null;
-  const totalMonths = profile.experiences.reduce((sum, experience) => sum + monthsBetween(experience.startedAt, experience.currentlyWorking ? null : experience.endedAt), 0);
-  const validatedWorklogs = profile.worklogs.filter((worklog) => worklog.validations.some((validation) => validation.status === "APPROVED")).length;
-  const cvMomentum = Math.min(100, profile.experiences.length * 10 + profile.worklogs.length * 6 + verifiedExperiences * 12 + validatedWorklogs * 8 + (identityComplete ? 15 : 0));
-  const updates = [...(communityUpdates?.posts || []).map((item) => ({ ...item, kind: "Conversación" })), ...(communityUpdates?.worklogs || []).map((item) => ({ ...item, kind: "Evidencia" }))].sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 5);
+  const publicCvHref = profile.username
+    ? `${terraqoDomains.public}/cv/${profile.username}`
+    : null;
+  const pendingDocuments = Number(!hasCv) + Number(!identityComplete);
+  const attentionTotal =
+    dashboard.pendingExperienceValidations +
+    dashboard.unreadMessages +
+    dashboard.pendingTeamInvitations +
+    pendingDocuments;
+
+  const draftApplication = profile.applications.find(
+    (application) => application.status === "DRAFT",
+  );
+  const continuation = [
+    draftApplication
+      ? {
+          icon: BriefcaseBusiness,
+          title: "Postulación sin enviar",
+          detail: draftApplication.jobPost?.title || "Oportunidad profesional",
+          href: "/portal/postulaciones",
+          tone: "bg-[#fff3ef] text-[#b54708]",
+        }
+      : null,
+    dashboard.pendingExperienceValidations
+      ? {
+          icon: ShieldCheck,
+          title: "Experiencia pendiente",
+          detail: "Revisa el estado de tu solicitud de validación",
+          href: "/portal/experiencias",
+          tone: "bg-[#eef5ff] text-[#1768b0]",
+        }
+      : null,
+    pendingDocuments
+      ? {
+          icon: FileCheck2,
+          title: "Documentación por completar",
+          detail: !hasCv
+            ? "Falta incorporar tu CV profesional"
+            : "Falta completar la verificación de identidad",
+          href: "/portal/documentos",
+          tone: "bg-[#eefaf7] text-[#087b70]",
+        }
+      : null,
+    percent < 100
+      ? {
+          icon: CircleUserRound,
+          title: "Perfil por completar",
+          detail: `Tu identidad profesional está al ${percent}%`,
+          href: "/portal/perfil",
+          tone: "bg-[#f3f0ff] text-[#6f4bb7]",
+        }
+      : null,
+  ].filter(Boolean).slice(0, 2) as Array<{
+    icon: ElementType;
+    title: string;
+    detail: string;
+    href: string;
+    tone: string;
+  }>;
 
   return (
-    <div className="min-w-0 space-y-6 py-6 lg:py-8">
-          <section id="perfil" className="relative overflow-hidden rounded-lg bg-[linear-gradient(135deg,#0e1a26_0%,#102936_55%,#123d43_100%)] p-6 text-white shadow-[0_24px_70px_rgba(2,47,53,0.18)] lg:p-8">
-            <div className="relative lg:hidden">
-              <div className="flex items-start justify-between gap-3">
-                <div className="grid min-w-0 grid-cols-[80px_minmax(0,1fr)] items-center gap-4">
-                  <ProfessionalPhotoUploader name={name} image={profile.user.image} compact />
-                  <div className="min-w-0">
-                    <h1 className="font-display text-[1.65rem] font-bold leading-[1.05] tracking-tight">{name}</h1>
-                    <p className="mt-2 line-clamp-2 text-sm font-semibold leading-5 text-[#25c0d5]">{profile.headline || profile.specialties[0] || "Profesional Terraqo"}</p>
-                  </div>
-                </div>
-                <span className="shrink-0 rounded-full bg-emerald-400/10 px-2.5 py-1 text-[10px] font-bold text-emerald-300">{statusCopy[profile.status]}</span>
-              </div>
+    <div className="min-w-0 space-y-5 py-5 lg:py-7">
+      <section className="relative overflow-hidden rounded-2xl border border-[#163b54] bg-[radial-gradient(circle_at_82%_10%,rgba(37,192,213,0.16),transparent_30%),linear-gradient(125deg,#081b2b_0%,#0c3143_62%,#103b45_100%)] px-5 py-6 text-white shadow-[0_20px_48px_rgba(8,27,43,0.16)] sm:px-7 lg:px-8">
+        <div className="absolute inset-y-0 right-0 hidden w-[44%] opacity-35 lg:block [background-image:repeating-radial-gradient(ellipse_at_100%_50%,transparent_0,transparent_18px,rgba(102,220,224,0.18)_19px,transparent_20px)]" />
+        <div className="relative flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <p className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-[#67dce1]">Tu Terraqo</p>
+            <h1 className="mt-2 font-display text-[clamp(1.7rem,4vw,2.35rem)] font-bold tracking-[-0.035em]">{greeting()}, {firstName}.</h1>
+            <p className="mt-1 text-sm font-medium text-white/68">Workspace personal · {planCopy[profile.planTier] || profile.planTier}</p>
+          </div>
 
-              <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-white/15 pb-4 text-xs text-white/70">
-                <span className="inline-flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 text-[#25c0d5]" />{profile.locationCity || profile.city || "Ubicación por completar"}</span>
-                <Link href="/portal/perfil" className="font-semibold text-[#25c0d5]">Cambiar ubicación</Link>
-                <span className="basis-full inline-flex items-center gap-1.5"><BriefcaseBusiness className="h-3.5 w-3.5 text-[#25c0d5]" />{formatExperienceDuration(totalMonths)} de experiencia</span>
-              </div>
+          <div className="grid flex-1 grid-cols-2 gap-3 xl:max-w-[760px] xl:grid-cols-4">
+            <div className="flex items-center gap-3 border-white/12 xl:border-l xl:pl-5"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-full border border-[#55d6df]/45 bg-[#55d6df]/10 font-display text-sm font-bold text-[#7de7e7]">{percent}%</span><span className="text-xs leading-4 text-white/72"><strong className="block text-sm text-white">Perfil</strong>completo</span></div>
+            <div className="flex items-center gap-3 border-white/12 xl:border-l xl:pl-5"><BriefcaseBusiness className="h-5 w-5 shrink-0 text-[#62b8ff]" aria-hidden="true" /><span className="text-xs leading-4 text-white/72"><strong className="block text-sm text-white">{dashboard.verifiedExperiences}</strong>experiencias verificadas</span></div>
+            <div className="flex items-center gap-3 border-white/12 xl:border-l xl:pl-5"><NotebookPen className="h-5 w-5 shrink-0 text-[#62b8ff]" aria-hidden="true" /><span className="text-xs leading-4 text-white/72"><strong className="block text-sm text-white">{dashboard.totalWorklogs}</strong>evidencias registradas</span></div>
+            <div className="flex items-center gap-3 border-white/12 xl:border-l xl:pl-5"><CheckCircle2 className="h-5 w-5 shrink-0 text-[#65d8b1]" aria-hidden="true" /><span className="text-xs leading-4 text-white/72"><strong className="block text-sm text-white">{statusCopy[profile.status]}</strong>estado profesional</span></div>
+          </div>
 
-              {profile.generatedSummary ? <ExpandableSummary text={profile.generatedSummary} className="mt-3" /> : null}
+          <Button asChild variant="outline" className="min-h-11 shrink-0 border-white/35 bg-white/[0.08] text-white hover:bg-white hover:text-[#0e1a26]"><Link href="/portal/perfil">Completar perfil <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
+        </div>
+      </section>
 
-              <div className="mt-4 grid grid-cols-2 gap-2.5">
-                <Button asChild className="min-w-0 bg-gradient-to-r from-[#4374ba] to-[#37b99e] px-3 text-xs text-white"><Link href={publicCvHref || `/portal/profesionales/${profile.id}`} target={publicCvHref ? "_blank" : undefined}>Ver perfil público <ChevronRight className="ml-1 h-4 w-4" /></Link></Button>
-                <Button asChild variant="outline" className="min-w-0 justify-between border-white/35 bg-transparent px-3 text-xs text-white hover:bg-white/10"><Link href="/portal/documentos"><span>Completar perfil</span><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full border-2 border-[#25c0d5] text-[10px] font-bold">{percent}%</span></Link></Button>
-              </div>
+      <section className="rounded-2xl border border-[#dce5ed] bg-white p-4 shadow-[0_12px_34px_rgba(14,26,38,0.05)] sm:p-5">
+        <div className="mb-4 flex items-center gap-2"><h2 className="font-display text-xl font-bold tracking-[-0.02em] text-[#0e1a26]">Requiere tu atención</h2>{attentionTotal ? <span className="grid h-6 min-w-6 place-items-center rounded-full bg-[#d92d20] px-1.5 text-xs font-bold text-white" aria-label={`${attentionTotal} pendientes`}>{attentionTotal}</span> : null}</div>
+        {attentionTotal ? (
+          <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+            {dashboard.pendingExperienceValidations ? <AttentionCard icon={FileCheck2} value={dashboard.pendingExperienceValidations} label="Experiencia esperando validación" href="/portal/experiencias" tone="red" /> : null}
+            {dashboard.unreadMessages ? <AttentionCard icon={MessageSquareText} value={dashboard.unreadMessages} label="Mensajes nuevos" href="/portal/mensajes" tone="blue" /> : null}
+            {dashboard.pendingTeamInvitations ? <AttentionCard icon={FolderKanban} value={dashboard.pendingTeamInvitations} label="Invitaciones a equipo o proyecto" href="/portal/equipos" tone="teal" /> : null}
+            {pendingDocuments ? <AttentionCard icon={FileText} value={pendingDocuments} label="Documentos pendientes" href="/portal/documentos" tone="amber" /> : null}
+          </div>
+        ) : <div className="flex min-h-[86px] items-center gap-3 rounded-xl border border-[#d7eee6] bg-[#f4fbf8] px-4 py-3 text-sm text-[#315d52]"><CheckCircle2 className="h-5 w-5 text-[#087b70]" aria-hidden="true" />No tienes acciones urgentes. Tu espacio está al día.</div>}
+      </section>
+
+      <div className="grid items-start gap-5 2xl:grid-cols-[minmax(0,1fr)_350px]">
+        <div className="min-w-0 space-y-5">
+          {workspaceId ? <FieldVerificationPanel endpoint={`/api/terraqo/field-verification?workspaceId=${workspaceId}`} compact /> : <section className="flex flex-col gap-3 rounded-2xl border border-[#dce5ed] bg-white p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold text-[#0e1a26]">Control de campo por activar</p><p className="mt-1 text-sm text-[#607083]">La jornada y la geolocalización se habilitan cuando una empresa te asigna un proyecto.</p></div><Button asChild variant="outline"><Link href="/portal/perfil">Vincular empresa</Link></Button></section>}
+
+          <section className="rounded-2xl border border-[#dce5ed] bg-white p-4 shadow-[0_12px_34px_rgba(14,26,38,0.05)] sm:p-5">
+            <SectionHeading title="Tu actividad esta semana" href="/portal/bitacora" action="Ver historial" />
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <WeeklyMetric icon={NotebookPen} value={dashboard.weekWorklogs} label="Bitácoras registradas" />
+              <WeeklyMetric icon={ShieldCheck} value={dashboard.weekValidatedWorklogs} label="Evidencias validadas" />
+              <WeeklyMetric icon={Sparkles} value={`+${dashboard.weekTrust}`} label="Confianza aportada" />
+              <WeeklyMetric icon={UserRoundPlus} value={dashboard.newConnections} label="Nuevas conexiones" />
             </div>
-
-            <div className="relative hidden items-center gap-7 lg:grid lg:grid-cols-[minmax(0,1fr)_190px]">
-              <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
-                <ProfessionalPhotoUploader name={name} image={profile.user.image} />
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-3"><h1 className="font-display text-3xl font-bold lg:text-4xl">{name}</h1>{identityComplete ? <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-3 py-1 text-xs font-semibold text-[#25c0d5]"><BadgeCheck className="h-4 w-4" /> Perfil verificado</span> : null}</div>
-                  <p className="mt-2 text-lg font-semibold text-[#25c0d5]">{profile.headline || profile.specialties[0] || "Profesional Terraqo"}</p>
-                  <div className="mt-3 flex flex-wrap gap-3 text-sm text-white/70"><span className="inline-flex items-center gap-1.5"><MapPin className="h-4 w-4 text-[#25c0d5]" />{profile.locationCity || profile.city || "Ubicacion por completar"}</span><span>|</span><span>{formatExperienceDuration(totalMonths)} de experiencia</span></div>
-                  {profile.generatedSummary ? <ExpandableSummary text={profile.generatedSummary} className="mt-4 max-w-3xl" /> : null}
-                  <div className="mt-6 flex flex-wrap gap-3"><Button asChild className="bg-primary text-white hover:bg-primary/90"><Link href={`/portal/profesionales/${profile.id}`}>Ver perfil <ChevronRight className="ml-2 h-4 w-4" /></Link></Button><Button asChild variant="outline" className="border-white/40 bg-transparent text-white hover:bg-white/10"><Link href="/portal/documentos">Completar perfil</Link></Button></div>
-                </div>
-              </div>
-              <div className="justify-self-center text-center">
-                <div className="grid h-28 w-28 place-items-center rounded-full" style={{ background: `conic-gradient(#25c0d5 ${percent * 3.6}deg, rgba(255,255,255,0.13) 0deg)` }}><div className="grid h-[86px] w-[86px] place-items-center rounded-full bg-[#0e1a26] font-display text-2xl font-bold">{percent}%</div></div>
-                <p className="mt-3 text-sm text-white/75">Perfil completo</p>
-              </div>
-            </div>
+            {profile.worklogs.length ? <div className="mt-4 grid gap-3 lg:grid-cols-2">{profile.worklogs.slice(0, 2).map((worklog) => <WorklogPreview key={worklog.id} worklog={worklog} />)}</div> : <div className="mt-4 flex min-h-28 flex-col items-start justify-center rounded-xl border border-dashed border-[#cbd7e2] bg-[#fbfcfd] p-5"><p className="font-semibold text-[#0e1a26]">Tu trabajo todavía no tiene registros.</p><Link href="/portal/bitacora" className="mt-2 inline-flex min-h-11 items-center gap-1 text-sm font-bold text-[#1768b0]">Registrar primera bitácora <ArrowRight className="h-4 w-4" /></Link></div>}
           </section>
 
-          <section className="rounded-lg border bg-white p-5 shadow-[0_14px_36px_rgba(1,45,56,0.05)] lg:p-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="font-mono text-xs font-bold uppercase tracking-[0.16em] text-primary">Ahora en tu red</p><h2 className="mt-1 font-display text-2xl font-bold">Últimas actualizaciones de la comunidad</h2><p className="mt-1 text-sm text-muted-foreground">Trabajo documentado, conversaciones y oportunidades de aprendizaje de perfiles visibles.</p></div><Button asChild variant="outline"><Link href="/portal/red">Explorar la red</Link></Button></div>
-            <div className="mt-5 grid gap-3 lg:grid-cols-2">
-              {updates.map((update) => <article key={`${update.kind}-${update.id}`} className="rounded-lg border bg-muted/20 p-4"><div className="flex flex-wrap items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-primary"><span>{update.kind}</span><span className="text-muted-foreground">· {update.context}</span></div><h3 className="mt-2 font-display text-lg font-bold">{update.title}</h3><p className="mt-2 line-clamp-2 text-sm leading-6 text-muted-foreground">{update.body}</p><p className="mt-3 text-xs font-semibold text-[#2f4154]">{update.author} · {new Intl.DateTimeFormat("es-PE", { dateStyle: "medium" }).format(update.date)}</p></article>)}
-              {!updates.length ? <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground lg:col-span-2">Cuando la comunidad publique avances o conversaciones visibles, aparecerán aquí. Puedes iniciar desde tu bitácora.</div> : null}
-            </div>
-          </section>
-
-          {workspaceId ? <FieldVerificationPanel endpoint={`/api/terraqo/field-verification?workspaceId=${workspaceId}`} compact /> : (
-            <section className="flex flex-col gap-3 rounded-lg border bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
-              <div><p className="font-semibold">Control de campo pendiente de vinculación</p><p className="mt-1 text-sm text-muted-foreground">La entrada, salida y geolocalización se activan cuando una empresa confirma tu vínculo y te asigna un proyecto.</p></div>
-              <Button asChild variant="outline"><Link href="/portal/perfil">Vincular empresa</Link></Button>
+          <div className="grid gap-5 xl:grid-cols-2">
+            <section className="rounded-2xl border border-[#dce5ed] bg-white p-4 shadow-[0_12px_34px_rgba(14,26,38,0.05)] sm:p-5">
+              <SectionHeading title="Ahora en tu red" href="/portal/red" action="Explorar la red" />
+              <div className="mt-3 divide-y divide-[#e7edf2]">
+                {dashboard.networkUpdates.map((update) => {
+                  const Icon = updateIcon[update.kind];
+                  return <Link key={`${update.kind}-${update.id}`} href={update.href} className="group flex min-h-[72px] items-start gap-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1768b0] focus-visible:ring-offset-2"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#edf5ff] text-[#1768b0]"><Icon className="h-4 w-4" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block text-sm leading-5 text-[#52677a]"><strong className="text-[#0e1a26]">{update.actor}</strong> {update.action}</span><span className="mt-0.5 block truncate text-xs font-semibold text-[#1768b0]">{update.title}{update.context ? ` · ${update.context}` : ""}</span></span><span className="shrink-0 text-[11px] text-[#8392a1]">{relativeDate(update.date)}</span></Link>;
+                })}
+                {!dashboard.networkUpdates.length ? <p className="py-8 text-sm leading-6 text-[#607083]">Conecta con profesionales y empresas para ver actividad relevante en este espacio.</p> : null}
+              </div>
             </section>
-          )}
 
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <ProfileMetric icon={BriefcaseBusiness} value={profile.experiences.length} label="Experiencias" detail="registradas" />
-            <ProfileMetric icon={FileText} value={profile.applications.length} label="Postulaciones" detail="enviadas" />
-            <ProfileMetric icon={ShieldCheck} value={verifiedExperiences} label="Validaciones" detail="aprobadas" />
-            <ProfileMetric icon={NotebookPen} value={profile.worklogs.length} label="Evidencias" detail="en tu CV vivo" />
-          </div>
-
-          <section className="grid gap-5 rounded-lg border border-primary/20 bg-[#eefbf9] p-5 lg:grid-cols-[220px_1fr_auto] lg:items-center">
-            <div><p className="font-mono text-xs font-bold uppercase tracking-[0.16em] text-primary">Impulso del CV</p><p className="mt-1 font-display text-4xl font-bold text-[#0e1a26]">{cvMomentum}%</p><p className="text-xs text-muted-foreground">progreso con respaldo real</p></div>
-            <div><div className="h-2 overflow-hidden rounded-full bg-primary/10"><div className="h-full rounded-full bg-primary transition-all" style={{ width: `${cvMomentum}%` }} /></div><p className="mt-3 text-sm leading-6 text-muted-foreground">El avance aumenta con experiencias completas, bitácoras con evidencia, validaciones y verificación de identidad. Publicar contenido repetido no suma.</p></div>
-            <Button asChild><Link href="/portal/bitacora"><NotebookPen className="mr-2 h-4 w-4" /> Registrar avance útil</Link></Button>
-          </section>
-
-          <section className="flex flex-col gap-4 rounded-lg border border-primary/20 bg-[linear-gradient(135deg,rgba(67,116,186,0.10),rgba(37,192,213,0.08))] p-5 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-primary text-white"><NotebookPen className="h-5 w-5" /></span><div><h2 className="font-display text-lg font-bold">Convierte tu trabajo en evidencia</h2><p className="mt-1 text-sm text-muted-foreground">Registra avances, fotos, resultados y referencias desde la bitácora para alimentar tu CV vivo.</p></div></div>
-            <Button asChild className="shrink-0"><Link href="/portal/bitacora"><PlusCircle className="mr-2 h-4 w-4" /> Registrar evidencia</Link></Button>
-          </section>
-
-          <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_380px]">
-            <div className="min-w-0 space-y-6">
-              <div className="grid gap-6 lg:grid-cols-2">
-                <section id="experiencias" className="rounded-lg border bg-white p-6 shadow-[0_14px_36px_rgba(1,45,56,0.05)]">
-                  <div className="flex items-center justify-between"><h2 className="font-display text-xl font-bold">Experiencia destacada</h2><Link href="/portal/experiencias" className="text-xs font-semibold text-primary">Ver todas</Link></div>
-                  <div className="mt-4 divide-y">
-                    {profile.experiences.slice(0, 3).map((experience) => (
-                      <article key={experience.id} className="py-4 first:pt-0">
-                        <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-bold text-[#0e1a26]">{experience.title}</p><p className="mt-1 text-xs text-muted-foreground">{experience.companyName || "Empresa por confirmar"} | {experience.role || "Rol profesional"}</p>{experience.project ? <p className="mt-2 text-xs font-semibold text-primary">Proyecto: {experience.project.title}</p> : null}</div>{experience.verifiedByTerraqo ? <span className="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">Validado</span> : null}</div>
-                      </article>
-                    ))}
-                    {!profile.experiences.length ? <p className="py-8 text-center text-sm text-muted-foreground">Registra tu primera experiencia desde una bitacora o proyecto.</p> : null}
-                  </div>
-                </section>
-
-                <section id="actividad" className="scroll-mt-28 rounded-lg border bg-white p-6 shadow-[0_14px_36px_rgba(1,45,56,0.05)]">
-                  <h2 className="font-display text-xl font-bold">Actividad reciente</h2>
-                  <div className="mt-3">
-                    {profile.applications.slice(0, 2).map((application) => <ActivityRow key={application.id} icon={BriefcaseBusiness} title={application.jobPost?.title || "Postulacion enviada"} detail={`${application.workspace.name} | ${applicationStatusCopy[application.status] ?? "Por revisar"}`} />)}
-                    {profile.worklogs.slice(0, 2).map((worklog) => <ActivityRow key={worklog.id} icon={NotebookPen} title={worklog.title} detail="Evidencia agregada al CV vivo" />)}
-                    {!profile.applications.length && !profile.worklogs.length ? <p className="py-8 text-center text-sm text-muted-foreground">Tu actividad aparecera aqui.</p> : null}
-                  </div>
-                </section>
+            <section className="rounded-2xl border border-[#dce5ed] bg-white p-4 shadow-[0_12px_34px_rgba(14,26,38,0.05)] sm:p-5">
+              <SectionHeading title="Oportunidades para ti" href="/portal/oportunidades" action="Ver todas" />
+              <div className="mt-3 divide-y divide-[#e7edf2]">
+                {dashboard.opportunities.map((opportunity) => <Link key={opportunity.id} href="/portal/oportunidades" className="group flex min-h-[86px] items-center gap-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1768b0] focus-visible:ring-offset-2"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-[#dce5ed] bg-white text-[#1768b0]"><Building2 className="h-5 w-5" aria-hidden="true" /></span><span className="min-w-0 flex-1"><strong className="block truncate text-sm text-[#0e1a26]">{opportunity.title}</strong><span className="mt-0.5 block truncate text-xs text-[#607083]">{opportunity.company}{opportunity.location ? ` · ${opportunity.location}` : ""}</span><span className="mt-2 flex flex-wrap gap-1.5">{opportunity.relatedTags.slice(0, 2).map((tag) => <span key={tag} className="rounded-full bg-[#edf5ff] px-2 py-0.5 text-[10px] font-bold text-[#1768b0]">{tag}</span>)}{opportunity.modality ? <span className="rounded-full bg-[#eef8f5] px-2 py-0.5 text-[10px] font-bold text-[#087b70]">{opportunity.modality}</span> : null}</span></span><span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#f3f7fb] text-[#1768b0] transition group-hover:bg-[#1768b0] group-hover:text-white"><ArrowRight className="h-4 w-4" /></span></Link>)}
+                {!dashboard.opportunities.length ? <p className="py-8 text-sm leading-6 text-[#607083]">No hay oportunidades abiertas relacionadas con tu perfil en este momento.</p> : null}
               </div>
-
-              {profile.worklogs.length ? <section><div className="mb-4 flex items-end justify-between"><div><p className="font-mono text-xs font-bold uppercase tracking-[0.16em] text-primary">CV vivo</p><h2 className="mt-1 font-display text-2xl font-bold">Trabajo documentado</h2></div><Link href="/portal/bitacora" className="text-sm font-semibold text-primary">Ver bitacora</Link></div><div className="grid gap-5 lg:grid-cols-2">{profile.worklogs.map((worklog) => <WorklogCard key={worklog.id} worklog={worklog} viewerId={profile.userId} />)}</div></section> : null}
-
-              <section id="postulaciones" className="rounded-lg border bg-white p-6"><h2 className="font-display text-xl font-bold">Postulaciones</h2><div className="mt-4 grid gap-3">{profile.applications.map((application) => <div key={application.id} className="flex flex-col justify-between gap-3 rounded-md border p-4 sm:flex-row sm:items-center"><div><p className="font-semibold">{application.jobPost?.title || "Bolsa de talento general"}</p><p className="text-sm text-muted-foreground">{application.workspace.name}</p></div><span className="w-fit rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">{applicationStatusCopy[application.status] ?? "Por revisar"}</span></div>)}{!profile.applications.length ? <p className="text-sm text-muted-foreground">Aun no tienes postulaciones.</p> : null}</div></section>
-            </div>
-
-            <aside className="space-y-6">
-              <section className="rounded-lg border bg-white p-6 shadow-[0_14px_36px_rgba(1,45,56,0.05)]"><div className="flex gap-4"><span className="grid h-12 w-12 place-items-center rounded-lg bg-primary/10 text-primary"><CalendarDays className="h-5 w-5" /></span><div><h2 className="font-display text-lg font-bold">Disponibilidad</h2><span className="mt-2 inline-block rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">{statusCopy[profile.status]}</span></div></div><form action={updateProfessionalAvailabilityAction} className="mt-5 grid gap-2 border-t pt-4"><label className="grid gap-1.5 text-sm font-semibold">Estado<select name="status" defaultValue={profile.status} className="h-10 rounded-md border bg-background px-3 text-sm"><option value="AVAILABLE">Disponible ahora</option><option value="OPEN_TO_PROJECTS">Abierto a proyectos</option><option value="WORKING">Trabajando actualmente</option><option value="NOT_AVAILABLE">No disponible</option></select></label><button type="submit" className="h-10 rounded-md border border-primary/30 text-sm font-bold text-primary transition hover:bg-primary hover:text-white">Actualizar disponibilidad</button></form><div className="mt-5 border-t pt-4 text-sm"><p className="font-semibold">Ubicacion</p><p className="mt-1 text-muted-foreground">{profile.city || "Por completar"}</p><p className="mt-4 font-semibold">Miembro desde</p><p className="mt-1 text-muted-foreground">{new Intl.DateTimeFormat("es-PE", { month: "long", year: "numeric" }).format(profile.createdAt)}</p></div></section>
-
-              <section className="rounded-lg border bg-white p-6 shadow-[0_14px_36px_rgba(1,45,56,0.05)]"><div className="flex items-center justify-between"><h2 className="font-display text-lg font-bold">Documentos pendientes</h2><span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">{Number(!hasCv) + Number(!identityComplete)} pendientes</span></div><div className="mt-4 divide-y">{!hasCv ? <Link href="/portal/documentos" className="flex items-center justify-between gap-3 py-3 text-sm"><span><b>CV profesional</b><small className="mt-1 block text-muted-foreground">Completa tus postulaciones</small></span><span className="font-semibold text-primary">Subir</span></Link> : null}{!identityComplete ? <Link href="/portal/documentos" className="flex items-center justify-between gap-3 py-3 text-sm"><span><b>Verificacion de identidad</b><small className="mt-1 block text-muted-foreground">DNI por delante y detras</small></span><span className="font-semibold text-primary">Revisar</span></Link> : null}{hasCv && identityComplete ? <p className="py-4 text-sm text-emerald-700">Tus documentos principales estan completos.</p> : null}</div></section>
-
-              <section className="rounded-lg border bg-white p-6"><h2 className="font-display text-lg font-bold">Atajos rapidos</h2><div className="mt-4 divide-y">{[["/portal/oportunidades", "Explorar oportunidades"], ["/portal/postulaciones", "Mis postulaciones"], ["/portal/bitacora", "Actualizar CV vivo"], ["/portal/validaciones", "Ver validaciones"]].map(([href, label]) => <Link key={label} href={href} className="flex items-center justify-between py-3 text-sm font-semibold text-[#2f4154] hover:text-primary">{label}<ChevronRight className="h-4 w-4" /></Link>)}</div></section>
-
-              <section className="rounded-lg border bg-white p-6">
-                <p className="font-mono text-xs font-bold uppercase tracking-[0.16em] text-primary">Configuracion</p>
-                <h2 className="mt-2 font-display text-lg font-bold">Perfil, mensajes y pagos</h2>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  Administra tu usuario publico, permisos de mensajes, red de contactos y datos privados de cobro.
-                </p>
-                <Button asChild variant="outline" className="mt-4 w-full justify-between">
-                  <Link href="/portal/configuracion">Abrir configuracion <ChevronRight className="h-4 w-4" /></Link>
-                </Button>
-                {publicCvHref ? (
-                  <Link href={publicCvHref} target="_blank" className="mt-4 flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/10">
-                    {publicCvHref.replace(/^https?:\/\//, "")}
-                    <ExternalLink className="h-4 w-4" />
-                  </Link>
-                ) : null}
-              </section>
-            </aside>
+            </section>
           </div>
+        </div>
 
-          <div id="documentos" className="scroll-mt-24"><ProfessionalDocumentUploader identityStatus={profile.identityVerificationStatus} identityNote={profile.identityVerificationNote} documents={profile.documents} /></div>
+        <aside className="grid gap-5 md:grid-cols-2 2xl:grid-cols-1">
+          <section className="rounded-2xl border border-[#dce5ed] bg-white p-5 shadow-[0_12px_34px_rgba(14,26,38,0.05)]">
+            <SectionHeading title="Tu identidad Terraqo" href="/portal/perfil" action="Ver perfil" />
+            <div className="mt-4 grid items-center gap-5 sm:grid-cols-[1fr_116px] md:grid-cols-1 2xl:grid-cols-[1fr_116px]">
+              <div className="space-y-3">
+                {[
+                  [BadgeCheck, "Identidad", identityComplete ? "Perfil verificado" : "Pendiente de verificar"],
+                  [BriefcaseBusiness, "Experiencia", `${dashboard.verifiedExperiences} verificadas`],
+                  [NotebookPen, "Evidencias", `${dashboard.totalWorklogs} registradas`],
+                  [Building2, "Respaldos", `${dashboard.validationBackings} validaciones`],
+                ].map(([Icon, label, value]) => { const ItemIcon = Icon as ElementType; return <div key={String(label)} className="flex items-center gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#eef8f5] text-[#087b70]"><ItemIcon className="h-4 w-4" aria-hidden="true" /></span><span className="text-xs text-[#607083]"><strong className="block text-sm text-[#0e1a26]">{String(label)}</strong>{String(value)}</span></div>; })}
+              </div>
+              <div className="justify-self-center text-center"><div className="grid h-24 w-24 place-items-center rounded-full" style={{ background: `conic-gradient(#087b70 ${percent * 3.6}deg, #dfe7ef 0deg)` }}><div className="grid h-[72px] w-[72px] place-items-center rounded-full bg-white font-display text-xl font-bold text-[#0e1a26]">{percent}%</div></div><p className="mt-2 text-xs font-semibold text-[#52677a]">Nivel de avance</p></div>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-[#dce5ed] bg-white p-5 shadow-[0_12px_34px_rgba(14,26,38,0.05)]">
+            <SectionHeading title="Continuar donde lo dejaste" />
+            <div className="mt-3 space-y-2">
+              {continuation.map((item) => { const Icon = item.icon; return <Link key={item.title} href={item.href} className="group flex min-h-[70px] items-center gap-3 rounded-xl border border-[#e2e9ef] p-3 transition hover:border-[#bfd5e8] hover:bg-[#fbfdff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1768b0] focus-visible:ring-offset-2"><span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${item.tone}`}><Icon className="h-5 w-5" aria-hidden="true" /></span><span className="min-w-0 flex-1"><strong className="block truncate text-sm text-[#0e1a26]">{item.title}</strong><span className="mt-0.5 block line-clamp-2 text-xs leading-4 text-[#607083]">{item.detail}</span></span><ChevronRight className="h-4 w-4 shrink-0 text-[#1768b0] transition-transform group-hover:translate-x-0.5" /></Link>; })}
+              {!continuation.length ? <div className="flex min-h-[76px] items-center gap-3 rounded-xl bg-[#f4fbf8] p-4 text-sm text-[#315d52]"><CheckCircle2 className="h-5 w-5 text-[#087b70]" />No tienes tareas interrumpidas.</div> : null}
+            </div>
+          </section>
+
+          <section className="relative overflow-hidden rounded-2xl bg-[radial-gradient(circle_at_85%_15%,rgba(75,183,229,0.32),transparent_28%),linear-gradient(145deg,#071827,#0c3440)] p-6 text-white shadow-[0_20px_48px_rgba(8,27,43,0.18)] md:col-span-2 2xl:col-span-1">
+            <div className="absolute -bottom-10 -right-10 h-40 w-40 rounded-full border border-white/10" /><div className="absolute -bottom-4 -right-4 h-28 w-28 rounded-full border border-white/10" />
+            <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-[#67dce1]">Siguiente nivel</p><h2 className="mt-3 max-w-xs font-display text-2xl font-bold leading-[1.08] tracking-[-0.03em]">Más proyectos. Más validaciones. Mayor impacto.</h2><p className="mt-3 max-w-sm text-sm leading-6 text-white/70">Conecta tu evidencia con empresas y oportunidades que necesitan capacidades como las tuyas.</p>
+            <Button asChild className="relative mt-5 min-h-11 bg-white text-[#0e1a26] hover:bg-[#eaf5f7]"><Link href="/portal/oportunidades">Explorar oportunidades <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
+            {publicCvHref ? <Link href={publicCvHref} target="_blank" className="relative mt-3 flex min-h-11 items-center gap-2 text-sm font-semibold text-[#88e7e8]">Ver mi CV público <ArrowRight className="h-4 w-4" /></Link> : null}
+          </section>
+        </aside>
+      </div>
     </div>
   );
 }

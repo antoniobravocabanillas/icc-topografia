@@ -6,7 +6,7 @@ import { auth } from "@/auth";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { PortalFileUploader } from "@/components/portal/file-uploader";
-import { ProfessionalDashboard } from "@/components/terraqo/professional-dashboard";
+import { ProfessionalDashboard, type ProfessionalDashboardData } from "@/components/terraqo/professional-dashboard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,8 +19,8 @@ import { worklogInclude } from "@/lib/terraqo/worklog";
 import { formatCurrency } from "@/lib/utils";
 
 export const metadata = createMetadata({
-  title: "Portal de cliente",
-  description: "Cotizaciones, proyectos, documentos y tickets de soporte para clientes ICC.",
+  title: "Inicio del Portal Terraqo",
+  description: "Actividad, tareas, oportunidades y señales de confianza de tu espacio Terraqo.",
   path: "/portal"
 });
 
@@ -124,25 +124,224 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
       }
     }
   });
-  const professionalWorkspace = professionalProfile ? await prisma.terraqoWorkspaceMember.findFirst({
-    where: { userId: professionalProfile.userId, active: true, role: "PROFESSIONAL", workspace: { active: true, deletedAt: null } },
-    select: { workspaceId: true },
-    orderBy: { joinedAt: "desc" }
-  }) : null;
-  const communityUpdates = professionalProfile ? await Promise.all([
-    prisma.terraqoForumPost.findMany({
-      where: { deletedAt: null, visibility: { in: ["COMMUNITY", "PUBLIC"] } },
-      select: { id: true, title: true, body: true, createdAt: true, author: { select: { name: true } }, channel: { select: { name: true } } },
-      orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
-      take: 4
-    }),
-    prisma.terraqoWorklogEntry.findMany({
-      where: { deletedAt: null, visibility: { in: ["COMMUNITY", "PUBLIC"] }, NOT: { authorId: professionalProfile.userId } },
-      select: { id: true, title: true, summary: true, occurredAt: true, author: { select: { name: true } }, workspace: { select: { brandName: true, name: true } } },
-      orderBy: { occurredAt: "desc" },
-      take: 4
-    })
-  ]) : null;
+  let professionalWorkspaceId: string | null = null;
+  let professionalDashboard: ProfessionalDashboardData | null = null;
+
+  if (professionalProfile) {
+    const weekStart = new Date();
+    weekStart.setHours(0, 0, 0, 0);
+    weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
+
+    const memberships = await prisma.terraqoWorkspaceMember.findMany({
+      where: {
+        userId: professionalProfile.userId,
+        active: true,
+        role: "PROFESSIONAL",
+        workspace: { active: true, deletedAt: null }
+      },
+      select: { workspaceId: true },
+      orderBy: { joinedAt: "desc" }
+    });
+    professionalWorkspaceId = memberships[0]?.workspaceId || null;
+    const workspaceIds = memberships.map((membership) => membership.workspaceId);
+
+    const [
+      participants,
+      pendingTeamInvitations,
+      pendingExperienceValidations,
+      weekWorklogs,
+      weekValidatedWorklogs,
+      weekTrustAggregate,
+      newConnections,
+      totalWorklogs,
+      verifiedExperiences,
+      validationBackings,
+      forumPosts,
+      networkWorklogs,
+      jobPosts,
+      networkValidations
+    ] = await Promise.all([
+      prisma.terraqoConversationParticipant.findMany({
+        where: { userId: professionalProfile.userId, leftAt: null },
+        select: { conversationId: true, lastReadAt: true, joinedAt: true }
+      }),
+      prisma.terraqoTeamMember.count({
+        where: { userId: professionalProfile.userId, status: "INVITED", team: { status: "ACTIVE" } }
+      }),
+      prisma.terraqoProfessionalExperience.count({
+        where: { professionalProfileId: professionalProfile.id, verificationStatus: "REQUESTED" }
+      }),
+      prisma.terraqoWorklogEntry.count({
+        where: { professionalProfileId: professionalProfile.id, deletedAt: null, occurredAt: { gte: weekStart } }
+      }),
+      prisma.terraqoWorklogEntry.count({
+        where: { professionalProfileId: professionalProfile.id, deletedAt: null, occurredAt: { gte: weekStart }, validations: { some: { status: "APPROVED" } } }
+      }),
+      prisma.terraqoWorklogEntry.aggregate({
+        where: { professionalProfileId: professionalProfile.id, deletedAt: null, occurredAt: { gte: weekStart } },
+        _sum: { trustScoreAwarded: true }
+      }),
+      prisma.terraqoFriendship.count({
+        where: {
+          status: "ACCEPTED",
+          respondedAt: { gte: weekStart },
+          OR: [{ requesterId: professionalProfile.userId }, { recipientId: professionalProfile.userId }]
+        }
+      }),
+      prisma.terraqoWorklogEntry.count({ where: { professionalProfileId: professionalProfile.id, deletedAt: null } }),
+      prisma.terraqoProfessionalExperience.count({ where: { professionalProfileId: professionalProfile.id, verifiedByTerraqo: true } }),
+      prisma.terraqoWorklogValidation.count({ where: { worklog: { professionalProfileId: professionalProfile.id, deletedAt: null }, status: "APPROVED" } }),
+      prisma.terraqoForumPost.findMany({
+        where: { deletedAt: null, visibility: { in: ["COMMUNITY", "PUBLIC"] }, NOT: { authorId: professionalProfile.userId } },
+        select: { id: true, title: true, createdAt: true, author: { select: { name: true } }, channel: { select: { name: true } } },
+        orderBy: { createdAt: "desc" },
+        take: 4
+      }),
+      prisma.terraqoWorklogEntry.findMany({
+        where: { deletedAt: null, visibility: { in: ["COMMUNITY", "PUBLIC"] }, NOT: { authorId: professionalProfile.userId } },
+        select: { id: true, title: true, occurredAt: true, author: { select: { name: true } }, workspace: { select: { brandName: true, name: true } } },
+        orderBy: { occurredAt: "desc" },
+        take: 4
+      }),
+      prisma.terraqoJobPost.findMany({
+        where: {
+          status: "OPEN",
+          deletedAt: null,
+          workspace: { active: true, modules: { some: { code: "JOB_MARKETPLACE", active: true } } },
+          OR: [
+            { visibility: { in: ["PUBLIC", "COMMUNITY"] } },
+            ...(workspaceIds.length ? [{ visibility: "WORKSPACE" as const, workspaceId: { in: workspaceIds } }] : [])
+          ]
+        },
+        select: {
+          id: true,
+          title: true,
+          location: true,
+          modality: true,
+          requiredSkills: true,
+          requiredTools: true,
+          professionalCategories: true,
+          createdAt: true,
+          workspace: { select: { name: true, brandName: true } }
+        },
+        orderBy: { createdAt: "desc" },
+        take: 12
+      }),
+      prisma.terraqoWorklogValidation.findMany({
+        where: {
+          status: "APPROVED",
+          worklog: {
+            deletedAt: null,
+            visibility: { in: ["COMMUNITY", "PUBLIC"] },
+            NOT: { authorId: professionalProfile.userId }
+          }
+        },
+        select: {
+          id: true,
+          resolvedAt: true,
+          createdAt: true,
+          worklog: { select: { title: true, author: { select: { name: true } }, workspace: { select: { name: true, brandName: true } } } }
+        },
+        orderBy: { resolvedAt: "desc" },
+        take: 4
+      })
+    ]);
+
+    const unreadMessages = participants.length
+      ? await prisma.terraqoDirectMessage.count({
+          where: {
+            deletedAt: null,
+            senderId: { not: professionalProfile.userId },
+            OR: participants.map((participant) => ({
+              conversationId: participant.conversationId,
+              createdAt: { gt: participant.lastReadAt || participant.joinedAt }
+            }))
+          }
+        })
+      : 0;
+
+    const profileTerms = new Set(
+      [
+        ...professionalProfile.professionalCategories,
+        ...professionalProfile.specialties,
+        ...professionalProfile.equipment,
+        ...professionalProfile.software
+      ].map((term) => term.trim().toLocaleLowerCase("es-PE"))
+    );
+    const rankedJobs = jobPosts
+      .map((job) => {
+        const candidateTags = [...job.professionalCategories, ...job.requiredSkills, ...job.requiredTools];
+        const relatedTags = candidateTags.filter((tag) => profileTerms.has(tag.trim().toLocaleLowerCase("es-PE")));
+        const sameLocation = Boolean(job.location && [professionalProfile.locationCity, professionalProfile.city].filter(Boolean).some((city) => job.location?.toLocaleLowerCase("es-PE").includes(String(city).toLocaleLowerCase("es-PE"))));
+        return { job, relatedTags, score: relatedTags.length * 2 + Number(sameLocation) };
+      })
+      .sort((a, b) => b.score - a.score || b.job.createdAt.getTime() - a.job.createdAt.getTime());
+
+    const networkUpdates: ProfessionalDashboardData["networkUpdates"] = [
+      ...networkWorklogs.map((worklog) => ({
+        id: worklog.id,
+        kind: "evidence" as const,
+        actor: worklog.author.name || "Un profesional",
+        action: "publicó una evidencia",
+        title: worklog.title,
+        context: worklog.workspace?.brandName || worklog.workspace?.name || null,
+        date: worklog.occurredAt,
+        href: "/portal/red"
+      })),
+      ...jobPosts.slice(0, 4).map((job) => ({
+        id: job.id,
+        kind: "opportunity" as const,
+        actor: job.workspace.brandName || job.workspace.name,
+        action: "publicó una oportunidad",
+        title: job.title,
+        context: job.location,
+        date: job.createdAt,
+        href: "/portal/oportunidades"
+      })),
+      ...networkValidations.map((validation) => ({
+        id: validation.id,
+        kind: "validation" as const,
+        actor: validation.worklog.author.name || "Un profesional",
+        action: "obtuvo una validación",
+        title: validation.worklog.title,
+        context: validation.worklog.workspace?.brandName || validation.worklog.workspace?.name || null,
+        date: validation.resolvedAt || validation.createdAt,
+        href: "/portal/red"
+      })),
+      ...forumPosts.map((post) => ({
+        id: post.id,
+        kind: "conversation" as const,
+        actor: post.author?.name || "La comunidad Terraqo",
+        action: "inició una conversación",
+        title: post.title,
+        context: post.channel.name,
+        date: post.createdAt,
+        href: "/portal/commons"
+      }))
+    ].sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 6);
+
+    professionalDashboard = {
+      unreadMessages,
+      pendingTeamInvitations,
+      pendingExperienceValidations,
+      weekWorklogs,
+      weekValidatedWorklogs,
+      weekTrust: weekTrustAggregate._sum.trustScoreAwarded || 0,
+      newConnections,
+      totalWorklogs,
+      verifiedExperiences,
+      validationBackings,
+      opportunities: rankedJobs.slice(0, 3).map(({ job, relatedTags }) => ({
+        id: job.id,
+        title: job.title,
+        company: job.workspace.brandName || job.workspace.name,
+        location: job.location,
+        modality: job.modality,
+        relatedTags: relatedTags.length ? relatedTags : [...job.professionalCategories, ...job.requiredSkills].slice(0, 2)
+      })),
+      networkUpdates
+    };
+  }
 
   const activeClientAccount = account && ["active", "approved"].includes(account.status) && account.client?.terraqoWorkspaceId === terraqoWorkspaceId ? account : null;
   const client = activeClientAccount?.client || null;
@@ -162,96 +361,7 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
             {statusMessages[params.status]}
           </div>
         ) : null}
-        <ProfessionalDashboard profile={professionalProfile} workspaceId={professionalWorkspace?.workspaceId} communityUpdates={communityUpdates ? {
-          posts: communityUpdates[0].map((post) => ({ id: post.id, title: post.title, body: post.body, date: post.createdAt, author: post.author?.name || "Comunidad Terraqo", context: post.channel.name })),
-          worklogs: communityUpdates[1].map((worklog) => ({ id: worklog.id, title: worklog.title, body: worklog.summary, date: worklog.occurredAt, author: worklog.author?.name || "Profesional Terraqo", context: worklog.workspace?.brandName || worklog.workspace?.name || "Red profesional" }))
-        } : undefined} />
-        {client ? (
-          <section id="operaciones-comerciales" className="scroll-mt-28 space-y-6">
-            <div>
-              <p className="font-mono text-xs font-bold uppercase tracking-[0.16em] text-primary">Operaciones comerciales</p>
-              <h2 className="mt-1 font-display text-2xl font-bold">Compras, cotizaciones y soporte vinculados a tu cuenta</h2>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-                Esta informacion se agrega a tu portal personal Terraqo sin reemplazar tu perfil profesional ni tus permisos existentes.
-              </p>
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Pedidos de tienda tecnica</CardTitle>
-                <CardDescription>Historial generado desde tiendas conectadas al workspace.</CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-3">
-                {orders.map((order) => (
-                  <div key={order.id} className="rounded-lg border bg-white p-4">
-                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                      <div>
-                        <p className="font-display text-lg font-bold">{publicOrderCode(order.notes) || order.id}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {order.items.map((item) => `${item.quantity} x ${item.product.name}`).join(", ")}
-                        </p>
-                        <p className="mt-2 text-xs text-muted-foreground">{order.createdAt.toLocaleDateString("es-PE")}</p>
-                      </div>
-                      <div className="text-left md:text-right">
-                        <StatusBadge status={order.status} />
-                        <p className="mt-2 font-display text-xl font-bold">{formatCurrency(Number(order.total), order.currency)}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {!orders.length ? <p className="text-sm text-muted-foreground">Aun no tienes pedidos registrados.</p> : null}
-              </CardContent>
-            </Card>
-
-            <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-              <Card id="cotizaciones" className="scroll-mt-28">
-                <CardHeader>
-                  <CardTitle>Cotizaciones recibidas</CardTitle>
-                  <CardDescription>Acepta, rechaza o descarga propuestas comerciales.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {client.quotes.map((quote) => (
-                    <div key={quote.id} className="rounded-lg border bg-white p-4">
-                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                        <div>
-                          <p className="font-display text-xl font-bold">{quote.number}</p>
-                          <p className="text-sm text-muted-foreground">{quote.items.map((item) => item.description).join(", ")}</p>
-                          <p className="mt-2 text-sm">Asesor: {quote.sellerProfile?.displayName || "Equipo comercial"}</p>
-                        </div>
-                        <div className="text-left md:text-right">
-                          <StatusBadge status={quote.status} />
-                          <p className="mt-2 font-display text-2xl font-bold">{formatCurrency(Number(quote.total), quote.currency)}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {!client.quotes.length ? <p className="text-sm text-muted-foreground">Aun no tienes cotizaciones registradas.</p> : null}
-                </CardContent>
-              </Card>
-
-              <Card id="soporte" className="scroll-mt-28">
-                <CardHeader>
-                  <CardTitle>Soporte comercial y tecnico</CardTitle>
-                  <CardDescription>Tickets asociados a tus operaciones con este workspace.</CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-4">
-                  {client.tickets.slice(0, 3).map((ticket) => (
-                    <div key={ticket.id} className="rounded-lg border bg-white p-4">
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <p className="font-display text-lg font-bold">{ticket.code}</p>
-                          <p className="text-sm text-muted-foreground">{ticket.subject}</p>
-                        </div>
-                        <StatusBadge status={ticket.status} />
-                      </div>
-                    </div>
-                  ))}
-                  {!client.tickets.length ? <p className="text-sm text-muted-foreground">Todavia no tienes tickets.</p> : null}
-                </CardContent>
-              </Card>
-            </div>
-          </section>
-        ) : null}
+        <ProfessionalDashboard profile={professionalProfile} workspaceId={professionalWorkspaceId} dashboard={professionalDashboard!} />
       </div>
     );
   }
