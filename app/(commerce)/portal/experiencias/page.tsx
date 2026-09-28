@@ -1,4 +1,5 @@
-import { BadgeCheck, BookOpenCheck, CircleCheck, Eye, History, ShieldCheck, Sparkles } from "lucide-react";
+import { BadgeCheck, BookOpenCheck, CircleCheck, Eye, FileSearch, History, ShieldCheck, Sparkles } from "lucide-react";
+import Link from "next/link";
 import type { TerraqoMemberRole } from "@prisma/client";
 import { EntryReferenceRequest } from "@/components/portal/entry-reference-request";
 import { ExperiencePublicDetailsEditor } from "@/components/portal/experience-public-details-editor";
@@ -7,6 +8,7 @@ import { ExperienceForm, EducationForm } from "@/components/portal/profile-entry
 import { PortalPageHeading } from "@/components/terraqo/portal-page-heading";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { createEducationAction, createHistoricalExperienceAction, requestEducationVerificationAction, requestExperienceVerificationAction, updateEducationReferenceAction, updateExperiencePublicDetailsAction, updateExperienceReferenceAction, updateProfessionalExperienceAction } from "@/lib/server/professional-actions";
 import { prisma } from "@/lib/prisma";
 import { requireProfessionalPortal } from "@/lib/terraqo/professional-portal";
@@ -73,10 +75,12 @@ export default async function ExperiencesPage({ searchParams }: ExperiencesPageP
         eyebrow="Experiencias"
         title="Carga trabajos reales y conviertelos en experiencia verificable."
         description="Puedes registrar proyectos actuales o historicos. Si un responsable valida el trabajo, la experiencia gana un check. Si tambien existe evidencia de campo diaria, puede mostrar doble validacion."
+        action={<Button asChild variant="outline"><Link href="/portal/experiencias/importar"><FileSearch className="mr-2 h-4 w-4" /> Importar mi CV</Link></Button>}
       />
 
       {params.success === "experience" ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Experiencia cargada. Quedo privada y pendiente de verificacion.</div> : null}
       {params.success === "education" ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Educacion registrada. El extracto del perfil fue actualizado.</div> : null}
+      {params.success === "cv-import" ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Tu CV fue incorporado como borradores privados. Revisa cada entrada antes de publicarla o pedir validación.</div> : null}
       {params.success === "experience-details" ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Detalle publico de la experiencia actualizado.</div> : null}
       {params.success === "experience-updated" ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Experiencia actualizada. Las evidencias y solicitudes de validación quedaron registradas.</div> : null}
       {params.success === "verification-requested" ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Solicitud enviada a Terraqo. El equipo revisara las referencias y evidencias declaradas.</div> : null}

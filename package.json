@@ -33,7 +33,8 @@
     "workspace:backfill": "tsx prisma/backfill-workspace-ownership.ts",
     "db:migrate-location-identity": "tsx scripts/migrate-location-identity.ts",
     "workspace:test-isolation": "tsx prisma/test-workspace-isolation.ts",
-    "demo:create-accesses": "tsx prisma/create-demo-accesses.ts"
+    "demo:create-accesses": "tsx prisma/create-demo-accesses.ts",
+    "ml:export-cv-feedback": "tsx scripts/export-cv-feedback.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",

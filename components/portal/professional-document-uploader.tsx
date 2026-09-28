@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useRef, useState } from "react";
 import { BadgeCheck, Download, Eye, FileBadge2, FileText, IdCard, Loader2, LockKeyhole, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -107,10 +108,13 @@ export function ProfessionalDocumentUploader({ identityStatus, identityNote, doc
         </CardHeader>
         <CardContent className="space-y-4">
           {latestCv ? (
-            <div className="grid gap-2 rounded-md border bg-muted/35 p-3 text-sm font-semibold sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
-              <span className="truncate">{latestCv.fileName}</span>
-              <button type="button" onClick={() => setPreview(latestCv)} className="inline-flex items-center gap-1 text-primary"><Eye className="h-4 w-4" /> Previsualizar</button>
-              <a href={`/api/terraqo/professional-documents/${latestCv.id}`} className="inline-flex items-center gap-1 text-primary"><Download className="h-4 w-4" /> Descargar</a>
+            <div className="space-y-3">
+              <div className="grid gap-2 rounded-md border bg-muted/35 p-3 text-sm font-semibold sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
+                <span className="truncate">{latestCv.fileName}</span>
+                <button type="button" onClick={() => setPreview(latestCv)} className="inline-flex items-center gap-1 text-primary"><Eye className="h-4 w-4" /> Previsualizar</button>
+                <a href={`/api/terraqo/professional-documents/${latestCv.id}`} className="inline-flex items-center gap-1 text-primary"><Download className="h-4 w-4" /> Descargar</a>
+              </div>
+              <Button asChild variant="outline" className="w-full"><Link href="/portal/experiencias/importar"><FileText className="mr-2 h-4 w-4" /> Leer datos y completar mi perfil</Link></Button>
             </div>
           ) : null}
           <form ref={cvFormRef} className="grid gap-3" onSubmit={(event) => { event.preventDefault(); void upload(event.currentTarget, "cv"); }}>

@@ -1,0 +1,43 @@
+name: terraqo-document-ai
+
+services:
+  extractor:
+    container_name: terraqo-document-intelligence
+    build:
+      context: .
+    image: terraqo-document-intelligence:local
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${TERRAQO_DOCUMENT_AI_PORT:-8081}:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      TERRAQO_DOCUMENT_AI_TOKEN: "${TERRAQO_DOCUMENT_AI_TOKEN:?Define TERRAQO_DOCUMENT_AI_TOKEN}"
+      OLLAMA_BASE_URL: "${OLLAMA_BASE_URL:-http://host.docker.internal:11434}"
+      OLLAMA_CV_MODEL: "${OLLAMA_CV_MODEL:-qwen2.5:7b-instruct}"
+      OLLAMA_TIMEOUT_SECONDS: "${OLLAMA_TIMEOUT_SECONDS:-240}"
+    volumes:
+      - document-ai-cache:/home/terraqo
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=5)"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  document-ai-cache:
+    name: terraqo-document-ai-cache
+    external: true
