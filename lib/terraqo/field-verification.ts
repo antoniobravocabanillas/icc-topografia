@@ -9,6 +9,7 @@ import {
 import type { Prisma, TerraqoAttendanceType, TerraqoMemberRole, TerraqoWebAuthnPurpose } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { awardAutomatedBuilderContribution, consumeBuilderValidationCredit, syncWorklogReputation } from "@/lib/terraqo/builders";
+import { activeCompensation, calculateJornada } from "@/lib/terraqo/jornada";
 
 const SUPERVISOR_ROLES: TerraqoMemberRole[] = ["OWNER", "ADMIN", "MANAGER"];
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
@@ -172,6 +173,17 @@ export async function getFieldVerificationStatus(userId: string, workspaceId: st
     })
   ]);
 
+  const approvedCheckoutCorrection = latestAttendance?.type === "CHECK_IN"
+    ? await prisma.terraqoAttendanceAdjustment.findFirst({
+        where: { attendanceEventId: latestAttendance.id, status: "APPROVED", requestedCheckOutAt: { not: null } },
+        orderBy: { reviewedAt: "desc" },
+        select: { requestedCheckOutAt: true },
+      })
+    : null;
+  const effectiveLatestAttendance = approvedCheckoutCorrection?.requestedCheckOutAt
+    ? { ...latestAttendance!, type: "CHECK_OUT" as const, capturedAt: approvedCheckoutCorrection.requestedCheckOutAt }
+    : latestAttendance;
+
   return {
     membership: { role: membership.role, title: membership.title },
     workspace: {
@@ -183,7 +195,7 @@ export async function getFieldVerificationStatus(userId: string, workspaceId: st
       ...project,
       imageUrl: images[0]?.url || null
     })),
-    latestAttendance,
+    latestAttendance: effectiveLatestAttendance,
     recentAttendance,
     supervisors: supervisors.map((item) => ({
       userId: item.userId,
@@ -422,6 +434,13 @@ export async function verifyAttendance(input: { userId: string; challengeId: str
   const payload = challenge.payload as unknown as LocationPayload & { distanceMeters: number; geofenceRadiusMeters: number };
   if (!challenge.workspaceId || !payload?.projectId) throw new FieldVerificationError("La solicitud de asistencia esta incompleta.", 422);
   const { profile } = await requireAssignedProject(input.userId, challenge.workspaceId, payload.projectId);
+  const relationship = await prisma.terraqoWorkRelationship.findFirst({
+    where: { workspaceId: challenge.workspaceId, member: { userId: input.userId, active: true }, status: { in: ["ACTIVE", "DRAFT"] } },
+    include: {
+      schedules: { where: { effectiveTo: null }, orderBy: { effectiveFrom: "desc" }, take: 1 },
+      compensationPolicies: { where: { effectiveTo: null }, orderBy: [{ source: "asc" }, { effectiveFrom: "desc" }] }
+    }
+  });
   const capturedAt = new Date();
   const event = await prisma.$transaction(async (tx) => {
     const consumed = await tx.terraqoWebAuthnChallenge.updateMany({
@@ -437,6 +456,7 @@ export async function verifyAttendance(input: { userId: string; challengeId: str
         userId: input.userId,
         workspaceId: challenge.workspaceId!,
         projectId: payload.projectId,
+        workRelationshipId: relationship?.id,
         status: "ACCEPTED"
       },
       orderBy: { capturedAt: "desc" },
@@ -465,6 +485,46 @@ export async function verifyAttendance(input: { userId: string; challengeId: str
       },
       include: { project: { select: { title: true } } }
     });
+    if (payload.type === "CHECK_OUT" && relationship) {
+      const entry = await tx.terraqoAttendanceEvent.findFirst({
+        where: {
+          userId: input.userId,
+          workspaceId: challenge.workspaceId!,
+          projectId: payload.projectId,
+          type: "CHECK_IN",
+          status: "ACCEPTED",
+          capturedAt: { lt: capturedAt }
+        },
+        orderBy: { capturedAt: "desc" },
+        select: { id: true, capturedAt: true }
+      });
+      if (entry) {
+        const compensation = activeCompensation(relationship.compensationPolicies);
+        const calculation = calculateJornada({
+          entryAt: entry.capturedAt,
+          exitAt: capturedAt,
+          schedule: relationship.schedules[0] || null,
+          compensation,
+        });
+        await tx.terraqoAttendanceApproval.upsert({
+          where: { checkInEventId: entry.id },
+          update: {
+            checkOutEventId: created.id,
+            regularMinutes: calculation.regularMinutes,
+            additionalDetectedMinutes: calculation.additionalDetectedMinutes,
+          },
+          create: {
+            workRelationshipId: relationship.id,
+            checkInEventId: entry.id,
+            checkOutEventId: created.id,
+            regularMinutes: calculation.regularMinutes,
+            additionalDetectedMinutes: calculation.additionalDetectedMinutes,
+            status: compensation?.additionalHoursPolicy === "AUTOMATIC" ? "APPROVED" : "PENDING",
+            additionalApprovedMinutes: compensation?.additionalHoursPolicy === "AUTOMATIC" ? calculation.additionalDetectedMinutes : 0,
+          }
+        });
+      }
+    }
     return created;
   }, { isolationLevel: "Serializable" });
   return { id: event.id, type: event.type, capturedAt: event.capturedAt, project: event.project };

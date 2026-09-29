@@ -6,6 +6,7 @@ import { useEffect, useState, type ElementType, type ReactNode } from "react";
 import {
   Award,
   Bell,
+  CalendarClock,
   BriefcaseBusiness,
   Building2,
   Compass,
@@ -85,6 +86,12 @@ const professionalItems: PortalNavItem[] = [
   { href: "/portal/archivos", label: "Archivos", icon: FolderOpen },
   { href: "/portal/oportunidades", label: "Oportunidades", icon: Compass },
   { href: "/portal/mensajes", label: "Mensajes", icon: MessagesSquare },
+  { href: "/portal/jornadas", label: "Mis jornadas", icon: CalendarClock },
+  {
+    href: "/portal/relacion-laboral",
+    label: "Relación laboral",
+    icon: BriefcaseBusiness,
+  },
   { href: "/portal/bitacora", label: "Bitácora", icon: NotebookPen },
   { href: "/portal/commons", label: "Commons", icon: UsersRound },
   { href: "/portal/equipos", label: "Equipos", icon: Building2 },
@@ -221,7 +228,7 @@ export function PortalShell({
       ? professionalItems.filter((item) =>
           [
             "/portal",
-            "/portal/experiencias",
+            "/portal/jornadas",
             "/portal/bitacora",
             "/portal/red",
           ].includes(item.href),

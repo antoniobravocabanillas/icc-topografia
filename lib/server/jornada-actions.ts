@@ -1,0 +1,253 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+
+import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
+import { activeCompensation, calculateJornada } from "@/lib/terraqo/jornada";
+import { getSessionTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
+
+function text(formData: FormData, key: string) {
+  return String(formData.get(key) || "").trim();
+}
+
+function integer(formData: FormData, key: string, fallback = 0) {
+  const value = Number(text(formData, key));
+  return Number.isInteger(value) ? value : fallback;
+}
+
+function money(formData: FormData, key: string) {
+  const value = Number(text(formData, key));
+  if (!Number.isFinite(value) || value <= 0) throw new Error("Monto inválido.");
+  return value;
+}
+
+function validClock(value: string) {
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) throw new Error("Horario inválido.");
+  return value;
+}
+
+function clockMinutes(value: string) {
+  const [hours, minutes] = value.split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+function limaLocalDateTime(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return new Date(Number.NaN);
+  return new Date(`${value}:00-05:00`);
+}
+
+async function requireCompanyManager() {
+  const session = await auth();
+  if (!session?.user?.id || !["ADMIN", "SUPER_ADMIN"].includes(session.user.role || "")) throw new Error("Acceso administrativo requerido.");
+  const workspaceId = await getSessionTerraqoWorkspaceId();
+  return { userId: session.user.id, workspaceId };
+}
+
+export async function configureWorkRelationshipAction(formData: FormData) {
+  const { userId, workspaceId } = await requireCompanyManager();
+  const memberId = text(formData, "memberId");
+  const member = await prisma.terraqoWorkspaceMember.findFirst({ where: { id: memberId, workspaceId, active: true }, select: { id: true } });
+  if (!member) throw new Error("El colaborador no pertenece al workspace activo.");
+
+  const startTime = validClock(text(formData, "startTime"));
+  const endTime = validClock(text(formData, "endTime"));
+  if (clockMinutes(endTime) <= clockMinutes(startTime)) throw new Error("La hora de salida debe ser posterior a la entrada.");
+  const workDays = formData.getAll("workDays").map(Number).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6);
+  if (!workDays.length) throw new Error("Selecciona al menos un día laborable.");
+  const saturdayStartRaw = text(formData, "saturdayStartTime");
+  const saturdayEndRaw = text(formData, "saturdayEndTime");
+  if ((saturdayStartRaw && !saturdayEndRaw) || (!saturdayStartRaw && saturdayEndRaw)) throw new Error("Completa ambas horas del sábado.");
+  const saturdayStartTime = saturdayStartRaw ? validClock(saturdayStartRaw) : null;
+  const saturdayEndTime = saturdayEndRaw ? validClock(saturdayEndRaw) : null;
+  if (saturdayStartTime && saturdayEndTime && clockMinutes(saturdayEndTime) <= clockMinutes(saturdayStartTime)) throw new Error("La salida del sábado debe ser posterior a la entrada.");
+  const baseAmount = money(formData, "baseAmount");
+  const hourlyReferenceAmount = money(formData, "hourlyReferenceAmount");
+  const now = new Date();
+
+  await prisma.$transaction(async (tx) => {
+    const relationship = await tx.terraqoWorkRelationship.upsert({
+      where: { memberId },
+      update: {
+        status: "ACTIVE",
+        area: text(formData, "area") || null,
+        contractType: text(formData, "contractType") || null,
+        modality: text(formData, "modality") || null,
+        workSite: text(formData, "workSite") || null,
+        startDate: text(formData, "startDate") ? new Date(`${text(formData, "startDate")}T12:00:00Z`) : null,
+        configuredByUserId: userId,
+        confirmedAt: now,
+      },
+      create: {
+        workspaceId,
+        memberId,
+        status: "ACTIVE",
+        area: text(formData, "area") || null,
+        contractType: text(formData, "contractType") || null,
+        modality: text(formData, "modality") || null,
+        workSite: text(formData, "workSite") || null,
+        startDate: text(formData, "startDate") ? new Date(`${text(formData, "startDate")}T12:00:00Z`) : null,
+        configuredByUserId: userId,
+        confirmedAt: now,
+      },
+    });
+
+    await tx.terraqoWorkSchedule.updateMany({ where: { workRelationshipId: relationship.id, effectiveTo: null }, data: { effectiveTo: now } });
+    await tx.terraqoWorkSchedule.create({
+      data: {
+        workRelationshipId: relationship.id,
+        startTime,
+        endTime,
+        breakMinutes: Math.max(0, integer(formData, "breakMinutes", 60)),
+        toleranceMinutes: Math.max(0, integer(formData, "toleranceMinutes", 10)),
+        workDays,
+        saturdayStartTime,
+        saturdayEndTime,
+        saturdayBreakMinutes: Math.max(0, integer(formData, "saturdayBreakMinutes")),
+        effectiveFrom: now,
+      },
+    });
+
+    await tx.terraqoCompensationPolicy.updateMany({ where: { workRelationshipId: relationship.id, source: "COMPANY", effectiveTo: null }, data: { effectiveTo: now } });
+    await tx.terraqoCompensationPolicy.create({
+      data: {
+        workRelationshipId: relationship.id,
+        source: "COMPANY",
+        baseAmount,
+        currency: "PEN",
+        frequency: text(formData, "frequency") === "HOURLY" ? "HOURLY" : text(formData, "frequency") === "DAILY" ? "DAILY" : "MONTHLY",
+        paymentDay: Math.min(31, Math.max(1, integer(formData, "paymentDay", 28))),
+        additionalHoursPolicy: "REQUIRES_APPROVAL",
+        hourlyReferenceAmount,
+        effectiveFrom: now,
+        confirmedAt: now,
+        createdByUserId: userId,
+      },
+    });
+  }, { isolationLevel: "Serializable" });
+
+  revalidatePath("/admin/jornadas");
+  revalidatePath("/portal/relacion-laboral");
+  revalidatePath("/portal/jornadas");
+  redirect("/admin/jornadas?success=relationship");
+}
+
+export async function savePersonalCompensationAction(formData: FormData) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Sesión requerida.");
+  const relationshipId = text(formData, "relationshipId");
+  const member = await prisma.terraqoWorkspaceMember.findFirst({ where: { id: text(formData, "memberId"), userId: session.user.id, active: true }, select: { id: true, workspaceId: true } });
+  if (!member) throw new Error("Membresía profesional no disponible.");
+  const relationship = relationshipId
+    ? await prisma.terraqoWorkRelationship.findFirst({ where: { id: relationshipId, memberId: member.id }, select: { id: true } })
+    : await prisma.terraqoWorkRelationship.upsert({ where: { memberId: member.id }, update: {}, create: { memberId: member.id, workspaceId: member.workspaceId, status: "DRAFT" }, select: { id: true } });
+  if (!relationship) throw new Error("Relación laboral no disponible.");
+  const now = new Date();
+  await prisma.$transaction([
+    prisma.terraqoCompensationPolicy.updateMany({ where: { workRelationshipId: relationship.id, source: "PERSONAL", effectiveTo: null }, data: { effectiveTo: now } }),
+    prisma.terraqoCompensationPolicy.create({ data: { workRelationshipId: relationship.id, source: "PERSONAL", baseAmount: money(formData, "baseAmount"), currency: "PEN", frequency: "MONTHLY", hourlyReferenceAmount: money(formData, "hourlyReferenceAmount"), additionalHoursPolicy: "REQUIRES_APPROVAL", effectiveFrom: now, createdByUserId: session.user.id } }),
+  ]);
+  revalidatePath("/portal/relacion-laboral");
+  revalidatePath("/portal/jornadas");
+  redirect("/portal/relacion-laboral?success=personal-reference");
+}
+
+export async function requestAttendanceAdjustmentAction(formData: FormData) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Sesión requerida.");
+  const relationshipId = text(formData, "relationshipId");
+  const relationship = await prisma.terraqoWorkRelationship.findFirst({ where: { id: relationshipId, member: { userId: session.user.id, active: true } }, select: { id: true } });
+  if (!relationship) throw new Error("Relación laboral no disponible.");
+  const attendanceEventId = text(formData, "attendanceEventId");
+  const attendanceEvent = attendanceEventId
+    ? await prisma.terraqoAttendanceEvent.findFirst({ where: { id: attendanceEventId, userId: session.user.id, workRelationshipId: relationship.id }, select: { id: true, type: true, capturedAt: true } })
+    : null;
+  if (attendanceEventId && !attendanceEvent) throw new Error("El registro de jornada no pertenece a tu relación laboral.");
+  const reason = text(formData, "reason");
+  if (reason.length < 10 || reason.length > 1000) throw new Error("Describe la incidencia con al menos 10 caracteres.");
+  const requestedCheckOutRaw = text(formData, "requestedCheckOutAt");
+  const requestedCheckOutAt = requestedCheckOutRaw ? limaLocalDateTime(requestedCheckOutRaw) : null;
+  if (requestedCheckOutAt && (Number.isNaN(requestedCheckOutAt.getTime()) || !attendanceEvent || requestedCheckOutAt <= attendanceEvent.capturedAt || requestedCheckOutAt.getTime() > Date.now() + 5 * 60_000)) {
+    throw new Error("La salida propuesta debe ser posterior a la entrada y no puede estar en el futuro.");
+  }
+  await prisma.terraqoAttendanceAdjustment.create({
+    data: {
+      workRelationshipId: relationship.id,
+      attendanceEventId: attendanceEvent?.id || null,
+      type: text(formData, "type") === "MISSING_CHECK_IN" ? "MISSING_CHECK_IN" : text(formData, "type") === "WRONG_TIME" ? "WRONG_TIME" : text(formData, "type") === "WRONG_PROJECT" ? "WRONG_PROJECT" : text(formData, "type") === "OTHER" ? "OTHER" : "MISSING_CHECK_OUT",
+      requestedCheckOutAt,
+      reason,
+      requestedByUserId: session.user.id,
+    },
+  });
+  revalidatePath("/portal/jornadas");
+  redirect(`/portal/jornadas/${text(formData, "attendanceEventId")}?success=incident`);
+}
+
+export async function reviewAttendanceAction(formData: FormData) {
+  const { userId, workspaceId } = await requireCompanyManager();
+  const approvalId = text(formData, "approvalId");
+  const approval = await prisma.terraqoAttendanceApproval.findFirst({ where: { id: approvalId, workRelationship: { workspaceId } }, select: { id: true, additionalDetectedMinutes: true } });
+  if (!approval) throw new Error("Jornada no disponible.");
+  const approved = Math.min(approval.additionalDetectedMinutes, Math.max(0, integer(formData, "additionalApprovedMinutes")));
+  await prisma.terraqoAttendanceApproval.update({ where: { id: approval.id }, data: { status: approved === approval.additionalDetectedMinutes ? "APPROVED" : approved > 0 ? "PARTIALLY_APPROVED" : "REJECTED", additionalApprovedMinutes: approved, reviewedByUserId: userId, reviewNote: text(formData, "reviewNote") || null, reviewedAt: new Date() } });
+  revalidatePath("/admin/jornadas");
+  revalidatePath("/portal/jornadas");
+  redirect("/admin/jornadas?success=approval");
+}
+
+export async function reviewAttendanceAdjustmentAction(formData: FormData) {
+  const { userId, workspaceId } = await requireCompanyManager();
+  const adjustmentId = text(formData, "adjustmentId");
+  const adjustment = await prisma.terraqoAttendanceAdjustment.findFirst({
+    where: { id: adjustmentId, workRelationship: { workspaceId }, status: "REQUESTED" },
+    include: {
+      attendanceEvent: true,
+      workRelationship: {
+        include: {
+          schedules: { where: { effectiveTo: null }, orderBy: { effectiveFrom: "desc" }, take: 1 },
+          compensationPolicies: { where: { effectiveTo: null }, orderBy: [{ source: "asc" }, { effectiveFrom: "desc" }] },
+        },
+      },
+    },
+  });
+  if (!adjustment) throw new Error("Incidencia no disponible.");
+  const approved = text(formData, "decision") === "APPROVED";
+  await prisma.$transaction(async (tx) => {
+    await tx.terraqoAttendanceAdjustment.update({ where: { id: adjustment.id }, data: { status: approved ? "APPROVED" : "REJECTED", reviewedByUserId: userId, reviewNote: text(formData, "reviewNote") || null, reviewedAt: new Date() } });
+    if (approved && adjustment.attendanceEvent?.type === "CHECK_IN" && adjustment.requestedCheckOutAt) {
+      const compensation = activeCompensation(adjustment.workRelationship.compensationPolicies);
+      const calculation = calculateJornada({
+        entryAt: adjustment.attendanceEvent.capturedAt,
+        exitAt: adjustment.requestedCheckOutAt,
+        schedule: adjustment.workRelationship.schedules[0] || null,
+        compensation,
+      });
+      await tx.terraqoAttendanceApproval.upsert({
+        where: { checkInEventId: adjustment.attendanceEvent.id },
+        update: {
+          regularMinutes: calculation.regularMinutes,
+          additionalDetectedMinutes: calculation.additionalDetectedMinutes,
+          status: compensation?.additionalHoursPolicy === "AUTOMATIC" ? "APPROVED" : "PENDING",
+          additionalApprovedMinutes: compensation?.additionalHoursPolicy === "AUTOMATIC" ? calculation.additionalDetectedMinutes : 0,
+          reviewedByUserId: null,
+          reviewNote: "Recalculada desde una incidencia aprobada.",
+          reviewedAt: null,
+        },
+        create: {
+          workRelationshipId: adjustment.workRelationshipId,
+          checkInEventId: adjustment.attendanceEvent.id,
+          regularMinutes: calculation.regularMinutes,
+          additionalDetectedMinutes: calculation.additionalDetectedMinutes,
+          status: compensation?.additionalHoursPolicy === "AUTOMATIC" ? "APPROVED" : "PENDING",
+          additionalApprovedMinutes: compensation?.additionalHoursPolicy === "AUTOMATIC" ? calculation.additionalDetectedMinutes : 0,
+          reviewNote: "Calculada desde una incidencia aprobada.",
+        },
+      });
+    }
+  }, { isolationLevel: "Serializable" });
+  revalidatePath("/admin/jornadas");
+  revalidatePath("/portal/jornadas");
+  redirect("/admin/jornadas?success=incident");
+}

@@ -562,6 +562,67 @@ enum TerraqoAttendanceStatus {
   @@schema("icc")
 }
 
+enum TerraqoWorkRelationshipStatus {
+  DRAFT
+  ACTIVE
+  SUSPENDED
+  ENDED
+
+  @@schema("icc")
+}
+
+enum TerraqoCompensationSource {
+  COMPANY
+  PERSONAL
+
+  @@schema("icc")
+}
+
+enum TerraqoCompensationFrequency {
+  MONTHLY
+  DAILY
+  HOURLY
+
+  @@schema("icc")
+}
+
+enum TerraqoAdditionalHoursPolicy {
+  REQUIRES_APPROVAL
+  AUTOMATIC
+  TIME_OFF
+  NOT_APPLICABLE
+
+  @@schema("icc")
+}
+
+enum TerraqoAttendanceReviewStatus {
+  PENDING
+  APPROVED
+  PARTIALLY_APPROVED
+  REJECTED
+
+  @@schema("icc")
+}
+
+enum TerraqoAttendanceAdjustmentType {
+  MISSING_CHECK_IN
+  MISSING_CHECK_OUT
+  WRONG_TIME
+  WRONG_PROJECT
+  OTHER
+
+  @@schema("icc")
+}
+
+enum TerraqoAttendanceAdjustmentStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  CANCELLED
+
+  @@schema("icc")
+}
+
 enum TerraqoReactionType {
   USEFUL
   INSIGHTFUL
@@ -2176,6 +2237,7 @@ model TerraqoWorkspace {
   modules                  TerraqoWorkspaceModule[]
   subscriptions            TerraqoSubscription[]
   members                  TerraqoWorkspaceMember[]
+  workRelationships        TerraqoWorkRelationship[]
   companies                Company[]                        @relation("TerraqoWorkspaceCompanies")
   contacts                 Contact[]
   clientAccounts           ClientAccount[]
@@ -2546,18 +2608,19 @@ model TerraqoUsageBucket {
 }
 
 model TerraqoWorkspaceMember {
-  id          String            @id @default(cuid())
-  workspaceId String
-  workspace   TerraqoWorkspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  userId      String
-  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role        TerraqoMemberRole @default(MEMBER)
-  title       String?
-  active      Boolean           @default(true)
-  invitedAt   DateTime?
-  joinedAt    DateTime?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  id               String                   @id @default(cuid())
+  workspaceId      String
+  workspace        TerraqoWorkspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role             TerraqoMemberRole        @default(MEMBER)
+  title            String?
+  active           Boolean                  @default(true)
+  invitedAt        DateTime?
+  joinedAt         DateTime?
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  workRelationship TerraqoWorkRelationship?
 
   @@unique([workspaceId, userId])
   @@index([userId, active])
@@ -3008,15 +3071,17 @@ model TerraqoWorklogValidation {
 }
 
 model TerraqoAttendanceEvent {
-  id                    String                     @id @default(cuid())
+  id                    String                        @id @default(cuid())
   userId                String
-  user                  User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                  User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
   professionalProfileId String
-  professionalProfile   TerraqoProfessionalProfile @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
+  professionalProfile   TerraqoProfessionalProfile    @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
   workspaceId           String
-  workspace             TerraqoWorkspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace             TerraqoWorkspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   projectId             String
-  project               Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project               Project                       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workRelationshipId    String?
+  workRelationship      TerraqoWorkRelationship?      @relation(fields: [workRelationshipId], references: [id], onDelete: SetNull)
   type                  TerraqoAttendanceType
   status                TerraqoAttendanceStatus
   latitude              Float
@@ -3025,12 +3090,130 @@ model TerraqoAttendanceEvent {
   distanceMeters        Float
   geofenceRadiusMeters  Int
   credentialId          String?
-  capturedAt            DateTime                   @default(now())
-  createdAt             DateTime                   @default(now())
+  capturedAt            DateTime                      @default(now())
+  createdAt             DateTime                      @default(now())
+  adjustments           TerraqoAttendanceAdjustment[]
 
   @@index([userId, workspaceId, capturedAt])
   @@index([professionalProfileId, projectId, capturedAt])
   @@index([workspaceId, status, capturedAt])
+  @@index([workRelationshipId, capturedAt])
+  @@schema("icc")
+}
+
+model TerraqoWorkRelationship {
+  id                   String                        @id @default(cuid())
+  workspaceId          String
+  workspace            TerraqoWorkspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  memberId             String                        @unique
+  member               TerraqoWorkspaceMember        @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  status               TerraqoWorkRelationshipStatus @default(DRAFT)
+  area                 String?
+  contractType         String?
+  modality             String?
+  workSite             String?
+  startDate            DateTime?
+  endDate              DateTime?
+  configuredByUserId   String?
+  confirmedAt          DateTime?
+  attendanceEvents     TerraqoAttendanceEvent[]
+  schedules            TerraqoWorkSchedule[]
+  compensationPolicies TerraqoCompensationPolicy[]
+  approvals            TerraqoAttendanceApproval[]
+  adjustments          TerraqoAttendanceAdjustment[]
+  createdAt            DateTime                      @default(now())
+  updatedAt            DateTime                      @updatedAt
+
+  @@index([workspaceId, status])
+  @@schema("icc")
+}
+
+model TerraqoWorkSchedule {
+  id                   String                  @id @default(cuid())
+  workRelationshipId   String
+  workRelationship     TerraqoWorkRelationship @relation(fields: [workRelationshipId], references: [id], onDelete: Cascade)
+  timezone             String                  @default("America/Lima")
+  jurisdictionCountry  String                  @default("PE")
+  workDays             Int[]                   @default([1, 2, 3, 4, 5])
+  startTime            String                  @default("08:00")
+  endTime              String                  @default("17:00")
+  breakMinutes         Int                     @default(60)
+  toleranceMinutes     Int                     @default(10)
+  saturdayStartTime    String?
+  saturdayEndTime      String?
+  saturdayBreakMinutes Int                     @default(0)
+  effectiveFrom        DateTime                @default(now())
+  effectiveTo          DateTime?
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+
+  @@index([workRelationshipId, effectiveFrom])
+  @@schema("icc")
+}
+
+model TerraqoCompensationPolicy {
+  id                    String                       @id @default(cuid())
+  workRelationshipId    String
+  workRelationship      TerraqoWorkRelationship      @relation(fields: [workRelationshipId], references: [id], onDelete: Cascade)
+  source                TerraqoCompensationSource    @default(COMPANY)
+  currency              String                       @default("PEN")
+  baseAmount            Decimal                      @db.Decimal(12, 2)
+  frequency             TerraqoCompensationFrequency @default(MONTHLY)
+  paymentDay            Int?
+  additionalHoursPolicy TerraqoAdditionalHoursPolicy @default(REQUIRES_APPROVAL)
+  hourlyReferenceAmount Decimal?                     @db.Decimal(12, 4)
+  effectiveFrom         DateTime                     @default(now())
+  effectiveTo           DateTime?
+  confirmedAt           DateTime?
+  createdByUserId       String?
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+
+  @@index([workRelationshipId, source, effectiveFrom])
+  @@schema("icc")
+}
+
+model TerraqoAttendanceApproval {
+  id                        String                        @id @default(cuid())
+  workRelationshipId        String
+  workRelationship          TerraqoWorkRelationship       @relation(fields: [workRelationshipId], references: [id], onDelete: Cascade)
+  checkInEventId            String
+  checkOutEventId           String?
+  regularMinutes            Int                           @default(0)
+  additionalDetectedMinutes Int                           @default(0)
+  additionalApprovedMinutes Int                           @default(0)
+  status                    TerraqoAttendanceReviewStatus @default(PENDING)
+  reviewedByUserId          String?
+  reviewNote                String?
+  reviewedAt                DateTime?
+  createdAt                 DateTime                      @default(now())
+  updatedAt                 DateTime                      @updatedAt
+
+  @@unique([checkInEventId])
+  @@index([workRelationshipId, status, createdAt])
+  @@schema("icc")
+}
+
+model TerraqoAttendanceAdjustment {
+  id                  String                            @id @default(cuid())
+  workRelationshipId  String
+  workRelationship    TerraqoWorkRelationship           @relation(fields: [workRelationshipId], references: [id], onDelete: Cascade)
+  attendanceEventId   String?
+  attendanceEvent     TerraqoAttendanceEvent?           @relation(fields: [attendanceEventId], references: [id], onDelete: SetNull)
+  type                TerraqoAttendanceAdjustmentType
+  status              TerraqoAttendanceAdjustmentStatus @default(REQUESTED)
+  requestedCheckInAt  DateTime?
+  requestedCheckOutAt DateTime?
+  reason              String
+  requestedByUserId   String
+  reviewedByUserId    String?
+  reviewNote          String?
+  reviewedAt          DateTime?
+  createdAt           DateTime                          @default(now())
+  updatedAt           DateTime                          @updatedAt
+
+  @@index([workRelationshipId, status, createdAt])
+  @@index([attendanceEventId])
   @@schema("icc")
 }
 

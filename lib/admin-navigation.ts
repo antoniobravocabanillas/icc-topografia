@@ -56,6 +56,7 @@ export const adminNavigation: AdminNavItem[] = [
   { group: "Comercial", label: "Ventas", href: "/admin/ventas", icon: "chart", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"], module: "CRM" },
   { group: "Operacion", label: "Proyectos", href: "/admin/proyectos", icon: "clipboard", roles: ["EDITOR", "ADMIN", "SUPER_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT"], module: "PROJECTS" },
   { group: "Operacion", label: "Tecnicos", href: "/admin/tecnicos", icon: "wrench", roles: ["ADMIN", "SUPER_ADMIN", "ENGINEER", "SURVEYOR", "ARCHITECT", "SUPPORT"], module: "PROFESSIONAL_NETWORK" },
+  { group: "Operacion", label: "Jornadas", href: "/admin/jornadas", icon: "activity", roles: ["ADMIN", "SUPER_ADMIN"], module: "PROFESSIONAL_NETWORK" },
   { group: "Soporte", label: "Tickets", href: "/admin/tickets", icon: "ticket", roles: ["SUPPORT", "TECHNICIAN", "SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"], module: "CUSTOMER_CHAT" },
   { group: "Catalogo", label: "Productos", href: "/admin/productos", icon: "package", roles: ["EDITOR", "ADMIN", "SUPER_ADMIN"], module: "TECHNICAL_STORE" },
   { group: "Catalogo", label: "Pedidos", href: "/admin/pedidos", icon: "shopping", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"], module: "TECHNICAL_STORE" },

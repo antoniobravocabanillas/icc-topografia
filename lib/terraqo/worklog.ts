@@ -89,6 +89,7 @@ export async function getProfessionalNetworkContext(userId: string) {
       },
       orderBy: { createdAt: "asc" },
       select: {
+        id: true,
         workspaceId: true,
         role: true,
         title: true,

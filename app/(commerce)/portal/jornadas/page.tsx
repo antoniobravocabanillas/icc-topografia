@@ -7,6 +7,7 @@ import {
   BriefcaseBusiness,
   CalendarDays,
   Clock3,
+  Coins,
   FileText,
   Fingerprint,
   MapPin,
@@ -14,6 +15,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { prisma } from "@/lib/prisma";
+import { formatMinutes } from "@/lib/terraqo/jornada";
 import { requireProfessionalPortal } from "@/lib/terraqo/professional-portal";
 
 export const dynamic = "force-dynamic";
@@ -153,6 +155,11 @@ export default async function AttendanceHistoryPage({ searchParams }: PageProps)
     : [];
 
   const sessions = groupSessions(events as AttendanceEvent[]);
+  const approvals = sessions.length ? await prisma.terraqoAttendanceApproval.findMany({
+    where: { checkInEventId: { in: sessions.map((item) => item.entry.id) } },
+    include: { workRelationship: { include: { compensationPolicies: { where: { effectiveTo: null }, orderBy: [{ source: "asc" }, { effectiveFrom: "desc" }] } } } },
+  }) : [];
+  const approvalByEntry = new Map(approvals.map((approval) => [approval.checkInEventId, approval]));
   const firstEntry = sessions.at(-1)?.entry.capturedAt;
   const worklogs = sessions.length
     ? await prisma.terraqoWorklogEntry.findMany({
@@ -173,6 +180,21 @@ export default async function AttendanceHistoryPage({ searchParams }: PageProps)
     (sum, item) => sum + Math.max(0, Math.floor((item.exit!.capturedAt.getTime() - item.entry.capturedAt.getTime()) / 60_000)),
     0,
   );
+  const regularMinutes = approvals.reduce((sum, item) => sum + item.regularMinutes, 0);
+  const additionalMinutes = approvals.reduce((sum, item) => sum + item.additionalDetectedMinutes, 0);
+  const approvedAdditionalMinutes = approvals.reduce((sum, item) => sum + item.additionalApprovedMinutes, 0);
+  const estimatedAdditional = approvals.reduce((sum, item) => {
+    const policy = item.workRelationship.compensationPolicies.find((candidate) => candidate.source === "COMPANY") || item.workRelationship.compensationPolicies.find((candidate) => candidate.source === "PERSONAL");
+    return sum + (policy?.hourlyReferenceAmount ? (item.additionalApprovedMinutes / 60) * Number(policy.hourlyReferenceAmount) : 0);
+  }, 0);
+  const monthAnchor = new Date();
+  const calendarYear = Number(new Intl.DateTimeFormat("en-US", { year: "numeric", timeZone: "America/Lima" }).format(monthAnchor));
+  const calendarMonth = Number(new Intl.DateTimeFormat("en-US", { month: "numeric", timeZone: "America/Lima" }).format(monthAnchor)) - 1;
+  const daysInMonth = new Date(Date.UTC(calendarYear, calendarMonth + 1, 0)).getUTCDate();
+  const firstWeekday = (new Date(Date.UTC(calendarYear, calendarMonth, 1)).getUTCDay() + 6) % 7;
+  const dayKey = (date: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Lima", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+  const sessionsByDay = new Map(sessions.map((item) => [dayKey(item.entry.capturedAt), item]));
+  const monthLabel = new Intl.DateTimeFormat("es-PE", { month: "long", year: "numeric", timeZone: "America/Lima" }).format(monthAnchor);
 
   return (
     <main className="min-w-0 space-y-6 py-5 sm:py-8">
@@ -188,10 +210,12 @@ export default async function AttendanceHistoryPage({ searchParams }: PageProps)
         </div>
       </div>
 
-      <section className="grid gap-3 sm:grid-cols-3" aria-label="Resumen del periodo">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label="Resumen del periodo">
         <article className="rounded-2xl border border-[#dce5ed] bg-white p-4"><CalendarDays className="h-5 w-5 text-[#1768b0]" /><strong className="mt-3 block font-display text-2xl text-[#0e1a26]">{sessions.length}</strong><span className="text-sm text-[#607083]">jornadas registradas</span></article>
         <article className="rounded-2xl border border-[#dce5ed] bg-white p-4"><Clock3 className="h-5 w-5 text-[#087b70]" /><strong className="mt-3 block font-display text-2xl text-[#0e1a26]">{Math.floor(totalMinutes / 60)} h {totalMinutes % 60} min</strong><span className="text-sm text-[#607083]">tiempo completado</span></article>
-        <article className="rounded-2xl border border-[#dce5ed] bg-white p-4"><BadgeCheck className="h-5 w-5 text-[#087b70]" /><strong className="mt-3 block font-display text-2xl text-[#0e1a26]">{events.filter((event) => event.credentialId).length}</strong><span className="text-sm text-[#607083]">marcas con identidad</span></article>
+        <article className="rounded-2xl border border-[#dce5ed] bg-white p-4"><BadgeCheck className="h-5 w-5 text-[#087b70]" /><strong className="mt-3 block font-display text-2xl text-[#0e1a26]">{formatMinutes(regularMinutes)}</strong><span className="text-sm text-[#607083]">horas regulares</span></article>
+        <article className="rounded-2xl border border-[#eadbc8] bg-[#fffaf2] p-4"><Clock3 className="h-5 w-5 text-[#c36a13]" /><strong className="mt-3 block font-display text-2xl text-[#9c4d0b]">{formatMinutes(additionalMinutes)}</strong><span className="text-sm text-[#7a5c3f]">adicionales detectadas</span></article>
+        <article className="rounded-2xl border border-[#d8d5ee] bg-[#f7f5ff] p-4"><Coins className="h-5 w-5 text-[#6955b5]" /><strong className="mt-3 block font-display text-2xl text-[#382c70]">{estimatedAdditional ? new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(estimatedAdditional) : "—"}</strong><span className="text-sm text-[#655e7e]">estimación aprobada</span></article>
       </section>
 
       <form method="get" className="grid gap-3 rounded-2xl border border-[#dce5ed] bg-white p-4 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end">
@@ -200,6 +224,23 @@ export default async function AttendanceHistoryPage({ searchParams }: PageProps)
         <label className="grid gap-1.5 text-xs font-bold text-[#52677a]">Proyecto<select name="proyecto" defaultValue={projectId || ""} className="min-h-11 rounded-xl border border-[#cbd7e2] bg-white px-3 text-sm text-[#0e1a26]"><option value="">Todos</option>{assignedProjects.filter((project) => !workspaceId || project.terraqoWorkspaceId === workspaceId).map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select></label>
         <Button type="submit" variant="outline" className="min-h-11">Aplicar filtros</Button>
       </form>
+
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(420px,1.1fr)]">
+        <article className="rounded-2xl border border-[#dce5ed] bg-white p-5">
+          <div className="flex items-center justify-between gap-4"><div><p className="text-[11px] font-bold uppercase tracking-[0.15em] text-[#087b70]">Calendario</p><h2 className="mt-1 font-display text-xl font-bold capitalize text-[#0e1a26]">{monthLabel}</h2></div><span className="text-xs font-semibold text-[#607083]">{approvedAdditionalMinutes ? `${formatMinutes(approvedAdditionalMinutes)} aprobadas` : "Sin horas aprobadas"}</span></div>
+          <div className="mt-5 grid grid-cols-7 gap-1.5 text-center text-[11px] font-bold text-[#748596]">{["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map((day) => <span key={day}>{day}</span>)}</div>
+          <div className="mt-2 grid grid-cols-7 gap-1.5">{Array.from({ length: firstWeekday }).map((_, index) => <span key={`empty-${index}`} />)}{Array.from({ length: daysInMonth }, (_, index) => index + 1).map((day) => {
+            const key = `${calendarYear}-${String(calendarMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+            const item = sessionsByDay.get(key);
+            const approval = item ? approvalByEntry.get(item.entry.id) : null;
+            const tone = !item ? "border-[#edf1f4] text-[#9aa9b7]" : !item.exit ? "border-[#8bb8e2] bg-[#eef6ff] text-[#1768b0]" : approval?.status === "APPROVED" ? "border-[#9ed7c9] bg-[#effaf7] text-[#087b70]" : approval?.status === "REJECTED" ? "border-[#efb9b9] bg-[#fff3f3] text-[#a52b2b]" : "border-[#e8c997] bg-[#fff8ea] text-[#9a5a08]";
+            const marker = !item?.exit ? "●" : approval?.status === "APPROVED" ? "✓" : approval?.status === "REJECTED" ? "!" : "+";
+            return item ? <Link key={key} href={`/portal/jornadas/${item.entry.id}`} aria-label={`${day} de ${monthLabel}: ${!item.exit ? "jornada en curso" : approval?.status === "APPROVED" ? "aprobada" : approval?.status === "REJECTED" ? "con incidencia" : "pendiente"}`} className={`grid aspect-square min-h-10 grid-cols-[auto_auto] place-content-center gap-1 rounded-lg border text-xs font-bold transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1768b0] ${tone}`}><span>{day}</span><span aria-hidden="true" className="text-[10px]">{marker}</span><span className="sr-only">{item.entry.project.title}</span></Link> : <span key={key} className={`grid aspect-square min-h-10 place-items-center rounded-lg border text-xs ${tone}`}>{day}</span>;
+          })}</div>
+          <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-[11px] text-[#607083]"><span><b className="text-[#087b70]">✓</b> Aprobada</span><span><b className="text-[#9a5a08]">+</b> Pendiente</span><span><b className="text-[#1768b0]">●</b> En curso</span><span><b className="text-[#a52b2b]">!</b> Incidencia</span><span>— Sin registro</span></div>
+        </article>
+        <article className="rounded-2xl border border-[#dce5ed] bg-white p-5"><p className="text-[11px] font-bold uppercase tracking-[0.15em] text-[#1768b0]">Lectura del periodo</p><h2 className="mt-1 font-display text-xl font-bold text-[#0e1a26]">Hechos, detección y aprobación</h2><div className="mt-5 space-y-4"><div className="flex items-center justify-between gap-4 border-b border-[#edf1f4] pb-3"><span className="text-sm text-[#607083]">Tiempo objetivamente registrado</span><strong>{formatMinutes(totalMinutes)}</strong></div><div className="flex items-center justify-between gap-4 border-b border-[#edf1f4] pb-3"><span className="text-sm text-[#607083]">Tiempo adicional detectado</span><strong className="text-[#9c4d0b]">{formatMinutes(additionalMinutes)}</strong></div><div className="flex items-center justify-between gap-4"><span className="text-sm text-[#607083]">Tiempo adicional aprobado</span><strong className="text-[#087b70]">{formatMinutes(approvedAdditionalMinutes)}</strong></div></div><p className="mt-5 rounded-xl bg-[#eef6fb] p-4 text-xs leading-5 text-[#426079]">Terraqo registra hechos y calcula referencias según la configuración vigente. La empresa conserva la decisión final sobre la aprobación.</p></article>
+      </section>
 
       <section className="space-y-3" aria-label="Historial de jornadas">
         {sessions.length ? sessions.map((item) => {
@@ -223,7 +264,7 @@ export default async function AttendanceHistoryPage({ searchParams }: PageProps)
               <div className="border-t border-[#e6edf2] bg-[#fbfcfd] px-5 py-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <p className="inline-flex items-center gap-2 text-xs font-semibold text-[#52677a]"><Fingerprint className="h-4 w-4 text-[#087b70]" />Identidad y hora del servidor verificadas · precisión {Math.round(item.entry.accuracyMeters)} m</p>
-                  <Link href={`/portal/bitacora?fecha=${item.entry.capturedAt.toISOString().slice(0, 10)}`} className="inline-flex min-h-11 items-center gap-2 text-sm font-bold text-[#1768b0]">Ver actividad del día <ArrowRight className="h-4 w-4" /></Link>
+                  <Link href={`/portal/jornadas/${item.entry.id}`} className="inline-flex min-h-11 items-center gap-2 text-sm font-bold text-[#1768b0]">Ver detalle de jornada <ArrowRight className="h-4 w-4" /></Link>
                 </div>
                 {relatedWorklogs.length ? <div className="mt-3 grid gap-2 sm:grid-cols-2">{relatedWorklogs.slice(0, 4).map((worklog) => <Link key={worklog.id} href={`/portal/bitacora?fecha=${worklog.occurredAt.toISOString().slice(0, 10)}`} className="flex min-h-12 items-center gap-3 rounded-xl border border-[#dce5ed] bg-white px-3 py-2 transition hover:border-[#9abbd8]"><FileText className="h-4 w-4 shrink-0 text-[#1768b0]" /><span className="min-w-0"><strong className="block truncate text-sm text-[#0e1a26]">{worklog.title}</strong><span className="text-xs text-[#748596]">{timeFormatter.format(worklog.occurredAt)} · {worklog.evidenceStatus === "VERIFIED" ? "Verificada" : "Bitácora"}</span></span></Link>)}</div> : <p className="mt-2 text-xs text-[#748596]">Sin bitácoras asociadas durante esta jornada.</p>}
               </div>

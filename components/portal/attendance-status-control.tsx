@@ -188,7 +188,7 @@ export function AttendanceStatusControl({ endpoint }: { endpoint: string }) {
               <Button type="button" onClick={registerExit} disabled={busy} className="min-h-12 bg-[#087b70] text-white hover:bg-[#06675f]">
                 <LogOut className="mr-2 h-4 w-4" />{busy ? "Verificando…" : "Registrar salida"}
               </Button>
-              <Button asChild variant="outline" className="min-h-12"><Link href="/portal/jornadas" onClick={() => setOpen(false)}><BriefcaseBusiness className="mr-2 h-4 w-4" />Ver historial <ArrowRight className="ml-auto h-4 w-4" /></Link></Button>
+              <Button asChild variant="outline" className="min-h-12"><Link href={`/portal/jornadas/${active.id}`} onClick={() => setOpen(false)}><BriefcaseBusiness className="mr-2 h-4 w-4" />Ver detalle de jornada <ArrowRight className="ml-auto h-4 w-4" /></Link></Button>
             </div>
             {message ? <p className="mt-4 flex items-start gap-2 rounded-xl bg-[#eef5fa] px-3 py-2.5 text-sm font-semibold text-[#29434d]" role="status" aria-live="polite"><LocateFixed className="mt-0.5 h-4 w-4 shrink-0 text-[#1768b0]" />{message}</p> : null}
           </section>

@@ -242,7 +242,7 @@ export function FieldVerificationPanel({ endpoint, compact = false }: { endpoint
               )}
               <div className={`mt-4 grid gap-2 ${completedToday ? "" : "sm:grid-cols-2"}`}>
                 {!completedToday ? <Button type="button" onClick={registerAttendance} disabled={!projectId || Boolean(busy)} className="min-h-11 order-1 sm:order-2">{activeAttendance ? <LogOut className="mr-2 h-4 w-4" /> : <LogIn className="mr-2 h-4 w-4" />}{busy === "attendance" ? "Verificando…" : activeAttendance ? "Registrar salida" : "Registrar entrada"}</Button> : null}
-                <Button asChild variant="outline" className="min-h-11 order-2 sm:order-1"><Link href="/portal/jornadas">Ver historial <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
+                <Button asChild variant="outline" className="min-h-11 order-2 sm:order-1"><Link href={activeAttendance ? `/portal/jornadas/${activeAttendance.id}` : "/portal/jornadas"}>{activeAttendance ? "Ver detalle" : "Ver historial"} <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
               </div>
             </div>
           </div>
