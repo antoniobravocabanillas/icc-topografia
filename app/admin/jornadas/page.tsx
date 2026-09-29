@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BadgeCheck, BriefcaseBusiness, Clock3, Coins, ShieldAlert, UsersRound } from "lucide-react";
+import { ArrowRight, BadgeCheck, BriefcaseBusiness, CalendarDays, Clock3, Coins, MapPin, ShieldAlert, UsersRound } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,37 @@ import { getSessionTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 
 export const dynamic = "force-dynamic";
 
+type CompanyAttendanceEvent = {
+  id: string;
+  type: "CHECK_IN" | "CHECK_OUT";
+  capturedAt: Date;
+  projectId: string;
+  project: { title: string; location: string | null };
+};
+
+function pairCompanyJourneys(events: CompanyAttendanceEvent[]) {
+  const openByProject = new Map<string, CompanyAttendanceEvent>();
+  const journeys: Array<{ entry: CompanyAttendanceEvent; exit: CompanyAttendanceEvent | null }> = [];
+  for (const event of events) {
+    if (event.type === "CHECK_IN") {
+      const previous = openByProject.get(event.projectId);
+      if (previous) journeys.push({ entry: previous, exit: null });
+      openByProject.set(event.projectId, event);
+    } else {
+      const entry = openByProject.get(event.projectId);
+      if (entry) {
+        journeys.push({ entry, exit: event });
+        openByProject.delete(event.projectId);
+      }
+    }
+  }
+  for (const entry of openByProject.values()) journeys.push({ entry, exit: null });
+  return journeys.sort((left, right) => right.entry.capturedAt.getTime() - left.entry.capturedAt.getTime());
+}
+
+const companyDate = new Intl.DateTimeFormat("es-PE", { day: "2-digit", month: "short", year: "numeric", timeZone: "America/Lima" });
+const companyTime = new Intl.DateTimeFormat("es-PE", { hour: "2-digit", minute: "2-digit", timeZone: "America/Lima" });
+
 export default async function AdminJourneysPage({ searchParams }: { searchParams: Promise<{ member?: string; success?: string }> }) {
   const params = await searchParams;
   await requireAdminPage(["ADMIN", "SUPER_ADMIN"]);
@@ -19,7 +50,7 @@ export default async function AdminJourneysPage({ searchParams }: { searchParams
   const members = await prisma.terraqoWorkspaceMember.findMany({
     where: { workspaceId, active: true, role: "PROFESSIONAL" },
     include: {
-      user: { select: { name: true, email: true, image: true } },
+      user: { select: { id: true, name: true, email: true, image: true } },
       workRelationship: { include: { schedules: { where: { effectiveTo: null }, orderBy: { effectiveFrom: "desc" }, take: 1 }, compensationPolicies: { where: { source: "COMPANY", effectiveTo: null }, orderBy: { effectiveFrom: "desc" }, take: 1 } } },
     },
     orderBy: { user: { name: "asc" } },
@@ -32,13 +63,32 @@ export default async function AdminJourneysPage({ searchParams }: { searchParams
   ]);
   const schedule = selected?.workRelationship?.schedules[0];
   const policy = selected?.workRelationship?.compensationPolicies[0];
+  const now = new Date();
+  const year = Number(new Intl.DateTimeFormat("en-US", { year: "numeric", timeZone: "America/Lima" }).format(now));
+  const month = Number(new Intl.DateTimeFormat("en-US", { month: "numeric", timeZone: "America/Lima" }).format(now));
+  const monthStart = new Date(Date.UTC(year, month - 1, 1, 5));
+  const monthEnd = new Date(Date.UTC(year, month, 1, 5));
+  const selectedEvents = selected ? await prisma.terraqoAttendanceEvent.findMany({
+    where: { workspaceId, userId: selected.user.id, status: "ACCEPTED", capturedAt: { gte: monthStart, lt: monthEnd } },
+    select: { id: true, type: true, capturedAt: true, projectId: true, project: { select: { title: true, location: true } } },
+    orderBy: { capturedAt: "asc" },
+  }) : [];
+  const selectedJourneys = pairCompanyJourneys(selectedEvents as CompanyAttendanceEvent[]);
+  const selectedApprovals = selectedJourneys.length ? await prisma.terraqoAttendanceApproval.findMany({ where: { workRelationshipId: selected?.workRelationship?.id, checkInEventId: { in: selectedJourneys.map((journey) => journey.entry.id) } } }) : [];
+  const selectedApprovalByEntry = new Map(selectedApprovals.map((approval) => [approval.checkInEventId, approval]));
+  const selectedRegularMinutes = selectedApprovals.reduce((sum, approval) => sum + approval.regularMinutes, 0);
+  const selectedDetectedMinutes = selectedApprovals.reduce((sum, approval) => sum + approval.additionalDetectedMinutes, 0);
+  const selectedApprovedMinutes = selectedApprovals.reduce((sum, approval) => sum + approval.additionalApprovedMinutes, 0);
+  const monthLabel = new Intl.DateTimeFormat("es-PE", { month: "long", year: "numeric", timeZone: "America/Lima" }).format(now);
 
   return (
     <main className="space-y-6">
       <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Operación verificable</p><h1 className="mt-2 font-display text-4xl font-bold">Jornadas y relaciones laborales</h1><p className="mt-2 max-w-3xl text-sm text-muted-foreground">Configura reglas privadas por colaborador, revisa horas adicionales e incidencias sin alterar las marcas originales.</p></div><div className="flex flex-wrap gap-2"><span className="rounded-md bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">{approvals.length} jornadas pendientes</span><span className="rounded-md bg-rose-50 px-3 py-2 text-xs font-bold text-rose-800">{adjustments.length} incidencias</span><span className="rounded-md bg-blue-50 px-3 py-2 text-xs font-bold text-blue-800">{periods.length} cierres</span></div></header>
       {params.success ? <div role="status" className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Cambios guardados con trazabilidad.</div> : null}
 
-      <section className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
+      {selected ? <section className="rounded-2xl border border-[#d8e0ec] bg-white p-5 shadow-[0_16px_40px_-34px_rgba(14,26,38,0.45)] sm:p-6" aria-labelledby="company-journey-summary"><div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#4374ba]">Vista empresarial vinculada</p><h2 id="company-journey-summary" className="mt-1 font-display text-2xl font-bold text-[#0e1a26]">{selected.user.name || selected.user.email}</h2><p className="mt-1 text-sm capitalize text-[#607083]">{selected.title || "Profesional"} · {monthLabel}</p></div><Link href={`/admin/jornadas?member=${selected.id}#configuracion-laboral`} className="inline-flex min-h-11 items-center gap-2 text-sm font-bold text-[#245da7]">Gestionar condiciones <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link></div><div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><article className="rounded-xl bg-[#eef6fb] p-4"><CalendarDays className="h-5 w-5 text-[#1768b0]" aria-hidden="true" /><strong className="mt-3 block font-display text-2xl">{selectedJourneys.length}</strong><span className="text-sm text-[#52677a]">jornadas del mes</span></article><article className="rounded-xl bg-[#effaf7] p-4"><Clock3 className="h-5 w-5 text-[#087b70]" aria-hidden="true" /><strong className="mt-3 block font-display text-2xl">{formatMinutes(selectedRegularMinutes)}</strong><span className="text-sm text-[#52677a]">tiempo regular</span></article><article className="rounded-xl bg-[#fff8ea] p-4"><ShieldAlert className="h-5 w-5 text-[#a8670d]" aria-hidden="true" /><strong className="mt-3 block font-display text-2xl">{formatMinutes(selectedDetectedMinutes)}</strong><span className="text-sm text-[#6d5b42]">adicional detectado</span></article><article className="rounded-xl bg-[#f2f0fb] p-4"><BadgeCheck className="h-5 w-5 text-[#6552a8]" aria-hidden="true" /><strong className="mt-3 block font-display text-2xl">{formatMinutes(selectedApprovedMinutes)}</strong><span className="text-sm text-[#625d76]">adicional aprobado</span></article></div><div className="mt-6"><div className="flex items-center justify-between gap-3"><h3 className="font-display text-lg font-bold">Jornadas recientes</h3><span className="text-xs font-semibold text-[#607083]">Datos exclusivos de este workspace</span></div>{selectedJourneys.length ? <div className="mt-3 divide-y divide-[#e6edf2]">{selectedJourneys.slice(0, 8).map((journey) => { const approval = selectedApprovalByEntry.get(journey.entry.id); const state = !journey.exit ? "En curso" : approval?.status === "APPROVED" ? "Aprobada" : approval?.status === "PARTIALLY_APPROVED" ? "Parcial" : approval?.status === "REJECTED" ? "Observada" : "Pendiente"; return <Link key={journey.entry.id} href={`/admin/jornadas/${journey.entry.id}`} className="grid min-h-16 gap-2 py-3 transition-colors hover:bg-[#f7f9fb] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4374ba] sm:grid-cols-[130px_minmax(0,1fr)_180px_100px_auto] sm:items-center"><span className="text-xs font-bold text-[#52677a]">{companyDate.format(journey.entry.capturedAt)}</span><span className="min-w-0"><strong className="block truncate text-sm">{journey.entry.project.title}</strong><span className="mt-0.5 flex items-center gap-1 text-xs text-[#748596]"><MapPin className="h-3.5 w-3.5" aria-hidden="true" />{journey.entry.project.location || "Ubicación registrada"}</span></span><span className="text-sm tabular-nums text-[#2f4154]">{companyTime.format(journey.entry.capturedAt)} → {journey.exit ? companyTime.format(journey.exit.capturedAt) : "—"}</span><span className="text-xs font-bold text-[#52677a]">{state}</span><ArrowRight className="hidden h-4 w-4 text-[#4374ba] sm:block" aria-hidden="true" /></Link>; })}</div> : <p className="mt-3 rounded-xl bg-[#f7f9fb] p-5 text-sm text-[#607083]">Este profesional todavía no registra jornadas en el mes actual.</p>}</div></section> : null}
+
+      <section id="configuracion-laboral" className="grid scroll-mt-36 gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
         <aside className="rounded-lg border bg-white p-4"><h2 className="flex items-center gap-2 font-display text-lg font-bold"><UsersRound className="h-5 w-5 text-primary" />Colaboradores</h2><div className="mt-4 grid gap-2">{members.map((member) => <Link key={member.id} href={`/admin/jornadas?member=${member.id}`} className={`rounded-md border px-3 py-3 transition ${selected?.id === member.id ? "border-primary bg-primary/5" : "hover:bg-muted/50"}`}><strong className="block text-sm">{member.user.name || member.user.email}</strong><span className="mt-1 block text-xs text-muted-foreground">{member.title || "Profesional"}</span><span className={`mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-bold ${member.workRelationship?.status === "ACTIVE" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"}`}>{member.workRelationship?.status === "ACTIVE" ? "Configurado" : "Pendiente"}</span></Link>)}{!members.length ? <p className="text-sm text-muted-foreground">No hay profesionales activos en este workspace.</p> : null}</div></aside>
 
         {selected ? <form action={configureWorkRelationshipAction} className="rounded-lg border bg-white p-5"><input type="hidden" name="memberId" value={selected.id} /><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">Relación laboral</p><h2 className="mt-1 font-display text-2xl font-bold">{selected.user.name || selected.user.email}</h2><p className="mt-1 text-sm text-muted-foreground">{selected.user.email}</p></div>{selected.workRelationship?.confirmedAt ? <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700"><BadgeCheck className="h-4 w-4" />Confirmada</span> : null}</div>
