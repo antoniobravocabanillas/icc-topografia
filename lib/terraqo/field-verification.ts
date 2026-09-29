@@ -114,7 +114,7 @@ export async function getFieldVerificationStatus(userId: string, workspaceId: st
   const membership = await requireMembership(userId, workspaceId);
   const profile = await prisma.terraqoProfessionalProfile.findUnique({ where: { userId }, select: { id: true } });
 
-  const [projects, latestAttendance, passkeyCount, supervisors, pendingValidations] = await Promise.all([
+  const [projects, latestAttendance, recentAttendance, passkeyCount, supervisors, pendingValidations] = await Promise.all([
     profile ? prisma.project.findMany({
       where: {
         terraqoWorkspaceId: workspaceId,
@@ -124,13 +124,36 @@ export async function getFieldVerificationStatus(userId: string, workspaceId: st
           { terraqoJobPosts: { some: { applications: { some: { professionalProfileId: profile.id, status: "ACCEPTED" } } } } }
         ]
       },
-      select: { id: true, title: true, location: true, latitude: true, longitude: true, geofenceRadiusMeters: true },
+      select: {
+        id: true,
+        title: true,
+        location: true,
+        latitude: true,
+        longitude: true,
+        geofenceRadiusMeters: true,
+        images: { select: { url: true }, orderBy: { position: "asc" }, take: 1 }
+      },
       orderBy: { updatedAt: "desc" }
     }) : Promise.resolve([]),
     prisma.terraqoAttendanceEvent.findFirst({
       where: { userId, workspaceId, status: "ACCEPTED" },
       orderBy: { capturedAt: "desc" },
       select: { id: true, type: true, capturedAt: true, projectId: true, project: { select: { title: true } } }
+    }),
+    prisma.terraqoAttendanceEvent.findMany({
+      where: { userId, workspaceId, status: "ACCEPTED" },
+      orderBy: { capturedAt: "desc" },
+      take: 12,
+      select: {
+        id: true,
+        type: true,
+        capturedAt: true,
+        projectId: true,
+        credentialId: true,
+        accuracyMeters: true,
+        distanceMeters: true,
+        project: { select: { title: true, location: true } }
+      }
     }),
     prisma.terraqoWebAuthnCredential.count({ where: { userId, rpId } }),
     prisma.terraqoWorkspaceMember.findMany({
@@ -151,9 +174,17 @@ export async function getFieldVerificationStatus(userId: string, workspaceId: st
 
   return {
     membership: { role: membership.role, title: membership.title },
+    workspace: {
+      id: membership.workspace.id,
+      name: membership.workspace.brandName || membership.workspace.name
+    },
     hasPasskey: passkeyCount > 0,
-    projects,
+    projects: projects.map(({ images, ...project }) => ({
+      ...project,
+      imageUrl: images[0]?.url || null
+    })),
     latestAttendance,
+    recentAttendance,
     supervisors: supervisors.map((item) => ({
       userId: item.userId,
       name: item.user.name || item.user.email,
@@ -393,6 +424,29 @@ export async function verifyAttendance(input: { userId: string; challengeId: str
   const { profile } = await requireAssignedProject(input.userId, challenge.workspaceId, payload.projectId);
   const capturedAt = new Date();
   const event = await prisma.$transaction(async (tx) => {
+    const consumed = await tx.terraqoWebAuthnChallenge.updateMany({
+      where: { id: challenge.id, consumedAt: null },
+      data: { consumedAt: capturedAt }
+    });
+    if (consumed.count !== 1) {
+      throw new FieldVerificationError("Esta solicitud de asistencia ya fue utilizada.", 409, { code: "ATTENDANCE_REPLAY" });
+    }
+
+    const latest = await tx.terraqoAttendanceEvent.findFirst({
+      where: {
+        userId: input.userId,
+        workspaceId: challenge.workspaceId!,
+        projectId: payload.projectId,
+        status: "ACCEPTED"
+      },
+      orderBy: { capturedAt: "desc" },
+      select: { type: true }
+    });
+    const expectedType: TerraqoAttendanceType = latest?.type === "CHECK_IN" ? "CHECK_OUT" : "CHECK_IN";
+    if (payload.type !== expectedType) {
+      throw new FieldVerificationError("La jornada cambió mientras se procesaba la solicitud. Actualiza e intenta nuevamente.", 409, { code: "ATTENDANCE_STATE_CHANGED" });
+    }
+
     const created = await tx.terraqoAttendanceEvent.create({
       data: {
         userId: input.userId,
@@ -411,9 +465,8 @@ export async function verifyAttendance(input: { userId: string; challengeId: str
       },
       include: { project: { select: { title: true } } }
     });
-    await tx.terraqoWebAuthnChallenge.update({ where: { id: challenge.id }, data: { consumedAt: capturedAt } });
     return created;
-  });
+  }, { isolationLevel: "Serializable" });
   return { id: event.id, type: event.type, capturedAt: event.capturedAt, project: event.project };
 }
 

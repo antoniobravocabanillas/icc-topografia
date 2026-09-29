@@ -30,11 +30,12 @@ export default async function PortalLayout({
               workspace: { active: true, deletedAt: null },
             },
             orderBy: { joinedAt: "desc" },
-            take: 1,
+            take: 10,
             select: {
               role: true,
               workspace: {
                 select: {
+                  id: true,
                   name: true,
                   brandName: true,
                   logoUrl: true,
@@ -56,7 +57,10 @@ export default async function PortalLayout({
         },
       })
     : null;
-  const membership = user?.terraqoMemberships[0];
+  const membership = user?.terraqoProfessionalProfile
+    ? user.terraqoMemberships.find((item) => item.role === "PROFESSIONAL") ||
+      user.terraqoMemberships[0]
+    : user?.terraqoMemberships[0];
   const portalType = user?.terraqoProfessionalProfile
     ? "professional"
     : membership
@@ -90,6 +94,11 @@ export default async function PortalLayout({
         }
         visualIdentity={visualIdentity}
         writingAssistantEnabled={writingAssistantEnabled}
+        fieldVerificationEndpoint={
+          portalType === "professional" && membership?.workspace.id
+            ? `/api/terraqo/field-verification?workspaceId=${membership.workspace.id}`
+            : null
+        }
       >
         {children}
       </PortalShell>

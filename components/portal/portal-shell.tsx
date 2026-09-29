@@ -37,6 +37,7 @@ import { ClientFeatureBoundary } from "@/components/errors/client-feature-bounda
 import { UserAvatar } from "@/components/terraqo/user-avatar";
 import { TerraqoLogo } from "@/components/terraqo/terraqo-logo";
 import { MessageDrawer } from "@/components/terraqo/message-drawer";
+import { AttendanceStatusControl } from "@/components/portal/attendance-status-control";
 import type { WorkspaceVisualIdentity } from "@/lib/terraqo/workspace-visual-identity";
 
 type PortalShellProps = {
@@ -51,6 +52,7 @@ type PortalShellProps = {
   writingAssistantEnabled?: boolean;
   visualIdentity: WorkspaceVisualIdentity;
   currentUserId: string;
+  fieldVerificationEndpoint?: string | null;
 };
 
 type PortalNavItem = {
@@ -197,6 +199,7 @@ export function PortalShell({
   writingAssistantEnabled = false,
   visualIdentity,
   currentUserId,
+  fieldVerificationEndpoint,
 }: PortalShellProps) {
   const pathname = usePathname();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -321,6 +324,9 @@ export function PortalShell({
           ) : null}
 
           <div className="ml-auto flex items-center gap-2 sm:gap-3 md:ml-0">
+            {portalType === "professional" && fieldVerificationEndpoint ? (
+              <AttendanceStatusControl endpoint={fieldVerificationEndpoint} />
+            ) : null}
             <button
               type="button"
               onClick={() =>
