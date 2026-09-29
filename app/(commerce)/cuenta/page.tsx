@@ -1,12 +1,14 @@
 import { redirect } from "next/navigation";
+import Image from "next/image";
 import { auth } from "@/auth";
 import { AccountAccessPanel } from "@/components/auth/account-access-panel";
+import { TerraqoLogo } from "@/components/terraqo/terraqo-logo";
 import { prisma } from "@/lib/prisma";
 import { createMetadata } from "@/lib/seo";
 import { terraqoDomains } from "@/lib/terraqo-domains";
 import { billingContinuation } from "@/lib/terraqo/billing/continuation";
 
-export const metadata = createMetadata({ title: "Portal Terraqo", description: "Acceso a clientes, profesionales y equipo operativo de Terraqo.", path: "/cuenta" });
+export const metadata = createMetadata({ title: "Accede a Terraqo", description: "Inicia sesión como profesional o empresa y continúa tu operación en Terraqo.", path: "/cuenta" });
 
 const workspaceAdminRoles = new Set(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"]);
 
@@ -36,12 +38,26 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
   const isWorkspacePortal = Boolean(workspace);
 
   return (
-    <section className="tq-auth-surface relative isolate min-h-[calc(100vh-81px)] overflow-hidden bg-[#0e1a26] text-white">
-      <div className="tq-auth-atmosphere" aria-hidden="true" />
+    <section className="tq-auth-surface tq-auth-surface--editorial relative isolate min-h-dvh overflow-hidden bg-[#07101a] text-white">
+      <Image
+        src="/images/terraqo/bgimagen.png"
+        alt=""
+        fill
+        priority
+        sizes="100vw"
+        className="tq-auth-background"
+        aria-hidden="true"
+      />
+      <div className="tq-auth-editorial-shade" aria-hidden="true" />
+      <a href="https://terraqoglobal.com" className="tq-auth-brand" aria-label="Ir al inicio de Terraqo">
+        <TerraqoLogo variant="horizontal" tone="dark" className="h-11 w-[210px]" />
+      </a>
+      <div className="tq-auth-language" aria-label="Idioma actual">Español</div>
       <div className="tq-auth-layout">
         <div className="tq-auth-story">
           <div className="tq-auth-copy">
-            <p className="tq-auth-kicker">{isWorkspacePortal ? `Portal ${brandName}` : "Portal Terraqo"}</p>
+            <span className="tq-auth-story-rule" aria-hidden="true" />
+            <p className="tq-auth-kicker">{isWorkspacePortal ? `Portal ${brandName}` : "Trabajo real · oportunidades reales"}</p>
             {workspace?.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={workspace.logoUrl} alt={brandName} className="mt-5 h-12 max-w-[220px] object-contain object-left" />
@@ -50,20 +66,18 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
               {isWorkspacePortal ? (
                 <>Tu operación, conectada a <span>{brandName}</span>.</>
               ) : (
-                <>Un solo acceso para <span>empresas</span>, <span>profesionales</span> y <span>equipos</span> operativos.</>
+                <>Tu trabajo <span>conecta</span> nuevas oportunidades.</>
               )}
             </h1>
             <p className="tq-auth-lead">
               {isWorkspacePortal
                 ? "Entra al espacio asignado a tu organización con identidad, permisos y datos aislados."
-                : "Proyectos, capacidades y evidencia conviven en una red que transforma actividad real en confianza y nuevas oportunidades."}
+                : "Terraqo es la infraestructura digital para operar, validar y conectar el trabajo técnico."}
             </p>
           </div>
 
-          <div className="tq-auth-principles" aria-label="Principios del Portal Terraqo">
-            <div><b>01</b><strong>Identidad confiable</strong><span>Perfiles y organizaciones con contexto verificable.</span></div>
-            <div><b>02</b><strong>Operación conectada</strong><span>Personas, proyectos y herramientas bajo un mismo entorno.</span></div>
-            <div><b>03</b><strong>Evidencia que crece</strong><span>El trabajo realizado alimenta reputación y oportunidades.</span></div>
+          <div className="tq-auth-principles" aria-label="Ecosistema Terraqo">
+            <span>Profesionales</span><i aria-hidden="true" /><span>Empresas</span><i aria-hidden="true" /><span>Proyectos</span><i aria-hidden="true" /><span>Evidencia</span>
           </div>
         </div>
 
@@ -71,6 +85,11 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
           <AccountAccessPanel
             loginTitle={isWorkspacePortal ? `Bienvenido a ${brandName}` : undefined}
             loginDescription={isWorkspacePortal ? "Usa tus credenciales Terraqo para ingresar al espacio asignado." : undefined}
+            socialProviders={{
+              google: Boolean(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET),
+              apple: Boolean(process.env.AUTH_APPLE_ID && process.env.AUTH_APPLE_SECRET),
+              microsoft: Boolean(process.env.AUTH_MICROSOFT_ENTRA_ID_ID && process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET),
+            }}
           />
         </div>
       </div>

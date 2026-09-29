@@ -1,11 +1,24 @@
-import NextAuth from "next-auth";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import Apple from "next-auth/providers/apple";
+import Google from "next-auth/providers/google";
+import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 
 const credentialsSchema = z.object({ email: z.string().trim().toLowerCase().email(), password: z.string().optional(), passkeyToken: z.string().optional() });
+
+class EmailNotVerifiedError extends CredentialsSignin {
+  code = "email_not_verified";
+}
+
+const socialProviders = [
+  ...(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET ? [Google] : []),
+  ...(process.env.AUTH_APPLE_ID && process.env.AUTH_APPLE_SECRET ? [Apple] : []),
+  ...(process.env.AUTH_MICROSOFT_ENTRA_ID_ID && process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET ? [MicrosoftEntraID] : []),
+];
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   adapter: PrismaAdapter(prisma),
@@ -45,12 +58,30 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           select: { token: true }
         });
         if (user.role === "CUSTOMER" && pendingEmailVerification) {
-          throw new Error("EMAIL_NOT_VERIFIED");
+          throw new EmailNotVerifiedError();
         }
         return { id: user.id, email: user.email, name: user.name, role: user.role };
       }
-    })
+    }),
+    ...socialProviders,
   ],
+  events: {
+    async createUser({ user }) {
+      if (!user.id) return;
+      await prisma.terraqoProfessionalProfile.upsert({
+        where: { userId: user.id },
+        update: {},
+        create: {
+          userId: user.id,
+          headline: "Profesional técnico",
+          bio: "Perfil creado mediante acceso seguro. Completa tu información profesional para conectar con proyectos y empresas.",
+          visibility: "PRIVATE",
+          liveCvEnabled: false,
+          onboardingSource: "TERRAQO_SOCIAL_AUTH",
+        },
+      });
+    },
+  },
   callbacks: {
     jwt({ token, user }) {
       if (user) token.role = (user as { role?: string }).role;

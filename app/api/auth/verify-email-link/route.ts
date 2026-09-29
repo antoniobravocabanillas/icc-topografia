@@ -11,6 +11,12 @@ export async function GET(request: Request) {
     destination.searchParams.set("verification", "invalid");
     return NextResponse.redirect(destination);
   }
+  const user = await prisma.user.findUnique({ where: { email }, select: { emailVerified: true } });
+  if (user?.emailVerified) {
+    destination.searchParams.set("verification", "already");
+    destination.searchParams.set("email", email);
+    return NextResponse.redirect(destination);
+  }
   const token = await prisma.verificationToken.findFirst({
     where: {
       identifier: `email:${email}`,

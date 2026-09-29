@@ -9,41 +9,22 @@ type AccessMode = "login" | "register";
 type AccountAccessPanelProps = {
   loginTitle?: string;
   loginDescription?: string;
+  socialProviders?: {
+    google: boolean;
+    apple: boolean;
+    microsoft: boolean;
+  };
 };
 
-export function AccountAccessPanel({ loginTitle, loginDescription }: AccountAccessPanelProps) {
+export function AccountAccessPanel({ loginTitle, loginDescription, socialProviders }: AccountAccessPanelProps) {
   const [mode, setMode] = useState<AccessMode>("login");
 
   return (
     <section className="tq-access-panel" aria-label="Acceso a Terraqo">
-      <div className="tq-access-tabs" role="tablist" aria-label="Acceso o registro">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mode === "login"}
-          aria-controls="terraqo-login-panel"
-          onClick={() => setMode("login")}
-          className={mode === "login" ? "is-active" : ""}
-        >
-          Iniciar sesión
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mode === "register"}
-          aria-controls="terraqo-register-panel"
-          onClick={() => setMode("register")}
-          className={mode === "register" ? "is-active" : ""}
-        >
-          Registrarme
-        </button>
-        <span className={mode === "register" ? "tq-access-tab-indicator is-register" : "tq-access-tab-indicator"} aria-hidden="true" />
-      </div>
-
       <div className="tq-access-stage">
         {mode === "login" ? (
           <div key="login" id="terraqo-login-panel" role="tabpanel" className="tq-access-card-content">
-            <SignInForm title={loginTitle} description={loginDescription} embedded onRegister={() => setMode("register")} />
+            <SignInForm title={loginTitle} description={loginDescription} embedded onRegister={() => setMode("register")} socialProviders={socialProviders} />
           </div>
         ) : (
           <div key="register" id="terraqo-register-panel" role="tabpanel" className="tq-access-card-content">
