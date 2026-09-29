@@ -10,10 +10,18 @@ import {
 export async function GET(request: Request) {
   const { response, session } = await requireUser();
   if (response) return response;
-  const selected =
-    new URL(request.url).searchParams.get("conversation") || undefined;
+  const searchParams = new URL(request.url).searchParams;
+  const selected = searchParams.get("conversation") || undefined;
+  const markSelectedRead = searchParams.get("peek") !== "1";
   try {
-    return ok(await getConversationHub(session.user.id, selected));
+    return ok(
+      await getConversationHub(
+        session.user.id,
+        selected,
+        undefined,
+        markSelectedRead,
+      ),
+    );
   } catch (error) {
     if (error instanceof TerraqoMessagingError)
       return fail(error.message, error.status);

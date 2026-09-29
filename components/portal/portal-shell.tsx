@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, type ElementType, type ReactNode } from "react";
 import {
   Award,
-  Bell,
   CalendarClock,
   BriefcaseBusiness,
   Building2,
@@ -39,6 +38,7 @@ import { UserAvatar } from "@/components/terraqo/user-avatar";
 import { TerraqoLogo } from "@/components/terraqo/terraqo-logo";
 import { MessageDrawer } from "@/components/terraqo/message-drawer";
 import { AttendanceStatusControl } from "@/components/portal/attendance-status-control";
+import { PortalRealtimeAlerts } from "@/components/terraqo/portal-realtime-alerts";
 import type { WorkspaceVisualIdentity } from "@/lib/terraqo/workspace-visual-identity";
 
 type PortalShellProps = {
@@ -334,27 +334,7 @@ export function PortalShell({
             {portalType === "professional" && fieldVerificationEndpoint ? (
               <AttendanceStatusControl endpoint={fieldVerificationEndpoint} />
             ) : null}
-            <button
-              type="button"
-              onClick={() =>
-                window.dispatchEvent(new CustomEvent("terraqo:open-messages"))
-              }
-              className="relative grid h-10 w-10 place-items-center rounded-lg border border-[#d8e0ec] text-[#35485b] transition hover:bg-[#e8eef7] hover:text-primary"
-              aria-label="Abrir mensajes"
-            >
-              <MessagesSquare className="h-[18px] w-[18px]" />
-            </button>
-            <Link
-              href="/portal#actividad"
-              className="relative grid h-10 w-10 place-items-center rounded-lg border border-[#d8e0ec] text-[#35485b] transition hover:bg-[#e8eef7] hover:text-primary"
-              aria-label="Ver actividad reciente"
-            >
-              <Bell className="h-[18px] w-[18px]" />
-              <span
-                className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full"
-                style={{ backgroundColor: accentColor }}
-              />
-            </Link>
+            <PortalRealtimeAlerts currentUserId={currentUserId} />
             <div className="hidden h-9 w-px bg-[#d8e0ec] sm:block" />
             <details data-portal-popover className="group relative">
               <summary className="flex cursor-pointer list-none items-center gap-2.5 rounded-lg px-1.5 py-1 transition hover:bg-[#eef3f7] [&::-webkit-details-marker]:hidden">

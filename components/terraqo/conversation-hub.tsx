@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -140,7 +141,8 @@ function ConversationWorkspace({
   compactIntro,
 }: ConversationHubProps) {
   const router = useRouter();
-  const selected = data.selected;
+  const [hub, setHub] = useState(data);
+  const selected = hub.selected;
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const [detailTab, setDetailTab] = useState<DetailTab>("chat");
@@ -170,6 +172,36 @@ function ConversationWorkspace({
   const [starting, setStarting] = useState(false);
   const startingRef = useRef(false);
   const [imagePreview, setImagePreview] = useState("");
+  const refreshHub = useCallback(async () => {
+    const query = selected?.id
+      ? `?conversation=${encodeURIComponent(selected.id)}`
+      : "?peek=1";
+    const response = await fetch(`/api/terraqo/messages${query}`, {
+      cache: "no-store",
+    });
+    if (!response.ok) return;
+    const payload = await response.json();
+    if (payload?.data) setHub(payload.data as ConversationHubData);
+  }, [selected?.id]);
+
+  useEffect(() => setHub(data), [data]);
+  useEffect(() => {
+    let timer = 0;
+    const refresh = () => {
+      if (document.visibilityState === "visible" && !sendingRef.current)
+        void refreshHub();
+    };
+    timer = window.setInterval(refresh, 3000);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("terraqo:messages-changed", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("terraqo:messages-changed", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [refreshHub]);
   useEffect(() => {
     if (newMessageOpen) newMessageRef.current?.showModal();
     else newMessageRef.current?.close();
@@ -235,7 +267,7 @@ function ConversationWorkspace({
 
   const conversations = useMemo(
     () =>
-      data.conversations.filter((conversation) => {
+      hub.conversations.filter((conversation) => {
         const text =
           `${participantLabel(conversation, currentUserId)} ${conversation.messages.at(-1)?.body || ""}`.toLowerCase();
         if (query && !text.includes(query.toLowerCase())) return false;
@@ -246,7 +278,7 @@ function ConversationWorkspace({
           return false;
         return true;
       }),
-    [currentUserId, data.conversations, filter, query],
+    [currentUserId, hub.conversations, filter, query],
   );
 
   const selectedOther = selected
@@ -352,7 +384,8 @@ function ConversationWorkspace({
         );
       setBody("");
       clearAttachment();
-      router.refresh();
+      await refreshHub();
+      window.dispatchEvent(new CustomEvent("terraqo:message-sent"));
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -613,7 +646,7 @@ function ConversationWorkspace({
                 </div>
                 <div className="flex items-center gap-2">
                   {selected.workspaceId &&
-                  data.meetWorkspaceIds.includes(selected.workspaceId) ? (
+                  hub.meetWorkspaceIds.includes(selected.workspaceId) ? (
                     selected.meetings[0] ? (
                       <Button asChild variant="outline" size="icon">
                         <Link
@@ -971,7 +1004,7 @@ function ConversationWorkspace({
                 <p className="mt-2 text-xs text-rose-600">{error}</p>
               ) : null}
               <div className="mt-3 max-h-[58dvh] space-y-1 overflow-y-auto">
-                {data.recipients
+                {hub.recipients
                   .filter((recipient) =>
                     `${recipient.name} ${recipient.headline}`
                       .toLowerCase()

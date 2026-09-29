@@ -1,12 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { Bell, BellRing, Volume2, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Bell, BellRing, Settings2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AlertPreferencesPanel } from "@/components/terraqo/alert-preferences";
+import {
+  installTerraqoAudioUnlock,
+  playTerraqoAlert,
+} from "@/lib/terraqo/alert-sounds";
 
 type PulseEvent = {
   id: string;
+  type?: string;
   title: string;
   body: string;
   href: string;
@@ -19,20 +25,16 @@ type PulsePayload = {
 };
 
 const storageKey = "icc-admin-latest-event";
-const soundKey = "icc-admin-sound-enabled";
-
 export function AdminNotificationMonitor() {
   const [event, setEvent] = useState<PulseEvent | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [soundEnabled, setSoundEnabled] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   const initializedRef = useRef(false);
-  const audioContextRef = useRef<AudioContext | null>(null);
+  const requestRef = useRef(false);
 
-  useEffect(() => {
-    setSoundEnabled(window.localStorage.getItem(soundKey) === "1");
-
-    async function poll() {
+  const poll = useCallback(async () => {
+      if (requestRef.current || !navigator.onLine) return;
+      requestRef.current = true;
       try {
         const response = await fetch("/api/admin/notifications/pulse", { cache: "no-store" });
         if (!response.ok) return;
@@ -51,57 +53,44 @@ export function AdminNotificationMonitor() {
           window.localStorage.setItem(storageKey, payload.latestEvent.id);
           setEvent(payload.latestEvent);
           setIsVisible(true);
-          if (window.localStorage.getItem(soundKey) === "1") playNotificationSound();
+          await playTerraqoAlert(
+            payload.latestEvent.type === "notification"
+              ? "notification"
+              : "message",
+          );
         }
       } catch {
         // The monitor is non-critical; failed polls should not interrupt admin work.
+      } finally {
+        requestRef.current = false;
       }
-    }
+    }, []);
 
-    poll();
-    const interval = window.setInterval(poll, 12000);
-    return () => window.clearInterval(interval);
-  }, []);
-
-  async function enableSound() {
-    const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextClass) return;
-    audioContextRef.current = audioContextRef.current || new AudioContextClass();
-    if (audioContextRef.current.state === "suspended") await audioContextRef.current.resume();
-    window.localStorage.setItem(soundKey, "1");
-    setSoundEnabled(true);
-    playNotificationSound();
-  }
-
-  function playNotificationSound() {
-    const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextClass) return;
-    const context = audioContextRef.current || new AudioContextClass();
-    audioContextRef.current = context;
-    if (context.state === "suspended") return;
-
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(880, context.currentTime);
-    oscillator.frequency.setValueAtTime(660, context.currentTime + 0.12);
-    gain.gain.setValueAtTime(0.0001, context.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.18, context.currentTime + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.32);
-    oscillator.connect(gain);
-    gain.connect(context.destination);
-    oscillator.start();
-    oscillator.stop(context.currentTime + 0.34);
-  }
+  useEffect(() => {
+    installTerraqoAudioUnlock();
+    void poll();
+    const interval = window.setInterval(() => void poll(), 4000);
+    const refresh = () => void poll();
+    window.addEventListener("focus", refresh);
+    window.addEventListener("online", refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("online", refresh);
+    };
+  }, [poll]);
 
   return (
     <div className="fixed bottom-5 right-5 z-50 flex max-w-[calc(100vw-2.5rem)] flex-col items-end gap-3">
-      {!soundEnabled ? (
-        <Button type="button" variant="outline" size="sm" className="border-primary/30 bg-background shadow-lg" onClick={enableSound}>
-          <Volume2 className="h-4 w-4" />
-          Activar sonido
-        </Button>
-      ) : null}
+      <details className="group relative">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-xl border bg-background px-3 text-sm font-bold shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary [&::-webkit-details-marker]:hidden">
+          <Settings2 className="h-4 w-4" aria-hidden="true" />
+          Sonidos
+        </summary>
+        <div className="absolute bottom-[calc(100%+8px)] right-0 rounded-2xl border bg-white p-4 text-slate-900 shadow-2xl">
+          <AlertPreferencesPanel />
+        </div>
+      </details>
 
       {isVisible && event ? (
         <div className="w-[360px] max-w-full rounded-lg border bg-background p-4 shadow-technical">

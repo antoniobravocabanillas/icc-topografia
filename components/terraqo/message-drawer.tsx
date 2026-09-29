@@ -11,7 +11,10 @@ import {
 import { MessageSquare, Search, Send, X } from "lucide-react";
 import { UserAvatar } from "@/components/terraqo/user-avatar";
 import { AutoGrowTextarea } from "@/components/ui/auto-grow-textarea";
-import { WritingAssistantTrigger } from "@/components/terraqo/composer-tools";
+import {
+  ComposerEmojiPicker,
+  WritingAssistantTrigger,
+} from "@/components/terraqo/composer-tools";
 
 type Person = {
   id: string;
@@ -57,24 +60,53 @@ export function MessageDrawer({ currentUserId }: { currentUserId: string }) {
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [body, setBody] = useState("");
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const sendingRef = useRef(false);
-  const load = useCallback(async (id?: string) => {
-    const response = await fetch(
-      `/api/terraqo/messages${id ? `?conversation=${id}` : ""}`,
-      { cache: "no-store" },
-    );
+  const load = useCallback(async (
+    id?: string,
+    options?: { peek?: boolean; preserveSelection?: boolean },
+  ) => {
+    const params = new URLSearchParams();
+    if (id) params.set("conversation", id);
+    if (options?.peek) params.set("peek", "1");
+    const response = await fetch(`/api/terraqo/messages?${params}`, {
+      cache: "no-store",
+    });
     const payload = await response.json();
     if (!response.ok)
       throw new Error(
         payload?.error?.message || "No pudimos cargar tus mensajes.",
       );
     setHub(payload.data);
-    setSelectedId(id);
+    if (!options?.preserveSelection) setSelectedId(id);
   }, []);
   useEffect(() => {
-    if (open && !hub) load().catch((cause) => setError(cause.message));
+    if (open && !hub)
+      load(undefined, { peek: true, preserveSelection: true }).catch((cause) =>
+        setError(cause.message),
+      );
   }, [hub, load, open]);
+  useEffect(() => {
+    if (!open) return;
+    const refresh = () => {
+      if (document.visibilityState !== "visible") return;
+      load(selectedId, {
+        peek: !selectedId,
+        preserveSelection: true,
+      }).catch(() => undefined);
+    };
+    const interval = window.setInterval(refresh, 3000);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("terraqo:messages-changed", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("terraqo:messages-changed", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [load, open, selectedId]);
   useEffect(() => {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<{ conversationId?: string }>).detail;
@@ -123,7 +155,9 @@ export function MessageDrawer({ currentUserId }: { currentUserId: string }) {
           payload?.error?.message || "No pudimos enviar el mensaje.",
         );
       form.reset();
+      setBody("");
       await load(selected.id);
+      window.dispatchEvent(new CustomEvent("terraqo:message-sent"));
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -235,6 +269,8 @@ export function MessageDrawer({ currentUserId }: { currentUserId: string }) {
                   name="body"
                   required
                   maxLength={4000}
+                  value={body}
+                  onChange={(event) => setBody(event.target.value)}
                   placeholder="Escribe un mensaje..."
                   className="rounded-xl border px-3 py-2 focus-visible:outline-teal-700"
                   onKeyDown={(event) => {
@@ -249,6 +285,20 @@ export function MessageDrawer({ currentUserId }: { currentUserId: string }) {
                   }}
                 />
                 <div className="mt-2 flex items-center justify-between gap-2">
+                  <ComposerEmojiPicker
+                    disabled={busy}
+                    onSelect={(emoji) => {
+                      const field = composerRef.current;
+                      const start = field?.selectionStart ?? body.length;
+                      const end = field?.selectionEnd ?? body.length;
+                      const next = `${body.slice(0, start)}${emoji}${body.slice(end)}`;
+                      setBody(next);
+                      requestAnimationFrame(() => {
+                        field?.focus();
+                        field?.setSelectionRange(start + emoji.length, start + emoji.length);
+                      });
+                    }}
+                  />
                   <WritingAssistantTrigger
                     field={composerRef}
                     disabled={busy}

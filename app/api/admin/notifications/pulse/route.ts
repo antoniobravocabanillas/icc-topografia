@@ -36,6 +36,19 @@ export async function GET() {
       include: { channel: true, user: true },
       orderBy: { createdAt: "desc" }
     });
+    const latestProfessionalMessage = await prisma.terraqoDirectMessage.findFirst({
+      where: {
+        deletedAt: null,
+        senderId: { not: session.user.id },
+        conversation: {
+          workspaceId: terraqoWorkspaceId,
+          archivedAt: null,
+          participants: { some: { userId: session.user.id, leftAt: null, mutedAt: null } }
+        }
+      },
+      include: { sender: { select: { name: true, email: true } } },
+      orderBy: { createdAt: "desc" }
+    });
 
     const events = [
       latestNotification
@@ -66,6 +79,16 @@ export async function GET() {
             body: `${latestInternalMessage.user?.name || latestInternalMessage.user?.email || "Equipo ICC"}: ${latestInternalMessage.body}`,
             href: "/admin/chat-interno",
             createdAt: latestInternalMessage.createdAt
+          }
+        : null,
+      latestProfessionalMessage
+        ? {
+            id: `professional:${latestProfessionalMessage.id}`,
+            type: "professional",
+            title: "Nuevo mensaje profesional",
+            body: `${latestProfessionalMessage.sender.name || latestProfessionalMessage.sender.email}: ${latestProfessionalMessage.body || "Compartió un archivo"}`,
+            href: `/admin/terraqo/mensajes?conversation=${latestProfessionalMessage.conversationId}`,
+            createdAt: latestProfessionalMessage.createdAt
           }
         : null
     ].filter((event): event is NonNullable<typeof event> => Boolean(event))

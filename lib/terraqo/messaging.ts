@@ -76,6 +76,7 @@ export async function getConversationHub(
   userId: string,
   selectedId?: string,
   workspaceId?: string,
+  markSelectedRead = true,
 ) {
   const workspaces = await getMessagingWorkspaces(userId);
   const allowedWorkspaceIds = new Set(
@@ -189,7 +190,7 @@ export async function getConversationHub(
     conversations.find((conversation) => conversation.id === selectedId) ||
     conversations[0] ||
     null;
-  if (selected) {
+  if (selected && markSelectedRead) {
     await prisma.terraqoConversationParticipant.updateMany({
       where: { conversationId: selected.id, userId, leftAt: null },
       data: { lastReadAt: new Date() },
