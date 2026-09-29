@@ -1,458 +1,170 @@
-import type { TerraqoModuleCode } from "@prisma/client";
 import Link from "next/link";
-import { revalidatePath } from "next/cache";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import {
+  Activity,
+  ArrowRight,
+  BadgeCheck,
+  Banknote,
+  BriefcaseBusiness,
+  Building2,
+  CircleAlert,
+  FileCheck2,
+  Network,
+  ReceiptText,
+  ShieldCheck,
+  UserRoundCheck,
+  UsersRound,
+} from "lucide-react";
+
 import { prisma } from "@/lib/prisma";
-import { slugify } from "@/lib/server/api";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
-import { getTerraqoIndustryLabel, terraqoIndustries } from "@/lib/terraqo/industries";
-import { createTerraqoWorkspace } from "@/lib/terraqo/workspace-repository";
-import { setWorkspaceModuleState, type WorkspaceProvisioningMode } from "@/lib/terraqo/workspace-modules";
-import { getDefaultModulesForTier, terraqoModules } from "@/lib/workspace";
 
-function textField(formData: FormData, key: string) {
-  return String(formData.get(key) || "").trim();
+export const dynamic = "force-dynamic";
+
+const dateTime = new Intl.DateTimeFormat("es-PE", {
+  day: "2-digit",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: "America/Lima",
+});
+
+const planOrder = ["FREE", "BASIC", "PROFESSIONAL", "PREMIUM", "ENTERPRISE"] as const;
+
+function money(amountMinor: number) {
+  return new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN", maximumFractionDigits: 0 }).format(amountMinor / 100);
 }
 
-async function createWorkspaceAction(formData: FormData) {
-  "use server";
-  await requireAdminPage(["SUPER_ADMIN"]);
-  const name = textField(formData, "name");
-  const slug = slugify(textField(formData, "slug") || name);
-  const plan = textField(formData, "plan") as "FREE" | "BASIC" | "PROFESSIONAL" | "PREMIUM" | "ENTERPRISE";
-  const companyId = textField(formData, "companyId");
-  const newCompanyName = textField(formData, "newCompanyName");
-  const industry = textField(formData, "industry");
-  if (!name || !slug || !["FREE", "BASIC", "PROFESSIONAL", "PREMIUM", "ENTERPRISE"].includes(plan)) return;
-  const workspace = await createTerraqoWorkspace({
-    name,
-    slug,
-    companyId: companyId || undefined,
-    industry: industry || undefined,
-    domain: textField(formData, "domain") || undefined,
-    brandName: textField(formData, "brandName") || name,
-    description: textField(formData, "description") || undefined,
-    plan
-  });
-  if (!companyId && newCompanyName) {
-    const company = await prisma.company.create({
-      data: {
-        legalName: newCompanyName,
-        tradeName: textField(formData, "newCompanyTradeName") || newCompanyName,
-        document: textField(formData, "newCompanyDocument") || null,
-        website: textField(formData, "newCompanyWebsite") || textField(formData, "domain") || null,
-        logoUrl: textField(formData, "newCompanyLogoUrl") || null,
-        industry: industry || null,
-        status: "cliente",
-        terraqoWorkspaceId: workspace.id
-      }
-    });
-    await prisma.terraqoWorkspace.update({
-      where: { id: workspace.id },
-      data: { companyId: company.id }
-    });
-  }
-  revalidatePath("/admin/terraqo");
+function metricTone(tone: "blue" | "teal" | "violet" | "amber") {
+  return {
+    blue: "bg-[#eaf2ff] text-[#245da7]",
+    teal: "bg-[#e9f8f5] text-[#087b70]",
+    violet: "bg-[#f1eefb] text-[#6552a8]",
+    amber: "bg-[#fff5e3] text-[#a8670d]",
+  }[tone];
 }
 
-async function updateWorkspaceAction(formData: FormData) {
-  "use server";
+export default async function TerraqoGlobalControlPage() {
   await requireAdminPage(["SUPER_ADMIN"]);
-  const workspaceId = textField(formData, "workspaceId");
-  const tier = textField(formData, "tier") as "FREE" | "BASIC" | "PROFESSIONAL" | "PREMIUM" | "ENTERPRISE";
-  const status = textField(formData, "subscriptionStatus") as "TRIALING" | "ACTIVE" | "PAST_DUE" | "SUSPENDED" | "CANCELLED";
-  const seats = Math.max(1, Number(textField(formData, "seats") || 1));
-  const selectedCompanyId = textField(formData, "companyId");
-  const newCompanyName = textField(formData, "newCompanyName");
-  const industry = textField(formData, "industry");
-  if (!workspaceId) return;
-  const latestSubscription = await prisma.terraqoSubscription.findFirst({ where: { workspaceId }, orderBy: { createdAt: "desc" }, select: { id: true } });
-  await prisma.$transaction(async (tx) => {
-    let companyId = selectedCompanyId === "__none" ? null : selectedCompanyId || null;
-    if (newCompanyName) {
-      const company = await tx.company.create({
-        data: {
-          legalName: newCompanyName,
-          tradeName: textField(formData, "newCompanyTradeName") || newCompanyName,
-          document: textField(formData, "newCompanyDocument") || null,
-          website: textField(formData, "newCompanyWebsite") || null,
-          logoUrl: textField(formData, "newCompanyLogoUrl") || null,
-          industry: industry || null,
-          status: "cliente",
-          terraqoWorkspaceId: workspaceId
-        },
-        select: { id: true }
-      });
-      companyId = company.id;
-    }
-    await tx.terraqoWorkspace.update({
-      where: { id: workspaceId },
-      data: {
-        name: textField(formData, "name"),
-        brandName: textField(formData, "brandName") || null,
-        domain: textField(formData, "domain") || null,
-        industry: industry || null,
-        companyId,
-        active: textField(formData, "active") === "true"
-      }
-    });
-    if (latestSubscription) {
-      await tx.terraqoSubscription.update({ where: { id: latestSubscription.id }, data: { tier, status, seats } });
-    } else {
-      await tx.terraqoSubscription.create({ data: { workspaceId, tier, status, seats } });
-    }
-    const entitledModules = new Set(getDefaultModulesForTier(tier));
-    const currentModules = await tx.terraqoWorkspaceModule.findMany({ where: { workspaceId }, select: { code: true, active: true } });
-    for (const code of entitledModules) {
-      await tx.terraqoWorkspaceModule.upsert({
-        where: { workspaceId_code: { workspaceId, code } },
-        update: { active: true, enabledAt: new Date(), disabledAt: null },
-        create: { workspaceId, code, active: true, enabledAt: new Date(), config: { provisioning: { mode: "blank", version: 1, provisionedAt: new Date().toISOString() } } }
-      });
-    }
-    for (const workspaceModule of currentModules) {
-      if (!entitledModules.has(workspaceModule.code) && workspaceModule.active) {
-        await tx.terraqoWorkspaceModule.update({ where: { workspaceId_code: { workspaceId, code: workspaceModule.code } }, data: { active: false, disabledAt: new Date() } });
-      }
-    }
-  });
-  revalidatePath("/admin/terraqo");
-}
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const dayStart = new Date(new Intl.DateTimeFormat("en-CA", { timeZone: "America/Lima" }).format(now) + "T05:00:00.000Z");
 
-async function toggleWorkspaceModule(formData: FormData) {
-  "use server";
-
-  await requireAdminPage(["SUPER_ADMIN"]);
-
-  const workspaceId = String(formData.get("workspaceId") || "");
-  const code = String(formData.get("code") || "") as TerraqoModuleCode;
-  const active = String(formData.get("active") || "") === "true";
-  const requestedMode = String(formData.get("provisioningMode") || "blank");
-  const mode: WorkspaceProvisioningMode = requestedMode === "template" ? "template" : "blank";
-
-  if (!workspaceId || !code) return;
-
-  await setWorkspaceModuleState({ workspaceId, code, active, mode });
-
-  revalidatePath("/admin/terraqo");
-}
-
-export default async function TerraqoAdminPage() {
-  await requireAdminPage(["SUPER_ADMIN"]);
-
-  const workspaces = await prisma.terraqoWorkspace.findMany({
-    where: { deletedAt: null },
-    include: {
-      company: true,
-      modules: true,
-      subscriptions: { orderBy: { createdAt: "desc" }, take: 1 },
-      _count: {
-        select: {
-          members: true,
-          clients: true,
-          leads: true,
-          products: true,
-          services: true,
-          projects: true,
-          tickets: true,
-          jobPosts: true,
-          forumChannels: true
-        }
-      }
-    },
-    orderBy: [{ active: "desc" }, { createdAt: "desc" }]
-  });
-
-  const registeredCompanies = await prisma.company.findMany({
-    where: { deletedAt: null },
-    select: {
-      id: true,
-      legalName: true,
-      tradeName: true,
-      document: true,
-      industry: true,
-      website: true,
-      logoUrl: true
-    },
-    orderBy: [{ legalName: "asc" }]
-  });
-
-  const activeWorkspaces = workspaces.filter((item) => item.active).length;
-  const activeModules = workspaces.reduce((total, item) => total + item.modules.filter((module) => module.active).length, 0);
-  const premiumWorkspaces = workspaces.filter((item) => ["PREMIUM", "ENTERPRISE"].includes(item.subscriptions[0]?.tier || "")).length;
-  const [pendingDocuments, pendingIdentities, pendingExperiences, totalProfessionals] = await Promise.all([
+  const [
+    workspaces,
+    totalUsers,
+    newUsers,
+    onlineUsers,
+    totalProfessionals,
+    worklogsMonth,
+    attendanceToday,
+    activeRelationships,
+    pendingDocuments,
+    pendingIdentities,
+    pendingExperiences,
+    openComplaints,
+    overdueComplaints,
+    activeBillingAccounts,
+    pastDueBillingAccounts,
+    failedBillingAttempts,
+    paymentTotals,
+    recentUsers,
+  ] = await Promise.all([
+    prisma.terraqoWorkspace.findMany({
+      where: { deletedAt: null },
+      include: {
+        subscriptions: { orderBy: { createdAt: "desc" }, take: 1 },
+        _count: { select: { members: true, projects: true, worklogs: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.user.count(),
+    prisma.user.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
+    prisma.user.count({ where: { onlineUntil: { gte: now } } }),
+    prisma.terraqoProfessionalProfile.count(),
+    prisma.terraqoWorklogEntry.count({ where: { deletedAt: null, createdAt: { gte: thirtyDaysAgo } } }),
+    prisma.terraqoAttendanceEvent.count({ where: { status: "ACCEPTED", capturedAt: { gte: dayStart } } }),
+    prisma.terraqoWorkRelationship.count({ where: { status: "ACTIVE" } }),
     prisma.terraqoProfessionalDocument.count({ where: { reviewStatus: "SUBMITTED" } }),
     prisma.terraqoProfessionalProfile.count({ where: { identityVerificationStatus: "UNDER_REVIEW" } }),
     prisma.terraqoProfessionalExperience.count({ where: { verificationStatus: "REQUESTED" } }),
-    prisma.terraqoProfessionalProfile.count()
+    prisma.terraqoComplaint.count({ where: { respondedAt: null } }),
+    prisma.terraqoComplaint.count({ where: { respondedAt: null, dueAt: { lt: now } } }),
+    prisma.terraqoBillingAccount.count({ where: { mode: "live", status: "ACTIVE" } }),
+    prisma.terraqoBillingAccount.count({ where: { mode: "live", status: "PAST_DUE" } }),
+    prisma.terraqoBillingAttempt.count({ where: { status: "FAILED", updatedAt: { gte: thirtyDaysAgo } } }),
+    prisma.terraqoBillingPayment.aggregate({ where: { paidAt: { gte: thirtyDaysAgo } }, _sum: { amountMinor: true, refundedMinor: true } }),
+    prisma.user.findMany({ select: { id: true, name: true, email: true, role: true, createdAt: true }, orderBy: { createdAt: "desc" }, take: 5 }),
   ]);
 
+  const activeWorkspaces = workspaces.filter((workspace) => workspace.active).length;
+  const suspendedWorkspaces = workspaces.length - activeWorkspaces;
+  const payingSubscriptions = workspaces.filter((workspace) => ["ACTIVE", "TRIALING"].includes(workspace.subscriptions[0]?.status || "")).length;
+  const netCollected = Number(paymentTotals._sum.amountMinor || 0) - Number(paymentTotals._sum.refundedMinor || 0);
+  const validationQueue = pendingDocuments + pendingIdentities + pendingExperiences;
+  const attentionTotal = validationQueue + openComplaints + pastDueBillingAccounts + failedBillingAttempts + suspendedWorkspaces;
+  const planDistribution = planOrder.map((tier) => ({
+    tier,
+    value: workspaces.filter((workspace) => (workspace.subscriptions[0]?.tier || "FREE") === tier).length,
+  }));
+  const maxPlanCount = Math.max(...planDistribution.map((item) => item.value), 1);
+  const activeWorkspaceRanking = [...workspaces]
+    .sort((left, right) => (right._count.worklogs + right._count.projects * 3 + right._count.members) - (left._count.worklogs + left._count.projects * 3 + left._count.members))
+    .slice(0, 6);
+
+  const metrics = [
+    { label: "Workspaces activos", value: activeWorkspaces, detail: `${workspaces.length} registrados`, icon: Building2, tone: "blue" as const },
+    { label: "Usuarios Terraqo", value: totalUsers, detail: `+${newUsers} en 30 días`, icon: UsersRound, tone: "teal" as const },
+    { label: "Profesionales", value: totalProfessionals, detail: `${activeRelationships} relaciones activas`, icon: UserRoundCheck, tone: "violet" as const },
+    { label: "Cobrado en 30 días", value: money(netCollected), detail: `${activeBillingAccounts} cuentas live activas`, icon: Banknote, tone: "amber" as const },
+  ];
+
+  const attention = [
+    { label: "Validaciones pendientes", value: validationQueue, detail: `${pendingDocuments} documentos · ${pendingIdentities} identidades · ${pendingExperiences} experiencias`, href: "/admin/terraqo/validaciones", icon: FileCheck2, critical: false },
+    { label: "Facturación por revisar", value: pastDueBillingAccounts + failedBillingAttempts, detail: `${pastDueBillingAccounts} vencidas · ${failedBillingAttempts} intentos fallidos`, href: "/admin/terraqo/facturacion", icon: ReceiptText, critical: pastDueBillingAccounts > 0 },
+    { label: "Reclamaciones abiertas", value: openComplaints, detail: overdueComplaints ? `${overdueComplaints} fuera de plazo` : "Todas dentro de plazo", href: "/admin/terraqo/reclamaciones", icon: CircleAlert, critical: overdueComplaints > 0 },
+    { label: "Workspaces suspendidos", value: suspendedWorkspaces, detail: "Revisar operación y suscripción", href: "/admin/terraqo/workspaces", icon: ShieldCheck, critical: suspendedWorkspaces > 0 },
+  ];
+
   return (
-    <section className="space-y-8">
-      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
-        <div>
-          <p className="text-sm font-semibold uppercase text-primary">Terraqo producto</p>
-          <h1 className="font-display text-3xl font-bold">Workspaces y modulos activables</h1>
-          <Link href="/admin/terraqo/facturacion" className="mt-3 inline-flex rounded-lg border px-4 py-2 font-semibold">Facturación de Terraqo →</Link>
-          <Link href="/admin/terraqo/reclamaciones" className="mt-3 inline-flex rounded-lg border px-4 py-2 font-semibold">Libro de Reclamaciones →</Link>
-          <p className="mt-2 max-w-3xl text-muted-foreground">
-            Terraqo opera como plataforma multi-cliente. Cada empresa tiene su workspace, plan,
-            modulos habilitados y permisos separados para CRM, proyectos, tienda, red profesional,
-            CV vivo, marketplace laboral, foros, documentos y analitica.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button asChild variant="outline">
-            <Link href="/admin/terraqo/usuarios">Usuarios y accesos</Link>
-          </Button>
-          <Button asChild variant="outline">
-            <Link href="/admin/terraqo/red">Red profesional</Link>
-          </Button>
-          <Button asChild>
-            <Link href="/admin/terraqo/validaciones">Validaciones Terraqo</Link>
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid gap-5 md:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardDescription>Clientes activos</CardDescription>
-            <CardTitle className="text-3xl">{activeWorkspaces}</CardTitle>
-            <p className="text-sm font-semibold">Workspaces Terraqo</p>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Servicios habilitados</CardDescription>
-            <CardTitle className="text-3xl">{activeModules}</CardTitle>
-            <p className="text-sm font-semibold">Modulos activos</p>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Planes con red profesional</CardDescription>
-            <CardTitle className="text-3xl">{premiumWorkspaces}</CardTitle>
-            <p className="text-sm font-semibold">Premium / Enterprise</p>
-          </CardHeader>
-        </Card>
-      </div>
-
-      <Card className="border-primary/20 bg-primary/5">
-        <CardHeader>
-          <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary">Gobierno global</p>
-              <CardTitle className="mt-2">Mesa de validaciones Terraqo</CardTitle>
-              <CardDescription className="mt-2 max-w-3xl">
-                Control central para documentos de identidad, experiencias verificables y cuentas profesionales
-                de todos los workspaces. Esto pertenece a Terraqo, no al panel operativo de cada cliente.
-              </CardDescription>
-            </div>
-            <Button asChild>
-              <Link href="/admin/terraqo/validaciones">Abrir mesa de validaciones</Link>
-            </Button>
+    <section className="space-y-6 sm:space-y-8">
+      <header className="relative overflow-hidden rounded-3xl bg-[linear-gradient(120deg,#071d2a_0%,#0b3442_58%,#176b75_100%)] px-5 py-6 text-white shadow-[0_28px_70px_-48px_rgba(7,29,42,0.95)] sm:px-7 sm:py-8 lg:px-9">
+        <div className="pointer-events-none absolute -right-24 -top-28 h-72 w-72 rounded-full border border-white/10" aria-hidden="true" />
+        <div className="pointer-events-none absolute -right-8 top-8 h-48 w-48 rounded-full border border-[#7cd8d0]/20" aria-hidden="true" />
+        <div className="relative flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+          <div>
+            <h1 className="max-w-3xl font-display text-3xl font-bold tracking-[-0.035em] sm:text-4xl lg:text-5xl">Centro de control Terraqo</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/68 sm:text-base">Supervisa crecimiento, confianza, facturación y riesgo operativo de toda la plataforma sin mezclar datos de los workspaces.</p>
+            <span className="mt-4 inline-flex min-h-9 items-center gap-2 rounded-full border border-[#7cd8d0]/25 bg-[#7cd8d0]/10 px-3 text-xs font-bold text-[#9ce6df]"><Activity className="h-4 w-4" aria-hidden="true" /> Datos globales en vivo</span>
           </div>
-        </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-4">
-          {[
-            ["Documentos por revisar", pendingDocuments],
-            ["Identidades en revisión", pendingIdentities],
-            ["Experiencias solicitadas", pendingExperiences],
-            ["Profesionales registrados", totalProfessionals]
-          ].map(([label, count]) => (
-            <div key={String(label)} className="rounded-xl border bg-background/80 p-4 shadow-sm">
-              <p className="text-3xl font-bold">{count}</p>
-              <p className="mt-1 text-sm font-semibold text-muted-foreground">{label}</p>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+          <div className="grid gap-2 sm:grid-cols-3 xl:min-w-[460px]">
+            <div className="rounded-xl border border-white/12 bg-white/8 p-3"><span className="block text-[10px] font-bold uppercase tracking-[0.14em] text-white/50">En línea ahora</span><strong className="mt-1 block text-xl">{onlineUsers}</strong></div>
+            <div className="rounded-xl border border-white/12 bg-white/8 p-3"><span className="block text-[10px] font-bold uppercase tracking-[0.14em] text-white/50">Bitácoras 30 días</span><strong className="mt-1 block text-xl">{worklogsMonth}</strong></div>
+            <div className="rounded-xl border border-white/12 bg-white/8 p-3"><span className="block text-[10px] font-bold uppercase tracking-[0.14em] text-white/50">Marcas hoy</span><strong className="mt-1 block text-xl">{attendanceToday}</strong></div>
+          </div>
+        </div>
+      </header>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Nuevo cliente Terraqo</CardTitle>
-          <CardDescription>Crea un workspace aislado. Sus datos comienzan en blanco y solo recibe los modulos incluidos en el plan seleccionado.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form action={createWorkspaceAction} className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <Input name="name" placeholder="Empresa o workspace" required />
-            <Input name="slug" placeholder="slug-del-workspace" />
-            <Input name="brandName" placeholder="Marca visible" />
-            <Input name="domain" placeholder="empresa.com" />
-            <select name="industry" defaultValue="" className="h-10 rounded-md border bg-background px-3 text-sm">
-              <option value="">Seleccionar industria</option>
-              {terraqoIndustries.map((industry) => <option key={industry.value} value={industry.value}>{industry.label}</option>)}
-            </select>
-            <select name="companyId" defaultValue="" className="h-10 rounded-md border bg-background px-3 text-sm">
-              <option value="">Sin empresa registrada</option>
-              {registeredCompanies.map((company) => (
-                <option key={company.id} value={company.id}>
-                  {company.tradeName || company.legalName}{company.document ? ` - ${company.document}` : ""}
-                </option>
-              ))}
-            </select>
-            <select name="plan" defaultValue="BASIC" className="h-10 rounded-md border bg-background px-3 text-sm">
-              {['FREE', 'BASIC', 'PROFESSIONAL', 'PREMIUM', 'ENTERPRISE'].map((tier) => <option key={tier}>{tier}</option>)}
-            </select>
-            <Input name="description" placeholder="Descripcion interna" />
-            <div className="rounded-md border bg-background/70 p-3 md:col-span-2 xl:col-span-4">
-              <p className="text-sm font-semibold">Crear empresa registrada si no existe</p>
-              <p className="mt-1 text-xs text-muted-foreground">Opcional. Si completas el nombre, quedara vinculada automaticamente a este workspace.</p>
-              <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                <Input name="newCompanyName" placeholder="Razon social" />
-                <Input name="newCompanyTradeName" placeholder="Nombre comercial" />
-                <Input name="newCompanyDocument" placeholder="RUC / documento" />
-                <Input name="newCompanyWebsite" placeholder="Web de la empresa" />
-                <Input name="newCompanyLogoUrl" placeholder="URL del logo" />
-              </div>
-            </div>
-            <Button type="submit" className="md:col-span-2 xl:col-span-4">Crear workspace aislado</Button>
-          </form>
-        </CardContent>
-      </Card>
+      <section aria-labelledby="global-metrics"><div className="flex items-center justify-between gap-3"><h2 id="global-metrics" className="font-display text-2xl font-bold">La operación en una lectura</h2><span className="hidden text-xs font-semibold text-[#607083] sm:block">Datos reales · actualización al cargar</span></div><div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{metrics.map(({ label, value, detail, icon: Icon, tone }) => <article key={label} className="rounded-2xl border border-[#d8e0ec] bg-white p-5 shadow-[0_18px_45px_-38px_rgba(14,26,38,0.55)]"><div className={`grid h-10 w-10 place-items-center rounded-xl ${metricTone(tone)}`}><Icon className="h-5 w-5" aria-hidden="true" /></div><strong className="mt-5 block font-display text-3xl tracking-[-0.03em]">{value}</strong><span className="mt-1 block text-sm font-bold">{label}</span><span className="mt-1 block text-xs text-[#607083]">{detail}</span></article>)}</div></section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Catalogo de modulos Terraqo</CardTitle>
-          <CardDescription>
-            Esta es la base para vender Terraqo por capas: software, CRM, operaciones, red profesional,
-            marketplace, comunidad y servicios avanzados.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {terraqoModules.map((module) => (
-            <div key={module.code} className="rounded-md border bg-muted/30 p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold">{module.label}</p>
-                  <p className="mt-2 text-sm text-muted-foreground">{module.description}</p>
-                </div>
-                <Badge variant="outline">{module.minimumTier}</Badge>
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+      <section className="rounded-2xl border border-[#d8e0ec] bg-white p-5 sm:p-6" aria-labelledby="attention-heading"><div className="flex flex-wrap items-center justify-between gap-3"><h2 id="attention-heading" className="font-display text-2xl font-bold">Requiere atención <span className="ml-1 text-[#a8670d]">{attentionTotal}</span></h2><p className="text-xs text-[#607083]">Solo estados accionables, sin métricas decorativas.</p></div><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">{attention.map(({ label, value, detail, href, icon: Icon, critical }) => <Link key={label} href={href} className={`group rounded-xl border p-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4374ba] ${critical ? "border-[#efc6bd] bg-[#fff6f3] hover:bg-[#fff0eb]" : "border-[#dfe6ec] bg-[#f8fafb] hover:bg-[#eef3f6]"}`}><div className="flex items-start justify-between gap-3"><span className={`grid h-9 w-9 place-items-center rounded-lg ${critical ? "bg-[#fde2dc] text-[#b94631]" : "bg-white text-[#4374ba]"}`}><Icon className="h-5 w-5" aria-hidden="true" /></span><strong className="font-display text-2xl">{value}</strong></div><span className="mt-4 block text-sm font-bold">{label}</span><span className="mt-1 block min-h-9 text-xs leading-5 text-[#607083]">{detail}</span><span className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-[#245da7]">Resolver <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" /></span></Link>)}</div></section>
 
-      <div className="space-y-5">
-        {workspaces.map((item) => {
-          const subscription = item.subscriptions[0];
-          const moduleState = new Map(item.modules.map((module) => [module.code, module]));
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.7fr)]">
+        <section className="rounded-2xl border border-[#d8e0ec] bg-white p-5 sm:p-6" aria-labelledby="workspace-pulse"><div className="flex items-center justify-between gap-3"><h2 id="workspace-pulse" className="font-display text-2xl font-bold">Workspaces con mayor actividad</h2><Link href="/admin/terraqo/workspaces" className="inline-flex min-h-11 items-center gap-1 text-xs font-bold text-[#245da7]">Gestionar todos <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link></div><div className="mt-4 divide-y divide-[#e4eaef]">{activeWorkspaceRanking.map((workspace) => { const subscription = workspace.subscriptions[0]; const operationalVolume = workspace._count.worklogs + workspace._count.projects * 3 + workspace._count.members; return <Link key={workspace.id} href={`/admin/terraqo/workspaces#workspace-${workspace.id}`} className="grid gap-2 py-4 transition-colors hover:bg-[#f8fafb] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4374ba] sm:grid-cols-[minmax(0,1fr)_100px_100px_110px_auto] sm:items-center"><div className="min-w-0"><strong className="block truncate text-sm">{workspace.brandName || workspace.name}</strong><span className="mt-1 block truncate text-xs text-[#607083]">{workspace.slug} · {workspace.country}</span></div><span className="text-xs"><strong className="block text-sm">{workspace._count.members}</strong> miembros</span><span className="text-xs"><strong className="block text-sm">{workspace._count.projects}</strong> proyectos</span><span className="text-xs"><strong className="block text-sm">{workspace._count.worklogs}</strong> bitácoras</span><span className={`w-fit rounded-full px-2 py-1 text-[10px] font-bold ${workspace.active ? "bg-[#e9f8f5] text-[#087b70]" : "bg-[#fde2dc] text-[#b94631]"}`}>{subscription?.tier || "FREE"} · {workspace.active ? "Activo" : "Suspendido"}</span><span className="sr-only">Volumen operativo {operationalVolume}</span></Link>; })}{!activeWorkspaceRanking.length ? <p className="py-8 text-center text-sm text-[#607083]">Todavía no existen workspaces registrados.</p> : null}</div></section>
 
-          return (
-            <Card key={item.id}>
-              <CardHeader>
-                <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <CardTitle>{item.name}</CardTitle>
-                      <Badge variant={item.active ? "default" : "outline"}>{item.active ? "Activo" : "Inactivo"}</Badge>
-                      <Badge variant="secondary">{subscription?.tier ?? "Sin plan"}</Badge>
-                    </div>
-                    <CardDescription className="mt-2">
-                      {item.company?.tradeName ?? item.company?.legalName ?? "Sin empresa vinculada"} | {item.domain ?? item.slug} | {getTerraqoIndustryLabel(item.industry)}
-                    </CardDescription>
-                  </div>
-                  <div className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-3 lg:text-right">
-                    <span>{item._count.members} miembros</span>
-                    <span>{item._count.leads} leads</span>
-                    <span>{item._count.projects} proyectos</span>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <form action={updateWorkspaceAction} className="mb-6 grid gap-3 rounded-md border bg-muted/20 p-4 md:grid-cols-2 xl:grid-cols-4">
-                  <input type="hidden" name="workspaceId" value={item.id} />
-                  <Input name="name" defaultValue={item.name} aria-label="Nombre del workspace" required />
-                  <Input name="brandName" defaultValue={item.brandName || ""} placeholder="Marca" />
-                  <Input name="domain" defaultValue={item.domain || ""} placeholder="Dominio" />
-                  <select name="industry" defaultValue={item.industry || ""} className="h-10 rounded-md border bg-background px-3 text-sm">
-                    <option value="">Seleccionar industria</option>
-                    {terraqoIndustries.map((industry) => <option key={industry.value} value={industry.value}>{industry.label}</option>)}
-                  </select>
-                  <select name="tier" defaultValue={subscription?.tier || "BASIC"} className="h-10 rounded-md border bg-background px-3 text-sm">
-                    {['FREE', 'BASIC', 'PROFESSIONAL', 'PREMIUM', 'ENTERPRISE'].map((tier) => <option key={tier}>{tier}</option>)}
-                  </select>
-                  <select name="subscriptionStatus" defaultValue={subscription?.status || "TRIALING"} className="h-10 rounded-md border bg-background px-3 text-sm">
-                    {['TRIALING', 'ACTIVE', 'PAST_DUE', 'SUSPENDED', 'CANCELLED'].map((status) => <option key={status}>{status}</option>)}
-                  </select>
-                  <Input name="seats" type="number" min={1} defaultValue={subscription?.seats || 1} aria-label="Cantidad de usuarios" />
-                  <select name="active" defaultValue={String(item.active)} className="h-10 rounded-md border bg-background px-3 text-sm"><option value="true">Workspace activo</option><option value="false">Workspace suspendido</option></select>
-                  <select name="companyId" defaultValue={item.companyId || "__none"} className="h-10 rounded-md border bg-background px-3 text-sm md:col-span-2">
-                    <option value="__none">Sin empresa vinculada</option>
-                    {registeredCompanies.map((company) => (
-                      <option key={company.id} value={company.id}>
-                        {company.tradeName || company.legalName}{company.document ? ` - ${company.document}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="rounded-md border bg-background/70 p-3 md:col-span-2 xl:col-span-4">
-                    <p className="text-sm font-semibold">Crear y vincular empresa registrada</p>
-                    <p className="mt-1 text-xs text-muted-foreground">Usalo cuando el cliente aun no existe en Terraqo. Si completas el nombre, reemplaza la vinculacion seleccionada.</p>
-                    <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                      <Input name="newCompanyName" placeholder="Razon social" />
-                      <Input name="newCompanyTradeName" placeholder="Nombre comercial" />
-                      <Input name="newCompanyDocument" placeholder="RUC / documento" />
-                      <Input name="newCompanyWebsite" placeholder="Web de la empresa" />
-                      <Input name="newCompanyLogoUrl" placeholder="URL del logo" />
-                    </div>
-                  </div>
-                  <Button type="submit" variant="outline" className="md:col-span-2 xl:col-span-4">Guardar configuracion del cliente</Button>
-                </form>
-                <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-                  {[
-                    ["Clientes", item._count.clients],
-                    ["Servicios", item._count.services],
-                    ["Productos", item._count.products],
-                    ["Tickets", item._count.tickets],
-                    ["Convocatorias", item._count.jobPosts],
-                    ["Foros", item._count.forumChannels]
-                  ].map(([label, value]) => (
-                    <div key={String(label)} className="rounded-md border bg-muted/20 p-3">
-                      <p className="text-2xl font-bold">{value}</p>
-                      <p className="text-xs font-semibold text-muted-foreground">{label}</p>
-                    </div>
-                  ))}
-                </div>
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  {terraqoModules.map((module) => {
-                    const moduleRecord = moduleState.get(module.code);
-                    const active = moduleRecord?.active ?? false;
+        <section className="rounded-2xl border border-[#d8e0ec] bg-white p-5 sm:p-6" aria-labelledby="plans-heading"><h2 id="plans-heading" className="font-display text-2xl font-bold">Distribución de planes</h2><p className="mt-2 text-sm text-[#607083]">{payingSubscriptions} suscripciones activas o en prueba.</p><div className="mt-5 space-y-4">{planDistribution.map(({ tier, value }) => <div key={tier}><div className="mb-1.5 flex items-center justify-between text-xs"><span className="font-bold">{tier}</span><span className="text-[#607083]">{value} workspace{value === 1 ? "" : "s"}</span></div><div className="h-2 overflow-hidden rounded-full bg-[#edf1f4]"><div className="h-full rounded-full bg-[linear-gradient(90deg,#4374ba,#28a6a1)]" style={{ width: `${(value / maxPlanCount) * 100}%` }} /></div></div>)}</div><Link href="/admin/terraqo/facturacion" className="mt-6 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-[#245da7]">Abrir facturación <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link></section>
+      </div>
 
-                    return (
-                      <div key={module.code} className="flex items-center justify-between gap-3 rounded-md border p-3">
-                        <div>
-                          <p className="text-sm font-semibold">{module.label}</p>
-                          <p className="text-xs text-muted-foreground">{module.code}</p>
-                        </div>
-                        <form action={toggleWorkspaceModule} className="flex items-center gap-2">
-                          <input type="hidden" name="workspaceId" value={item.id} />
-                          <input type="hidden" name="code" value={module.code} />
-                          <input type="hidden" name="active" value={String(!active)} />
-                          {!active ? (
-                            <select name="provisioningMode" defaultValue="blank" className="h-9 rounded-md border bg-background px-2 text-xs">
-                              <option value="blank">En blanco</option>
-                              <option value="template">Con plantilla</option>
-                            </select>
-                          ) : (
-                            <input type="hidden" name="provisioningMode" value="blank" />
-                          )}
-                          <Button size="sm" variant={active ? "default" : "outline"}>
-                            {active ? "Activo" : "Activar"}
-                          </Button>
-                        </form>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+      <div className="grid gap-5 lg:grid-cols-2">
+        <section className="rounded-2xl border border-[#d8e0ec] bg-white p-5 sm:p-6" aria-labelledby="recent-users"><div className="flex items-center justify-between"><h2 id="recent-users" className="font-display text-2xl font-bold">Nuevos usuarios</h2><Link href="/admin/terraqo/usuarios" className="text-xs font-bold text-[#245da7]">Ver usuarios</Link></div><div className="mt-4 divide-y divide-[#e4eaef]">{recentUsers.map((user) => <div key={user.id} className="flex items-center justify-between gap-4 py-3"><div className="min-w-0"><strong className="block truncate text-sm">{user.name || user.email}</strong><span className="mt-0.5 block truncate text-xs text-[#607083]">{user.email}</span></div><div className="shrink-0 text-right"><span className="block text-[10px] font-bold uppercase tracking-[0.1em] text-[#4374ba]">{user.role.replaceAll("_", " ")}</span><span className="mt-1 block text-[10px] text-[#748596]">{dateTime.format(user.createdAt)}</span></div></div>)}</div></section>
+
+        <section className="overflow-hidden rounded-2xl border border-[#d8e0ec] bg-[#071d2a] p-5 text-white sm:p-6" aria-labelledby="global-actions"><h2 id="global-actions" className="font-display text-2xl font-bold">Acciones globales</h2><p className="mt-2 max-w-xl text-sm leading-6 text-white/62">Administra la plataforma sin entrar en la operación privada de cada cliente.</p><div className="mt-5 grid gap-2 sm:grid-cols-2">{[
+          ["Aprovisionar workspace", "/admin/terraqo/workspaces", Building2],
+          ["Gestionar accesos", "/admin/terraqo/usuarios", UsersRound],
+          ["Revisar confianza", "/admin/terraqo/validaciones", BadgeCheck],
+          ["Supervisar la red", "/admin/terraqo/red", Network],
+          ["Abrir facturación", "/admin/terraqo/facturacion", ReceiptText],
+          ["Terraqo Builders", "/admin/terraqo/builders", BriefcaseBusiness],
+        ].map(([label, href, Icon]) => <Link key={String(href)} href={String(href)} className="group flex min-h-14 items-center justify-between gap-3 rounded-xl border border-white/12 bg-white/6 px-4 text-sm font-bold transition-colors hover:bg-white/11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7cd8d0]"><span className="flex items-center gap-3"><Icon className="h-5 w-5 text-[#7cd8d0]" aria-hidden="true" />{String(label)}</span><ArrowRight className="h-4 w-4 text-white/45 transition-transform group-hover:translate-x-0.5" aria-hidden="true" /></Link>)}</div></section>
       </div>
     </section>
   );

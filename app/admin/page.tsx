@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/admin/status-badge";
@@ -7,8 +8,10 @@ import { requireAdminPage } from "@/lib/server/admin-page-auth";
 import { getSessionTerraqoWorkspace } from "@/lib/terraqo/workspace-scope";
 import { terraqoModules } from "@/lib/workspace";
 
-export default async function AdminPage() {
+export default async function AdminPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
   const session = await requireAdminPage(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"]);
+  const params = await searchParams;
+  if (session.user.role === "SUPER_ADMIN" && params.view !== "workspace") redirect("/admin/terraqo");
   const activeWorkspace = await getSessionTerraqoWorkspace();
   const terraqoWorkspaceId = activeWorkspace.id;
   if (["TECHNICIAN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"].includes(session.user.role || "")) {

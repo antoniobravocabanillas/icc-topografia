@@ -151,6 +151,7 @@ export function AdminNavigation({ items, workspaceName, panelName, brandName, lo
 
   const primaryColor = visualIdentity.primaryColor;
   const accentColor = visualIdentity.accentColor;
+  const workspaceReturnTo = role === "SUPER_ADMIN" && pathname === "/admin" ? "/admin?view=workspace" : pathname;
   return (
     <header ref={shellRef} className="sticky top-0 z-40 border-b border-[#0d4d58]/12 bg-[#f7f6f1]/95 shadow-[0_16px_45px_-36px_rgba(3,38,45,0.65)] backdrop-blur-xl">
       <div className="bg-[linear-gradient(135deg,#0e1a26_0%,#0e1a26_46%,#4374ba_100%)] text-white">
@@ -171,7 +172,7 @@ export function AdminNavigation({ items, workspaceName, panelName, brandName, lo
           <div className="hidden min-w-0 items-center gap-5 md:flex">
             {role === "SUPER_ADMIN" ? (
               <form action={selectAdminWorkspace} className="flex items-center gap-2">
-                <input type="hidden" name="returnTo" value={pathname} />
+                <input type="hidden" name="returnTo" value={workspaceReturnTo} />
                 <label className="sr-only" htmlFor="admin-workspace">Workspace activo</label>
                 <select id="admin-workspace" name="workspaceId" defaultValue={activeWorkspaceId} className="h-10 max-w-64 rounded-md border px-3 text-sm font-semibold text-white outline-none" style={{ borderColor: withAlpha(accentColor, "40"), backgroundColor: withAlpha(primaryColor, "dd") }}>
                   {workspaceOptions.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
@@ -276,7 +277,7 @@ export function AdminNavigation({ items, workspaceName, panelName, brandName, lo
             <div className="mt-5 flex flex-col gap-3 border-t border-[#d8e0ec] pt-5 md:hidden">
               {role === "SUPER_ADMIN" ? (
                 <form action={selectAdminWorkspace} className="grid gap-2 rounded-md border border-[#d8e0ec] bg-white p-3">
-                  <input type="hidden" name="returnTo" value={pathname} />
+                  <input type="hidden" name="returnTo" value={workspaceReturnTo} />
                   <label htmlFor="admin-workspace-mobile" className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#607083]">Workspace activo</label>
                   <select id="admin-workspace-mobile" name="workspaceId" defaultValue={activeWorkspaceId} className="h-11 rounded-md border border-[#d8e0ec] bg-white px-3 text-sm font-semibold">
                     {workspaceOptions.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
