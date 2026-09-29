@@ -15,6 +15,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { prisma } from "@/lib/prisma";
+import { submitAttendancePeriodAction } from "@/lib/server/jornada-actions";
 import { formatMinutes } from "@/lib/terraqo/jornada";
 import { requireProfessionalPortal } from "@/lib/terraqo/professional-portal";
 
@@ -31,6 +32,7 @@ type PageProps = {
     periodo?: string;
     proyecto?: string;
     empresa?: string;
+    success?: string;
   }>;
 };
 
@@ -195,6 +197,13 @@ export default async function AttendanceHistoryPage({ searchParams }: PageProps)
   const dayKey = (date: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Lima", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
   const sessionsByDay = new Map(sessions.map((item) => [dayKey(item.entry.capturedAt), item]));
   const monthLabel = new Intl.DateTimeFormat("es-PE", { month: "long", year: "numeric", timeZone: "America/Lima" }).format(monthAnchor);
+  const periodKey = `${calendarYear}-${String(calendarMonth + 1).padStart(2, "0")}`;
+  const currentRelationship = await prisma.terraqoWorkRelationship.findFirst({
+    where: { member: { userId: session.user.id, active: true }, status: { in: ["ACTIVE", "DRAFT"] } },
+    include: { attendancePeriods: { where: { periodKey }, take: 1 } },
+    orderBy: { updatedAt: "desc" },
+  });
+  const currentPeriod = currentRelationship?.attendancePeriods[0] || null;
 
   return (
     <main className="min-w-0 space-y-6 py-5 sm:py-8">
@@ -209,6 +218,7 @@ export default async function AttendanceHistoryPage({ searchParams }: PageProps)
           <Button asChild className="min-h-11 w-full sm:w-auto"><Link href="/portal/bitacora">Registrar bitácora <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
         </div>
       </div>
+      {params.success === "period-submitted" ? <div role="status" className="rounded-xl border border-[#bde4d8] bg-[#effaf7] px-4 py-3 text-sm font-semibold text-[#087b70]">El período fue enviado a revisión. El snapshot queda protegido mientras la empresa decide.</div> : null}
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label="Resumen del periodo">
         <article className="rounded-2xl border border-[#dce5ed] bg-white p-4"><CalendarDays className="h-5 w-5 text-[#1768b0]" /><strong className="mt-3 block font-display text-2xl text-[#0e1a26]">{sessions.length}</strong><span className="text-sm text-[#607083]">jornadas registradas</span></article>
@@ -241,6 +251,8 @@ export default async function AttendanceHistoryPage({ searchParams }: PageProps)
         </article>
         <article className="rounded-2xl border border-[#dce5ed] bg-white p-5"><p className="text-[11px] font-bold uppercase tracking-[0.15em] text-[#1768b0]">Lectura del periodo</p><h2 className="mt-1 font-display text-xl font-bold text-[#0e1a26]">Hechos, detección y aprobación</h2><div className="mt-5 space-y-4"><div className="flex items-center justify-between gap-4 border-b border-[#edf1f4] pb-3"><span className="text-sm text-[#607083]">Tiempo objetivamente registrado</span><strong>{formatMinutes(totalMinutes)}</strong></div><div className="flex items-center justify-between gap-4 border-b border-[#edf1f4] pb-3"><span className="text-sm text-[#607083]">Tiempo adicional detectado</span><strong className="text-[#9c4d0b]">{formatMinutes(additionalMinutes)}</strong></div><div className="flex items-center justify-between gap-4"><span className="text-sm text-[#607083]">Tiempo adicional aprobado</span><strong className="text-[#087b70]">{formatMinutes(approvedAdditionalMinutes)}</strong></div></div><p className="mt-5 rounded-xl bg-[#eef6fb] p-4 text-xs leading-5 text-[#426079]">Terraqo registra hechos y calcula referencias según la configuración vigente. La empresa conserva la decisión final sobre la aprobación.</p></article>
       </section>
+
+      {currentRelationship ? <section className="flex flex-col gap-4 rounded-2xl border border-[#cfe2ea] bg-[#f2f9fb] p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-[11px] font-bold uppercase tracking-[0.15em] text-[#087b70]">Cierre del período</p><h2 className="mt-1 font-display text-xl font-bold capitalize text-[#0e1a26]">{monthLabel} · {currentPeriod?.status === "APPROVED" ? "aprobado" : currentPeriod?.status === "SUBMITTED" ? "en revisión" : "listo para revisar"}</h2><p className="mt-2 text-sm text-[#52677a]">{currentPeriod ? `${currentPeriod.journeyCount} jornadas · ${formatMinutes(currentPeriod.additionalDetectedMinutes)} adicionales detectadas · ${formatMinutes(currentPeriod.additionalApprovedMinutes)} aprobadas.` : "Revisa tus jornadas y envía un snapshot mensual a la empresa."}</p></div>{currentPeriod?.status === "APPROVED" ? <span className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#ddf5ec] px-4 text-sm font-bold text-[#087b70]"><BadgeCheck className="h-4 w-4" />Período aprobado</span> : currentPeriod?.status === "SUBMITTED" ? <span className="inline-flex min-h-11 items-center rounded-xl bg-[#fff1d8] px-4 text-sm font-bold text-[#8a570c]">Pendiente de aprobación</span> : <form action={submitAttendancePeriodAction}><input type="hidden" name="relationshipId" value={currentRelationship.id} /><input type="hidden" name="periodKey" value={periodKey} /><Button type="submit" className="min-h-11 w-full sm:w-auto">Solicitar aprobación</Button></form>}</section> : null}
 
       <section className="space-y-3" aria-label="Historial de jornadas">
         {sessions.length ? sessions.map((item) => {

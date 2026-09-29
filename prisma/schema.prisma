@@ -623,6 +623,15 @@ enum TerraqoAttendanceAdjustmentStatus {
   @@schema("icc")
 }
 
+enum TerraqoAttendancePeriodStatus {
+  OPEN
+  SUBMITTED
+  APPROVED
+  REOPENED
+
+  @@schema("icc")
+}
+
 enum TerraqoReactionType {
   USEFUL
   INSIGHTFUL
@@ -3121,10 +3130,35 @@ model TerraqoWorkRelationship {
   compensationPolicies TerraqoCompensationPolicy[]
   approvals            TerraqoAttendanceApproval[]
   adjustments          TerraqoAttendanceAdjustment[]
+  attendancePeriods    TerraqoAttendancePeriod[]
   createdAt            DateTime                      @default(now())
   updatedAt            DateTime                      @updatedAt
 
   @@index([workspaceId, status])
+  @@schema("icc")
+}
+
+model TerraqoAttendancePeriod {
+  id                        String                        @id @default(cuid())
+  workRelationshipId        String
+  workRelationship          TerraqoWorkRelationship       @relation(fields: [workRelationshipId], references: [id], onDelete: Cascade)
+  periodKey                 String
+  status                    TerraqoAttendancePeriodStatus @default(OPEN)
+  journeyCount              Int                           @default(0)
+  regularMinutes            Int                           @default(0)
+  additionalDetectedMinutes Int                           @default(0)
+  additionalApprovedMinutes Int                           @default(0)
+  estimatedAdditionalAmount Decimal?                      @db.Decimal(12, 2)
+  submittedByUserId         String?
+  submittedAt               DateTime?
+  reviewedByUserId          String?
+  reviewedAt                DateTime?
+  reviewNote                String?
+  createdAt                 DateTime                      @default(now())
+  updatedAt                 DateTime                      @updatedAt
+
+  @@unique([workRelationshipId, periodKey])
+  @@index([workRelationshipId, status, periodKey])
   @@schema("icc")
 }
 

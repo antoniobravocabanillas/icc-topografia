@@ -251,3 +251,56 @@ export async function reviewAttendanceAdjustmentAction(formData: FormData) {
   revalidatePath("/portal/jornadas");
   redirect("/admin/jornadas?success=incident");
 }
+
+function periodRange(periodKey: string) {
+  const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(periodKey);
+  if (!match) throw new Error("Periodo inválido.");
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  return {
+    from: new Date(Date.UTC(year, month - 1, 1, 5)),
+    to: new Date(Date.UTC(year, month, 1, 5)),
+  };
+}
+
+export async function submitAttendancePeriodAction(formData: FormData) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Sesión requerida.");
+  const relationshipId = text(formData, "relationshipId");
+  const periodKey = text(formData, "periodKey");
+  const relationship = await prisma.terraqoWorkRelationship.findFirst({
+    where: { id: relationshipId, member: { userId: session.user.id, active: true } },
+    include: { compensationPolicies: { where: { effectiveTo: null }, orderBy: [{ source: "asc" }, { effectiveFrom: "desc" }] } },
+  });
+  if (!relationship) throw new Error("Relación laboral no disponible.");
+  const { from, to } = periodRange(periodKey);
+  const entries = await prisma.terraqoAttendanceEvent.findMany({
+    where: { workRelationshipId: relationship.id, userId: session.user.id, type: "CHECK_IN", status: "ACCEPTED", capturedAt: { gte: from, lt: to } },
+    select: { id: true },
+  });
+  const approvals = entries.length ? await prisma.terraqoAttendanceApproval.findMany({ where: { checkInEventId: { in: entries.map((entry) => entry.id) } } }) : [];
+  const regularMinutes = approvals.reduce((sum, item) => sum + item.regularMinutes, 0);
+  const additionalDetectedMinutes = approvals.reduce((sum, item) => sum + item.additionalDetectedMinutes, 0);
+  const additionalApprovedMinutes = approvals.reduce((sum, item) => sum + item.additionalApprovedMinutes, 0);
+  const compensation = activeCompensation(relationship.compensationPolicies);
+  const hourly = compensation?.hourlyReferenceAmount ? Number(compensation.hourlyReferenceAmount) : null;
+  const estimatedAdditionalAmount = hourly === null ? null : Number(((additionalApprovedMinutes / 60) * hourly).toFixed(2));
+  await prisma.terraqoAttendancePeriod.upsert({
+    where: { workRelationshipId_periodKey: { workRelationshipId: relationship.id, periodKey } },
+    update: { status: "SUBMITTED", journeyCount: entries.length, regularMinutes, additionalDetectedMinutes, additionalApprovedMinutes, estimatedAdditionalAmount, submittedByUserId: session.user.id, submittedAt: new Date(), reviewedByUserId: null, reviewedAt: null, reviewNote: null },
+    create: { workRelationshipId: relationship.id, periodKey, status: "SUBMITTED", journeyCount: entries.length, regularMinutes, additionalDetectedMinutes, additionalApprovedMinutes, estimatedAdditionalAmount, submittedByUserId: session.user.id, submittedAt: new Date() },
+  });
+  revalidatePath("/portal/jornadas");
+  revalidatePath("/admin/jornadas");
+  redirect("/portal/jornadas?success=period-submitted");
+}
+
+export async function reviewAttendancePeriodAction(formData: FormData) {
+  const { userId, workspaceId } = await requireCompanyManager();
+  const period = await prisma.terraqoAttendancePeriod.findFirst({ where: { id: text(formData, "periodId"), status: "SUBMITTED", workRelationship: { workspaceId } }, select: { id: true } });
+  if (!period) throw new Error("Cierre de período no disponible.");
+  await prisma.terraqoAttendancePeriod.update({ where: { id: period.id }, data: { status: "APPROVED", reviewedByUserId: userId, reviewedAt: new Date(), reviewNote: text(formData, "reviewNote") || null } });
+  revalidatePath("/admin/jornadas");
+  revalidatePath("/portal/jornadas");
+  redirect("/admin/jornadas?success=period");
+}
