@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import Image from "next/image";
 import { auth } from "@/auth";
 import { AccountAccessPanel } from "@/components/auth/account-access-panel";
-import { TerraqoLogo } from "@/components/terraqo/terraqo-logo";
 import { prisma } from "@/lib/prisma";
 import { createMetadata } from "@/lib/seo";
 import { terraqoDomains } from "@/lib/terraqo-domains";
@@ -49,10 +48,6 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
         aria-hidden="true"
       />
       <div className="tq-auth-editorial-shade" aria-hidden="true" />
-      <a href="https://terraqoglobal.com" className="tq-auth-brand" aria-label="Ir al inicio de Terraqo">
-        <TerraqoLogo variant="horizontal" tone="dark" className="h-11 w-[210px]" />
-      </a>
-      <div className="tq-auth-language" aria-label="Idioma actual">Español</div>
       <div className="tq-auth-layout">
         <div className="tq-auth-story">
           <div className="tq-auth-copy">

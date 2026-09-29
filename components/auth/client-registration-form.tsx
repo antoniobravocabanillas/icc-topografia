@@ -59,14 +59,14 @@ export function ClientRegistrationForm({ embedded = false, onSignIn, initialType
 
   return (
     <form action={submit} className={embedded ? "tq-embedded-auth-form tq-register-form" : "relative rounded-lg border bg-card p-8"}>
-      <div className="mb-5">
-        <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">Únete a la red Terraqo</p>
-        <h2 className="mt-1 font-display text-2xl font-bold">Crea tu cuenta</h2>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">Solo pedimos lo necesario. Completarás tu perfil después de verificar el correo.</p>
+      <div className="tq-auth-heading">
+        <p>Únete a Terraqo</p>
+        <h2>Crea tu cuenta</h2>
+        <span>Empieza con lo esencial. Completarás tu perfil después de verificar el correo.</span>
       </div>
       <div className="tq-account-type" aria-label="Tipo de cuenta">
-        <button type="button" onClick={() => setAccountType("client")} className={accountType === "client" ? "is-active" : ""}><Building2 className="h-4 w-4" /><span><strong>Empresa</strong><small>Organización o negocio</small></span></button>
         <button type="button" onClick={() => setAccountType("professional")} className={accountType === "professional" ? "is-active" : ""}><BriefcaseBusiness className="h-4 w-4" /><span><strong>Profesional</strong><small>Especialista independiente</small></span></button>
+        <button type="button" onClick={() => setAccountType("client")} className={accountType === "client" ? "is-active" : ""}><Building2 className="h-4 w-4" /><span><strong>Empresa</strong><small>Organización o negocio</small></span></button>
       </div>
       <div className="grid gap-3.5">
         <Input name="name" required placeholder="Nombre y apellido" autoComplete="name" />
