@@ -334,7 +334,10 @@ export function PortalShell({
             {portalType === "professional" && fieldVerificationEndpoint ? (
               <AttendanceStatusControl endpoint={fieldVerificationEndpoint} />
             ) : null}
-            <PortalRealtimeAlerts currentUserId={currentUserId} />
+            <PortalRealtimeAlerts
+              currentUserId={currentUserId}
+              messagesEnabled={portalType === "professional"}
+            />
             <div className="hidden h-9 w-px bg-[#d8e0ec] sm:block" />
             <details data-portal-popover className="group relative">
               <summary className="flex cursor-pointer list-none items-center gap-2.5 rounded-lg px-1.5 py-1 transition hover:bg-[#eef3f7] [&::-webkit-details-marker]:hidden">

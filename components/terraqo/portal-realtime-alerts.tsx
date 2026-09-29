@@ -25,7 +25,13 @@ type PulseData = {
   latestEvent: AlertEvent | null;
 };
 
-export function PortalRealtimeAlerts({ currentUserId }: { currentUserId: string }) {
+export function PortalRealtimeAlerts({
+  currentUserId,
+  messagesEnabled = true,
+}: {
+  currentUserId: string;
+  messagesEnabled?: boolean;
+}) {
   const [pulse, setPulse] = useState<PulseData>({
     unreadMessages: 0,
     unreadNotifications: 0,
@@ -62,6 +68,11 @@ export function PortalRealtimeAlerts({ currentUserId }: { currentUserId: string 
       }
       if (latestId !== previousId) {
         window.localStorage.setItem(latestKey, latestId);
+        if (
+          payload.data.latestEvent.channel === "message" &&
+          !messagesEnabled
+        )
+          return;
         setToast(payload.data.latestEvent);
         await playTerraqoAlert(payload.data.latestEvent.channel);
         if (payload.data.latestEvent.channel === "message") {
@@ -75,7 +86,7 @@ export function PortalRealtimeAlerts({ currentUserId }: { currentUserId: string 
     } finally {
       if (requestRef.current === controller) requestRef.current = null;
     }
-  }, [latestKey]);
+  }, [latestKey, messagesEnabled]);
 
   useEffect(() => {
     installTerraqoAudioUnlock();
@@ -107,15 +118,17 @@ export function PortalRealtimeAlerts({ currentUserId }: { currentUserId: string 
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => window.dispatchEvent(new CustomEvent("terraqo:open-messages"))}
-        className="relative grid h-11 w-11 place-items-center rounded-xl border border-[#d8e0ec] text-[#35485b] transition-colors hover:bg-[#e8eef7] hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#315f9f]"
-        aria-label={pulse.unreadMessages ? `Abrir mensajes, ${pulse.unreadMessages} sin leer` : "Abrir mensajes"}
-      >
-        <MessagesSquare className="h-[18px] w-[18px]" aria-hidden="true" />
-        <CountBadge count={pulse.unreadMessages} />
-      </button>
+      {messagesEnabled ? (
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent("terraqo:open-messages"))}
+          className="relative grid h-11 w-11 place-items-center rounded-xl border border-[#d8e0ec] text-[#35485b] transition-colors hover:bg-[#e8eef7] hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#315f9f]"
+          aria-label={pulse.unreadMessages ? `Abrir mensajes, ${pulse.unreadMessages} sin leer` : "Abrir mensajes"}
+        >
+          <MessagesSquare className="h-[18px] w-[18px]" aria-hidden="true" />
+          <CountBadge count={pulse.unreadMessages} />
+        </button>
+      ) : null}
 
       <details className="group relative" data-portal-popover>
         <summary
@@ -130,8 +143,8 @@ export function PortalRealtimeAlerts({ currentUserId }: { currentUserId: string 
             <div>
               <p className="text-sm font-bold text-[#0e1a26]">Centro de alertas</p>
               <p className="mt-0.5 text-xs text-[#607083]">
-                {pulse.unreadMessages + pulse.unreadNotifications
-                  ? `${pulse.unreadMessages + pulse.unreadNotifications} pendientes`
+                {(messagesEnabled ? pulse.unreadMessages : 0) + pulse.unreadNotifications
+                  ? `${(messagesEnabled ? pulse.unreadMessages : 0) + pulse.unreadNotifications} pendientes`
                   : "Estás al día"}
               </p>
             </div>
