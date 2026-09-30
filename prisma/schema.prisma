@@ -553,6 +553,13 @@ enum TerraqoAttendanceType {
   @@schema("icc")
 }
 
+enum TerraqoAttendanceContext {
+  PROJECT
+  PERSONAL_FIELD
+
+  @@schema("icc")
+}
+
 enum TerraqoAttendanceStatus {
   ACCEPTED
   OUTSIDE_GEOFENCE
@@ -3087,17 +3094,18 @@ model TerraqoAttendanceEvent {
   professionalProfile   TerraqoProfessionalProfile    @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
   workspaceId           String
   workspace             TerraqoWorkspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  projectId             String
-  project               Project                       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId             String?
+  project               Project?                      @relation(fields: [projectId], references: [id], onDelete: SetNull)
   workRelationshipId    String?
   workRelationship      TerraqoWorkRelationship?      @relation(fields: [workRelationshipId], references: [id], onDelete: SetNull)
   type                  TerraqoAttendanceType
+  context               TerraqoAttendanceContext      @default(PROJECT)
   status                TerraqoAttendanceStatus
   latitude              Float
   longitude             Float
   accuracyMeters        Float
-  distanceMeters        Float
-  geofenceRadiusMeters  Int
+  distanceMeters        Float?
+  geofenceRadiusMeters  Int?
   credentialId          String?
   capturedAt            DateTime                      @default(now())
   createdAt             DateTime                      @default(now())
@@ -3105,6 +3113,7 @@ model TerraqoAttendanceEvent {
 
   @@index([userId, workspaceId, capturedAt])
   @@index([professionalProfileId, projectId, capturedAt])
+  @@index([professionalProfileId, context, capturedAt])
   @@index([workspaceId, status, capturedAt])
   @@index([workRelationshipId, capturedAt])
   @@schema("icc")

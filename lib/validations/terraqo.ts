@@ -118,11 +118,19 @@ export const terraqoWorklogValidationRequestSchema = z.object({
 });
 
 export const terraqoAttendanceOptionsSchema = z.object({
-  projectId: z.string().cuid(),
+  context: z.enum(["PROJECT", "PERSONAL_FIELD"]),
+  projectId: z.string().cuid().optional(),
   type: z.enum(["CHECK_IN", "CHECK_OUT"]),
   latitude: z.number().finite().min(-90).max(90),
   longitude: z.number().finite().min(-180).max(180),
   accuracyMeters: z.number().finite().positive().max(5000),
+}).superRefine((value, context) => {
+  if (value.context === "PROJECT" && !value.projectId) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "Selecciona el proyecto de la jornada.", path: ["projectId"] });
+  }
+  if (value.context === "PERSONAL_FIELD" && value.projectId) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "La jornada personal no debe vincularse a un proyecto.", path: ["projectId"] });
+  }
 });
 
 export const terraqoWorklogEngagementSchema = z.discriminatedUnion("action", [

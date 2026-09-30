@@ -71,7 +71,7 @@ export default async function CompanyAttendanceDetailPage({
   const exit = approval?.checkOutEventId
     ? await prisma.terraqoAttendanceEvent.findFirst({ where: { id: approval.checkOutEventId, workspaceId } })
     : await prisma.terraqoAttendanceEvent.findFirst({
-        where: { userId: entry.userId, workspaceId, projectId: entry.projectId, type: "CHECK_OUT", status: "ACCEPTED", capturedAt: { gt: entry.capturedAt } },
+        where: { userId: entry.userId, workspaceId, context: entry.context, projectId: entry.projectId, type: "CHECK_OUT", status: "ACCEPTED", capturedAt: { gt: entry.capturedAt } },
         orderBy: { capturedAt: "asc" },
       });
   const correction = entry.workRelationship.adjustments.find(
@@ -128,8 +128,8 @@ export default async function CompanyAttendanceDetailPage({
       <section className="rounded-2xl border border-[#d8e0ec] bg-white p-5 sm:p-6">
         <div className="grid gap-4 border-b border-[#e6edf2] pb-5 md:grid-cols-3">
           <div className="flex items-center gap-3"><UserRound className="h-5 w-5 text-[#4374ba]" aria-hidden="true" /><span><strong className="block text-sm">{entry.user.name || entry.user.email}</strong><small className="text-[#607083]">{entry.workRelationship.member.title || "Profesional"}</small></span></div>
-          <div className="flex items-center gap-3"><BriefcaseBusiness className="h-5 w-5 text-[#4374ba]" aria-hidden="true" /><span><strong className="block text-sm">{entry.project.title}</strong><small className="text-[#607083]">Proyecto vinculado</small></span></div>
-          <div className="flex items-center gap-3"><MapPin className="h-5 w-5 text-[#4374ba]" aria-hidden="true" /><span><strong className="block text-sm">{entry.project.location || "Ubicación verificada"}</strong><small className="text-[#607083]">Precisión de entrada: {Math.round(entry.accuracyMeters)} m</small></span></div>
+          <div className="flex items-center gap-3"><BriefcaseBusiness className="h-5 w-5 text-[#4374ba]" aria-hidden="true" /><span><strong className="block text-sm">{entry.project?.title || "Jornada personal de campo"}</strong><small className="text-[#607083]">{entry.project ? "Proyecto vinculado" : "Sin proyecto fijo"}</small></span></div>
+          <div className="flex items-center gap-3"><MapPin className="h-5 w-5 text-[#4374ba]" aria-hidden="true" /><span><strong className="block text-sm">{entry.context === "PERSONAL_FIELD" ? "Ubicación capturada" : entry.project?.location || "Ubicación verificada"}</strong><small className="text-[#607083]">Precisión de entrada: {Math.round(entry.accuracyMeters)} m</small></span></div>
         </div>
         <div className="mt-5 grid gap-4 md:grid-cols-[1fr_auto_1fr] md:items-center">
           <article className="rounded-xl bg-[#effaf7] p-4"><span className="text-xs font-bold text-[#087b70]">Entrada</span><strong className="mt-2 block font-display text-3xl">{timeLabel.format(entry.capturedAt)}</strong><p className="mt-2 flex items-center gap-2 text-xs text-[#607083]"><Fingerprint className="h-4 w-4" aria-hidden="true" />Identidad y ubicación verificadas</p></article>

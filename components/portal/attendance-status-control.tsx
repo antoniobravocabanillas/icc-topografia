@@ -85,7 +85,8 @@ export function AttendanceStatusControl({ endpoint }: { endpoint: string }) {
       }>(endpoint, {
         action: "attendance_options",
         data: {
-          projectId: active.projectId,
+          context: active.context,
+          ...(active.projectId ? { projectId: active.projectId } : {}),
           type: "CHECK_OUT",
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
@@ -131,7 +132,7 @@ export function AttendanceStatusControl({ endpoint }: { endpoint: string }) {
       </span>
       <span className="min-w-0">
         <strong className="block whitespace-nowrap text-xs tabular-nums">Jornada · {elapsed}</strong>
-        <span className="block max-w-32 truncate text-[10px] font-medium text-[#607083]">{project?.title || active.project.title}</span>
+        <span className="block max-w-32 truncate text-[10px] font-medium text-[#607083]">{project?.title || active.project?.title || "Trabajo de campo"}</span>
       </span>
     </button>
   );
@@ -173,7 +174,7 @@ export function AttendanceStatusControl({ endpoint }: { endpoint: string }) {
                 <strong className="font-display text-2xl tabular-nums text-[#0e1a26]">{elapsed}</strong>
               </div>
               <div className="mt-4 border-t border-[#d9e9e6] pt-4">
-                <p className="font-display text-base font-bold text-[#0e1a26]">{project?.title || active.project.title}</p>
+                <p className="font-display text-base font-bold text-[#0e1a26]">{project?.title || active.project?.title || "Jornada personal de campo"}</p>
                 <p className="mt-1 text-sm font-semibold text-[#52677a]">{status.workspace.name}</p>
                 <p className="mt-0.5 text-xs text-[#748596]">{status.membership.title || "Profesional asignado"}</p>
               </div>
@@ -181,7 +182,7 @@ export function AttendanceStatusControl({ endpoint }: { endpoint: string }) {
 
             <dl className="mt-5 grid grid-cols-2 gap-3">
               <div className="rounded-xl border border-[#dce5ed] p-3"><dt className="text-xs text-[#748596]">Entrada</dt><dd className="mt-1 font-bold tabular-nums text-[#0e1a26]">{formatTime(active.capturedAt)}</dd></div>
-              <div className="rounded-xl border border-[#dce5ed] p-3"><dt className="text-xs text-[#748596]">Ubicación</dt><dd className="mt-1 flex items-center gap-1.5 font-bold text-[#0e1a26]"><MapPin className="h-4 w-4 text-[#1768b0]" />{project?.location || "Proyecto verificado"}</dd></div>
+              <div className="rounded-xl border border-[#dce5ed] p-3"><dt className="text-xs text-[#748596]">Ubicación</dt><dd className="mt-1 flex items-center gap-1.5 font-bold text-[#0e1a26]"><MapPin className="h-4 w-4 text-[#1768b0]" />{active.context === "PERSONAL_FIELD" ? "Capturada en cada marca" : project?.location || "Proyecto verificado"}</dd></div>
             </dl>
 
             <div className="mt-5 grid gap-2">

@@ -38,20 +38,21 @@ type PageProps = {
 
 type AttendanceEvent = {
   id: string;
-  projectId: string;
+  context: "PROJECT" | "PERSONAL_FIELD";
+  projectId: string | null;
   workspaceId: string;
   type: "CHECK_IN" | "CHECK_OUT";
   capturedAt: Date;
   credentialId: string | null;
   accuracyMeters: number;
-  distanceMeters: number;
-  project: { title: string; location: string | null };
+  distanceMeters: number | null;
+  project: { title: string; location: string | null } | null;
   workspace: { name: string; brandName: string | null };
 };
 
 type Session = {
   id: string;
-  projectId: string;
+  projectId: string | null;
   workspaceId: string;
   entry: AttendanceEvent;
   exit: AttendanceEvent | null;
@@ -84,7 +85,7 @@ function groupSessions(events: AttendanceEvent[]) {
   const sessions: Session[] = [];
 
   for (const event of events) {
-    const key = `${event.workspaceId}:${event.projectId}`;
+    const key = `${event.workspaceId}:${event.context}:${event.projectId || "personal"}`;
     if (event.type === "CHECK_IN") {
       const previous = openByProject.get(key);
       if (previous) {
@@ -127,7 +128,7 @@ export default async function AttendanceHistoryPage({ searchParams }: PageProps)
         orderBy: { title: "asc" },
       })
     : [];
-  const projectId = assignedProjects.some((project) => project.id === params.proyecto) ? params.proyecto : undefined;
+  const projectId = params.proyecto === "personal" ? null : assignedProjects.some((project) => project.id === params.proyecto) ? params.proyecto : undefined;
 
   const events = workspaceIds.length
     ? await prisma.terraqoAttendanceEvent.findMany({
@@ -141,6 +142,7 @@ export default async function AttendanceHistoryPage({ searchParams }: PageProps)
         },
         select: {
           id: true,
+          context: true,
           projectId: true,
           workspaceId: true,
           type: true,
@@ -169,7 +171,10 @@ export default async function AttendanceHistoryPage({ searchParams }: PageProps)
           authorId: session.user.id,
           professionalProfileId: profile.id,
           deletedAt: null,
-          projectId: { in: Array.from(new Set(sessions.map((item) => item.projectId))) },
+          OR: [
+            { projectId: { in: Array.from(new Set(sessions.map((item) => item.projectId).filter((id): id is string => Boolean(id)))) } },
+            ...(sessions.some((item) => item.projectId === null) ? [{ projectId: null }] : []),
+          ],
           occurredAt: firstEntry ? { gte: firstEntry } : undefined,
         },
         select: { id: true, title: true, occurredAt: true, projectId: true, evidenceStatus: true },
@@ -231,7 +236,7 @@ export default async function AttendanceHistoryPage({ searchParams }: PageProps)
       <form method="get" className="grid gap-3 rounded-2xl border border-[#dce5ed] bg-white p-4 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end">
         <label className="grid gap-1.5 text-xs font-bold text-[#52677a]">Periodo<select name="periodo" defaultValue={period} className="min-h-11 rounded-xl border border-[#cbd7e2] bg-white px-3 text-sm text-[#0e1a26]"><option value="semana">Últimos 7 días</option><option value="mes">Últimos 31 días</option><option value="todo">Todo el historial</option></select></label>
         <label className="grid gap-1.5 text-xs font-bold text-[#52677a]">Empresa<select name="empresa" defaultValue={workspaceId || ""} className="min-h-11 rounded-xl border border-[#cbd7e2] bg-white px-3 text-sm text-[#0e1a26]"><option value="">Todas</option>{memberships.map((membership) => <option key={membership.workspaceId} value={membership.workspaceId}>{membership.workspace.brandName || membership.workspace.name}</option>)}</select></label>
-        <label className="grid gap-1.5 text-xs font-bold text-[#52677a]">Proyecto<select name="proyecto" defaultValue={projectId || ""} className="min-h-11 rounded-xl border border-[#cbd7e2] bg-white px-3 text-sm text-[#0e1a26]"><option value="">Todos</option>{assignedProjects.filter((project) => !workspaceId || project.terraqoWorkspaceId === workspaceId).map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select></label>
+        <label className="grid gap-1.5 text-xs font-bold text-[#52677a]">Contexto de trabajo<select name="proyecto" defaultValue={projectId === null ? "personal" : projectId || ""} className="min-h-11 rounded-xl border border-[#cbd7e2] bg-white px-3 text-sm text-[#0e1a26]"><option value="">Todos</option><option value="personal">Trabajo de campo · sin proyecto</option>{assignedProjects.filter((project) => !workspaceId || project.terraqoWorkspaceId === workspaceId).map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select></label>
         <Button type="submit" variant="outline" className="min-h-11">Aplicar filtros</Button>
       </form>
 
@@ -245,7 +250,7 @@ export default async function AttendanceHistoryPage({ searchParams }: PageProps)
             const approval = item ? approvalByEntry.get(item.entry.id) : null;
             const tone = !item ? "border-[#edf1f4] text-[#9aa9b7]" : !item.exit ? "border-[#8bb8e2] bg-[#eef6ff] text-[#1768b0]" : approval?.status === "APPROVED" ? "border-[#9ed7c9] bg-[#effaf7] text-[#087b70]" : approval?.status === "REJECTED" ? "border-[#efb9b9] bg-[#fff3f3] text-[#a52b2b]" : "border-[#e8c997] bg-[#fff8ea] text-[#9a5a08]";
             const marker = !item?.exit ? "●" : approval?.status === "APPROVED" ? "✓" : approval?.status === "REJECTED" ? "!" : "+";
-            return item ? <Link key={key} href={`/portal/jornadas/${item.entry.id}`} aria-label={`${day} de ${monthLabel}: ${!item.exit ? "jornada en curso" : approval?.status === "APPROVED" ? "aprobada" : approval?.status === "REJECTED" ? "con incidencia" : "pendiente"}`} className={`grid aspect-square min-h-10 grid-cols-[auto_auto] place-content-center gap-1 rounded-lg border text-xs font-bold transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1768b0] ${tone}`}><span>{day}</span><span aria-hidden="true" className="text-[10px]">{marker}</span><span className="sr-only">{item.entry.project.title}</span></Link> : <span key={key} className={`grid aspect-square min-h-10 place-items-center rounded-lg border text-xs ${tone}`}>{day}</span>;
+            return item ? <Link key={key} href={`/portal/jornadas/${item.entry.id}`} aria-label={`${day} de ${monthLabel}: ${!item.exit ? "jornada en curso" : approval?.status === "APPROVED" ? "aprobada" : approval?.status === "REJECTED" ? "con incidencia" : "pendiente"}`} className={`grid aspect-square min-h-10 grid-cols-[auto_auto] place-content-center gap-1 rounded-lg border text-xs font-bold transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1768b0] ${tone}`}><span>{day}</span><span aria-hidden="true" className="text-[10px]">{marker}</span><span className="sr-only">{item.entry.project?.title || "Trabajo de campo"}</span></Link> : <span key={key} className={`grid aspect-square min-h-10 place-items-center rounded-lg border text-xs ${tone}`}>{day}</span>;
           })}</div>
           <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-[11px] text-[#607083]"><span><b className="text-[#087b70]">✓</b> Aprobada</span><span><b className="text-[#9a5a08]">+</b> Pendiente</span><span><b className="text-[#1768b0]">●</b> En curso</span><span><b className="text-[#a52b2b]">!</b> Incidencia</span><span>— Sin registro</span></div>
         </article>
@@ -263,8 +268,8 @@ export default async function AttendanceHistoryPage({ searchParams }: PageProps)
               <div className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2"><span className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs font-bold ${item.exit ? "bg-[#e8f7f1] text-[#087b70]" : "bg-[#eaf3ff] text-[#1768b0]"}`}><span className={`h-2 w-2 rounded-full ${item.exit ? "bg-[#0da785]" : "bg-[#2b82d9]"}`} />{item.exit ? "Completada" : "En curso"}</span><span className="text-xs font-semibold capitalize text-[#748596]">{dateFormatter.format(item.entry.capturedAt)}</span></div>
-                  <h2 className="mt-3 font-display text-xl font-bold text-[#0e1a26]">{item.entry.project.title}</h2>
-                  <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[#607083]"><span className="inline-flex items-center gap-1.5"><BriefcaseBusiness className="h-4 w-4" />{workspaceName}</span><span className="inline-flex items-center gap-1.5"><MapPin className="h-4 w-4" />{item.entry.project.location || "Ubicación del proyecto"}</span></p>
+                  <h2 className="mt-3 font-display text-xl font-bold text-[#0e1a26]">{item.entry.project?.title || "Jornada personal de campo"}</h2>
+                  <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[#607083]"><span className="inline-flex items-center gap-1.5"><BriefcaseBusiness className="h-4 w-4" />{workspaceName}</span><span className="inline-flex items-center gap-1.5"><MapPin className="h-4 w-4" />{item.entry.context === "PERSONAL_FIELD" ? "Ubicación capturada en cada marca" : item.entry.project?.location || "Ubicación del proyecto"}</span></p>
                 </div>
                 <dl className="grid grid-cols-3 gap-2 text-center sm:min-w-[360px]">
                   <div className="rounded-xl bg-[#f5f8fa] p-3"><dt className="text-[11px] text-[#748596]">Entrada</dt><dd className="mt-1 font-bold tabular-nums text-[#0e1a26]">{timeFormatter.format(item.entry.capturedAt)}</dd></div>

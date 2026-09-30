@@ -420,7 +420,7 @@ export default async function TerraqoNetworkPage({ searchParams }: TerraqoNetwor
                     ) : (
                       <p className="font-semibold">{event.user.name || event.user.email || "Profesional"}</p>
                     )}
-                    <p className="truncate text-sm text-muted-foreground">{event.project?.title || "Sin proyecto"} | {event.project?.location || "Ubicacion por revisar"}</p>
+                    <p className="truncate text-sm text-muted-foreground">{event.project?.title || "Jornada personal de campo"} | {event.context === "PERSONAL_FIELD" ? "Ubicación capturada" : event.project?.location || "Ubicación por revisar"}</p>
                   </div>
                 </div>
                 <div>

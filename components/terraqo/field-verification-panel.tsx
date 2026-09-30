@@ -12,16 +12,17 @@ export type VerificationStatus = {
   workspace: { id: string; name: string };
   membership: { role: string; title: string | null };
   projects: Array<{ id: string; title: string; location: string | null; latitude: number | null; longitude: number | null; geofenceRadiusMeters: number; imageUrl: string | null }>;
-  latestAttendance: { id: string; type: "CHECK_IN" | "CHECK_OUT"; capturedAt: string; projectId: string; project: { title: string } } | null;
+  latestAttendance: { id: string; type: "CHECK_IN" | "CHECK_OUT"; context: "PROJECT" | "PERSONAL_FIELD"; capturedAt: string; projectId: string | null; project: { title: string } | null } | null;
   recentAttendance: Array<{
     id: string;
     type: "CHECK_IN" | "CHECK_OUT";
     capturedAt: string;
-    projectId: string;
+    context: "PROJECT" | "PERSONAL_FIELD";
+    projectId: string | null;
     credentialId: string | null;
     accuracyMeters: number;
-    distanceMeters: number;
-    project: { title: string; location: string | null };
+    distanceMeters: number | null;
+    project: { title: string; location: string | null } | null;
   }>;
   pendingValidations: Array<{
     id: string;
@@ -68,6 +69,7 @@ function isTodayInLima(value: string) {
 export function FieldVerificationPanel({ endpoint, compact = false }: { endpoint: string; compact?: boolean }) {
   const [status, setStatus] = useState<VerificationStatus | null>(null);
   const [projectId, setProjectId] = useState("");
+  const [attendanceContext, setAttendanceContext] = useState<"PROJECT" | "PERSONAL_FIELD">("PROJECT");
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [loadError, setLoadError] = useState("");
@@ -79,7 +81,9 @@ export function FieldVerificationPanel({ endpoint, compact = false }: { endpoint
       setLoadError("");
       const next = await requestFieldVerification<VerificationStatus>(endpoint, { action: "status" });
       setStatus(next);
-      setProjectId((current) => next.latestAttendance?.type === "CHECK_IN" ? next.latestAttendance.projectId : current || next.projects[0]?.id || "");
+      const active = next.latestAttendance?.type === "CHECK_IN" ? next.latestAttendance : null;
+      setAttendanceContext(active?.context || (next.projects.length ? "PROJECT" : "PERSONAL_FIELD"));
+      setProjectId((current) => active?.projectId || current || next.projects[0]?.id || "");
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "No pudimos cargar asistencia y validaciones.");
     }
@@ -100,9 +104,8 @@ export function FieldVerificationPanel({ endpoint, compact = false }: { endpoint
   }, [status?.latestAttendance?.id, status?.latestAttendance?.type]);
 
   const nextAttendanceType = useMemo(() => {
-    if (!status?.latestAttendance || status.latestAttendance.projectId !== projectId || status.latestAttendance.type === "CHECK_OUT") return "CHECK_IN" as const;
-    return "CHECK_OUT" as const;
-  }, [projectId, status?.latestAttendance]);
+    return status?.latestAttendance?.type === "CHECK_IN" ? "CHECK_OUT" as const : "CHECK_IN" as const;
+  }, [status?.latestAttendance]);
 
   async function activatePasskey() {
     setBusy("passkey");
@@ -128,7 +131,13 @@ export function FieldVerificationPanel({ endpoint, compact = false }: { endpoint
   }
 
   async function registerAttendance() {
-    if (!projectId) return;
+    const active = status?.latestAttendance?.type === "CHECK_IN" ? status.latestAttendance : null;
+    const context = active?.context || attendanceContext;
+    const attendanceProjectId = active?.projectId || (context === "PROJECT" ? projectId : undefined);
+    if (context === "PROJECT" && !attendanceProjectId) {
+      setMessage("Selecciona un proyecto o usa Trabajo de campo.");
+      return;
+    }
     setBusy("attendance");
     setMessage("Obteniendo tu ubicacion exacta...");
     try {
@@ -136,7 +145,8 @@ export function FieldVerificationPanel({ endpoint, compact = false }: { endpoint
       const options = await requestFieldVerification<{ challengeId: string; options: Parameters<typeof startAuthentication>[0] }>(endpoint, {
         action: "attendance_options",
         data: {
-          projectId,
+          context,
+          ...(attendanceProjectId ? { projectId: attendanceProjectId } : {}),
           type: nextAttendanceType,
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
@@ -145,12 +155,12 @@ export function FieldVerificationPanel({ endpoint, compact = false }: { endpoint
       });
       setMessage("Confirma tu identidad en el dispositivo.");
       const response = await startAuthentication(options.options);
-      const result = await requestFieldVerification<{ type: "CHECK_IN" | "CHECK_OUT"; capturedAt: string; project: { title: string } }>(endpoint, {
+      const result = await requestFieldVerification<{ type: "CHECK_IN" | "CHECK_OUT"; capturedAt: string; project: { title: string } | null }>(endpoint, {
         action: "attendance_verify",
         challengeId: options.challengeId,
         response
       });
-      setMessage(`${result.type === "CHECK_IN" ? "Entrada" : "Salida"} registrada en ${result.project.title} a las ${formatDateTime(result.capturedAt)}.`);
+      setMessage(`${result.type === "CHECK_IN" ? "Entrada" : "Salida"} registrada en ${result.project?.title || "trabajo de campo"} a las ${formatDateTime(result.capturedAt)}.`);
       await load();
       window.dispatchEvent(new CustomEvent("terraqo:attendance-updated"));
     } catch (error) {
@@ -190,9 +200,10 @@ export function FieldVerificationPanel({ endpoint, compact = false }: { endpoint
 
   if (compact) {
     const activeAttendance = status.latestAttendance?.type === "CHECK_IN" ? status.latestAttendance : null;
+    const currentContext = activeAttendance?.context || attendanceContext;
     const selectedProject = status.projects.find((project) => project.id === (activeAttendance?.projectId || projectId));
     const completedToday = status.latestAttendance?.type === "CHECK_OUT" && isTodayInLima(status.latestAttendance.capturedAt);
-    const latestEntry = status.recentAttendance.find((event) => event.type === "CHECK_IN" && event.projectId === status.latestAttendance?.projectId);
+    const latestEntry = status.recentAttendance.find((event) => event.type === "CHECK_IN" && event.context === status.latestAttendance?.context && event.projectId === status.latestAttendance?.projectId);
 
     return (
       <section id="jornada-de-hoy" className="overflow-hidden rounded-2xl border border-[#dce5ed] bg-white p-4 shadow-[0_12px_34px_rgba(14,26,38,0.05)] sm:p-5">
@@ -209,24 +220,27 @@ export function FieldVerificationPanel({ endpoint, compact = false }: { endpoint
             <div><p className="font-bold text-[#0e1a26]">Activa este dispositivo una sola vez</p><p className="mt-1 text-sm leading-5 text-[#6b5b39]">Usaremos su método seguro para firmar entradas y salidas. Terraqo no recibe datos biométricos.</p></div>
             <Button type="button" onClick={activatePasskey} disabled={Boolean(busy)} className="min-h-11 shrink-0"><Fingerprint className="mr-2 h-4 w-4" />{busy === "passkey" ? "Activando…" : "Activar dispositivo"}</Button>
           </div>
-        ) : !selectedProject ? (
-          <div className="mt-4 rounded-xl border border-dashed border-[#cbd7e2] bg-[#fbfcfd] p-5"><p className="font-bold text-[#0e1a26]">Sin proyecto asignado</p><p className="mt-1 text-sm text-[#607083]">Cuando una empresa te incorpore a un proyecto podrás registrar aquí tu jornada.</p></div>
         ) : (
-          <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.85fr)] lg:items-center">
+          <div className="mt-4">
+            {!activeAttendance ? <div className="mb-4 inline-flex w-full rounded-xl border border-[#dce5ed] bg-[#f6f9fb] p-1 sm:w-auto" role="group" aria-label="Tipo de jornada">
+              <button type="button" onClick={() => setAttendanceContext("PROJECT")} disabled={!status.projects.length} className={`min-h-11 flex-1 rounded-lg px-4 text-sm font-bold transition sm:flex-none ${currentContext === "PROJECT" ? "bg-white text-[#1768b0] shadow-sm" : "text-[#607083] hover:text-[#0e1a26]"} disabled:cursor-not-allowed disabled:opacity-45`}>Por proyecto</button>
+              <button type="button" onClick={() => setAttendanceContext("PERSONAL_FIELD")} className={`min-h-11 flex-1 rounded-lg px-4 text-sm font-bold transition sm:flex-none ${currentContext === "PERSONAL_FIELD" ? "bg-white text-[#087b70] shadow-sm" : "text-[#607083] hover:text-[#0e1a26]"}`}>Trabajo de campo</button>
+            </div> : null}
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.85fr)] lg:items-center">
             <div className="flex min-w-0 items-center gap-4">
               <div className="relative hidden h-24 w-28 shrink-0 overflow-hidden rounded-xl bg-[#eaf1f5] sm:block">
-                {selectedProject.imageUrl ? <Image src={selectedProject.imageUrl} alt="" fill sizes="112px" className="object-cover" unoptimized /> : <span className="absolute inset-0 grid place-items-center text-[#1768b0]"><CalendarClock className="h-8 w-8" aria-hidden="true" /></span>}
+                {currentContext === "PROJECT" && selectedProject?.imageUrl ? <Image src={selectedProject.imageUrl} alt="" fill sizes="112px" className="object-cover" unoptimized /> : <span className="absolute inset-0 grid place-items-center text-[#1768b0]">{currentContext === "PERSONAL_FIELD" ? <LocateFixed className="h-8 w-8" aria-hidden="true" /> : <CalendarClock className="h-8 w-8" aria-hidden="true" />}</span>}
               </div>
               <div className="min-w-0">
-                <p className="truncate font-display text-lg font-bold text-[#0e1a26]">{selectedProject.title}</p>
+                <p className="truncate font-display text-lg font-bold text-[#0e1a26]">{currentContext === "PERSONAL_FIELD" ? "Jornada personal de campo" : selectedProject?.title || "Selecciona un proyecto"}</p>
                 <p className="truncate text-sm font-semibold text-[#52677a]">{status.workspace.name}</p>
-                <p className="mt-0.5 truncate text-xs text-[#748596]">{status.membership.title || "Profesional asignado"}{selectedProject.location ? ` · ${selectedProject.location}` : ""}</p>
-                {!activeAttendance && status.projects.length > 1 ? <button type="button" onClick={() => setChangingProject((value) => !value)} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg border border-[#dce5ed] px-3 text-xs font-bold text-[#1768b0] transition hover:bg-[#edf5ff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1768b0]"><RefreshCw className="h-3.5 w-3.5" />Cambiar proyecto</button> : null}
+                <p className="mt-0.5 text-xs leading-5 text-[#748596]">{currentContext === "PERSONAL_FIELD" ? "Sin proyecto fijo · se capturará la ubicación en cada entrada y salida" : `${status.membership.title || "Profesional asignado"}${selectedProject?.location ? ` · ${selectedProject.location}` : ""}`}</p>
+                {!activeAttendance && currentContext === "PROJECT" && status.projects.length > 1 ? <button type="button" onClick={() => setChangingProject((value) => !value)} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg border border-[#dce5ed] px-3 text-xs font-bold text-[#1768b0] transition hover:bg-[#edf5ff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1768b0]"><RefreshCw className="h-3.5 w-3.5" />Cambiar proyecto</button> : null}
               </div>
             </div>
 
             <div className="min-w-0 border-[#e3eaf0] lg:border-l lg:pl-6">
-              {changingProject && !activeAttendance ? <label className="mb-4 grid gap-2 text-sm font-bold text-[#0e1a26]">Proyecto<select value={projectId} onChange={(event) => { setProjectId(event.target.value); setChangingProject(false); }} className="min-h-11 rounded-lg border border-[#cbd7e2] bg-white px-3 text-sm font-medium">{status.projects.map((project) => <option key={project.id} value={project.id}>{project.title}{project.location ? ` · ${project.location}` : ""}</option>)}</select></label> : null}
+              {changingProject && !activeAttendance && currentContext === "PROJECT" ? <label className="mb-4 grid gap-2 text-sm font-bold text-[#0e1a26]">Proyecto<select value={projectId} onChange={(event) => { setProjectId(event.target.value); setChangingProject(false); }} className="min-h-11 rounded-lg border border-[#cbd7e2] bg-white px-3 text-sm font-medium">{status.projects.map((project) => <option key={project.id} value={project.id}>{project.title}{project.location ? ` · ${project.location}` : ""}</option>)}</select></label> : null}
               {activeAttendance ? (
                 <div>
                   <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
@@ -238,13 +252,14 @@ export function FieldVerificationPanel({ endpoint, compact = false }: { endpoint
               ) : completedToday ? (
                 <div className="flex items-center gap-3 rounded-xl bg-[#f1faf7] p-4"><CheckCircle2 className="h-6 w-6 shrink-0 text-[#087b70]" /><div><p className="font-bold text-[#0e1a26]">Jornada completada</p><p className="mt-0.5 text-sm text-[#52677a]">Salida registrada a las {formatTime(status.latestAttendance!.capturedAt)}{latestEntry ? ` · ${formatElapsed(latestEntry.capturedAt, new Date(status.latestAttendance!.capturedAt).getTime())}` : ""}</p></div></div>
               ) : (
-                <div><p className="font-bold text-[#0e1a26]">Sin entrada registrada</p><p className="mt-1 text-sm text-[#607083]">Confirma tu ubicación y dispositivo al iniciar.</p></div>
+                <div><p className="font-bold text-[#0e1a26]">Sin entrada registrada</p><p className="mt-1 text-sm text-[#607083]">Terraqo capturará hora, ubicación y dispositivo al iniciar.</p></div>
               )}
               <div className={`mt-4 grid gap-2 ${completedToday ? "" : "sm:grid-cols-2"}`}>
-                {!completedToday ? <Button type="button" onClick={registerAttendance} disabled={!projectId || Boolean(busy)} className="min-h-11 order-1 sm:order-2">{activeAttendance ? <LogOut className="mr-2 h-4 w-4" /> : <LogIn className="mr-2 h-4 w-4" />}{busy === "attendance" ? "Verificando…" : activeAttendance ? "Registrar salida" : "Registrar entrada"}</Button> : null}
+                {!completedToday ? <Button type="button" onClick={registerAttendance} disabled={(currentContext === "PROJECT" && !projectId) || Boolean(busy)} className="min-h-11 order-1 sm:order-2">{activeAttendance ? <LogOut className="mr-2 h-4 w-4" /> : <LogIn className="mr-2 h-4 w-4" />}{busy === "attendance" ? "Verificando…" : activeAttendance ? "Registrar salida" : "Registrar entrada"}</Button> : null}
                 <Button asChild variant="outline" className="min-h-11 order-2 sm:order-1"><Link href={activeAttendance ? `/portal/jornadas/${activeAttendance.id}` : "/portal/jornadas"}>{activeAttendance ? "Ver detalle" : "Ver historial"} <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
               </div>
             </div>
+          </div>
           </div>
         )}
         {message ? <p role="status" aria-live="polite" className="mt-4 rounded-xl bg-[#f3f7fa] px-4 py-3 text-sm font-semibold text-[#29434d]"><LocateFixed className="mr-2 inline h-4 w-4" />{message}</p> : null}
@@ -258,7 +273,7 @@ export function FieldVerificationPanel({ endpoint, compact = false }: { endpoint
         <div>
           <p className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-primary">Control de campo</p>
           <h2 className="mt-1 font-display text-xl font-bold">Entrada, salida y firmas verificables</h2>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">La hora la registra Terraqo. La ubicacion confirma el proyecto y el dispositivo valida tu identidad.</p>
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">La hora la registra Terraqo. Puedes trabajar por proyecto o registrar una jornada móvil solo con ubicación.</p>
         </div>
         <span className={`inline-flex w-fit items-center gap-2 rounded-md px-3 py-2 text-xs font-bold ${status.hasPasskey ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"}`}>
           {status.hasPasskey ? <ShieldCheck className="h-4 w-4" /> : <Fingerprint className="h-4 w-4" />}
@@ -268,20 +283,21 @@ export function FieldVerificationPanel({ endpoint, compact = false }: { endpoint
 
       {!status.hasPasskey ? <div className="mt-5 flex flex-col gap-3 rounded-md border border-amber-200 bg-amber-50/60 p-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-amber-950">Activa la huella, Face ID o PIN disponible en este equipo. Terraqo nunca recibe tus datos biometricos.</p><Button type="button" onClick={activatePasskey} disabled={Boolean(busy)}><Fingerprint className="mr-2 h-4 w-4" />{busy === "passkey" ? "Activando..." : "Activar dispositivo"}</Button></div> : null}
 
-      <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-        <label className="grid gap-2 text-sm font-semibold">Puesto de trabajo
-          <select value={projectId} onChange={(event) => setProjectId(event.target.value)} className="h-11 rounded-md border bg-background px-3" disabled={!status.projects.length}>
-            {!status.projects.length ? <option value="">Sin proyecto asignado</option> : null}
+      <div className="mt-5 grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)_auto] lg:items-end">
+        <label className="grid gap-2 text-sm font-semibold">Tipo de jornada<select value={status.latestAttendance?.type === "CHECK_IN" ? status.latestAttendance.context : attendanceContext} onChange={(event) => setAttendanceContext(event.target.value as "PROJECT" | "PERSONAL_FIELD")} disabled={status.latestAttendance?.type === "CHECK_IN"} className="h-11 rounded-md border bg-background px-3"><option value="PERSONAL_FIELD">Trabajo de campo</option><option value="PROJECT" disabled={!status.projects.length}>Por proyecto</option></select></label>
+        <label className="grid gap-2 text-sm font-semibold">Proyecto <span className="sr-only">opcional para trabajo de campo</span>
+          <select value={projectId} onChange={(event) => setProjectId(event.target.value)} className="h-11 rounded-md border bg-background px-3" disabled={attendanceContext === "PERSONAL_FIELD" || !status.projects.length || status.latestAttendance?.type === "CHECK_IN"}>
+            {!status.projects.length ? <option value="">No hay proyectos asignados</option> : null}
             {status.projects.map((project) => <option key={project.id} value={project.id}>{project.title}{project.location ? ` | ${project.location}` : ""}</option>)}
           </select>
         </label>
-        <Button type="button" onClick={registerAttendance} disabled={!status.hasPasskey || !projectId || Boolean(busy)} className="h-11 min-w-48">
+        <Button type="button" onClick={registerAttendance} disabled={!status.hasPasskey || (attendanceContext === "PROJECT" && !projectId) || Boolean(busy)} className="h-11 min-w-48">
           {nextAttendanceType === "CHECK_IN" ? <LogIn className="mr-2 h-4 w-4" /> : <LogOut className="mr-2 h-4 w-4" />}
           {busy === "attendance" ? "Verificando..." : nextAttendanceType === "CHECK_IN" ? "Registrar entrada" : "Registrar salida"}
         </Button>
       </div>
 
-      {status.latestAttendance ? <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t pt-4 text-sm text-[#35485b]"><span className="inline-flex items-center gap-2 font-semibold"><CalendarClock className="h-4 w-4 text-primary" />Ultimo registro: {formatDateTime(status.latestAttendance.capturedAt)}</span><span className="inline-flex items-center gap-2"><MapPin className="h-4 w-4 text-primary" />{status.latestAttendance.project.title}</span></div> : null}
+      {status.latestAttendance ? <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t pt-4 text-sm text-[#35485b]"><span className="inline-flex items-center gap-2 font-semibold"><CalendarClock className="h-4 w-4 text-primary" />Ultimo registro: {formatDateTime(status.latestAttendance.capturedAt)}</span><span className="inline-flex items-center gap-2"><MapPin className="h-4 w-4 text-primary" />{status.latestAttendance.project?.title || "Trabajo de campo · ubicación capturada"}</span></div> : null}
 
       {status.pendingValidations.length ? <div className="mt-6 border-t pt-5"><div className="flex items-center justify-between gap-3"><div><p className="font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-primary">Pendientes para ti</p><h3 className="mt-1 font-display text-lg font-bold">Bitacoras por supervisar</h3></div><span className="rounded-md bg-primary/10 px-3 py-1 text-xs font-bold text-primary">{status.pendingValidations.length}</span></div><div className="mt-4 grid gap-3">{status.pendingValidations.map((validation) => <article key={validation.id} className="flex flex-col gap-4 rounded-md border bg-[#f3f3f3] p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold">{validation.worklog.title}</p><p className="mt-1 text-sm text-muted-foreground">{validation.worklog.author.name || "Profesional"}{validation.worklog.project ? ` | ${validation.worklog.project.title}` : ""}</p><small className="mt-1 block text-muted-foreground">Registrada: {formatDateTime(validation.worklog.occurredAt)}</small></div><Button type="button" variant="outline" onClick={() => approveValidation(validation.id)} disabled={!status.hasPasskey || Boolean(busy)}><BadgeCheck className="mr-2 h-4 w-4" />{busy === validation.id ? "Validando..." : "Validar con mi dispositivo"}</Button></article>)}</div></div> : null}
 

@@ -369,7 +369,7 @@ export function ProfessionalDashboard({ profile, workspaceId, dashboard }: { pro
             <section className="flex flex-col gap-3 rounded-2xl border border-[#dce5ed] bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="font-semibold text-[#0e1a26]">Control de campo por activar</p>
-                <p className="mt-1 text-sm text-[#607083]">La jornada y la geolocalización se habilitan cuando una empresa te asigna un proyecto.</p>
+                <p className="mt-1 text-sm text-[#607083]">Vincula una empresa para registrar jornadas por proyecto o trabajo de campo móvil con ubicación verificable.</p>
               </div>
               <Button asChild variant="outline">
                 <Link href="/portal/perfil">Vincular empresa</Link>
