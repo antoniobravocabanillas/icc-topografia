@@ -39,6 +39,7 @@ type PreviousWorklogOption = {
   occurredAt: string;
   workspaceId: string | null;
   projectId: string | null;
+  previousWorklogId: string | null;
   hasNext: boolean;
 };
 

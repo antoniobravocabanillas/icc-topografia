@@ -60,56 +60,56 @@ type PortalNavItem = {
   href: string;
   label: string;
   icon: ElementType;
+  group: "Principal" | "Identidad" | "Trabajo" | "Oportunidades" | "Comunidad" | "Cuenta";
 };
 
 const professionalItems: PortalNavItem[] = [
-  { href: "/portal", label: "Inicio", icon: LayoutDashboard },
-  { href: "/portal/perfil", label: "Mi perfil", icon: UserRound },
-  { href: "/portal/membresia", label: "Mi membresía", icon: ReceiptText },
-  { href: "/portal/red", label: "Red profesional", icon: Search },
-  { href: "/portal/amigos", label: "Amigos", icon: UserRoundPlus },
-  { href: "/portal/recompensas", label: "Terraqo Builders", icon: Award },
-  {
-    href: "/portal/operaciones",
-    label: "Operaciones comerciales",
-    icon: ReceiptText,
-  },
-  {
-    href: "/portal/experiencias",
-    label: "Experiencias",
-    icon: BriefcaseBusiness,
-  },
-  { href: "/portal/postulaciones", label: "Postulaciones", icon: FileText },
-  { href: "/portal/validaciones", label: "Validaciones", icon: ShieldCheck },
-  { href: "/portal/documentos", label: "Documentos y datos", icon: Files },
-  { href: "/portal/notas", label: "Notas", icon: StickyNote },
-  { href: "/portal/archivos", label: "Archivos", icon: FolderOpen },
-  { href: "/portal/oportunidades", label: "Oportunidades", icon: Compass },
-  { href: "/portal/mensajes", label: "Mensajes", icon: MessagesSquare },
-  { href: "/portal/jornadas", label: "Mis jornadas", icon: CalendarClock },
+  { href: "/portal", label: "Inicio", icon: LayoutDashboard, group: "Principal" },
+  { href: "/portal/perfil", label: "Mi perfil", icon: UserRound, group: "Identidad" },
+  { href: "/portal/experiencias", label: "Experiencias", icon: BriefcaseBusiness, group: "Identidad" },
+  { href: "/portal/validaciones", label: "Validaciones", icon: ShieldCheck, group: "Identidad" },
+  { href: "/portal/documentos", label: "Documentos y datos", icon: Files, group: "Identidad" },
+  { href: "/portal/membresia", label: "Mi membresía", icon: ReceiptText, group: "Identidad" },
+  { href: "/portal/jornadas", label: "Mis jornadas", icon: CalendarClock, group: "Trabajo" },
   {
     href: "/portal/relacion-laboral",
     label: "Relación laboral",
     icon: BriefcaseBusiness,
+    group: "Trabajo",
   },
-  { href: "/portal/bitacora", label: "Bitácora", icon: NotebookPen },
-  { href: "/portal/commons", label: "Commons", icon: UsersRound },
-  { href: "/portal/equipos", label: "Equipos", icon: Building2 },
-  { href: "/portal/configuracion", label: "Configuración", icon: Settings },
-];
-
-const clientItems: PortalNavItem[] = [
-  { href: "/portal", label: "Resumen", icon: LayoutDashboard },
-  { href: "/portal/membresia", label: "Mi membresía", icon: ReceiptText },
+  { href: "/portal/bitacora", label: "Bitácora", icon: NotebookPen, group: "Trabajo" },
+  { href: "/portal/archivos", label: "Archivos", icon: FolderOpen, group: "Trabajo" },
+  { href: "/portal/notas", label: "Notas", icon: StickyNote, group: "Trabajo" },
+  { href: "/portal/oportunidades", label: "Oportunidades", icon: Compass, group: "Oportunidades" },
+  { href: "/portal/postulaciones", label: "Postulaciones", icon: FileText, group: "Oportunidades" },
   {
     href: "/portal/operaciones",
     label: "Operaciones comerciales",
     icon: ReceiptText,
+    group: "Oportunidades",
   },
-  { href: "/portal#cotizaciones", label: "Cotizaciones", icon: FileText },
-  { href: "/portal#soporte", label: "Soporte", icon: Headphones },
-  { href: "/portal#proyectos", label: "Proyectos", icon: BriefcaseBusiness },
-  { href: "/portal#documentos", label: "Documentos", icon: FileCheck2 },
+  { href: "/portal/red", label: "Red profesional", icon: Search, group: "Comunidad" },
+  { href: "/portal/amigos", label: "Amigos", icon: UserRoundPlus, group: "Comunidad" },
+  { href: "/portal/mensajes", label: "Mensajes", icon: MessagesSquare, group: "Comunidad" },
+  { href: "/portal/commons", label: "Commons", icon: UsersRound, group: "Comunidad" },
+  { href: "/portal/equipos", label: "Equipos", icon: Building2, group: "Comunidad" },
+  { href: "/portal/recompensas", label: "Terraqo Builders", icon: Award, group: "Comunidad" },
+  { href: "/portal/configuracion", label: "Configuración", icon: Settings, group: "Cuenta" },
+];
+
+const clientItems: PortalNavItem[] = [
+  { href: "/portal", label: "Resumen", icon: LayoutDashboard, group: "Principal" },
+  { href: "/portal/membresia", label: "Mi membresía", icon: ReceiptText, group: "Cuenta" },
+  {
+    href: "/portal/operaciones",
+    label: "Operaciones comerciales",
+    icon: ReceiptText,
+    group: "Trabajo",
+  },
+  { href: "/portal#cotizaciones", label: "Cotizaciones", icon: FileText, group: "Trabajo" },
+  { href: "/portal#proyectos", label: "Proyectos", icon: BriefcaseBusiness, group: "Trabajo" },
+  { href: "/portal#documentos", label: "Documentos", icon: FileCheck2, group: "Trabajo" },
+  { href: "/portal#soporte", label: "Soporte", icon: Headphones, group: "Cuenta" },
 ];
 
 function isActive(pathname: string, href: string) {
@@ -141,14 +141,7 @@ function PortalNavigation({
   variant?: "stack" | "mobile";
   collapsed?: boolean;
 }) {
-  const navClass =
-    variant === "mobile"
-      ? "flex w-max min-w-full gap-2"
-      : "grid grid-cols-2 gap-1.5 sm:grid-cols-3 xl:grid-cols-1";
-
-  return (
-    <nav className={navClass} aria-label="Navegación del portal">
-      {items.map((item) => {
+  const renderItem = (item: PortalNavItem) => {
         const Icon = item.icon;
         const active = isActive(pathname, item.href);
         return (
@@ -177,7 +170,27 @@ function PortalNavigation({
             </span>
           </Link>
         );
-      })}
+  };
+
+  if (variant === "mobile") {
+    return (
+      <nav className="flex w-max min-w-full gap-2" aria-label="Navegación del portal">
+        {items.map(renderItem)}
+      </nav>
+    );
+  }
+
+  const groups = Array.from(new Set(items.map((item) => item.group)));
+  return (
+    <nav className={collapsed ? "space-y-2" : "space-y-5"} aria-label="Navegación del portal">
+      {groups.map((group, index) => (
+        <section key={group} className={collapsed && index ? "border-t border-[#e5eaf1] pt-2" : undefined} aria-label={group}>
+          <p className={collapsed ? "sr-only" : "mb-1.5 px-3.5 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-[#77879a]"}>
+            {group}
+          </p>
+          <div className="grid gap-1">{items.filter((item) => item.group === group).map(renderItem)}</div>
+        </section>
+      ))}
     </nav>
   );
 }
@@ -412,7 +425,7 @@ export function PortalShell({
           <aside
             className={`hidden border-r border-[#d8e0ec] pt-6 transition-[padding] duration-300 xl:block ${sidebarCollapsed ? "pr-3" : "pr-6"}`}
           >
-            <div className="sticky top-[108px]">
+            <div className="sticky top-[92px] max-h-[calc(100vh-108px)] overflow-y-auto pb-6 [scrollbar-width:thin]">
               <div
                 className={`mb-4 flex items-center ${sidebarCollapsed ? "justify-center" : "justify-between gap-3 px-3"}`}
               >

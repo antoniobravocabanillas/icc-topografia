@@ -84,6 +84,7 @@ export default async function WorklogPage({ searchParams }: WorklogPageProps) {
           occurredAt: worklog.occurredAt.toISOString(),
           workspaceId: worklog.workspaceId,
           projectId: worklog.projectId,
+          previousWorklogId: worklog.previousWorklogId,
           hasNext: Boolean(worklog.nextWorklog),
         }))}
       />
@@ -148,6 +149,7 @@ export default async function WorklogPage({ searchParams }: WorklogPageProps) {
               occurredAt: candidate.occurredAt.toISOString(),
               workspaceId: candidate.workspaceId,
               projectId: candidate.projectId,
+              previousWorklogId: candidate.previousWorklogId,
               hasNext: Boolean(candidate.nextWorklog),
             }))}
           />

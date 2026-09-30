@@ -340,71 +340,116 @@ export async function setWorklogContinuity(input: {
   worklogId: string;
   previousWorklogId: string | null;
 }) {
-  const current = await prisma.terraqoWorklogEntry.findFirst({
-    where: { id: input.worklogId, authorId: input.userId, deletedAt: null },
-    select: {
-      id: true,
-      workspaceId: true,
-      projectId: true,
-      previousWorklogId: true,
-    },
-  });
-  if (!current) throw new TerraqoWorklogError("Bitacora no encontrada.", 404);
-
   if (!input.previousWorklogId) {
+    const current = await prisma.terraqoWorklogEntry.findFirst({
+      where: { id: input.worklogId, authorId: input.userId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!current) throw new TerraqoWorklogError("Bitacora no encontrada.", 404);
     return prisma.terraqoWorklogEntry.update({
       where: { id: current.id },
       data: { previousWorklogId: null },
       include: worklogInclude,
     });
   }
-  if (input.previousWorklogId === current.id) {
+  if (input.previousWorklogId === input.worklogId) {
     throw new TerraqoWorklogError(
       "Una bitacora no puede enlazarse consigo misma.",
       422,
     );
   }
 
-  const previous = await prisma.terraqoWorklogEntry.findFirst({
-    where: {
-      id: input.previousWorklogId,
-      authorId: input.userId,
-      deletedAt: null,
-    },
-    select: { id: true, nextWorklog: { select: { id: true } } },
-  });
-  if (!previous) {
-    throw new TerraqoWorklogError(
-      "Solo puedes enlazar bitacoras de tu propio perfil.",
-      422,
-    );
-  }
-  if (previous.nextWorklog && previous.nextWorklog.id !== current.id) {
-    throw new TerraqoWorklogError(
-      "Ese registro ya tiene una continuacion. Selecciona el ultimo avance de la cadena.",
-      409,
-    );
-  }
-
-  let descendantId: string | null = current.id;
-  for (let depth = 0; descendantId && depth < 100; depth += 1) {
-    const descendant: { nextWorklog: { id: string } | null } | null =
-      await prisma.terraqoWorklogEntry.findUnique({
-        where: { id: descendantId },
-        select: { nextWorklog: { select: { id: true } } },
-      });
-    descendantId = descendant?.nextWorklog?.id || null;
-    if (descendantId === previous.id) {
+  return prisma.$transaction(async (tx) => {
+    const entries = await tx.terraqoWorklogEntry.findMany({
+      where: { authorId: input.userId, deletedAt: null },
+      select: {
+        id: true,
+        previousWorklogId: true,
+        workspaceId: true,
+        projectId: true,
+        occurredAt: true,
+        createdAt: true,
+      },
+    });
+    const byId = new Map(entries.map((entry) => [entry.id, entry]));
+    const current = byId.get(input.worklogId);
+    const selected = byId.get(input.previousWorklogId!);
+    if (!current) throw new TerraqoWorklogError("Bitacora no encontrada.", 404);
+    if (!selected) {
       throw new TerraqoWorklogError(
-        "El enlace crearia un ciclo entre bitacoras.",
+        "Solo puedes enlazar bitacoras de tu propio perfil.",
         422,
       );
     }
-  }
+    if (
+      current.projectId &&
+      selected.projectId &&
+      current.projectId !== selected.projectId
+    ) {
+      throw new TerraqoWorklogError(
+        "Las bitacoras pertenecen a proyectos distintos.",
+        422,
+      );
+    }
+    if (
+      current.workspaceId &&
+      selected.workspaceId &&
+      current.workspaceId !== selected.workspaceId
+    ) {
+      throw new TerraqoWorklogError(
+        "Las bitacoras pertenecen a espacios de trabajo distintos.",
+        422,
+      );
+    }
 
-  return prisma.terraqoWorklogEntry.update({
-    where: { id: current.id },
-    data: { previousWorklogId: previous.id },
-    include: worklogInclude,
-  });
+    const nextByPrevious = new Map<string, string>();
+    for (const entry of entries) {
+      if (entry.previousWorklogId)
+        nextByPrevious.set(entry.previousWorklogId, entry.id);
+    }
+    const chainIds = new Set<string>();
+    const collectChain = (seedId: string) => {
+      let rootId = seedId;
+      for (let depth = 0; depth < 100; depth += 1) {
+        const previousId = byId.get(rootId)?.previousWorklogId;
+        if (!previousId || !byId.has(previousId)) break;
+        rootId = previousId;
+      }
+      let cursorId: string | undefined = rootId;
+      for (let depth = 0; cursorId && depth < 100; depth += 1) {
+        chainIds.add(cursorId);
+        cursorId = nextByPrevious.get(cursorId);
+      }
+    };
+    collectChain(current.id);
+    collectChain(selected.id);
+
+    const ordered = [...chainIds]
+      .map((id) => byId.get(id))
+      .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+      .sort(
+        (left, right) =>
+          left.occurredAt.getTime() - right.occurredAt.getTime() ||
+          left.createdAt.getTime() - right.createdAt.getTime() ||
+          left.id.localeCompare(right.id),
+      );
+
+    // Clear first to avoid transient unique-key collisions while rebuilding
+    // the linked list in chronological order.
+    await tx.terraqoWorklogEntry.updateMany({
+      where: { id: { in: ordered.map((entry) => entry.id) } },
+      data: { previousWorklogId: null },
+    });
+    for (let index = 1; index < ordered.length; index += 1) {
+      await tx.terraqoWorklogEntry.update({
+        where: { id: ordered[index].id },
+        data: { previousWorklogId: ordered[index - 1].id },
+      });
+    }
+
+    return tx.terraqoWorklogEntry.findUniqueOrThrow({
+      where: { id: current.id },
+      include: worklogInclude,
+    });
+  }, { isolationLevel: "Serializable" });
 }
