@@ -23,4 +23,4 @@ const cvImportBackground = async (request: Request) => {
 
 export default cvImportBackground;
 
-export const config = { background: true, method: "POST", memory: "2gb" };
+export const config = { background: true, method: "POST" };
