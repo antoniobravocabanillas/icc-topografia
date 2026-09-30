@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 import {
   ArrowLeft,
   ArrowRight,
@@ -19,6 +18,7 @@ import {
   WorklogContinuityControl,
   type WorklogContinuityOption,
 } from "@/components/terraqo/worklog-continuity-control";
+import { EvidenceGallery } from "@/components/terraqo/evidence-gallery";
 
 const typeLabels: Record<string, string> = {
   FIELD_UPDATE: "Avance de trabajo",
@@ -219,28 +219,15 @@ export function WorklogCard({
       </div>
 
       {worklog.media.length ? (
-        <div
-          className={`mt-5 grid gap-2 ${worklog.media.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}
-        >
-          {worklog.media.map((media, index) => (
-            <a
-              key={media.id}
-              href={`/api/terraqo/worklog/evidence/${media.id}`}
-              target="_blank"
-              rel="noreferrer"
-              className={`relative overflow-hidden rounded-md border bg-muted ${worklog.media.length === 3 && index === 0 ? "col-span-2 aspect-[16/8]" : "aspect-[4/3]"}`}
-            >
-              <Image
-                src={`/api/terraqo/worklog/evidence/${media.id}`}
-                alt={`${worklog.title}, evidencia ${index + 1}`}
-                fill
-                sizes="(max-width: 768px) 100vw, 680px"
-                className="object-cover transition duration-500 hover:scale-[1.02]"
-                unoptimized
-              />
-            </a>
-          ))}
-        </div>
+        <EvidenceGallery
+          className="mt-5"
+          items={worklog.media.map((media, index) => ({
+            id: media.id,
+            src: `/api/terraqo/worklog/evidence/${media.id}`,
+            downloadHref: `/api/terraqo/worklog/evidence/${media.id}?download=1`,
+            alt: `${worklog.title}, evidencia ${index + 1}`,
+          }))}
+        />
       ) : null}
 
       {worklog.comments.length ? (

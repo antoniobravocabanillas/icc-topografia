@@ -90,7 +90,7 @@ export const publicCvProfileInclude = {
       media: {
         select: { id: true, fileName: true, contentType: true, sortOrder: true },
         orderBy: { sortOrder: "asc" },
-        take: 1
+        take: 12
       }
     },
     orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],

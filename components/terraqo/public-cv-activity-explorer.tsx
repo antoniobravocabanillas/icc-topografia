@@ -12,7 +12,6 @@ import {
   ClipboardCheck,
   Clock3,
   Copy,
-  Download,
   ExternalLink,
   FileCheck2,
   FileText,
@@ -29,6 +28,7 @@ import {
   type LucideIcon
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { EvidenceGallery } from "@/components/terraqo/evidence-gallery";
 
 export type PublicCvActivityRecord = {
   id: string;
@@ -39,6 +39,7 @@ export type PublicCvActivityRecord = {
   evidenceStatus: string;
   occurredAt: string;
   createdAt: string;
+  locationLabel: string | null;
   skills: string[];
   evidenceUrls: string[];
   project: {
@@ -273,7 +274,14 @@ function ActivityDetail({ record, copied, onCopy }: { record: PublicCvActivityRe
   const validation = record.validations[0] || null;
   const validated = Boolean(validation) || record.evidenceStatus === "VERIFIED";
   const image = evidenceImage(record);
-  const primaryMedia = record.media[0] || null;
+  const galleryItems = record.media
+    .filter((media) => media.contentType.startsWith("image/"))
+    .map((media, index) => ({
+      id: media.id,
+      src: media.href,
+      downloadHref: media.downloadHref,
+      alt: `${record.title}, evidencia ${index + 1}`,
+    }));
 
   return (
     <article className="overflow-hidden rounded-2xl border border-[#28425e] bg-[linear-gradient(150deg,rgba(15,31,52,0.98),rgba(7,17,31,0.98))] shadow-[0_30px_80px_rgba(0,0,0,0.32)]">
@@ -304,7 +312,9 @@ function ActivityDetail({ record, copied, onCopy }: { record: PublicCvActivityRe
             <DetailMetric icon={Clock3} label="Hora" value={formatTime(record.occurredAt)} />
             <DetailMetric icon={ShieldCheck} label="Estado" value={validated ? "Validado" : "Declarado"} accent={validated} />
             {record.project ? <DetailMetric icon={FolderKanban} label="Proyecto" value={record.project.title} /> : null}
+            {record.locationLabel ? <DetailMetric icon={MapPin} label="Lugar" value={record.locationLabel} /> : null}
           </div>
+          {record.locationLabel ? <p className="mt-2 text-right text-[10px] font-medium text-[#60778e]">Ubicación aproximada · © OpenStreetMap contributors</p> : null}
         </section>
 
         <section className="mt-7">
@@ -331,9 +341,11 @@ function ActivityDetail({ record, copied, onCopy }: { record: PublicCvActivityRe
         ) : null}
 
         <section className="mt-7">
-          <div className="flex items-center justify-between gap-4"><h3 className="font-mono text-xs font-black uppercase tracking-[0.16em] text-[#7fa8ff]">Evidencia pública</h3>{primaryMedia ? <a href={primaryMedia.downloadHref} className="inline-flex items-center gap-2 text-xs font-black text-[#25c0d5] hover:text-white"><Download className="h-4 w-4" />Descargar</a> : null}</div>
-          {image ? (
-            <a href={primaryMedia?.href || image} target="_blank" rel="noreferrer" className="group relative mt-4 block aspect-[16/10] overflow-hidden rounded-xl border border-[#2a4561] bg-[#0e1a26]">
+          <div className="flex items-center justify-between gap-4"><h3 className="font-mono text-xs font-black uppercase tracking-[0.16em] text-[#7fa8ff]">Evidencia pública</h3>{galleryItems.length > 1 ? <span className="text-xs font-bold text-[#91a5b9]">{galleryItems.length} imágenes</span> : null}</div>
+          {galleryItems.length ? (
+            <EvidenceGallery items={galleryItems} tone="dark" className="mt-4" />
+          ) : image ? (
+            <a href={image} target="_blank" rel="noreferrer" className="group relative mt-4 block aspect-[16/10] overflow-hidden rounded-xl border border-[#2a4561] bg-[#0e1a26]">
               <Image src={image} alt={`Evidencia de ${record.title}`} fill sizes="(max-width: 1280px) 100vw, 680px" unoptimized className="object-cover transition duration-500 group-hover:scale-[1.015]" />
               <span className="absolute bottom-3 right-3 inline-flex items-center gap-2 rounded-lg border border-white/20 bg-[#07111f]/85 px-3 py-2 text-xs font-black backdrop-blur"><ExternalLink className="h-3.5 w-3.5" />Abrir evidencia</span>
             </a>

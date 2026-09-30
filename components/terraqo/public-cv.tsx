@@ -339,6 +339,9 @@ export function PublicCVSectionPage({ profile, section }: { profile: PublicCvPro
       evidenceStatus: worklog.evidenceStatus,
       occurredAt: worklog.occurredAt.toISOString(),
       createdAt: worklog.createdAt.toISOString(),
+      locationLabel: worklog.locationLabel
+        ? normalizeSpanishCopy(worklog.locationLabel) || worklog.locationLabel
+        : null,
       skills: worklog.skills.map((skill) => normalizeSpanishCopy(skill) || skill),
       evidenceUrls: worklog.evidenceUrls,
       project: worklog.project ? {
@@ -387,6 +390,7 @@ export function PublicCVSectionPage({ profile, section }: { profile: PublicCvPro
         evidenceStatus: validated ? "VERIFIED" : "DECLARED",
         occurredAt,
         createdAt: experience.createdAt.toISOString(),
+        locationLabel: location,
         skills: [role, experience.project?.category].filter((item): item is string => Boolean(item)),
         evidenceUrls: experience.evidence.filter((item) => /^(https?:\/\/|\/)/i.test(item)),
         project: experience.project ? {
@@ -425,6 +429,9 @@ export function PublicCVSectionPage({ profile, section }: { profile: PublicCvPro
         evidenceStatus: validated ? "VERIFIED" : "DECLARED",
         occurredAt,
         createdAt: education.createdAt.toISOString(),
+        locationLabel: education.locationCity
+          ? normalizeSpanishCopy(education.locationCity) || education.locationCity
+          : null,
         skills: field ? [field] : [],
         evidenceUrls: education.evidence.filter((item) => /^(https?:\/\/|\/)/i.test(item)),
         project: null,
@@ -455,6 +462,7 @@ export function PublicCVSectionPage({ profile, section }: { profile: PublicCvPro
           evidenceStatus: "VERIFIED",
           occurredAt: reviewedAt,
           createdAt: document.uploadedAt.toISOString(),
+          locationLabel: null,
           skills: [],
           evidenceUrls: [],
           project: null,
@@ -487,6 +495,9 @@ export function PublicCVSectionPage({ profile, section }: { profile: PublicCvPro
         evidenceStatus: experience.verifiedByTerraqo || experience.verificationStatus === "APPROVED" ? "VERIFIED" : "LINKED",
         occurredAt,
         createdAt: experience.createdAt.toISOString(),
+        locationLabel: project.location
+          ? normalizeSpanishCopy(project.location) || project.location
+          : null,
         skills: project.category ? [normalizeSpanishCopy(project.category) || project.category] : [],
         evidenceUrls: [],
         project: {

@@ -3,6 +3,7 @@
 import {
   ChangeEvent,
   FormEvent,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -43,6 +44,13 @@ type PreviousWorklogOption = {
   hasNext: boolean;
 };
 
+type CapturedLocation = {
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+  capturedAt: string;
+};
+
 export function WorklogComposer({
   workspaces,
   previousWorklogs,
@@ -64,12 +72,13 @@ export function WorklogComposer({
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
   const [locating, setLocating] = useState(false);
-  const [location, setLocation] = useState<{
-    latitude: number;
-    longitude: number;
-    accuracy: number;
-    capturedAt: string;
-  } | null>(null);
+  const [location, setLocation] = useState<CapturedLocation | null>(null);
+  const [includeAutomaticLocation, setIncludeAutomaticLocation] = useState(true);
+  const [locationLabel, setLocationLabel] = useState("");
+  const locationLabelRef = useRef("");
+  const [locationStatus, setLocationStatus] = useState(
+    "La ubicación se capturará automáticamente al publicar.",
+  );
   const projects = useMemo(
     () => workspaces.find((item) => item.id === workspaceId)?.projects || [],
     [workspaceId, workspaces],
@@ -121,34 +130,89 @@ export function WorklogComposer({
     );
   }
 
-  function captureLocation() {
+  const captureLocation = useCallback(async (): Promise<CapturedLocation | null> => {
     if (!navigator.geolocation) {
-      setMessage("Este dispositivo no permite capturar la ubicación.");
-      return;
+      setLocationStatus("Este dispositivo no permite capturar la ubicación. Puedes escribir el lugar.");
+      return null;
     }
+
     setLocating(true);
-    setMessage("");
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        setLocation({
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-          accuracy: coords.accuracy,
-          capturedAt: new Date().toISOString(),
-        });
-        setLocating(false);
-      },
-      (error) => {
-        setMessage(
-          error.code === error.PERMISSION_DENIED
-            ? "No se concedió permiso de ubicación. Puedes escribir el lugar manualmente."
-            : "No pudimos obtener una ubicación precisa. Inténtalo nuevamente o escribe el lugar.",
-        );
-        setLocating(false);
-      },
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
-    );
-  }
+    setLocationStatus("Obteniendo ubicación segura…");
+    const captured = await new Promise<CapturedLocation | null>((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        ({ coords }) =>
+          resolve({
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+            accuracy: coords.accuracy,
+            capturedAt: new Date().toISOString(),
+          }),
+        (error) => {
+          setLocationStatus(
+            error.code === error.PERMISSION_DENIED
+              ? "Permiso de ubicación bloqueado. Puedes escribir el lugar manualmente o habilitarlo en el navegador."
+              : "No pudimos obtener la ubicación. La publicación puede continuar con el lugar escrito manualmente.",
+          );
+          resolve(null);
+        },
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
+      );
+    });
+
+    if (!captured) {
+      setLocating(false);
+      return null;
+    }
+
+    setLocation(captured);
+    setLocationStatus(`Ubicación capturada · precisión aproximada ${Math.round(captured.accuracy)} m`);
+    try {
+      const params = new URLSearchParams({
+        latitude: String(captured.latitude),
+        longitude: String(captured.longitude),
+      });
+      const response = await fetch(`/api/locations/reverse?${params}`);
+      const payload = await response.json().catch(() => ({}));
+      const resolvedLabel = String(payload?.data?.label || "").trim();
+      if (response.ok && resolvedLabel) {
+        if (!locationLabelRef.current.trim()) {
+          locationLabelRef.current = resolvedLabel;
+          setLocationLabel(resolvedLabel);
+        }
+        setLocationStatus(`Ubicación identificada como ${resolvedLabel}.`);
+      }
+    } catch {
+      // La geocodificación es una mejora; las coordenadas privadas siguen siendo válidas.
+    } finally {
+      setLocating(false);
+    }
+    return captured;
+  }, []);
+
+  useEffect(() => {
+    if (!("permissions" in navigator) || !navigator.geolocation) return;
+    let mounted = true;
+    let permission: PermissionStatus | null = null;
+    const syncPermission = () => {
+      if (!mounted || !permission) return;
+      if (permission.state === "granted" && includeAutomaticLocation && !location) void captureLocation();
+      if (permission.state === "denied") {
+        setLocationStatus("Permiso de ubicación bloqueado. Puedes escribir el lugar manualmente.");
+      }
+    };
+    void navigator.permissions
+      .query({ name: "geolocation" })
+      .then((result) => {
+        permission = result;
+        syncPermission();
+        permission.addEventListener("change", syncPermission);
+      })
+      .catch(() => undefined);
+    return () => {
+      mounted = false;
+      permission?.removeEventListener("change", syncPermission);
+    };
+  }, [captureLocation, includeAutomaticLocation, location]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -176,6 +240,11 @@ export function WorklogComposer({
     setSubmitting(true);
     try {
       if (!savedWorklogId.current) {
+        // El envío es una acción explícita del usuario: es el momento correcto
+        // para solicitar el permiso nativo sin bloquear la publicación si falla.
+        const capturedLocation = includeAutomaticLocation
+          ? location || (await captureLocation())
+          : null;
         validateWorklogPhotos(photoFiles);
         const prepared: File[] = [];
         for (const [index, photo] of photoFiles.entries()) {
@@ -202,11 +271,11 @@ export function WorklogComposer({
               .map((item) => item.trim())
               .filter(Boolean),
             evidenceUrls: evidenceLinks,
-            locationLabel: String(data.get("locationLabel") || "") || undefined,
-            latitude: location?.latitude,
-            longitude: location?.longitude,
-            locationAccuracyMeters: location?.accuracy,
-            locationCapturedAt: location?.capturedAt,
+            locationLabel: locationLabelRef.current.trim() || undefined,
+            latitude: capturedLocation?.latitude,
+            longitude: capturedLocation?.longitude,
+            locationAccuracyMeters: capturedLocation?.accuracy,
+            locationCapturedAt: capturedLocation?.capturedAt,
           }),
         });
         const payload = await response.json().catch(() => ({}));
@@ -239,6 +308,10 @@ export function WorklogComposer({
       setPreviousWorklogId("");
       setPhotoFiles([]);
       setLocation(null);
+      setIncludeAutomaticLocation(true);
+      setLocationLabel("");
+      locationLabelRef.current = "";
+      setLocationStatus("La ubicación se capturará automáticamente al publicar.");
       setMessage(
         "Bitacora registrada. Tu trabajo ya suma evidencia a tu perfil.",
       );
@@ -436,45 +509,60 @@ export function WorklogComposer({
                 </span>
                 <input
                   name="locationLabel"
+                  value={locationLabel}
+                  onChange={(event) => {
+                    locationLabelRef.current = event.target.value;
+                    setLocationLabel(event.target.value);
+                  }}
                   maxLength={180}
                   className="h-12 min-w-0 rounded-xl border bg-white px-3 text-base sm:h-11 sm:rounded-md sm:text-sm"
                   placeholder="Ej. Santa Rosa de Asia, Cañete"
                 />
               </label>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={captureLocation}
-                disabled={locating}
-                className="min-h-12 rounded-xl sm:min-h-11 sm:rounded-md"
-              >
-                <LocateFixed className="mr-2 h-4 w-4" />{" "}
-                {locating
-                  ? "Ubicando..."
-                  : location
-                    ? "Actualizar ubicación"
-                    : "Usar mi ubicación"}
-              </Button>
+              {location && includeAutomaticLocation ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void captureLocation()}
+                  disabled={locating}
+                  className="min-h-12 rounded-xl sm:min-h-11 sm:rounded-md"
+                >
+                  <LocateFixed className="mr-2 h-4 w-4" />
+                  {locating ? "Actualizando…" : "Actualizar ubicación"}
+                </Button>
+              ) : null}
             </div>
-            <div className="flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-              <span>
-                {location
-                  ? `Ubicación capturada · precisión aproximada ${Math.round(location.accuracy)} m`
-                  : "Opcional. La captura requiere tu permiso y ayuda a contextualizar el trabajo."}
-              </span>
-              {location ? (
+            <div className="flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between" role="status" aria-live="polite">
+              <span>{locating ? "Obteniendo ubicación segura…" : locationStatus}</span>
+              {location && includeAutomaticLocation ? (
                 <button
                   type="button"
-                  onClick={() => setLocation(null)}
+                  onClick={() => {
+                    setLocation(null);
+                    setIncludeAutomaticLocation(false);
+                    setLocationStatus("Ubicación automática desactivada para esta publicación.");
+                  }}
                   className="w-fit font-bold text-primary hover:underline"
                 >
-                  Quitar ubicación capturada
+                  No incluir ubicación automática
+                </button>
+              ) : !includeAutomaticLocation ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIncludeAutomaticLocation(true);
+                    setLocationStatus("La ubicación se capturará automáticamente al publicar.");
+                  }}
+                  className="w-fit font-bold text-primary hover:underline"
+                >
+                  Activar ubicación automática
                 </button>
               ) : null}
             </div>
             <p className="text-xs leading-5 text-muted-foreground">
-              En el perfil público se muestra únicamente el nombre del lugar.
-              Las coordenadas exactas no se publican.
+              Al publicar, el navegador solicitará permiso si todavía no lo concediste.
+              En el perfil público se muestra solo el nombre aproximado del lugar;
+              las coordenadas exactas permanecen privadas. Datos de ubicación © OpenStreetMap contributors.
             </p>
           </div>
           <label className="grid gap-2 text-sm font-semibold md:col-span-2">
