@@ -115,14 +115,14 @@ export function WorklogContinuityControl({
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Buscar por título o ID del registro"
-          className="h-11 w-full rounded-md border bg-white pl-9 pr-3 text-sm"
+          className="h-11 w-full rounded-md border bg-white pl-9 pr-3 text-sm outline-none transition focus:border-primary/45 focus:ring-4 focus:ring-primary/10"
         />
       </div>
       <div className="mt-2 flex flex-col gap-2 sm:flex-row">
         <select
           value={value}
           onChange={(event) => setValue(event.target.value)}
-          className="h-10 min-w-0 flex-1 rounded-md border bg-white px-3 text-xs"
+          className="h-11 min-w-0 flex-1 rounded-md border bg-white px-3 text-xs outline-none transition focus:border-primary/45 focus:ring-4 focus:ring-primary/10"
         >
           <option value="">Sin registro vinculado</option>
           {filtered.map((item) => (
@@ -139,7 +139,7 @@ export function WorklogContinuityControl({
           onClick={() => save()}
           disabled={busy || !dirty}
           aria-busy={busy}
-          className="min-h-11 rounded-md bg-primary px-4 text-xs font-bold text-white transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-[#dbe3ee] disabled:text-[#607083] disabled:opacity-100"
+          className="min-h-11 rounded-md bg-primary px-4 text-xs font-bold text-white transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20 disabled:cursor-not-allowed disabled:bg-[#dbe3ee] disabled:text-[#607083] disabled:opacity-100"
         >
           {busy ? "Guardando…" : !dirty && initialValue ? "Vínculo guardado" : !dirty ? "Selecciona un registro" : value ? "Guardar vínculo" : "Desvincular"}
         </button>
@@ -147,7 +147,7 @@ export function WorklogContinuityControl({
       <div className="mt-2 flex flex-wrap items-start justify-between gap-2">
         <p className="text-xs leading-5 text-muted-foreground">Puedes elegir cualquier registro de la misma obra. Terraqo reunirá la cadena completa y la ordenará por fecha.</p>
         {initialValue ? (
-          <button type="button" onClick={() => save("")} disabled={busy} className="inline-flex min-h-9 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold text-[#b42318] transition hover:bg-[#fff1f0] disabled:opacity-50">
+          <button type="button" onClick={() => save("")} disabled={busy} className="inline-flex min-h-9 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold text-[#b42318] transition hover:bg-[#fff1f0] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#b42318]/15 disabled:opacity-50">
             <Unlink2 className="h-3.5 w-3.5" aria-hidden="true" /> Quitar vínculo actual
           </button>
         ) : null}

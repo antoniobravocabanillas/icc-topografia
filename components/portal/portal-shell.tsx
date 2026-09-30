@@ -150,7 +150,7 @@ function PortalNavigation({
             href={item.href}
             title={collapsed ? item.label : undefined}
             aria-current={active ? "page" : undefined}
-            className={`flex min-h-11 items-center rounded-lg text-sm font-semibold transition-colors ${collapsed ? "justify-center px-2" : "gap-3 px-3.5"} ${
+            className={`flex min-h-11 items-center rounded-lg text-sm font-semibold outline-none transition-colors focus-visible:ring-4 focus-visible:ring-primary/15 ${collapsed ? "justify-center px-2" : "gap-3 px-3.5"} ${
               active
                 ? "text-[#4374ba]"
                 : "text-[#2f4154] hover:bg-[#e8eef7] hover:text-[#0e1a26]"
