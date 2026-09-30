@@ -5,6 +5,9 @@ export const publicCvProfileInclude = {
   experiences: {
     where: { visibility: "PUBLIC" },
     include: {
+      workspace: {
+        select: { name: true, brandName: true, logoUrl: true }
+      },
       project: {
         select: {
           id: true,
@@ -24,6 +27,14 @@ export const publicCvProfileInclude = {
     },
     orderBy: [{ verifiedByTerraqo: "desc" }, { startedAt: "desc" }],
     take: 50
+  },
+  affiliations: {
+    include: {
+      workspace: { select: { name: true, brandName: true, logoUrl: true } },
+      company: { select: { legalName: true, tradeName: true, logoUrl: true } }
+    },
+    orderBy: [{ current: "desc" }, { updatedAt: "desc" }],
+    take: 30
   },
   education: {
     where: { visibility: "PUBLIC" },
