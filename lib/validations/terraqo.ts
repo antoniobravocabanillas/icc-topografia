@@ -133,6 +133,17 @@ export const terraqoAttendanceOptionsSchema = z.object({
   }
 });
 
+export const terraqoAttendanceLocationSyncSchema = z.object({
+  attendanceId: z.string().cuid(),
+  samples: z.array(z.object({
+    clientSampleId: z.string().uuid(),
+    latitude: z.number().finite().min(-90).max(90),
+    longitude: z.number().finite().min(-180).max(180),
+    accuracyMeters: z.number().finite().positive().max(150),
+    capturedAt: z.string().datetime({ offset: true }),
+  })).min(1).max(100),
+});
+
 export const terraqoWorklogEngagementSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("comment"),

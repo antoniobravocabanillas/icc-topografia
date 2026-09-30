@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { AttendanceRouteMap } from "@/components/terraqo/attendance-route-map";
 import { prisma } from "@/lib/prisma";
 import { requestAttendanceAdjustmentAction } from "@/lib/server/jornada-actions";
 import { activeCompensation, calculateJornada, formatMinutes } from "@/lib/terraqo/jornada";
@@ -23,6 +24,7 @@ export default async function AttendanceDetailPage({ params, searchParams }: { p
     include: {
       project: { select: { id: true, title: true, location: true } },
       workspace: { select: { name: true, brandName: true } },
+      locationSamples: { orderBy: { capturedAt: "asc" }, take: 1500 },
       workRelationship: {
         include: {
           member: { select: { title: true } },
@@ -59,13 +61,19 @@ export default async function AttendanceDetailPage({ params, searchParams }: { p
       {approvedCorrection ? <div role="status" className="rounded-xl border border-[#b8d8ef] bg-[#eef6fb] px-4 py-3 text-sm text-[#294f70]"><strong>Corrección aprobada:</strong> salida reconocida a las {time.format(approvedCorrection.requestedCheckOutAt!)}. La marca original se conserva en el historial de auditoría.</div> : null}
 
       <section className="rounded-2xl border border-[#dce5ed] bg-white p-5 shadow-[0_12px_36px_rgba(14,26,38,0.05)]">
-        <div className="flex flex-wrap gap-x-8 gap-y-3 border-b border-[#e6edf2] pb-5"><span className="inline-flex items-center gap-2 text-sm font-bold"><BriefcaseBusiness className="h-4 w-4 text-[#1768b0]" />{entry.project?.title || "Jornada personal de campo"}</span><span className="text-sm text-[#607083]">{workspaceName}</span><span className="text-sm text-[#607083]">{entry.workRelationship?.member.title || "Profesional"}</span><span className="inline-flex items-center gap-2 text-sm text-[#607083]"><MapPin className="h-4 w-4 text-[#1768b0]" />{entry.context === "PERSONAL_FIELD" ? "Ubicación capturada en entrada y salida" : entry.project?.location || "Ubicación del proyecto"}</span></div>
+        <div className="flex flex-wrap gap-x-8 gap-y-3 border-b border-[#e6edf2] pb-5"><span className="inline-flex items-center gap-2 text-sm font-bold"><BriefcaseBusiness className="h-4 w-4 text-[#1768b0]" />{entry.project?.title || "Jornada personal de campo"}</span><span className="text-sm text-[#607083]">{workspaceName}</span><span className="text-sm text-[#607083]">{entry.workRelationship?.member.title || "Profesional"}</span><span className="inline-flex items-center gap-2 text-sm text-[#607083]"><MapPin className="h-4 w-4 text-[#1768b0]" />{entry.context === "PERSONAL_FIELD" ? "Recorrido capturado durante la jornada" : entry.project?.location || "Ubicación del proyecto"}</span></div>
         <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
           <div className="rounded-xl bg-[#f2faf8] p-4"><span className="inline-flex items-center gap-2 text-sm font-bold text-[#087b70]"><span className="h-2.5 w-2.5 rounded-full bg-[#0da785]" />Entrada</span><strong className="mt-2 block font-display text-3xl text-[#0e1a26]">{time.format(entry.capturedAt)}</strong><p className="mt-2 flex items-center gap-2 text-xs text-[#607083]"><Fingerprint className="h-4 w-4" />Dispositivo e identidad verificados</p></div>
           <div className="text-center"><span className="text-xs text-[#748596]">Tiempo registrado</span><strong className="mt-1 block font-display text-2xl text-[#0e1a26]">{effectiveExitAt ? formatMinutes(Math.floor((effectiveExitAt.getTime() - entry.capturedAt.getTime()) / 60_000)) : "En curso"}</strong></div>
           <div className="rounded-xl bg-[#eef5fb] p-4"><span className="inline-flex items-center gap-2 text-sm font-bold text-[#1768b0]"><span className="h-2.5 w-2.5 rounded-full bg-[#2b82d9]" />{approvedCorrection && !exit ? "Salida corregida" : "Salida"}</span><strong className="mt-2 block font-display text-3xl text-[#0e1a26]">{effectiveExitAt ? time.format(effectiveExitAt) : "—"}</strong><p className="mt-2 flex items-center gap-2 text-xs text-[#607083]"><Fingerprint className="h-4 w-4" />{exit ? "Dispositivo e identidad verificados" : approvedCorrection ? "Corrección revisada por la empresa" : "Aún no registrada"}</p></div>
         </div>
       </section>
+
+      <AttendanceRouteMap
+        entry={{ latitude: entry.latitude, longitude: entry.longitude, accuracyMeters: entry.accuracyMeters, capturedAt: entry.capturedAt }}
+        exit={exit ? { latitude: exit.latitude, longitude: exit.longitude, accuracyMeters: exit.accuracyMeters, capturedAt: exit.capturedAt } : null}
+        samples={entry.locationSamples}
+      />
 
       <section className="grid gap-4 lg:grid-cols-3">
         <article className="rounded-2xl border border-[#dce5ed] bg-[#f4f8ff] p-5"><Clock3 className="h-5 w-5 text-[#1768b0]" /><p className="mt-3 text-xs font-bold uppercase tracking-[0.12em] text-[#52677a]">Horario esperado</p><strong className="mt-2 block text-lg text-[#0e1a26]">{schedule ? `${schedule.startTime} – ${schedule.endTime}` : "No configurado"}</strong><p className="mt-2 text-sm text-[#607083]">{schedule ? `Refrigerio: ${schedule.breakMinutes} minutos` : "La empresa aún no definió reglas de jornada."}</p></article>

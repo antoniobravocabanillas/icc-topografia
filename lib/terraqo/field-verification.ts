@@ -14,6 +14,8 @@ import { activeCompensation, calculateJornada } from "@/lib/terraqo/jornada";
 const SUPERVISOR_ROLES: TerraqoMemberRole[] = ["OWNER", "ADMIN", "MANAGER"];
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
 const MAX_LOCATION_ACCURACY_METERS = 150;
+const MAX_LOCATION_SAMPLES_PER_ATTENDANCE = 1_500;
+const LOCATION_TIME_TOLERANCE_MS = 2 * 60 * 1000;
 
 export class FieldVerificationError extends Error {
   constructor(message: string, public readonly status = 400, public readonly details?: unknown) {
@@ -557,6 +559,88 @@ export async function verifyAttendance(input: { userId: string; challengeId: str
     return created;
   }, { isolationLevel: "Serializable" });
   return { id: event.id, type: event.type, context: event.context, capturedAt: event.capturedAt, project: event.project };
+}
+
+export async function syncAttendanceLocationSamples(input: {
+  userId: string;
+  workspaceId: string;
+  attendanceId: string;
+  samples: Array<{
+    clientSampleId: string;
+    latitude: number;
+    longitude: number;
+    accuracyMeters: number;
+    capturedAt: string;
+  }>;
+}) {
+  await requireMembership(input.userId, input.workspaceId);
+  const entry = await prisma.terraqoAttendanceEvent.findFirst({
+    where: {
+      id: input.attendanceId,
+      userId: input.userId,
+      workspaceId: input.workspaceId,
+      type: "CHECK_IN",
+      status: "ACCEPTED",
+    },
+    select: { id: true, capturedAt: true, context: true, projectId: true },
+  });
+  if (!entry) throw new FieldVerificationError("La jornada no existe o no te pertenece.", 404);
+
+  const exit = await prisma.terraqoAttendanceEvent.findFirst({
+    where: {
+      userId: input.userId,
+      workspaceId: input.workspaceId,
+      context: entry.context,
+      projectId: entry.projectId,
+      type: "CHECK_OUT",
+      status: "ACCEPTED",
+      capturedAt: { gt: entry.capturedAt },
+    },
+    orderBy: { capturedAt: "asc" },
+    select: { capturedAt: true },
+  });
+  const earliest = entry.capturedAt.getTime() - LOCATION_TIME_TOLERANCE_MS;
+  const latest = (exit?.capturedAt.getTime() ?? Date.now()) + LOCATION_TIME_TOLERANCE_MS;
+  const validSamples = input.samples
+    .map((sample) => ({ ...sample, capturedAtDate: new Date(sample.capturedAt) }))
+    .filter((sample) => {
+      const capturedAt = sample.capturedAtDate.getTime();
+      return Number.isFinite(capturedAt)
+        && capturedAt >= earliest
+        && capturedAt <= latest
+        && sample.accuracyMeters <= MAX_LOCATION_ACCURACY_METERS;
+    });
+
+  if (!validSamples.length) {
+    return { accepted: 0, received: input.samples.length, rejected: input.samples.length };
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const existing = await tx.terraqoAttendanceLocationSample.count({
+      where: { attendanceEventId: entry.id },
+    });
+    const remaining = Math.max(0, MAX_LOCATION_SAMPLES_PER_ATTENDANCE - existing);
+    if (!remaining) throw new FieldVerificationError("La jornada alcanzó el límite de muestras de ubicación.", 409);
+    return tx.terraqoAttendanceLocationSample.createMany({
+      data: validSamples.slice(0, remaining).map((sample) => ({
+        attendanceEventId: entry.id,
+        userId: input.userId,
+        workspaceId: input.workspaceId,
+        clientSampleId: sample.clientSampleId,
+        latitude: sample.latitude,
+        longitude: sample.longitude,
+        accuracyMeters: sample.accuracyMeters,
+        capturedAt: sample.capturedAtDate,
+      })),
+      skipDuplicates: true,
+    });
+  }, { isolationLevel: "Serializable" });
+
+  return {
+    accepted: result.count,
+    received: input.samples.length,
+    rejected: input.samples.length - validSamples.length,
+  };
 }
 
 export async function requestWorklogValidation(input: {

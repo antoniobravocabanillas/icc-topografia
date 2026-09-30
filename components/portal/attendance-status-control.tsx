@@ -1,11 +1,12 @@
 "use client";
 
 import { startAuthentication } from "@simplewebauthn/browser";
-import { ArrowRight, BriefcaseBusiness, Clock3, LocateFixed, LogOut, MapPin, X } from "lucide-react";
+import { ArrowRight, BriefcaseBusiness, Clock3, LocateFixed, LogOut, MapPin, Navigation, WifiOff, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { useAttendanceLocationTracker } from "@/components/portal/use-attendance-location-tracker";
 import {
   formatElapsed,
   formatTime,
@@ -68,6 +69,7 @@ export function AttendanceStatusControl({ endpoint }: { endpoint: string }) {
   }, [status?.latestAttendance?.id, status?.latestAttendance?.type]);
 
   const active = status?.latestAttendance?.type === "CHECK_IN" ? status.latestAttendance : null;
+  const tracker = useAttendanceLocationTracker({ endpoint, attendanceId: active?.id || null });
   const project = useMemo(
     () => status?.projects.find((item) => item.id === active?.projectId),
     [active?.projectId, status?.projects],
@@ -75,9 +77,14 @@ export function AttendanceStatusControl({ endpoint }: { endpoint: string }) {
 
   async function registerExit() {
     if (!active) return;
+    if (!navigator.onLine) {
+      setMessage("Sigues sin conexión. Conservaremos el recorrido en este dispositivo y podrás cerrar la jornada al reconectarte.");
+      return;
+    }
     setBusy(true);
     setMessage("Confirmando tu ubicación…");
     try {
+      await tracker.flushQueued();
       const position = await currentPosition();
       const options = await requestFieldVerification<{
         challengeId: string;
@@ -100,6 +107,7 @@ export function AttendanceStatusControl({ endpoint }: { endpoint: string }) {
         challengeId: options.challengeId,
         response,
       });
+      await tracker.flushQueued();
       setMessage("Salida registrada correctamente.");
       await load();
       window.dispatchEvent(new CustomEvent("terraqo:attendance-updated"));
@@ -185,9 +193,29 @@ export function AttendanceStatusControl({ endpoint }: { endpoint: string }) {
               <div className="rounded-xl border border-[#dce5ed] p-3"><dt className="text-xs text-[#748596]">Ubicación</dt><dd className="mt-1 flex items-center gap-1.5 font-bold text-[#0e1a26]"><MapPin className="h-4 w-4 text-[#1768b0]" />{active.context === "PERSONAL_FIELD" ? "Capturada en cada marca" : project?.location || "Proyecto verificado"}</dd></div>
             </dl>
 
+            <div className={`mt-4 rounded-xl border px-3 py-3 ${tracker.state === "offline" ? "border-[#efd39e] bg-[#fff8ea]" : tracker.state === "blocked" || tracker.state === "error" ? "border-[#efc4c4] bg-[#fff4f4]" : "border-[#bde4d8] bg-[#effaf7]"}`}>
+              <div className="flex items-start gap-2.5">
+                {tracker.state === "offline" ? <WifiOff className="mt-0.5 h-4 w-4 shrink-0 text-[#a8670d]" aria-hidden="true" /> : <Navigation className="mt-0.5 h-4 w-4 shrink-0 text-[#087b70]" aria-hidden="true" />}
+                <div>
+                  <p className="text-sm font-bold text-[#0e1a26]">
+                    {tracker.state === "blocked" ? "Ubicación desactivada" : tracker.state === "error" ? "Seguimiento interrumpido" : tracker.state === "offline" ? "Recorrido guardándose sin conexión" : "Seguimiento de jornada activo"}
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-[#607083]">
+                    {tracker.state === "blocked"
+                      ? "Activa el permiso de ubicación para registrar el recorrido laboral."
+                      : tracker.state === "error"
+                        ? "Mantén esta pantalla abierta y revisa el permiso de ubicación del navegador."
+                        : tracker.state === "offline"
+                          ? `${tracker.pendingCount} punto(s) pendientes. Se sincronizarán automáticamente al recuperar internet.`
+                          : `Captura privada durante la jornada · ${tracker.syncedCount} punto(s) sincronizados${tracker.pendingCount ? ` · ${tracker.pendingCount} pendientes` : ""}.`}
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <div className="mt-5 grid gap-2">
-              <Button type="button" onClick={registerExit} disabled={busy} className="min-h-12 bg-[#087b70] text-white hover:bg-[#06675f]">
-                <LogOut className="mr-2 h-4 w-4" />{busy ? "Verificando…" : "Registrar salida"}
+              <Button type="button" onClick={registerExit} disabled={busy || tracker.state === "offline"} className="min-h-12 bg-[#087b70] text-white hover:bg-[#06675f]">
+                <LogOut className="mr-2 h-4 w-4" />{busy ? "Verificando…" : tracker.state === "offline" ? "Reconecta para registrar salida" : "Registrar salida"}
               </Button>
               <Button asChild variant="outline" className="min-h-12"><Link href={`/portal/jornadas/${active.id}`} onClick={() => setOpen(false)}><BriefcaseBusiness className="mr-2 h-4 w-4" />Ver detalle de jornada <ArrowRight className="ml-auto h-4 w-4" /></Link></Button>
             </div>

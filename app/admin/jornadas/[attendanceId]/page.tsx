@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { AttendanceRouteMap } from "@/components/terraqo/attendance-route-map";
 import { Input } from "@/components/ui/input";
 import { prisma } from "@/lib/prisma";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
@@ -55,6 +56,7 @@ export default async function CompanyAttendanceDetailPage({
     include: {
       user: { select: { id: true, name: true, email: true, image: true } },
       project: { select: { id: true, title: true, location: true } },
+      locationSamples: { orderBy: { capturedAt: "asc" }, take: 1500 },
       workRelationship: {
         include: {
           member: { select: { id: true, title: true } },
@@ -137,6 +139,12 @@ export default async function CompanyAttendanceDetailPage({
           <article className="rounded-xl bg-[#eef6fb] p-4"><span className="text-xs font-bold text-[#1768b0]">{correction && !exit ? "Salida corregida" : "Salida"}</span><strong className="mt-2 block font-display text-3xl">{effectiveExitAt ? timeLabel.format(effectiveExitAt) : "—"}</strong><p className="mt-2 text-xs text-[#607083]">{exit ? "Marca verificada" : correction ? "Corrección aprobada" : "Sin marca de salida"}</p></article>
         </div>
       </section>
+
+      <AttendanceRouteMap
+        entry={{ latitude: entry.latitude, longitude: entry.longitude, accuracyMeters: entry.accuracyMeters, capturedAt: entry.capturedAt }}
+        exit={exit ? { latitude: exit.latitude, longitude: exit.longitude, accuracyMeters: exit.accuracyMeters, capturedAt: exit.capturedAt } : null}
+        samples={entry.locationSamples}
+      />
 
       <section className="grid gap-4 lg:grid-cols-3">
         <article className="rounded-2xl bg-[#eef6fb] p-5"><Clock3 className="h-5 w-5 text-[#1768b0]" aria-hidden="true" /><p className="mt-3 text-xs font-bold uppercase tracking-[0.12em] text-[#52677a]">Horario esperado</p><strong className="mt-2 block text-lg">{schedule ? `${schedule.startTime} – ${schedule.endTime}` : "No configurado"}</strong><p className="mt-2 text-sm text-[#607083]">{schedule ? `Refrigerio: ${schedule.breakMinutes} minutos` : "Configura la relación laboral para calcular el período."}</p></article>

@@ -8,11 +8,12 @@ import {
   getFieldVerificationStatus,
   requestWorklogValidation,
   resolveWebAuthnContext,
+  syncAttendanceLocationSamples,
   verifyAttendance,
   verifyPasskeyRegistration,
   verifyWorklogValidation
 } from "@/lib/terraqo/field-verification";
-import { terraqoAttendanceOptionsSchema, terraqoWorklogValidationRequestSchema } from "@/lib/validations/terraqo";
+import { terraqoAttendanceLocationSyncSchema, terraqoAttendanceOptionsSchema, terraqoWorklogValidationRequestSchema } from "@/lib/validations/terraqo";
 
 const requestSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("status") }),
@@ -20,6 +21,7 @@ const requestSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("passkey_registration_verify"), challengeId: z.string().cuid(), response: z.record(z.unknown()), deviceName: z.string().trim().max(120).optional() }),
   z.object({ action: z.literal("attendance_options"), data: terraqoAttendanceOptionsSchema }),
   z.object({ action: z.literal("attendance_verify"), challengeId: z.string().cuid(), response: z.record(z.unknown()) }),
+  z.object({ action: z.literal("location_samples_sync"), data: terraqoAttendanceLocationSyncSchema }),
   z.object({ action: z.literal("request_worklog_validation"), worklogId: z.string().cuid(), data: terraqoWorklogValidationRequestSchema }),
   z.object({ action: z.literal("validation_options"), validationId: z.string().cuid() }),
   z.object({ action: z.literal("validation_verify"), challengeId: z.string().cuid(), response: z.record(z.unknown()) })
@@ -55,6 +57,13 @@ export async function runFieldVerificationAction(input: {
       return createAttendanceOptions({ userId: input.userId, workspaceId: input.workspaceId, context, location: body.data });
     case "attendance_verify":
       return verifyAttendance({ userId: input.userId, challengeId: body.challengeId, response: body.response as unknown as AuthenticationResponseJSON });
+    case "location_samples_sync":
+      return syncAttendanceLocationSamples({
+        userId: input.userId,
+        workspaceId: input.workspaceId,
+        attendanceId: body.data.attendanceId,
+        samples: body.data.samples,
+      });
     case "request_worklog_validation":
       return requestWorklogValidation({
         userId: input.userId,

@@ -811,6 +811,7 @@ model User {
   terraqoValidationRequests   TerraqoWorklogValidation[]       @relation("TerraqoValidationRequester")
   terraqoValidationsAssigned  TerraqoWorklogValidation[]       @relation("TerraqoValidationSupervisor")
   terraqoAttendanceEvents     TerraqoAttendanceEvent[]
+  terraqoAttendanceLocations  TerraqoAttendanceLocationSample[]
   terraqoBuilderAccount       TerraqoBuilderAccount?
   terraqoBuilderContributions TerraqoBuilderContribution[]
   terraqoFriendshipsRequested TerraqoFriendship[]              @relation("TerraqoFriendshipRequester")
@@ -2301,6 +2302,7 @@ model TerraqoWorkspace {
   webAuthnChallenges       TerraqoWebAuthnChallenge[]
   worklogValidations       TerraqoWorklogValidation[]
   attendanceEvents         TerraqoAttendanceEvent[]
+  attendanceLocations      TerraqoAttendanceLocationSample[]
   createdAt                DateTime                         @default(now())
   updatedAt                DateTime                         @updatedAt
   deletedAt                DateTime?
@@ -3110,12 +3112,34 @@ model TerraqoAttendanceEvent {
   capturedAt            DateTime                      @default(now())
   createdAt             DateTime                      @default(now())
   adjustments           TerraqoAttendanceAdjustment[]
+  locationSamples       TerraqoAttendanceLocationSample[]
 
   @@index([userId, workspaceId, capturedAt])
   @@index([professionalProfileId, projectId, capturedAt])
   @@index([professionalProfileId, context, capturedAt])
   @@index([workspaceId, status, capturedAt])
   @@index([workRelationshipId, capturedAt])
+  @@schema("icc")
+}
+
+model TerraqoAttendanceLocationSample {
+  id                String                 @id @default(cuid())
+  attendanceEventId String
+  attendanceEvent   TerraqoAttendanceEvent @relation(fields: [attendanceEventId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId       String
+  workspace         TerraqoWorkspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  clientSampleId    String
+  latitude          Float
+  longitude         Float
+  accuracyMeters    Float
+  capturedAt        DateTime
+  receivedAt        DateTime               @default(now())
+
+  @@unique([attendanceEventId, clientSampleId])
+  @@index([attendanceEventId, capturedAt])
+  @@index([userId, workspaceId, capturedAt])
   @@schema("icc")
 }
 
