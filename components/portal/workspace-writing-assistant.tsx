@@ -8,11 +8,12 @@ import {
   type CSSProperties,
 } from "react";
 import { createPortal } from "react-dom";
-import { Check, LoaderCircle, RotateCcw, X } from "lucide-react";
+import { Check, LoaderCircle, RotateCcw, Send, X } from "lucide-react";
 import { TerraqoWritingMark } from "@/components/terraqo/writing-mark";
 
 type EditableField = HTMLTextAreaElement | HTMLInputElement;
 type Suggestions = { corrected: string; improved: string; language: string };
+type UseAndSend = (text: string) => Promise<boolean>;
 type Placement = {
   left: number;
   top: number;
@@ -91,6 +92,7 @@ export function WorkspaceWritingAssistant() {
   const anchorRef = useRef<HTMLElement | null>(null);
   const requestRef = useRef<AbortController | null>(null);
   const sourceRef = useRef<{ field: EditableField; text: string } | null>(null);
+  const useAndSendRef = useRef<UseAndSend | null>(null);
   const [visible, setVisible] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [working, setWorking] = useState(false);
@@ -156,21 +158,69 @@ export function WorkspaceWritingAssistant() {
     });
   }, []);
 
+  const improve = useCallback(async (requestedField?: EditableField) => {
+    const field = requestedField || fieldRef.current;
+    const text = field?.value.trim() || "";
+    if (!field || !document.contains(field)) return setVisible(false);
+    setExpanded(true);
+    if (text.length < 3) {
+      setMessage("Escribe una idea breve y vuelve a intentarlo.");
+      return;
+    }
+    setWorking(true);
+    setMessage("");
+    setSuggestions(null);
+    requestRef.current?.abort();
+    const request = new AbortController();
+    requestRef.current = request;
+    sourceRef.current = { field, text: field.value };
+    try {
+      const response = await fetch("/api/terraqo/writing-assistant", {
+        signal: request.signal,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, purpose: inferPurpose(field) }),
+      });
+      const payload = await response.json();
+      if (request.signal.aborted || fieldRef.current !== field) return;
+      if (!response.ok)
+        throw new Error(payload?.error || "No pudimos revisar el texto.");
+      setSuggestions(payload.data);
+      setMessage(
+        `${payload.data.language} detectado · elige el acabado que prefieras`,
+      );
+    } catch (error) {
+      if (request.signal.aborted) return;
+      setMessage(
+        error instanceof Error ? error.message : "No pudimos revisar el texto.",
+      );
+    } finally {
+      if (requestRef.current === request) setWorking(false);
+      requestAnimationFrame(reposition);
+    }
+  }, [reposition]);
+
   useEffect(() => {
     const open = (event: Event) => {
       const detail = (
-        event as CustomEvent<{ field: EditableField; anchor: HTMLElement }>
+        event as CustomEvent<{
+          field: EditableField;
+          anchor: HTMLElement;
+          onUseAndSend?: UseAndSend;
+        }>
       ).detail;
       if (!isEditableProseField(detail?.field)) return;
       requestRef.current?.abort();
       fieldRef.current = detail.field;
       anchorRef.current = detail.anchor;
+      useAndSendRef.current = detail.onUseAndSend || null;
       setWorking(false);
       setMessage("");
       setSuggestions(null);
       setVisible(true);
       setExpanded(true);
       requestAnimationFrame(reposition);
+      requestAnimationFrame(() => void improve(detail.field));
     };
     const focus = (event: FocusEvent) => {
       if (!isEditableProseField(event.target)) return;
@@ -178,6 +228,7 @@ export function WorkspaceWritingAssistant() {
       requestRef.current?.abort();
       setWorking(false);
       anchorRef.current = null;
+      useAndSendRef.current = null;
       fieldRef.current = event.target;
       setMessage("");
       setSuggestions(null);
@@ -201,7 +252,7 @@ export function WorkspaceWritingAssistant() {
       window.removeEventListener("resize", move);
       window.removeEventListener("scroll", move, true);
     };
-  }, [reposition]);
+  }, [improve, reposition]);
 
   useEffect(() => {
     if (!expanded) return;
@@ -237,48 +288,7 @@ export function WorkspaceWritingAssistant() {
     };
   }, [expanded, reposition, suggestions]);
 
-  async function improve() {
-    if (working) return;
-    const field = fieldRef.current;
-    const text = field?.value.trim() || "";
-    if (!field || !document.contains(field)) return setVisible(false);
-    setExpanded(true);
-    if (text.length < 3)
-      return setMessage("Escribe una idea breve y vuelve a intentarlo.");
-    setWorking(true);
-    setMessage("");
-    setSuggestions(null);
-    requestRef.current?.abort();
-    const request = new AbortController();
-    requestRef.current = request;
-    sourceRef.current = { field, text: field.value };
-    try {
-      const response = await fetch("/api/terraqo/writing-assistant", {
-        signal: request.signal,
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, purpose: inferPurpose(field) }),
-      });
-      const payload = await response.json();
-      if (request.signal.aborted || fieldRef.current !== field) return;
-      if (!response.ok)
-        throw new Error(payload?.error || "No pudimos revisar el texto.");
-      setSuggestions(payload.data);
-      setMessage(
-        `${payload.data.language} detectado · elige el acabado que prefieras`,
-      );
-    } catch (error) {
-      if (request.signal.aborted) return;
-      setMessage(
-        error instanceof Error ? error.message : "No pudimos revisar el texto.",
-      );
-    } finally {
-      if (requestRef.current === request) setWorking(false);
-      requestAnimationFrame(reposition);
-    }
-  }
-
-  function applySuggestion(text: string) {
+  async function applySuggestion(text: string, sendAfterApply = false) {
     const field = fieldRef.current;
     if (!field || !document.contains(field)) return setVisible(false);
     // Suggestions belong to the exact draft used for generation, never a newer edit.
@@ -301,6 +311,23 @@ export function WorkspaceWritingAssistant() {
       return;
     }
     updateField(field, text);
+    sourceRef.current = { field, text };
+    if (sendAfterApply && useAndSendRef.current) {
+      setWorking(true);
+      setMessage("Enviando la versión elegida…");
+      try {
+        const sent = await useAndSendRef.current(text);
+        if (!sent) {
+          setMessage("No pudimos enviar el mensaje. Tu versión quedó lista para reintentar.");
+          return;
+        }
+      } catch {
+        setMessage("No pudimos enviar el mensaje. Tu versión quedó lista para reintentar.");
+        return;
+      } finally {
+        setWorking(false);
+      }
+    }
     setSuggestions(null);
     setExpanded(false);
   }
@@ -328,8 +355,7 @@ export function WorkspaceWritingAssistant() {
           style={launcherStyle}
           onPointerDown={(event) => event.preventDefault()}
           onClick={() => {
-            setExpanded(true);
-            requestAnimationFrame(reposition);
+            void improve();
           }}
           className="fixed z-[82] flex h-9 items-center gap-2 rounded-full border border-[#85a9d8]/60 bg-[#10253d]/95 px-2.5 text-[11px] font-bold text-white shadow-[0_10px_28px_rgba(16,37,61,.28)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-[#183b63]"
           aria-label="Abrir Pulso de redacción"
@@ -374,9 +400,8 @@ export function WorkspaceWritingAssistant() {
           {!suggestions ? (
             <div className="py-4">
               <p className="text-sm leading-6 text-[#43566a]">
-                Revisa únicamente el texto de este mensaje: una versión fiel a
-                tu idea y otra más profesional. Tú decides cuál usar; no se
-                envía automáticamente.
+                Pulso prepara al abrirse una versión fiel a tu idea y otra más
+                profesional. Tú conservas el control antes de usarla o enviarla.
               </p>
               {message ? (
                 <p
@@ -389,7 +414,7 @@ export function WorkspaceWritingAssistant() {
               <button
                 type="button"
                 onPointerDown={(event) => event.preventDefault()}
-                onClick={improve}
+                onClick={() => void improve()}
                 disabled={working}
                 className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#315f9f] via-[#4374ba] to-[#21a9c3] px-4 text-sm font-bold text-white transition hover:brightness-105 disabled:cursor-wait disabled:opacity-70"
               >
@@ -410,7 +435,7 @@ export function WorkspaceWritingAssistant() {
                 <button
                   type="button"
                   onPointerDown={(event) => event.preventDefault()}
-                  onClick={improve}
+                  onClick={() => void improve()}
                   className="inline-flex shrink-0 items-center gap-1 text-xs font-bold text-[#4374ba]"
                 >
                   <RotateCcw className="h-3.5 w-3.5" /> Rehacer
@@ -422,12 +447,16 @@ export function WorkspaceWritingAssistant() {
                   description="Ortografía, gramática y sintaxis; conserva tu forma de expresarte."
                   text={suggestions.corrected}
                   onApply={() => applySuggestion(suggestions.corrected)}
+                  onApplyAndSend={useAndSendRef.current ? () => applySuggestion(suggestions.corrected, true) : undefined}
+                  disabled={working}
                 />
                 <AssistantSuggestion
                   title="Versión profesional"
                   description="Más clara y sólida; mantiene hechos y esencia."
                   text={suggestions.improved}
                   onApply={() => applySuggestion(suggestions.improved)}
+                  onApplyAndSend={useAndSendRef.current ? () => applySuggestion(suggestions.improved, true) : undefined}
+                  disabled={working}
                 />
               </div>
             </>
@@ -456,11 +485,15 @@ function AssistantSuggestion({
   description,
   text,
   onApply,
+  onApplyAndSend,
+  disabled = false,
 }: {
   title: string;
   description: string;
   text: string;
   onApply: () => void;
+  onApplyAndSend?: () => void;
+  disabled?: boolean;
 }) {
   return (
     <article className="flex min-h-0 flex-col rounded-2xl border border-[#d8e2e8] bg-[#f7fafc] p-3">
@@ -469,14 +502,28 @@ function AssistantSuggestion({
       <p className="mt-3 max-h-40 flex-1 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-[#35485b]">
         {text}
       </p>
-      <button
-        type="button"
-        onPointerDown={(event) => event.preventDefault()}
-        onClick={onApply}
-        className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-[#4374ba]/25 bg-white px-3 text-xs font-bold text-[#315f9f] transition hover:bg-[#315f9f] hover:text-white"
-      >
-        <Check className="h-3.5 w-3.5" /> Usar esta versión
-      </button>
+      <div className={`mt-3 grid gap-2 ${onApplyAndSend ? "sm:grid-cols-2" : ""}`}>
+        <button
+          type="button"
+          disabled={disabled}
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={onApply}
+          className="inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-[#4374ba]/25 bg-white px-3 text-xs font-bold text-[#315f9f] transition hover:bg-[#315f9f] hover:text-white disabled:cursor-wait disabled:opacity-60"
+        >
+          <Check className="h-3.5 w-3.5" /> Usar
+        </button>
+        {onApplyAndSend ? (
+          <button
+            type="button"
+            disabled={disabled}
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={onApplyAndSend}
+            className="inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-[#0b6f68] px-3 text-xs font-bold text-white transition hover:bg-[#075c56] disabled:cursor-wait disabled:opacity-60"
+          >
+            {disabled ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} Usar y enviar
+          </button>
+        ) : null}
+      </div>
     </article>
   );
 }

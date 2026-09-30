@@ -10,9 +10,11 @@ export const composerToolClass =
 export function WritingAssistantTrigger({
   field,
   disabled,
+  onUseAndSend,
 }: {
   field: RefObject<HTMLTextAreaElement | null>;
   disabled?: boolean;
+  onUseAndSend?: (text: string) => Promise<boolean>;
 }) {
   return (
     <button
@@ -25,7 +27,11 @@ export function WritingAssistantTrigger({
         if (!field.current) return;
         document.dispatchEvent(
           new CustomEvent("terraqo:open-writing-assistant", {
-            detail: { field: field.current, anchor: event.currentTarget },
+            detail: {
+              field: field.current,
+              anchor: event.currentTarget,
+              onUseAndSend,
+            },
           }),
         );
       }}

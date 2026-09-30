@@ -348,10 +348,11 @@ function ConversationWorkspace({
     if (imageInputRef.current) imageInputRef.current.value = "";
   }
 
-  async function send(event?: FormEvent) {
+  async function send(event?: FormEvent, textOverride?: string): Promise<boolean> {
     event?.preventDefault();
-    if (!selected || sendingRef.current || recording || (!body.trim() && !file))
-      return;
+    const messageBody = textOverride ?? body;
+    if (!selected || sendingRef.current || recording || (!messageBody.trim() && !file))
+      return false;
     sendingRef.current = true;
     setSending(true);
     setError("");
@@ -362,7 +363,7 @@ function ConversationWorkspace({
             body: (() => {
               const form = new FormData();
               form.set("conversationId", selected.id);
-              form.set("body", body);
+              form.set("body", messageBody);
               form.set("file", file);
               if (durationMs) form.set("durationMs", String(durationMs));
               return form;
@@ -374,7 +375,7 @@ function ConversationWorkspace({
             body: JSON.stringify({
               action: "send",
               conversationId: selected.id,
-              body,
+              body: messageBody,
             }),
           });
       const payload = await response.json();
@@ -386,12 +387,14 @@ function ConversationWorkspace({
       clearAttachment();
       await refreshHub();
       window.dispatchEvent(new CustomEvent("terraqo:message-sent"));
+      return true;
     } catch (cause) {
       setError(
         cause instanceof Error
           ? cause.message
           : "No pudimos enviar el mensaje.",
       );
+      return false;
     } finally {
       sendingRef.current = false;
       setSending(false);
@@ -856,6 +859,7 @@ function ConversationWorkspace({
                           <WritingAssistantTrigger
                             disabled={sending || recording}
                             field={composerRef}
+                            onUseAndSend={(text) => send(undefined, text)}
                           />
                           <button
                             type="button"

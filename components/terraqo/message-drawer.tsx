@@ -130,12 +130,8 @@ export function MessageDrawer({ currentUserId }: { currentUserId: string }) {
   const selected =
     hub?.conversations.find((item) => item.id === selectedId) || null;
   const selectedPerson = selected ? other(selected, currentUserId) : null;
-  async function send(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!selected || sendingRef.current) return;
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    if (!String(data.get("body") || "").trim()) return;
+  async function sendMessage(messageBody: string): Promise<boolean> {
+    if (!selected || sendingRef.current || !messageBody.trim()) return false;
     sendingRef.current = true;
     setBusy(true);
     setError("");
@@ -146,7 +142,7 @@ export function MessageDrawer({ currentUserId }: { currentUserId: string }) {
         body: JSON.stringify({
           action: "send",
           conversationId: selected.id,
-          body: data.get("body"),
+          body: messageBody,
         }),
       });
       const payload = await response.json();
@@ -154,20 +150,26 @@ export function MessageDrawer({ currentUserId }: { currentUserId: string }) {
         throw new Error(
           payload?.error?.message || "No pudimos enviar el mensaje.",
         );
-      form.reset();
       setBody("");
       await load(selected.id);
       window.dispatchEvent(new CustomEvent("terraqo:message-sent"));
+      return true;
     } catch (cause) {
       setError(
         cause instanceof Error
           ? cause.message
           : "No pudimos enviar el mensaje.",
       );
+      return false;
     } finally {
       sendingRef.current = false;
       setBusy(false);
     }
+  }
+  async function send(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    await sendMessage(String(data.get("body") || ""));
   }
   return (
     <>
@@ -302,6 +304,7 @@ export function MessageDrawer({ currentUserId }: { currentUserId: string }) {
                   <WritingAssistantTrigger
                     field={composerRef}
                     disabled={busy}
+                    onUseAndSend={sendMessage}
                   />
                   <a
                     href={`/portal/mensajes?conversation=${selected.id}`}

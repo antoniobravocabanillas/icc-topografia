@@ -53,7 +53,7 @@ export function AccountAccessPanel({ loginTitle, loginDescription, socialProvide
             aria-hidden={!registering}
             inert={!registering}
           >
-            <ClientRegistrationForm embedded onSignIn={() => changeMode("login")} />
+            <ClientRegistrationForm embedded onSignIn={() => changeMode("login")} socialProviders={socialProviders} />
           </div>
         </div>
       </div>

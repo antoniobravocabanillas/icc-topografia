@@ -5,10 +5,11 @@ import { ArrowRight, BriefcaseBusiness, Building2, CheckCircle2, Eye, EyeOff, Ma
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { companyIndustries, professionalIdentityTypes, professionalRoles } from "@/lib/terraqo/registration-options";
+import { SocialAccess, type SocialProviders } from "@/components/auth/social-access";
 
 type AccountType = "client" | "professional";
 
-export function ClientRegistrationForm({ embedded = false, onSignIn, initialType = "professional" }: { embedded?: boolean; onSignIn?: () => void; initialType?: AccountType }) {
+export function ClientRegistrationForm({ embedded = false, onSignIn, initialType = "professional", socialProviders = { google: false, apple: false, microsoft: false } }: { embedded?: boolean; onSignIn?: () => void; initialType?: AccountType; socialProviders?: SocialProviders }) {
   const [accountType, setAccountType] = useState<AccountType>(initialType);
   const [identityType, setIdentityType] = useState("DNI");
   const [showPassword, setShowPassword] = useState(false);
@@ -68,6 +69,7 @@ export function ClientRegistrationForm({ embedded = false, onSignIn, initialType
         <button type="button" onClick={() => setAccountType("professional")} className={accountType === "professional" ? "is-active" : ""}><BriefcaseBusiness className="h-4 w-4" /><span><strong>Profesional</strong><small>Especialista independiente</small></span></button>
         <button type="button" onClick={() => setAccountType("client")} className={accountType === "client" ? "is-active" : ""}><Building2 className="h-4 w-4" /><span><strong>Empresa</strong><small>Organización o negocio</small></span></button>
       </div>
+      {accountType === "professional" ? <SocialAccess providers={socialProviders} intent="register" /> : null}
       <div className="grid gap-3.5">
         <Input name="name" required placeholder="Nombre y apellido" autoComplete="name" />
         <div className="grid gap-3.5 sm:grid-cols-2"><Input name="email" type="email" required placeholder="Correo" autoComplete="email" /><Input name="phone" placeholder="Teléfono / WhatsApp" autoComplete="tel" /></div>
