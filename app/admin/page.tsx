@@ -152,7 +152,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const todayEnd = new Date(todayStart.getTime() + 86_400_000);
   const [professionalCount, activeRelationships, pendingAttendanceApprovals, requestedAdjustments, submittedPeriods, attendanceToday] = await prisma.$transaction([
     prisma.terraqoWorkspaceMember.count({ where: { workspaceId: terraqoWorkspaceId, active: true, role: "PROFESSIONAL" } }),
-    prisma.terraqoWorkRelationship.count({ where: { workspaceId: terraqoWorkspaceId, status: "ACTIVE" } }),
+    prisma.terraqoWorkRelationship.count({ where: { workspaceId: terraqoWorkspaceId, status: "ACTIVE", member: { active: true } } }),
     prisma.terraqoAttendanceApproval.count({ where: { workRelationship: { workspaceId: terraqoWorkspaceId }, status: "PENDING" } }),
     prisma.terraqoAttendanceAdjustment.count({ where: { workRelationship: { workspaceId: terraqoWorkspaceId }, status: "REQUESTED" } }),
     prisma.terraqoAttendancePeriod.count({ where: { workRelationship: { workspaceId: terraqoWorkspaceId }, status: "SUBMITTED" } }),
