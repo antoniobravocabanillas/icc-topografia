@@ -94,3 +94,14 @@ export function formatMinutes(minutes: number) {
   const remainder = Math.max(0, minutes) % 60;
   return `${hours} h ${remainder.toString().padStart(2, "0")} min`;
 }
+
+export function isCompanyWorklogWithinJourney(input: {
+  worklog: { workspaceId: string | null; authorId: string; occurredAt: Date };
+  journey: { workspaceId: string; userId: string; entryAt: Date; exitAt: Date | null };
+}) {
+  if (input.worklog.workspaceId !== input.journey.workspaceId) return false;
+  if (input.worklog.authorId !== input.journey.userId) return false;
+  if (input.worklog.occurredAt < input.journey.entryAt) return false;
+  if (input.journey.exitAt && input.worklog.occurredAt > input.journey.exitAt) return false;
+  return true;
+}

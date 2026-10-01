@@ -16,7 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { prisma } from "@/lib/prisma";
 import { submitAttendancePeriodAction } from "@/lib/server/jornada-actions";
-import { formatMinutes } from "@/lib/terraqo/jornada";
+import { formatMinutes, isCompanyWorklogWithinJourney } from "@/lib/terraqo/jornada";
 import { requireProfessionalPortal } from "@/lib/terraqo/professional-portal";
 
 export const dynamic = "force-dynamic";
@@ -170,14 +170,11 @@ export default async function AttendanceHistoryPage({ searchParams }: PageProps)
         where: {
           authorId: session.user.id,
           professionalProfileId: profile.id,
+          workspaceId: { in: Array.from(new Set(sessions.map((item) => item.entry.workspaceId))) },
           deletedAt: null,
-          OR: [
-            { projectId: { in: Array.from(new Set(sessions.map((item) => item.projectId).filter((id): id is string => Boolean(id)))) } },
-            ...(sessions.some((item) => item.projectId === null) ? [{ projectId: null }] : []),
-          ],
           occurredAt: firstEntry ? { gte: firstEntry } : undefined,
         },
-        select: { id: true, title: true, occurredAt: true, projectId: true, evidenceStatus: true },
+        select: { id: true, title: true, occurredAt: true, projectId: true, workspaceId: true, authorId: true, evidenceStatus: true },
         orderBy: { occurredAt: "desc" },
       })
     : [];
@@ -261,7 +258,10 @@ export default async function AttendanceHistoryPage({ searchParams }: PageProps)
 
       <section className="space-y-3" aria-label="Historial de jornadas">
         {sessions.length ? sessions.map((item) => {
-          const relatedWorklogs = worklogs.filter((worklog) => worklog.projectId === item.projectId && worklog.occurredAt >= item.entry.capturedAt && (!item.exit || worklog.occurredAt <= item.exit.capturedAt));
+          const relatedWorklogs = worklogs.filter((worklog) => isCompanyWorklogWithinJourney({
+            worklog,
+            journey: { workspaceId: item.entry.workspaceId, userId: session.user.id, entryAt: item.entry.capturedAt, exitAt: item.exit?.capturedAt || null },
+          }));
           const workspaceName = item.entry.workspace.brandName || item.entry.workspace.name;
           return (
             <article key={item.id} className="overflow-hidden rounded-2xl border border-[#dce5ed] bg-white shadow-[0_10px_34px_rgba(14,26,38,0.04)]">

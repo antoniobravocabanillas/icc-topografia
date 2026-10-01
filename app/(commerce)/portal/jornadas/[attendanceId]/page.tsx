@@ -47,7 +47,7 @@ export default async function AttendanceDetailPage({ params, searchParams }: { p
   const calculation = calculateJornada({ entryAt: entry.capturedAt, exitAt: effectiveExitAt, schedule, compensation, approval });
   const endAt = effectiveExitAt || new Date();
   const worklogs = await prisma.terraqoWorklogEntry.findMany({
-    where: { authorId: session.user.id, professionalProfileId: profile.id, projectId: entry.projectId, deletedAt: null, occurredAt: { gte: entry.capturedAt, lte: endAt } },
+    where: { workspaceId: entry.workspaceId, authorId: session.user.id, professionalProfileId: profile.id, deletedAt: null, occurredAt: { gte: entry.capturedAt, lte: endAt } },
     select: { id: true, title: true, type: true, evidenceStatus: true, occurredAt: true, evidenceUrls: true },
     orderBy: { occurredAt: "asc" },
   });
@@ -82,7 +82,7 @@ export default async function AttendanceDetailPage({ params, searchParams }: { p
       </section>
 
       <section className="rounded-2xl border border-[#dce5ed] bg-white p-5">
-        <div className="flex items-center justify-between gap-4"><div><h2 className="font-display text-xl font-bold text-[#0e1a26]">Actividad durante la jornada</h2><p className="mt-1 text-sm text-[#607083]">Trabajo documentado dentro del intervalo de entrada y salida.</p></div><FileText className="h-5 w-5 text-[#1768b0]" /></div>
+        <div className="flex items-center justify-between gap-4"><div><h2 className="font-display text-xl font-bold text-[#0e1a26]">Actividad empresarial durante la jornada</h2><p className="mt-1 text-sm text-[#607083]">Bitácoras registradas para {workspaceName} dentro del intervalo de entrada y salida, tengan o no un proyecto fijo.</p></div><FileText className="h-5 w-5 text-[#1768b0]" /></div>
         {worklogs.length ? <ol className="mt-5 divide-y divide-[#edf1f4]">{worklogs.map((worklog) => <li key={worklog.id} className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-3"><span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#1768b0]" aria-hidden="true" /><div><span className="text-xs font-bold text-[#1768b0]">{time.format(worklog.occurredAt)} · {worklog.type.replaceAll("_", " ")}</span><h3 className="mt-1 font-bold text-[#0e1a26]">{worklog.title}</h3></div></div><span className="text-xs font-semibold text-[#607083]">{worklog.evidenceStatus === "VERIFIED" ? "Verificada" : worklog.evidenceUrls.length ? `${worklog.evidenceUrls.length} evidencia(s)` : "Bitácora"}</span></li>)}</ol> : <p className="mt-5 rounded-xl bg-[#f7f9fb] p-5 text-sm text-[#607083]">No se registraron bitácoras durante este intervalo.</p>}
       </section>
 
