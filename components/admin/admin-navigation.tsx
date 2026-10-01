@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   Bell,
+  Banknote,
   Bot,
   BriefcaseBusiness,
   Building2,
@@ -52,6 +53,7 @@ type AdminNavigationProps = {
 
 const icons = {
   activity: Activity,
+  banknote: Banknote,
   bell: Bell,
   bot: Bot,
   briefcase: BriefcaseBusiness,

@@ -3,6 +3,7 @@ import type { Role, TerraqoModuleCode } from "@prisma/client";
 export type AdminNavIcon =
   | "activity"
   | "bell"
+  | "banknote"
   | "bot"
   | "briefcase"
   | "building"
@@ -56,7 +57,9 @@ export const adminNavigation: AdminNavItem[] = [
   { group: "Comercial", label: "Ventas", href: "/admin/ventas", icon: "chart", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"], module: "CRM" },
   { group: "Operacion", label: "Proyectos", href: "/admin/proyectos", icon: "clipboard", roles: ["EDITOR", "ADMIN", "SUPER_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT"], module: "PROJECTS" },
   { group: "Operacion", label: "Tecnicos", href: "/admin/tecnicos", icon: "wrench", roles: ["ADMIN", "SUPER_ADMIN", "ENGINEER", "SURVEYOR", "ARCHITECT", "SUPPORT"], module: "PROFESSIONAL_NETWORK" },
-  { group: "Operacion", label: "Jornadas", href: "/admin/jornadas", icon: "activity", roles: ["ADMIN", "SUPER_ADMIN"] },
+  { group: "Personas", label: "Personas y desempeño", href: "/admin/personal", icon: "users", roles: ["ADMIN", "SUPER_ADMIN"] },
+  { group: "Personas", label: "Jornadas", href: "/admin/jornadas", icon: "activity", roles: ["ADMIN", "SUPER_ADMIN"] },
+  { group: "Personas", label: "Nómina y pagos", href: "/admin/nomina", icon: "banknote", roles: ["ADMIN", "SUPER_ADMIN"] },
   { group: "Soporte", label: "Tickets", href: "/admin/tickets", icon: "ticket", roles: ["SUPPORT", "TECHNICIAN", "SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"], module: "CUSTOMER_CHAT" },
   { group: "Catalogo", label: "Productos", href: "/admin/productos", icon: "package", roles: ["EDITOR", "ADMIN", "SUPER_ADMIN"], module: "TECHNICAL_STORE" },
   { group: "Catalogo", label: "Pedidos", href: "/admin/pedidos", icon: "shopping", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"], module: "TECHNICAL_STORE" },
@@ -70,7 +73,7 @@ export const adminNavigation: AdminNavItem[] = [
   { group: "Gestion", label: "Marca blanca", href: "/admin/workspace/marca", icon: "sparkles", roles: ["ADMIN", "SUPER_ADMIN"] },
   { group: "Gestion", label: "Perfil de empresa", href: "/admin/workspace/perfil", icon: "building", roles: ["ADMIN", "SUPER_ADMIN"] },
   { group: "Gestion", label: "Ubicaciones", href: "/admin/ubicaciones", icon: "workspace", roles: ["ADMIN", "SUPER_ADMIN"] },
-  { group: "Talento", label: "Profesionales", href: "/admin/terraqo/red", icon: "community", roles: ["ADMIN", "SUPER_ADMIN"], module: "PROFESSIONAL_NETWORK" },
+  { group: "Talento", label: "Red de profesionales", href: "/admin/terraqo/red", icon: "community", roles: ["SUPER_ADMIN"], module: "PROFESSIONAL_NETWORK" },
   { group: "Talento", label: "Formulario publico", href: "/admin/terraqo/red/formulario", icon: "clipboard", roles: ["ADMIN", "SUPER_ADMIN"], module: "PROFESSIONAL_NETWORK" },
   { group: "Talento", label: "Mensajes profesionales", href: "/admin/terraqo/mensajes", icon: "messages", roles: ["ADMIN", "SUPER_ADMIN"], module: "PROFESSIONAL_MESSAGING" },
   { group: "Talento", label: "Comunidad", href: "/admin/terraqo/comunidad", icon: "store", roles: ["ADMIN", "SUPER_ADMIN"], module: "FORUMS" },
