@@ -21,6 +21,7 @@
     "test:private-storage-isolation": "tsx scripts/test-private-storage-isolation.ts",
     "test:workforce-analytics": "tsx scripts/test-workforce-analytics.ts",
     "test:worklog-journey-linking": "tsx scripts/test-worklog-journey-linking.ts",
+    "test:attendance-policy": "tsx scripts/test-attendance-policy-engine.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",

@@ -10,8 +10,8 @@ import { Button } from "@/components/ui/button";
 export type VerificationStatus = {
   hasPasskey: boolean;
   workspace: { id: string; name: string };
-  membership: { role: string; title: string | null };
-  projects: Array<{ id: string; title: string; location: string | null; latitude: number | null; longitude: number | null; geofenceRadiusMeters: number; imageUrl: string | null }>;
+  membership: { role: string; title: string | null; currentProjectId: string | null };
+  projects: Array<{ id: string; title: string; location: string | null; latitude: number | null; longitude: number | null; geofenceRadiusMeters: number; geofencePolicy: "FIXED_RADIUS" | "LOCATION_ONLY"; imageUrl: string | null }>;
   latestAttendance: { id: string; type: "CHECK_IN" | "CHECK_OUT"; context: "PROJECT" | "PERSONAL_FIELD"; capturedAt: string; projectId: string | null; project: { title: string } | null } | null;
   recentAttendance: Array<{
     id: string;
@@ -83,7 +83,7 @@ export function FieldVerificationPanel({ endpoint, compact = false }: { endpoint
       setStatus(next);
       const active = next.latestAttendance?.type === "CHECK_IN" ? next.latestAttendance : null;
       setAttendanceContext(active?.context || (next.projects.length ? "PROJECT" : "PERSONAL_FIELD"));
-      setProjectId((current) => active?.projectId || current || next.projects[0]?.id || "");
+      setProjectId((current) => active?.projectId || current || next.membership.currentProjectId || next.projects[0]?.id || "");
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "No pudimos cargar asistencia y validaciones.");
     }
@@ -234,7 +234,7 @@ export function FieldVerificationPanel({ endpoint, compact = false }: { endpoint
               <div className="min-w-0">
                 <p className="truncate font-display text-lg font-bold text-[#0e1a26]">{currentContext === "PERSONAL_FIELD" ? "Jornada personal de campo" : selectedProject?.title || "Selecciona un proyecto"}</p>
                 <p className="truncate text-sm font-semibold text-[#52677a]">{status.workspace.name}</p>
-                <p className="mt-0.5 text-xs leading-5 text-[#748596]">{currentContext === "PERSONAL_FIELD" ? "Sin proyecto fijo · se capturará la ubicación en cada entrada y salida" : `${status.membership.title || "Profesional asignado"}${selectedProject?.location ? ` · ${selectedProject.location}` : ""}`}</p>
+                <p className="mt-0.5 text-xs leading-5 text-[#748596]">{currentContext === "PERSONAL_FIELD" ? "Sin proyecto fijo · se capturará la ubicación en cada entrada y salida" : `${status.membership.title || "Profesional asignado"}${selectedProject?.location ? ` · ${selectedProject.location}` : ""}${selectedProject?.geofencePolicy === "LOCATION_ONLY" ? " · cobertura móvil" : ""}`}</p>
                 {!activeAttendance && currentContext === "PROJECT" && status.projects.length > 1 ? <button type="button" onClick={() => setChangingProject((value) => !value)} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg border border-[#dce5ed] px-3 text-xs font-bold text-[#1768b0] transition hover:bg-[#edf5ff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1768b0]"><RefreshCw className="h-3.5 w-3.5" />Cambiar proyecto</button> : null}
               </div>
             </div>
@@ -255,7 +255,7 @@ export function FieldVerificationPanel({ endpoint, compact = false }: { endpoint
                 <div><p className="font-bold text-[#0e1a26]">Sin entrada registrada</p><p className="mt-1 text-sm text-[#607083]">Terraqo capturará hora, ubicación y dispositivo al iniciar.</p></div>
               )}
               <div className={`mt-4 grid gap-2 ${completedToday ? "" : "sm:grid-cols-2"}`}>
-                {!completedToday ? <Button type="button" onClick={registerAttendance} disabled={(currentContext === "PROJECT" && !projectId) || Boolean(busy)} className="min-h-11 order-1 sm:order-2">{activeAttendance ? <LogOut className="mr-2 h-4 w-4" /> : <LogIn className="mr-2 h-4 w-4" />}{busy === "attendance" ? "Verificando…" : activeAttendance ? "Registrar salida" : "Registrar entrada"}</Button> : null}
+                {!completedToday ? <Button type="button" onClick={registerAttendance} disabled={(currentContext === "PROJECT" && !projectId) || Boolean(busy)} className="min-h-11 order-1 sm:order-2">{activeAttendance ? <LogOut className="mr-2 h-4 w-4" /> : <LogIn className="mr-2 h-4 w-4" />}{busy === "attendance" ? "Verificando…" : activeAttendance ? "Marcar salida" : "Marcar entrada"}</Button> : null}
                 <Button asChild variant="outline" className="min-h-11 order-2 sm:order-1"><Link href={activeAttendance ? `/portal/jornadas/${activeAttendance.id}` : "/portal/jornadas"}>{activeAttendance ? "Ver detalle" : "Ver historial"} <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
               </div>
             </div>
@@ -293,7 +293,7 @@ export function FieldVerificationPanel({ endpoint, compact = false }: { endpoint
         </label>
         <Button type="button" onClick={registerAttendance} disabled={!status.hasPasskey || (attendanceContext === "PROJECT" && !projectId) || Boolean(busy)} className="h-11 min-w-48">
           {nextAttendanceType === "CHECK_IN" ? <LogIn className="mr-2 h-4 w-4" /> : <LogOut className="mr-2 h-4 w-4" />}
-          {busy === "attendance" ? "Verificando..." : nextAttendanceType === "CHECK_IN" ? "Registrar entrada" : "Registrar salida"}
+          {busy === "attendance" ? "Verificando..." : nextAttendanceType === "CHECK_IN" ? "Marcar entrada" : "Marcar salida"}
         </Button>
       </div>
 

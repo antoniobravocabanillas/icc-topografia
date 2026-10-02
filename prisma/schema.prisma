@@ -569,6 +569,20 @@ enum TerraqoAttendanceStatus {
   @@schema("icc")
 }
 
+enum TerraqoGeofencePolicy {
+  FIXED_RADIUS
+  LOCATION_ONLY
+
+  @@schema("icc")
+}
+
+enum TerraqoAttendanceDecisionSource {
+  SYSTEM
+  MANAGER
+
+  @@schema("icc")
+}
+
 enum TerraqoWorkRelationshipStatus {
   DRAFT
   ACTIVE
@@ -762,9 +776,9 @@ enum TerraqoFileCategory {
 
 model User {
   billingAccounts             TerraqoBillingAccount[]
-  id                          String                           @id @default(cuid())
+  id                          String                            @id @default(cuid())
   name                        String?
-  email                       String                           @unique
+  email                       String                            @unique
   emailVerified               DateTime?
   image                       String?
   passwordHash                String?
@@ -772,8 +786,8 @@ model User {
   onlineUntil                 DateTime?
   identityType                String?
   identityNumber              String?
-  identityKey                 String?                          @unique
-  role                        Role                             @default(CUSTOMER)
+  identityKey                 String?                           @unique
+  role                        Role                              @default(CUSTOMER)
   accounts                    Account[]
   sessions                    Session[]
   orders                      Order[]
@@ -788,36 +802,36 @@ model User {
   clientProfiles              Client[]
   clientAccounts              ClientAccount[]
   terraqoMemberships          TerraqoWorkspaceMember[]
-  ownedTerraqoWorkspaces      TerraqoWorkspace[]               @relation("TerraqoWorkspaceOwner")
+  ownedTerraqoWorkspaces      TerraqoWorkspace[]                @relation("TerraqoWorkspaceOwner")
   terraqoProfessionalProfile  TerraqoProfessionalProfile?
   terraqoForumPosts           TerraqoForumPost[]
   terraqoForumReplies         TerraqoForumReply[]
   terraqoApplications         TerraqoProjectApplication[]
-  terraqoWorklogs             TerraqoWorklogEntry[]            @relation("TerraqoWorklogAuthor")
+  terraqoWorklogs             TerraqoWorklogEntry[]             @relation("TerraqoWorklogAuthor")
   terraqoWorklogComments      TerraqoWorklogComment[]
   terraqoWorklogReactions     TerraqoWorklogReaction[]
-  terraqoConversationsCreated TerraqoConversation[]            @relation("TerraqoConversationCreator")
+  terraqoConversationsCreated TerraqoConversation[]             @relation("TerraqoConversationCreator")
   terraqoConversationMembers  TerraqoConversationParticipant[]
-  terraqoDirectMessages       TerraqoDirectMessage[]           @relation("TerraqoDirectMessageSender")
-  terraqoMeetingsCreated      TerraqoMeeting[]                 @relation("TerraqoMeetingCreator")
+  terraqoDirectMessages       TerraqoDirectMessage[]            @relation("TerraqoDirectMessageSender")
+  terraqoMeetingsCreated      TerraqoMeeting[]                  @relation("TerraqoMeetingCreator")
   terraqoMeetingParticipants  TerraqoMeetingParticipant[]
-  terraqoTeamsOwned           TerraqoTeam[]                    @relation("TerraqoTeamOwner")
-  terraqoTeamMemberships      TerraqoTeamMember[]              @relation("TerraqoTeamMemberUser")
-  terraqoTeamInvitationsSent  TerraqoTeamMember[]              @relation("TerraqoTeamMemberInviter")
+  terraqoTeamsOwned           TerraqoTeam[]                     @relation("TerraqoTeamOwner")
+  terraqoTeamMemberships      TerraqoTeamMember[]               @relation("TerraqoTeamMemberUser")
+  terraqoTeamInvitationsSent  TerraqoTeamMember[]               @relation("TerraqoTeamMemberInviter")
   terraqoPrivateNotes         TerraqoPrivateNote[]
   terraqoWorkspaceFiles       TerraqoWorkspaceFile[]
   terraqoPasskeys             TerraqoWebAuthnCredential[]
   terraqoWebAuthnChallenges   TerraqoWebAuthnChallenge[]
-  terraqoValidationRequests   TerraqoWorklogValidation[]       @relation("TerraqoValidationRequester")
-  terraqoValidationsAssigned  TerraqoWorklogValidation[]       @relation("TerraqoValidationSupervisor")
+  terraqoValidationRequests   TerraqoWorklogValidation[]        @relation("TerraqoValidationRequester")
+  terraqoValidationsAssigned  TerraqoWorklogValidation[]        @relation("TerraqoValidationSupervisor")
   terraqoAttendanceEvents     TerraqoAttendanceEvent[]
   terraqoAttendanceLocations  TerraqoAttendanceLocationSample[]
   terraqoBuilderAccount       TerraqoBuilderAccount?
   terraqoBuilderContributions TerraqoBuilderContribution[]
-  terraqoFriendshipsRequested TerraqoFriendship[]              @relation("TerraqoFriendshipRequester")
-  terraqoFriendshipsReceived  TerraqoFriendship[]              @relation("TerraqoFriendshipRecipient")
-  createdAt                   DateTime                         @default(now())
-  updatedAt                   DateTime                         @updatedAt
+  terraqoFriendshipsRequested TerraqoFriendship[]               @relation("TerraqoFriendshipRequester")
+  terraqoFriendshipsReceived  TerraqoFriendship[]               @relation("TerraqoFriendshipRecipient")
+  createdAt                   DateTime                          @default(now())
+  updatedAt                   DateTime                          @updatedAt
 
   @@index([onlineUntil])
   @@schema("icc")
@@ -1932,52 +1946,54 @@ model StaffProfile {
 }
 
 model Project {
-  id                   String                          @id @default(cuid())
-  title                String
-  slug                 String
-  clientId             String?
-  client               Client?                         @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  companyId            String?
-  company              Company?                        @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  opportunityId        String?
-  opportunity          Opportunity?                    @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
-  saleId               String?
-  sale                 Sale?                           @relation(fields: [saleId], references: [id], onDelete: SetNull)
-  terraqoWorkspaceId   String
-  terraqoWorkspace     TerraqoWorkspace                @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
-  clientName           String?
-  location             String?
-  category             String?
-  servicesApplied      String[]
-  summary              String
-  description          String
-  challenge            String?
-  solution             String?
-  results              String?
-  status               ProjectStatus                   @default(PLANNING)
-  isPublic             Boolean                         @default(false)
-  isFeatured           Boolean                         @default(false)
-  images               ProjectImage[]
-  members              ProjectMember[]
-  progress             ProjectProgress[]
-  milestones           Milestone[]
-  tasks                Task[]
-  documents            Document[]
-  activities           ActivityLog[]
-  terraqoExperiences   TerraqoProfessionalExperience[]
-  terraqoJobPosts      TerraqoJobPost[]
-  terraqoWorklogs      TerraqoWorklogEntry[]
-  terraqoConversations TerraqoConversation[]
-  terraqoMeetings      TerraqoMeeting[]
-  terraqoTeams         TerraqoTeam[]
-  worklogValidations   TerraqoWorklogValidation[]
-  attendanceEvents     TerraqoAttendanceEvent[]
-  latitude             Float?
-  longitude            Float?
-  geofenceRadiusMeters Int                             @default(250)
-  createdAt            DateTime                        @default(now())
-  updatedAt            DateTime                        @updatedAt
-  deletedAt            DateTime?
+  id                       String                          @id @default(cuid())
+  title                    String
+  slug                     String
+  clientId                 String?
+  client                   Client?                         @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  companyId                String?
+  company                  Company?                        @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  opportunityId            String?
+  opportunity              Opportunity?                    @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  saleId                   String?
+  sale                     Sale?                           @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  terraqoWorkspaceId       String
+  terraqoWorkspace         TerraqoWorkspace                @relation(fields: [terraqoWorkspaceId], references: [id], onDelete: Restrict)
+  clientName               String?
+  location                 String?
+  category                 String?
+  servicesApplied          String[]
+  summary                  String
+  description              String
+  challenge                String?
+  solution                 String?
+  results                  String?
+  status                   ProjectStatus                   @default(PLANNING)
+  isPublic                 Boolean                         @default(false)
+  isFeatured               Boolean                         @default(false)
+  images                   ProjectImage[]
+  members                  ProjectMember[]
+  progress                 ProjectProgress[]
+  milestones               Milestone[]
+  tasks                    Task[]
+  documents                Document[]
+  activities               ActivityLog[]
+  terraqoExperiences       TerraqoProfessionalExperience[]
+  terraqoJobPosts          TerraqoJobPost[]
+  terraqoWorklogs          TerraqoWorklogEntry[]
+  terraqoConversations     TerraqoConversation[]
+  terraqoMeetings          TerraqoMeeting[]
+  terraqoTeams             TerraqoTeam[]
+  worklogValidations       TerraqoWorklogValidation[]
+  attendanceEvents         TerraqoAttendanceEvent[]
+  currentWorkRelationships TerraqoWorkRelationship[]
+  latitude                 Float?
+  longitude                Float?
+  geofenceRadiusMeters     Int                             @default(250)
+  geofencePolicy           TerraqoGeofencePolicy           @default(FIXED_RADIUS)
+  createdAt                DateTime                        @default(now())
+  updatedAt                DateTime                        @updatedAt
+  deletedAt                DateTime?
 
   @@unique([terraqoWorkspaceId, slug])
   @@index([status, isPublic])
@@ -2231,31 +2247,31 @@ model ActivityLog {
 
 model TerraqoWorkspace {
   billingAccounts          TerraqoBillingAccount[]
-  id                       String                           @id @default(cuid())
+  id                       String                            @id @default(cuid())
   name                     String
-  slug                     String                           @unique
-  type                     TerraqoWorkspaceType             @default(CLIENT_COMPANY)
+  slug                     String                            @unique
+  type                     TerraqoWorkspaceType              @default(CLIENT_COMPANY)
   industry                 String?
   description              String?
   companyId                String?
-  company                  Company?                         @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  company                  Company?                          @relation(fields: [companyId], references: [id], onDelete: SetNull)
   ownerUserId              String?
-  owner                    User?                            @relation("TerraqoWorkspaceOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  owner                    User?                             @relation("TerraqoWorkspaceOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
   brandName                String?
   publicSlug               String?
   domain                   String?
   logoUrl                  String?
-  country                  String                           @default("PE")
+  country                  String                            @default("PE")
   region                   String?
   locationSubdivisionCode  String?
   locationCity             String?
   settings                 Json?
-  active                   Boolean                          @default(true)
+  active                   Boolean                           @default(true)
   modules                  TerraqoWorkspaceModule[]
   subscriptions            TerraqoSubscription[]
   members                  TerraqoWorkspaceMember[]
   workRelationships        TerraqoWorkRelationship[]
-  companies                Company[]                        @relation("TerraqoWorkspaceCompanies")
+  companies                Company[]                         @relation("TerraqoWorkspaceCompanies")
   contacts                 Contact[]
   clientAccounts           ClientAccount[]
   clients                  Client[]
@@ -2303,8 +2319,8 @@ model TerraqoWorkspace {
   worklogValidations       TerraqoWorklogValidation[]
   attendanceEvents         TerraqoAttendanceEvent[]
   attendanceLocations      TerraqoAttendanceLocationSample[]
-  createdAt                DateTime                         @default(now())
-  updatedAt                DateTime                         @updatedAt
+  createdAt                DateTime                          @default(now())
+  updatedAt                DateTime                          @updatedAt
   deletedAt                DateTime?
 
   @@index([publicSlug])
@@ -3089,19 +3105,19 @@ model TerraqoWorklogValidation {
 }
 
 model TerraqoAttendanceEvent {
-  id                    String                        @id @default(cuid())
+  id                    String                            @id @default(cuid())
   userId                String
-  user                  User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                  User                              @relation(fields: [userId], references: [id], onDelete: Cascade)
   professionalProfileId String
-  professionalProfile   TerraqoProfessionalProfile    @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
+  professionalProfile   TerraqoProfessionalProfile        @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
   workspaceId           String
-  workspace             TerraqoWorkspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace             TerraqoWorkspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   projectId             String?
-  project               Project?                      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  project               Project?                          @relation(fields: [projectId], references: [id], onDelete: SetNull)
   workRelationshipId    String?
-  workRelationship      TerraqoWorkRelationship?      @relation(fields: [workRelationshipId], references: [id], onDelete: SetNull)
+  workRelationship      TerraqoWorkRelationship?          @relation(fields: [workRelationshipId], references: [id], onDelete: SetNull)
   type                  TerraqoAttendanceType
-  context               TerraqoAttendanceContext      @default(PROJECT)
+  context               TerraqoAttendanceContext          @default(PROJECT)
   status                TerraqoAttendanceStatus
   latitude              Float
   longitude             Float
@@ -3109,8 +3125,11 @@ model TerraqoAttendanceEvent {
   distanceMeters        Float?
   geofenceRadiusMeters  Int?
   credentialId          String?
-  capturedAt            DateTime                      @default(now())
-  createdAt             DateTime                      @default(now())
+  networkFingerprint    String?
+  userAgentFingerprint  String?
+  riskFlags             String[]                          @default([])
+  capturedAt            DateTime                          @default(now())
+  createdAt             DateTime                          @default(now())
   adjustments           TerraqoAttendanceAdjustment[]
   locationSamples       TerraqoAttendanceLocationSample[]
 
@@ -3154,6 +3173,8 @@ model TerraqoWorkRelationship {
   contractType         String?
   modality             String?
   workSite             String?
+  currentProjectId     String?
+  currentProject       Project?                      @relation(fields: [currentProjectId], references: [id], onDelete: SetNull)
   startDate            DateTime?
   endDate              DateTime?
   configuredByUserId   String?
@@ -3168,6 +3189,7 @@ model TerraqoWorkRelationship {
   updatedAt            DateTime                      @updatedAt
 
   @@index([workspaceId, status])
+  @@index([currentProjectId])
   @@schema("icc")
 }
 
@@ -3241,20 +3263,23 @@ model TerraqoCompensationPolicy {
 }
 
 model TerraqoAttendanceApproval {
-  id                        String                        @id @default(cuid())
+  id                        String                          @id @default(cuid())
   workRelationshipId        String
-  workRelationship          TerraqoWorkRelationship       @relation(fields: [workRelationshipId], references: [id], onDelete: Cascade)
+  workRelationship          TerraqoWorkRelationship         @relation(fields: [workRelationshipId], references: [id], onDelete: Cascade)
   checkInEventId            String
   checkOutEventId           String?
-  regularMinutes            Int                           @default(0)
-  additionalDetectedMinutes Int                           @default(0)
-  additionalApprovedMinutes Int                           @default(0)
-  status                    TerraqoAttendanceReviewStatus @default(PENDING)
+  regularMinutes            Int                             @default(0)
+  additionalDetectedMinutes Int                             @default(0)
+  additionalApprovedMinutes Int                             @default(0)
+  status                    TerraqoAttendanceReviewStatus   @default(PENDING)
+  decisionSource            TerraqoAttendanceDecisionSource @default(SYSTEM)
+  requiresReview            Boolean                         @default(false)
+  riskFlags                 String[]                        @default([])
   reviewedByUserId          String?
   reviewNote                String?
   reviewedAt                DateTime?
-  createdAt                 DateTime                      @default(now())
-  updatedAt                 DateTime                      @updatedAt
+  createdAt                 DateTime                        @default(now())
+  updatedAt                 DateTime                        @updatedAt
 
   @@unique([checkInEventId])
   @@index([workRelationshipId, status, createdAt])

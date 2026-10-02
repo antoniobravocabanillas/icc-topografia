@@ -44,6 +44,30 @@ function breakMinutesForDay(schedule: TerraqoWorkSchedule | null, date: Date) {
   return weekday === "Sat" ? schedule.saturdayBreakMinutes : schedule.breakMinutes;
 }
 
+function limaDateKey(date: Date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Lima",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function scheduledWindow(schedule: TerraqoWorkSchedule | null, date: Date) {
+  if (!schedule) return null;
+  const weekday = new Intl.DateTimeFormat("en-US", { timeZone: schedule.timezone, weekday: "short" }).format(date);
+  const isSaturday = weekday === "Sat";
+  const startClock = isSaturday && schedule.saturdayStartTime ? schedule.saturdayStartTime : schedule.startTime;
+  const endClock = isSaturday && schedule.saturdayEndTime ? schedule.saturdayEndTime : schedule.endTime;
+  // Terraqo's current labor engine is scoped to Peru. Lima has no daylight-saving
+  // transitions, so the explicit offset keeps payroll calculations deterministic.
+  const dateKey = limaDateKey(date);
+  return {
+    start: new Date(`${dateKey}T${startClock}:00-05:00`),
+    end: new Date(`${dateKey}T${endClock}:00-05:00`),
+  };
+}
+
 export function calculateJornada(input: {
   entryAt: Date;
   exitAt: Date | null;
@@ -58,8 +82,14 @@ export function calculateJornada(input: {
   const expected = expectedMinutesForDay(input.schedule, input.entryAt);
   const breakMinutes = input.schedule && expected !== 0 ? breakMinutesForDay(input.schedule, input.entryAt) : 0;
   const registeredMinutes = Math.max(0, elapsed - breakMinutes);
-  const regularMinutes = expected === null ? registeredMinutes : Math.min(registeredMinutes, expected);
-  const additionalDetectedMinutes = expected === null ? 0 : Math.max(0, registeredMinutes - expected);
+  const window = scheduledWindow(input.schedule, input.entryAt);
+  const overlapMinutes = window && expected !== 0
+    ? Math.max(0, Math.floor((Math.min(input.exitAt.getTime(), window.end.getTime()) - Math.max(input.entryAt.getTime(), window.start.getTime())) / 60_000))
+    : 0;
+  const regularMinutes = expected === null
+    ? registeredMinutes
+    : Math.min(expected, Math.max(0, overlapMinutes - breakMinutes));
+  const additionalDetectedMinutes = expected === null ? 0 : Math.max(0, registeredMinutes - regularMinutes);
   const additionalApprovedMinutes = input.approval?.status === "APPROVED" || input.approval?.status === "PARTIALLY_APPROVED"
     ? input.approval.additionalApprovedMinutes
     : 0;

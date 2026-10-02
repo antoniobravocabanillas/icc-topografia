@@ -7,6 +7,7 @@ type ProjectCoordinateFieldsProps = {
   latitude?: string;
   longitude?: string;
   radius?: string;
+  policy?: "FIXED_RADIUS" | "LOCATION_ONLY";
 };
 
 function parseCoordinate(value: string) {
@@ -30,7 +31,7 @@ function parseCoordinate(value: string) {
   return Number(decimalDegrees.toFixed(8)).toString();
 }
 
-export function ProjectCoordinateFields({ latitude, longitude, radius }: ProjectCoordinateFieldsProps) {
+export function ProjectCoordinateFields({ latitude, longitude, radius, policy = "FIXED_RADIUS" }: ProjectCoordinateFieldsProps) {
   const [lat, setLat] = useState(latitude || "");
   const [lng, setLng] = useState(longitude || "");
   const example = useMemo(() => `12° 7'19.62"S / 77° 2'18.58"W`, []);
@@ -43,6 +44,14 @@ export function ProjectCoordinateFields({ latitude, longitude, radius }: Project
           Pega las coordenadas como aparecen en Google Earth. Terraqo las convierte a decimal para validar entradas, salidas y distancia al punto de trabajo.
         </p>
       </div>
+      <label className="grid gap-2 md:col-span-3">
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Política de ubicación</span>
+        <select name="geofencePolicy" defaultValue={policy} className="min-h-11 rounded-md border bg-background px-3 text-sm font-medium">
+          <option value="FIXED_RADIUS">Radio fijo · bloquear marcas fuera del área</option>
+          <option value="LOCATION_ONLY">Cobertura móvil o nacional · capturar ubicación sin bloquear</option>
+        </select>
+        <span className="text-xs leading-5 text-muted-foreground">Usa cobertura móvil para cuadrillas que viajan o prestan servicios en distintas sedes. La ubicación siempre se registra y queda auditable.</span>
+      </label>
       <label className="grid gap-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Latitud Google Earth</span>
         <Input
@@ -67,7 +76,7 @@ export function ProjectCoordinateFields({ latitude, longitude, radius }: Project
       </label>
       <label className="grid gap-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Radio permitido</span>
-        <Input name="geofenceRadiusMeters" type="number" min="25" max="5000" step="1" placeholder="Radio en metros" defaultValue={radius || "250"} />
+        <Input name="geofenceRadiusMeters" type="number" min="25" max="2000000" step="1" placeholder="Radio en metros" defaultValue={radius || "250"} />
       </label>
       <Input name="latitude" type="number" step="any" min="-90" max="90" placeholder="Latitud decimal" value={lat} onChange={(event) => setLat(event.target.value)} />
       <Input name="longitude" type="number" step="any" min="-180" max="180" placeholder="Longitud decimal" value={lng} onChange={(event) => setLng(event.target.value)} />

@@ -215,7 +215,7 @@ export function AttendanceStatusControl({ endpoint }: { endpoint: string }) {
 
             <div className="mt-5 grid gap-2">
               <Button type="button" onClick={registerExit} disabled={busy || tracker.state === "offline"} className="min-h-12 bg-[#087b70] text-white hover:bg-[#06675f]">
-                <LogOut className="mr-2 h-4 w-4" />{busy ? "Verificando…" : tracker.state === "offline" ? "Reconecta para registrar salida" : "Registrar salida"}
+                <LogOut className="mr-2 h-4 w-4" />{busy ? "Verificando…" : tracker.state === "offline" ? "Reconecta para marcar salida" : "Marcar salida"}
               </Button>
               <Button asChild variant="outline" className="min-h-12"><Link href={`/portal/jornadas/${active.id}`} onClick={() => setOpen(false)}><BriefcaseBusiness className="mr-2 h-4 w-4" />Ver detalle de jornada <ArrowRight className="ml-auto h-4 w-4" /></Link></Button>
             </div>

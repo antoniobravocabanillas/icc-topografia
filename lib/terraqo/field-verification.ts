@@ -8,6 +8,7 @@ import {
 } from "@simplewebauthn/server";
 import type { Prisma, TerraqoAttendanceContext, TerraqoAttendanceType, TerraqoMemberRole, TerraqoWebAuthnPurpose } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import type { AttendanceRequestFingerprint } from "@/lib/terraqo/request-fingerprint";
 import { awardAutomatedBuilderContribution, consumeBuilderValidationCredit, syncWorklogReputation } from "@/lib/terraqo/builders";
 import { activeCompensation, calculateJornada } from "@/lib/terraqo/jornada";
 
@@ -74,7 +75,7 @@ export function resolveWebAuthnContext(input: {
 async function requireMembership(userId: string, workspaceId: string) {
   const membership = await prisma.terraqoWorkspaceMember.findFirst({
     where: { userId, workspaceId, active: true, workspace: { active: true, deletedAt: null } },
-    include: { workspace: { select: { id: true, name: true, brandName: true, domain: true } } }
+    include: { workspace: { select: { id: true, name: true, brandName: true, domain: true } }, workRelationship: { select: { currentProjectId: true } } }
   });
   if (!membership) throw new FieldVerificationError("No perteneces al workspace seleccionado.", 403);
   return membership;
@@ -125,7 +126,8 @@ export async function getFieldVerificationStatus(userId: string, workspaceId: st
         deletedAt: null,
         OR: [
           { terraqoExperiences: { some: { professionalProfileId: profile.id } } },
-          { terraqoJobPosts: { some: { applications: { some: { professionalProfileId: profile.id, status: "ACCEPTED" } } } } }
+          { terraqoJobPosts: { some: { applications: { some: { professionalProfileId: profile.id, status: "ACCEPTED" } } } } },
+          { currentWorkRelationships: { some: { member: { userId, active: true }, status: "ACTIVE" } } }
         ]
       },
       select: {
@@ -135,6 +137,7 @@ export async function getFieldVerificationStatus(userId: string, workspaceId: st
         latitude: true,
         longitude: true,
         geofenceRadiusMeters: true,
+        geofencePolicy: true,
         images: { select: { url: true }, orderBy: { position: "asc" }, take: 1 }
       },
       orderBy: { updatedAt: "desc" }
@@ -189,7 +192,7 @@ export async function getFieldVerificationStatus(userId: string, workspaceId: st
     : latestAttendance;
 
   return {
-    membership: { role: membership.role, title: membership.title },
+    membership: { role: membership.role, title: membership.title, currentProjectId: membership.workRelationship?.currentProjectId || null },
     workspace: {
       id: membership.workspace.id,
       name: membership.workspace.brandName || membership.workspace.name
@@ -374,10 +377,11 @@ async function requireAssignedProject(userId: string, workspaceId: string, proje
       deletedAt: null,
       OR: [
         { terraqoExperiences: { some: { professionalProfileId: profile.id } } },
-        { terraqoJobPosts: { some: { applications: { some: { professionalProfileId: profile.id, status: "ACCEPTED" } } } } }
+        { terraqoJobPosts: { some: { applications: { some: { professionalProfileId: profile.id, status: "ACCEPTED" } } } } },
+        { currentWorkRelationships: { some: { member: { userId, active: true }, status: "ACTIVE" } } }
       ]
     },
-    select: { id: true, title: true, latitude: true, longitude: true, geofenceRadiusMeters: true }
+    select: { id: true, title: true, latitude: true, longitude: true, geofenceRadiusMeters: true, geofencePolicy: true }
   });
   if (!project) throw new FieldVerificationError("El proyecto no esta asignado a tu perfil.", 403);
   return { project, profile };
@@ -388,6 +392,7 @@ export async function createAttendanceOptions(input: {
   workspaceId: string;
   context: WebAuthnContext;
   location: LocationPayload;
+  fingerprint: AttendanceRequestFingerprint;
 }) {
   await requireMembership(input.userId, input.workspaceId);
   const assignment = input.location.context === "PROJECT" && input.location.projectId
@@ -402,10 +407,10 @@ export async function createAttendanceOptions(input: {
   if (input.location.context === "PROJECT" && !project) {
     throw new FieldVerificationError("Selecciona un proyecto asignado para esta jornada.", 422);
   }
-  if (project && (project.latitude === null || project.longitude === null)) {
+  if (project?.geofencePolicy === "FIXED_RADIUS" && (project.latitude === null || project.longitude === null)) {
     throw new FieldVerificationError("La ubicacion de este proyecto aun no fue configurada por la empresa.", 409, { code: "GEOFENCE_NOT_CONFIGURED" });
   }
-  const distanceMeters = project
+  const distanceMeters = project && project.latitude !== null && project.longitude !== null
     ? haversineMeters(input.location.latitude, input.location.longitude, project.latitude!, project.longitude!)
     : null;
   const geofenceRadiusMeters = project?.geofenceRadiusMeters ?? null;
@@ -426,7 +431,7 @@ export async function createAttendanceOptions(input: {
     await prisma.terraqoAttendanceEvent.create({ data: { ...eventBase, status: "LOCATION_UNAVAILABLE" } });
     throw new FieldVerificationError("No pudimos obtener una ubicacion suficientemente precisa. Activa la ubicacion exacta e intenta nuevamente.", 422, { code: "LOCATION_ACCURACY", accuracyMeters: input.location.accuracyMeters });
   }
-  if (project && distanceMeters !== null && distanceMeters > project.geofenceRadiusMeters + input.location.accuracyMeters) {
+  if (project?.geofencePolicy === "FIXED_RADIUS" && distanceMeters !== null && distanceMeters > project.geofenceRadiusMeters + input.location.accuracyMeters) {
     await prisma.terraqoAttendanceEvent.create({ data: { ...eventBase, status: "OUTSIDE_GEOFENCE" } });
     throw new FieldVerificationError("No estas en tu trabajo.", 422, { code: "OUTSIDE_GEOFENCE", distanceMeters: Math.round(distanceMeters), radiusMeters: project.geofenceRadiusMeters });
   }
@@ -447,13 +452,13 @@ export async function createAttendanceOptions(input: {
     workspaceId: input.workspaceId,
     purpose: "ATTENDANCE",
     context: input.context,
-    payload: { ...input.location, projectId: project?.id ?? null, distanceMeters, geofenceRadiusMeters }
+    payload: { ...input.location, projectId: project?.id ?? null, distanceMeters, geofenceRadiusMeters, geofencePolicy: project?.geofencePolicy ?? null, ...input.fingerprint }
   });
 }
 
-export async function verifyAttendance(input: { userId: string; challengeId: string; response: AuthenticationResponseJSON }) {
+export async function verifyAttendance(input: { userId: string; challengeId: string; response: AuthenticationResponseJSON; fingerprint: AttendanceRequestFingerprint }) {
   const { challenge, credential } = await verifyAuthentication({ ...input, purpose: "ATTENDANCE" });
-  const payload = challenge.payload as unknown as LocationPayload & { projectId: string | null; distanceMeters: number | null; geofenceRadiusMeters: number | null };
+  const payload = challenge.payload as unknown as LocationPayload & { projectId: string | null; distanceMeters: number | null; geofenceRadiusMeters: number | null; geofencePolicy: "FIXED_RADIUS" | "LOCATION_ONLY" | null; networkFingerprint: string | null; userAgentFingerprint: string | null };
   if (!challenge.workspaceId || !payload?.context) throw new FieldVerificationError("La solicitud de asistencia esta incompleta.", 422);
   const assignment = payload.context === "PROJECT" && payload.projectId
     ? await requireAssignedProject(input.userId, challenge.workspaceId, payload.projectId)
@@ -485,7 +490,7 @@ export async function verifyAttendance(input: { userId: string; challengeId: str
         status: "ACCEPTED"
       },
       orderBy: { capturedAt: "desc" },
-      select: { type: true, context: true, projectId: true }
+      select: { type: true, context: true, projectId: true, networkFingerprint: true, userAgentFingerprint: true }
     });
     const expectedType: TerraqoAttendanceType = latest?.type === "CHECK_IN" ? "CHECK_OUT" : "CHECK_IN";
     if (payload.type !== expectedType) {
@@ -495,6 +500,10 @@ export async function verifyAttendance(input: { userId: string; challengeId: str
       throw new FieldVerificationError("La jornada activa pertenece a otro contexto de trabajo. Actualiza e intenta nuevamente.", 409, { code: "ATTENDANCE_CONTEXT_CHANGED" });
     }
 
+    const riskFlags = [
+      ...(latest?.networkFingerprint && input.fingerprint.networkFingerprint && latest.networkFingerprint !== input.fingerprint.networkFingerprint ? ["NETWORK_CHANGED"] : []),
+      ...(latest?.userAgentFingerprint && input.fingerprint.userAgentFingerprint && latest.userAgentFingerprint !== input.fingerprint.userAgentFingerprint ? ["BROWSER_CHANGED"] : []),
+    ];
     const created = await tx.terraqoAttendanceEvent.create({
       data: {
         userId: input.userId,
@@ -511,6 +520,9 @@ export async function verifyAttendance(input: { userId: string; challengeId: str
         distanceMeters: payload.distanceMeters,
         geofenceRadiusMeters: payload.geofenceRadiusMeters,
         credentialId: credential.credentialId,
+        networkFingerprint: input.fingerprint.networkFingerprint,
+        userAgentFingerprint: input.fingerprint.userAgentFingerprint,
+        riskFlags,
         capturedAt
       },
       include: { project: { select: { title: true } } }
@@ -537,12 +549,26 @@ export async function verifyAttendance(input: { userId: string; challengeId: str
           schedule: relationship.schedules[0] || null,
           compensation,
         });
+        const hasAdditional = calculation.additionalDetectedMinutes > 0;
+        const automaticAdditional = compensation?.additionalHoursPolicy === "AUTOMATIC";
+        const automaticallyApproved = !hasAdditional || automaticAdditional;
+        const reviewNote = automaticallyApproved
+          ? "Clasificación automática según horario y política laboral vigente."
+          : "Horas adicionales pendientes de autorización empresarial.";
         await tx.terraqoAttendanceApproval.upsert({
           where: { checkInEventId: entry.id },
           update: {
             checkOutEventId: created.id,
             regularMinutes: calculation.regularMinutes,
             additionalDetectedMinutes: calculation.additionalDetectedMinutes,
+            additionalApprovedMinutes: automaticallyApproved ? calculation.additionalDetectedMinutes : 0,
+            status: automaticallyApproved ? "APPROVED" : "PENDING",
+            decisionSource: "SYSTEM",
+            requiresReview: riskFlags.length > 0 || (hasAdditional && automaticAdditional),
+            riskFlags,
+            reviewedByUserId: null,
+            reviewedAt: null,
+            reviewNote,
           },
           create: {
             workRelationshipId: relationship.id,
@@ -550,8 +576,12 @@ export async function verifyAttendance(input: { userId: string; challengeId: str
             checkOutEventId: created.id,
             regularMinutes: calculation.regularMinutes,
             additionalDetectedMinutes: calculation.additionalDetectedMinutes,
-            status: compensation?.additionalHoursPolicy === "AUTOMATIC" ? "APPROVED" : "PENDING",
-            additionalApprovedMinutes: compensation?.additionalHoursPolicy === "AUTOMATIC" ? calculation.additionalDetectedMinutes : 0,
+            status: automaticallyApproved ? "APPROVED" : "PENDING",
+            additionalApprovedMinutes: automaticallyApproved ? calculation.additionalDetectedMinutes : 0,
+            decisionSource: "SYSTEM",
+            requiresReview: riskFlags.length > 0 || (hasAdditional && automaticAdditional),
+            riskFlags,
+            reviewNote,
           }
         });
       }
@@ -572,6 +602,7 @@ export async function syncAttendanceLocationSamples(input: {
     accuracyMeters: number;
     capturedAt: string;
   }>;
+  fingerprint: AttendanceRequestFingerprint;
 }) {
   await requireMembership(input.userId, input.workspaceId);
   const entry = await prisma.terraqoAttendanceEvent.findFirst({
@@ -582,9 +613,12 @@ export async function syncAttendanceLocationSamples(input: {
       type: "CHECK_IN",
       status: "ACCEPTED",
     },
-    select: { id: true, capturedAt: true, context: true, projectId: true },
+    select: { id: true, capturedAt: true, context: true, projectId: true, userAgentFingerprint: true },
   });
   if (!entry) throw new FieldVerificationError("La jornada no existe o no te pertenece.", 404);
+  if (entry.userAgentFingerprint && input.fingerprint.userAgentFingerprint && entry.userAgentFingerprint !== input.fingerprint.userAgentFingerprint) {
+    throw new FieldVerificationError("El recorrido se sincroniza desde el navegador que marcó la entrada. Puedes marcar la salida desde este dispositivo.", 409, { code: "LOCATION_TRACKER_OWNED_BY_ANOTHER_BROWSER" });
+  }
 
   const exit = await prisma.terraqoAttendanceEvent.findFirst({
     where: {

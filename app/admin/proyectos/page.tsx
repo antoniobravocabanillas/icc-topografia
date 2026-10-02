@@ -174,6 +174,7 @@ export default async function AdminProjectsPage({ searchParams }: AdminProjectsP
                   latitude: project.latitude?.toString() || "",
                   longitude: project.longitude?.toString() || "",
                   geofenceRadiusMeters: project.geofenceRadiusMeters.toString(),
+                  geofencePolicy: project.geofencePolicy,
                   category: project.category || "",
                   servicesApplied: project.servicesApplied.join("\n"),
                   summary: project.summary,
@@ -240,6 +241,7 @@ function ProjectForm({
     latitude: string;
     longitude: string;
     geofenceRadiusMeters: string;
+    geofencePolicy: "FIXED_RADIUS" | "LOCATION_ONLY";
     category: string;
     servicesApplied: string;
     summary: string;
@@ -259,7 +261,7 @@ function ProjectForm({
       <Input name="slug" placeholder="slug-url" defaultValue={defaults?.slug} />
       <ProjectClientFields clients={clients} defaultClientId={defaults?.clientId} defaultClientName={defaults?.clientName} />
       <Input name="location" placeholder="Ubicacion" defaultValue={defaults?.location} />
-      <ProjectCoordinateFields latitude={defaults?.latitude} longitude={defaults?.longitude} radius={defaults?.geofenceRadiusMeters} />
+      <ProjectCoordinateFields latitude={defaults?.latitude} longitude={defaults?.longitude} radius={defaults?.geofenceRadiusMeters} policy={defaults?.geofencePolicy} />
       <select name="category" defaultValue={defaults?.category || ""} className="h-11 rounded-md border bg-background px-3 text-sm">
         <option value="">Seleccionar rubro</option>
         {categories.map((category) => (

@@ -1,6 +1,7 @@
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from "@simplewebauthn/types";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { attendanceRequestFingerprint } from "@/lib/terraqo/request-fingerprint";
 import {
   createAttendanceOptions,
   createPasskeyRegistrationOptions,
@@ -40,6 +41,7 @@ export async function runFieldVerificationAction(input: {
   });
   if (!workspace) throw new Error("Workspace no encontrado.");
   const context = resolveWebAuthnContext({ request: input.request, workspace, portalOrigin: input.portalOrigin });
+  const fingerprint = attendanceRequestFingerprint(input.request);
 
   switch (body.action) {
     case "status":
@@ -54,15 +56,16 @@ export async function runFieldVerificationAction(input: {
         deviceName: body.deviceName
       });
     case "attendance_options":
-      return createAttendanceOptions({ userId: input.userId, workspaceId: input.workspaceId, context, location: body.data });
+      return createAttendanceOptions({ userId: input.userId, workspaceId: input.workspaceId, context, location: body.data, fingerprint });
     case "attendance_verify":
-      return verifyAttendance({ userId: input.userId, challengeId: body.challengeId, response: body.response as unknown as AuthenticationResponseJSON });
+      return verifyAttendance({ userId: input.userId, challengeId: body.challengeId, response: body.response as unknown as AuthenticationResponseJSON, fingerprint });
     case "location_samples_sync":
       return syncAttendanceLocationSamples({
         userId: input.userId,
         workspaceId: input.workspaceId,
         attendanceId: body.data.attendanceId,
         samples: body.data.samples,
+        fingerprint,
       });
     case "request_worklog_validation":
       return requestWorklogValidation({

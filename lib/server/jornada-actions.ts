@@ -64,6 +64,12 @@ export async function configureWorkRelationshipAction(formData: FormData) {
   if (saturdayStartTime && saturdayEndTime && clockMinutes(saturdayEndTime) <= clockMinutes(saturdayStartTime)) throw new Error("La salida del sábado debe ser posterior a la entrada.");
   const baseAmount = money(formData, "baseAmount");
   const hourlyReferenceAmount = money(formData, "hourlyReferenceAmount");
+  const currentProjectId = text(formData, "currentProjectId") || null;
+  if (currentProjectId) {
+    const project = await prisma.project.findFirst({ where: { id: currentProjectId, terraqoWorkspaceId: workspaceId, deletedAt: null }, select: { id: true } });
+    if (!project) throw new Error("La obra o proyecto seleccionado no pertenece al workspace activo.");
+  }
+  const additionalHoursPolicy = text(formData, "additionalHoursPolicy") === "REQUIRES_APPROVAL" ? "REQUIRES_APPROVAL" : "AUTOMATIC";
   const now = new Date();
 
   await prisma.$transaction(async (tx) => {
@@ -75,6 +81,7 @@ export async function configureWorkRelationshipAction(formData: FormData) {
         contractType: text(formData, "contractType") || null,
         modality: text(formData, "modality") || null,
         workSite: text(formData, "workSite") || null,
+        currentProjectId,
         startDate: text(formData, "startDate") ? new Date(`${text(formData, "startDate")}T12:00:00Z`) : null,
         configuredByUserId: userId,
         confirmedAt: now,
@@ -87,6 +94,7 @@ export async function configureWorkRelationshipAction(formData: FormData) {
         contractType: text(formData, "contractType") || null,
         modality: text(formData, "modality") || null,
         workSite: text(formData, "workSite") || null,
+        currentProjectId,
         startDate: text(formData, "startDate") ? new Date(`${text(formData, "startDate")}T12:00:00Z`) : null,
         configuredByUserId: userId,
         confirmedAt: now,
@@ -118,7 +126,7 @@ export async function configureWorkRelationshipAction(formData: FormData) {
         currency: "PEN",
         frequency: text(formData, "frequency") === "HOURLY" ? "HOURLY" : text(formData, "frequency") === "DAILY" ? "DAILY" : "MONTHLY",
         paymentDay: Math.min(31, Math.max(1, integer(formData, "paymentDay", 28))),
-        additionalHoursPolicy: "REQUIRES_APPROVAL",
+        additionalHoursPolicy,
         hourlyReferenceAmount,
         effectiveFrom: now,
         confirmedAt: now,
@@ -130,7 +138,7 @@ export async function configureWorkRelationshipAction(formData: FormData) {
   revalidatePath("/admin/jornadas");
   revalidatePath("/portal/relacion-laboral");
   revalidatePath("/portal/jornadas");
-  redirect("/admin/jornadas?success=relationship");
+  return;
 }
 
 export async function savePersonalCompensationAction(formData: FormData) {
@@ -191,10 +199,12 @@ export async function reviewAttendanceAction(formData: FormData) {
   const approval = await prisma.terraqoAttendanceApproval.findFirst({ where: { id: approvalId, workRelationship: { workspaceId } }, select: { id: true, additionalDetectedMinutes: true } });
   if (!approval) throw new Error("Jornada no disponible.");
   const approved = Math.min(approval.additionalDetectedMinutes, Math.max(0, integer(formData, "additionalApprovedMinutes")));
-  await prisma.terraqoAttendanceApproval.update({ where: { id: approval.id }, data: { status: approved === approval.additionalDetectedMinutes ? "APPROVED" : approved > 0 ? "PARTIALLY_APPROVED" : "REJECTED", additionalApprovedMinutes: approved, reviewedByUserId: userId, reviewNote: text(formData, "reviewNote") || null, reviewedAt: new Date() } });
+  await prisma.terraqoAttendanceApproval.update({ where: { id: approval.id }, data: { status: approved === approval.additionalDetectedMinutes ? "APPROVED" : approved > 0 ? "PARTIALLY_APPROVED" : "REJECTED", additionalApprovedMinutes: approved, decisionSource: "MANAGER", requiresReview: false, reviewedByUserId: userId, reviewNote: text(formData, "reviewNote") || null, reviewedAt: new Date() } });
   revalidatePath("/admin/jornadas");
   revalidatePath("/portal/jornadas");
-  redirect("/admin/jornadas?success=approval");
+  // Keep the user on the current admin surface. A server-action redirect through
+  // the custom admin host could resolve against the wrong deployment route.
+  return;
 }
 
 export async function reviewAttendanceAdjustmentAction(formData: FormData) {
@@ -224,13 +234,18 @@ export async function reviewAttendanceAdjustmentAction(formData: FormData) {
         schedule: adjustment.workRelationship.schedules[0] || null,
         compensation,
       });
+      const hasAdditional = calculation.additionalDetectedMinutes > 0;
+      const automaticAdditional = compensation?.additionalHoursPolicy === "AUTOMATIC";
+      const automaticallyApproved = !hasAdditional || automaticAdditional;
       await tx.terraqoAttendanceApproval.upsert({
         where: { checkInEventId: adjustment.attendanceEvent.id },
         update: {
           regularMinutes: calculation.regularMinutes,
           additionalDetectedMinutes: calculation.additionalDetectedMinutes,
-          status: compensation?.additionalHoursPolicy === "AUTOMATIC" ? "APPROVED" : "PENDING",
-          additionalApprovedMinutes: compensation?.additionalHoursPolicy === "AUTOMATIC" ? calculation.additionalDetectedMinutes : 0,
+          status: automaticallyApproved ? "APPROVED" : "PENDING",
+          additionalApprovedMinutes: automaticallyApproved ? calculation.additionalDetectedMinutes : 0,
+          decisionSource: "SYSTEM",
+          requiresReview: hasAdditional && automaticAdditional,
           reviewedByUserId: null,
           reviewNote: "Recalculada desde una incidencia aprobada.",
           reviewedAt: null,
@@ -240,8 +255,10 @@ export async function reviewAttendanceAdjustmentAction(formData: FormData) {
           checkInEventId: adjustment.attendanceEvent.id,
           regularMinutes: calculation.regularMinutes,
           additionalDetectedMinutes: calculation.additionalDetectedMinutes,
-          status: compensation?.additionalHoursPolicy === "AUTOMATIC" ? "APPROVED" : "PENDING",
-          additionalApprovedMinutes: compensation?.additionalHoursPolicy === "AUTOMATIC" ? calculation.additionalDetectedMinutes : 0,
+          status: automaticallyApproved ? "APPROVED" : "PENDING",
+          additionalApprovedMinutes: automaticallyApproved ? calculation.additionalDetectedMinutes : 0,
+          decisionSource: "SYSTEM",
+          requiresReview: hasAdditional && automaticAdditional,
           reviewNote: "Calculada desde una incidencia aprobada.",
         },
       });
@@ -249,7 +266,7 @@ export async function reviewAttendanceAdjustmentAction(formData: FormData) {
   }, { isolationLevel: "Serializable" });
   revalidatePath("/admin/jornadas");
   revalidatePath("/portal/jornadas");
-  redirect("/admin/jornadas?success=incident");
+  return;
 }
 
 function periodRange(periodKey: string) {
@@ -302,5 +319,5 @@ export async function reviewAttendancePeriodAction(formData: FormData) {
   await prisma.terraqoAttendancePeriod.update({ where: { id: period.id }, data: { status: "APPROVED", reviewedByUserId: userId, reviewedAt: new Date(), reviewNote: text(formData, "reviewNote") || null } });
   revalidatePath("/admin/jornadas");
   revalidatePath("/portal/jornadas");
-  redirect("/admin/jornadas?success=period");
+  return;
 }
