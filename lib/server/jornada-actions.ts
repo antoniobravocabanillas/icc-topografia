@@ -141,6 +141,51 @@ export async function configureWorkRelationshipAction(formData: FormData) {
   return;
 }
 
+export type WorkRelationshipFormState = {
+  status: "idle" | "success" | "error";
+  message: string;
+  submissionId: number;
+};
+
+export async function configureWorkRelationshipFormAction(
+  _previousState: WorkRelationshipFormState,
+  formData: FormData,
+): Promise<WorkRelationshipFormState> {
+  try {
+    await configureWorkRelationshipAction(formData);
+    const automatic = text(formData, "additionalHoursPolicy") === "AUTOMATIC";
+
+    return {
+      status: "success",
+      message: automatic
+        ? "Configuración guardada. Las horas extra preautorizadas se clasificarán y aprobarán automáticamente."
+        : "Configuración guardada. Las horas extra quedarán pendientes de autorización.",
+      submissionId: Date.now(),
+    };
+  } catch (error) {
+    const safeMessages = new Set([
+      "Acceso administrativo requerido.",
+      "El colaborador no pertenece al workspace activo.",
+      "La hora de salida debe ser posterior a la entrada.",
+      "Selecciona al menos un día laborable.",
+      "Completa ambas horas del sábado.",
+      "La salida del sábado debe ser posterior a la entrada.",
+      "La obra o proyecto seleccionado no pertenece al workspace activo.",
+      "Monto inválido.",
+      "Horario inválido.",
+    ]);
+    const message = error instanceof Error && safeMessages.has(error.message)
+      ? error.message
+      : "No se pudo guardar la configuración. Revisa los datos e inténtalo nuevamente.";
+
+    return {
+      status: "error",
+      message,
+      submissionId: Date.now(),
+    };
+  }
+}
+
 export async function savePersonalCompensationAction(formData: FormData) {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Sesión requerida.");
