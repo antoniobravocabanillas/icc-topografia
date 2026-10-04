@@ -5,8 +5,9 @@ import { prisma } from "@/lib/prisma";
 import { hasWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 import type { WorkspacePortalToken } from "./workspace-portal-session";
 import { listProfessionalProfile, updateProfessionalProfile } from "./portal-professional-profile";
+import { listCvEntries, saveCvEntry } from "./portal-cv-entries";
 
-export const resourceCodes = ["clients", "leads", "notes", "tasks", "files", "worklogs", "quotes", "orders", "notifications", "profile"] as const;
+export const resourceCodes = ["clients", "leads", "notes", "tasks", "files", "worklogs", "quotes", "orders", "notifications", "profile", "experiences", "education"] as const;
 export type ResourceCode = typeof resourceCodes[number];
 export class PortalResourceError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
@@ -14,9 +15,10 @@ export class PortalResourceError extends Error {
 // Personal workspace files retain the existing portal ownership and quota policy;
 // PROJECTS/DOCUMENTS entitlements refer to project documents, a different resource.
 const modules = { clients: "CRM", leads: "CRM", notes: null, tasks: "PROJECTS", files: null,
-  worklogs: "PROFESSIONAL_NETWORK", quotes: "CRM", orders: "TECHNICAL_STORE", notifications: null, profile: "PROFESSIONAL_NETWORK" } as const;
+  worklogs: "PROFESSIONAL_NETWORK", quotes: "CRM", orders: "TECHNICAL_STORE", notifications: null, profile: "PROFESSIONAL_NETWORK",
+  experiences: "PROFESSIONAL_NETWORK", education: "PROFESSIONAL_NETWORK" } as const;
 export async function authorizeResource(token: WorkspacePortalToken, resource: ResourceCode) {
-  if (resource === "profile" && token.role !== "PROFESSIONAL")
+  if (["profile", "experiences", "education"].includes(resource) && token.role !== "PROFESSIONAL")
     throw new PortalResourceError("Esta sección requiere tu cuenta profesional.", 403);
   if (["clients", "leads", "tasks"].includes(resource) && token.role !== "ADMIN")
     throw new PortalResourceError("Esta sección requiere administración empresarial.", 403);
@@ -58,6 +60,7 @@ function record(row: Row, resource: ResourceCode, actorId?: string) {
 export async function listPortalResource(token: WorkspacePortalToken, resource: ResourceCode, cursor?: string) {
   await authorizeResource(token, resource);
   if (resource === "profile") return listProfessionalProfile(token);
+  if (resource === "experiences" || resource === "education") return listCvEntries(token, resource, cursor);
   const window = { take: 31, orderBy: { id: "asc" as const }, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}) };
   const tenant = { terraqoWorkspaceId: token.workspaceId, deletedAt: null };
   let rows: Row[];
@@ -97,6 +100,7 @@ export async function listPortalResource(token: WorkspacePortalToken, resource: 
 export async function savePortalResource(token: WorkspacePortalToken, resource: ResourceCode,
   input: unknown, key: string | null, id?: string, version?: string) {
   await authorizeResource(token, resource);
+  if (resource === "experiences" || resource === "education") return saveCvEntry(token, resource, input, key, id, version);
   if (resource === "profile") {
     const saved = await updateProfessionalProfile(token, input, id, version);
     if (saved.failure === "missing") throw new PortalResourceError("Perfil no disponible.", 404);

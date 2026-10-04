@@ -73,6 +73,28 @@ async function main() {
         const persisted = await prisma.terraqoProfessionalProfile.findUniqueOrThrow({ where: { userId: user.id }, select: { liveCvEnabled: true, liveCvVisibility: true, bankCci: true } });
         assert.equal(persisted.liveCvEnabled, false); assert.equal(persisted.liveCvVisibility, "PRIVATE"); assert.equal(persisted.bankCci, null);
         console.log("PASS real professional profile: edit, stale rejection, restricted-field rejection and publication privacy preserved.");
+        for (const resource of ["experiences", "education"] as const) {
+          const fields = resource === "experiences" ? { title: "Trabajo temporal", companyName: "Empresa de prueba", role: "Topógrafo", summary: "Entrada de prueba",
+            startedAt: "2020-01-01", endedAt: "2021-12-31", currentlyWorking: "false" } : { institution: "Instituto de prueba", degree: "Geomática",
+            field: "Topografía", startedAt: "2022-01-01", endedAt: "2023-12-31", currentlyStudying: "false" };
+          const key = randomBytes(16).toString("hex");
+          const responses = await Promise.all(Array.from({ length: 4 }, () => call(`resources/${resource}`, fixture.token, { fields }, key)));
+          for (const response of responses) assert.equal(response.status, 200, "Concurrent CV creation/replay must succeed without duplication.");
+          const entries = await Promise.all(responses.map(response => response.json()));
+          const entry = entries[0].data.record;
+          assert.ok(entries.every(result => result.data.record.id === entry.id)); assert.equal(entry.fields.visibility, "PRIVATE");
+          assert.equal(entry.fields.verificationStatus, "NOT_REQUESTED");
+          assert.equal(await prisma.activityLog.count({ where: { entityId: entry.id, entityType: "ProfessionalCv", actorId: user.id } }), 1);
+          const command = { id: entry.id, version: entry.updatedAt, fields: { ...fields, endedAt: "2024-01-01" } };
+          const edited = await call(`resources/${resource}`, fixture.token, command); assert.equal(edited.status, 200);
+          assert.equal((await call(`resources/${resource}`, fixture.token, command)).status, 409);
+          assert.equal((await call(`resources/${resource}`, fixture.token, { fields: { ...fields, visibility: "PUBLIC" } }, randomBytes(16).toString("hex"))).status, 422);
+          const updated = (await edited.json()).data.record;
+          if (resource === "experiences") await prisma.terraqoProfessionalExperience.update({ where: { id: entry.id }, data: { verificationStatus: "APPROVED", verifiedByTerraqo: true } });
+          else await prisma.terraqoProfessionalEducation.update({ where: { id: entry.id }, data: { verificationStatus: "APPROVED" } });
+          assert.equal((await call(`resources/${resource}`, fixture.token, { ...command, version: updated.updatedAt })).status, 403);
+          console.log(`PASS real ${resource}: concurrent idempotency, edit, stale/private-field rejection and verified-entry protection.`);
+        }
       } else assert.equal((await call("resources/profile", fixture.token)).status, 403);
       if (role === "ADMIN") {
         assert.ok(privateFileId);
@@ -109,6 +131,7 @@ async function main() {
       await prisma.verificationToken.deleteMany({ where: { identifier: { in: [`portal-session:${workspace.id}:${user.id}`, `portal-login-attempt:${workspace.id}:${user.id}`] } } });
     }
     await prisma.activityLog.deleteMany({ where: { taskId, terraqoWorkspaceId: workspace.id, actorId: { in: users.map(user => user.id) } } });
+    await prisma.activityLog.deleteMany({ where: { entityType: "ProfessionalCv", terraqoWorkspaceId: workspace.id, actorId: { in: users.map(user => user.id) } } });
     await prisma.project.deleteMany({ where: { id: projectId, terraqoWorkspaceId: workspace.id, slug: `mobile-test-${run}` } });
     if (clientId) await prisma.client.deleteMany({ where: { id: clientId, terraqoWorkspaceId: workspace.id } });
     for (const user of users) await prisma.user.delete({ where: { id: user.id } });

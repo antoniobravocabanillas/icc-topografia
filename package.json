@@ -51,6 +51,7 @@
     "test:portal-task-edit": "tsx scripts/test-portal-task-edit.ts",
     "test:portal-login-limit": "tsx scripts/test-portal-login-limit.ts",
     "test:portal-profile": "tsx scripts/test-portal-profile.ts",
+    "test:portal-cv": "tsx scripts/test-portal-cv.ts",
     "test:icc-mobile-flows": "tsx scripts/test-icc-mobile-flows.ts",
     "test:icc-native-login": "tsx scripts/test-icc-native-login.ts",
     "test:icc-login-limit": "tsx scripts/test-icc-login-limit.ts"

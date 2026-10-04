@@ -36,7 +36,7 @@ export async function updateProfessionalProfile(token: WorkspacePortalToken, inp
     const current = await tx.terraqoProfessionalProfile.findFirst({ where: { id, userId: token.sub }, select: { id: true } });
     if (!current) return { failure: "missing" as const };
     const changed = await tx.terraqoProfessionalProfile.updateMany({ where: { id, userId: token.sub, updatedAt: new Date(version) },
-      data: { ...data, headline: data.headline || null, bio: data.bio || null } });
+      data: { ...data, headline: data.headline || null, bio: data.bio || null, generatedSummary: null, generatedSummaryUpdatedAt: null } });
     if (changed.count !== 1) return { failure: "version" as const };
     const saved = await tx.terraqoProfessionalProfile.findFirstOrThrow({ where: { id, userId: token.sub }, select });
     return { record: record(saved) };
