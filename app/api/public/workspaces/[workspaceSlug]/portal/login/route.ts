@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { fail, handleApiError, ok, parseJson } from "@/lib/server/api";
 import { createRevocablePortalToken } from "@/lib/server/workspace-portal-session";
 import { toWorkspacePortalRole } from "@/lib/server/workspace-portal-policy";
+import { reservePortalLoginAttempt, PORTAL_LOGIN_WINDOW_SECONDS } from "@/lib/server/portal-login-limit";
 
 type RouteContext = { params: Promise<{ workspaceSlug: string }> };
 
@@ -37,11 +38,15 @@ export async function POST(request: Request, { params }: RouteContext) {
       },
     });
 
-    const passwordIsValid = user?.passwordHash ? await bcrypt.compare(payload.password, user.passwordHash) : false;
     const membership = user?.terraqoMemberships[0];
-    if (!user || !passwordIsValid || !membership) {
+    if (!user?.passwordHash || !membership) {
       return fail("El correo o la contrasena no son correctos para este portal.", 401);
     }
+    if (!await reservePortalLoginAttempt(workspace.id, user.id)) return Response.json({ error: {
+      message: "Demasiados intentos. Espera unos minutos antes de volver a ingresar.",
+    } }, { status: 429, headers: { "Retry-After": String(PORTAL_LOGIN_WINDOW_SECONDS), "Cache-Control": "private, no-store" } });
+    if (!await bcrypt.compare(payload.password, user.passwordHash))
+      return fail("El correo o la contrasena no son correctos para este portal.", 401);
 
     const role = toWorkspacePortalRole(membership.role);
     if (!role) return fail("Tu membresia no permite acceder a este portal.", 403);

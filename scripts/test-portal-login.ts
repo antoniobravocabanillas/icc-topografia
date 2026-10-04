@@ -7,7 +7,11 @@ import { verifyWorkspacePortalToken } from "../lib/server/workspace-portal-sessi
 
 async function main() {
   process.env.AUTH_SECRET = randomBytes(32).toString("hex");
-  const originals = { workspace: prisma.terraqoWorkspace.findFirst, user: prisma.user.findUnique, grant: prisma.verificationToken.create };
+  const originals = { workspace: prisma.terraqoWorkspace.findFirst, user: prisma.user.findUnique, grant: prisma.verificationToken.create, transaction: prisma.$transaction };
+  let limited = false;
+  const limitClient = { $queryRaw: async () => [], verificationToken: { deleteMany: async () => ({ count: 0 }),
+    count: async () => limited ? 8 : 0, create: async () => ({}) } };
+  prisma.$transaction = (async (operation: (client: typeof limitClient) => Promise<unknown>) => operation(limitClient)) as unknown as typeof originals.transaction;
   prisma.verificationToken.create = (async (args: { data: { identifier: string; token: string; expires: Date } }) => {
     assert.equal(args.data.identifier, "portal-session:fixture-workspace:fixture-user");
     assert.match(args.data.token, /^[a-f0-9]{64}$/);
@@ -50,11 +54,14 @@ async function main() {
     assert.equal((await login()).status, 401);
     membershipRole = "OWNER";
     assert.equal((await login(randomBytes(16).toString("hex"))).status, 401);
+    limited = true; const blocked = await login(); assert.equal(blocked.status, 429);
+    assert.equal(blocked.headers.get("retry-after"), "600");
     console.log("PASS: actual login route preserves all legitimate roles and never promotes MEMBER, VIEWER or unknown roles.");
   } finally {
     prisma.terraqoWorkspace.findFirst = originals.workspace;
     prisma.user.findUnique = originals.user;
     prisma.verificationToken.create = originals.grant;
+    prisma.$transaction = originals.transaction;
     await prisma.$disconnect();
   }
 }
