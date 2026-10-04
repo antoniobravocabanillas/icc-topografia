@@ -54,6 +54,7 @@
     "test:portal-cv": "tsx scripts/test-portal-cv.ts",
     "test:icc-mobile-flows": "tsx scripts/test-icc-mobile-flows.ts",
     "test:icc-native-login": "tsx scripts/test-icc-native-login.ts",
+    "test:icc-native-cv": "tsx scripts/test-icc-native-cv.ts",
     "test:icc-login-limit": "tsx scripts/test-icc-login-limit.ts"
   },
   "dependencies": {
