@@ -100,6 +100,17 @@ export async function listPortalResource(token: WorkspacePortalToken, resource: 
 export async function savePortalResource(token: WorkspacePortalToken, resource: ResourceCode,
   input: unknown, key: string | null, id?: string, version?: string) {
   await authorizeResource(token, resource);
+  if (resource === "notifications") {
+    z.object({ action: z.literal("READ") }).strict().parse(input);
+    if (!id) throw new PortalResourceError("Selecciona una notificación.", 422);
+    const where = { id, userId: token.sub, terraqoWorkspaceId: token.workspaceId };
+    // Atomic monotonic transition: concurrent retries preserve the first read time.
+    await prisma.notification.updateMany({ where: { ...where, readAt: null }, data: { readAt: new Date() } });
+    const saved = await prisma.notification.findFirst({ where,
+      select: { id: true, title: true, body: true, readAt: true, createdAt: true } });
+    if (!saved) throw new PortalResourceError("Notificación no disponible.", 404);
+    return record({ ...saved, updatedAt: saved.createdAt, status: saved.readAt ? "READ" : "UNREAD" }, resource);
+  }
   if (resource === "experiences" || resource === "education") return saveCvEntry(token, resource, input, key, id, version);
   if (resource === "profile") {
     const saved = await updateProfessionalProfile(token, input, id, version);

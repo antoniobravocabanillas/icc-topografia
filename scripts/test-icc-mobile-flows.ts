@@ -37,6 +37,19 @@ async function main() {
       assert.equal((await session.json()).data.user.role, role.toLowerCase());
       if (role !== "ADMIN") assert.equal((await call("resources/clients", fixture.token)).status, 403);
       console.log(`PASS real password login: temporary ${role} account.`);
+      const notice: { id: string } = await prisma.notification.create({ data: { userId: user.id, terraqoWorkspaceId: workspace.id,
+        title: "Aviso temporal Android", body: "Prueba de lectura" } });
+      const readCommand: { id: string; fields: { action: string } } = { id: notice.id, fields: { action: "READ" } };
+      const reads: Response[] = await Promise.all(Array.from({ length: 4 }, () => call("resources/notifications", fixture.token, readCommand)));
+      for (const response of reads) assert.equal(response.status, 200);
+      const results = await Promise.all(reads.map(response => response.json()));
+      const readAt = results[0].data.record.fields.readAt;
+      assert.ok(readAt); assert.ok(results.every(result => result.data.record.fields.readAt === readAt && result.data.record.status === "READ"));
+      assert.equal((await call("resources/notifications", fixture.token, { ...readCommand, fields: { action: "READ", userId: "other" } })).status, 422);
+      for (const previous of users.filter(previous => previous.id !== user.id)) {
+        assert.equal((await call("resources/notifications", previous.token, readCommand)).status, 404);
+      }
+      console.log(`PASS notifications ${role}: concurrent reads preserve timestamp; foreign-owner and field injection rejected.`);
       if (role === "MEMBER") {
         const key = randomBytes(16).toString("hex");
         const fields = { title: "Prueba Android", body: "Contenido temporal de validación" };

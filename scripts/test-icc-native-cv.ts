@@ -13,6 +13,9 @@ async function main() {
     terraqoMemberships: { create: { workspaceId: workspace.id, role: "PROFESSIONAL", active: true } }, terraqoProfessionalProfile: { create: {} } }, select: { id: true } });
   try {
     for (const serial of ["emulator-5554", "emulator-5556"]) {
+      const noticeTitle = serial === "emulator-5554" ? "Aviso-celular" : "Aviso-tablet";
+      const notice: { id: string } = await prisma.notification.create({ data: { userId: user.id, terraqoWorkspaceId: workspace.id,
+        title: noticeTitle, body: "Notificacion temporal para validar lectura Android" } });
       stage = `${serial}: login`; await login(serial, email, password);
       stage = `${serial}: opening CV`; await tapLabel(serial, "Abrir herramientas"); await tapLabel(serial, "Formación académica");
       if (serial === "emulator-5554") {
@@ -38,10 +41,22 @@ async function main() {
         capture(serial, "cv-education-tablet.png"); shell(serial, "input keyevent 4"); await pause(500);
       }
       shell(serial, "input keyevent 4"); await pause(500); shell(serial, "input keyevent 4"); await pause(500);
+      stage = `${serial}: notification read`;
+      await tapLabel(serial, "Abrir herramientas"); await tapLabel(serial, "Notificaciones"); await tapLabel(serial, noticeTitle);
+      await tapLabel(serial, "Marcar como leída");
+      let read = false;
+      for (let attempt = 0; attempt < 8; attempt++) {
+        if ((await prisma.notification.findUniqueOrThrow({ where: { id: notice.id } })).readAt) { read = true; break; }
+        await pause(1000);
+      }
+      assert.ok(read, "Native notification read must persist.");
+      const listed = await snapshot(serial); assert.ok(listed.includes(noticeTitle)); assert.ok(listed.includes("Leído"));
+      capture(serial, serial === "emulator-5554" ? "cv-notifications-phone.png" : "cv-notifications-tablet.png");
+      shell(serial, "input keyevent 4"); await pause(500); shell(serial, "input keyevent 4"); await pause(500);
       stage = `${serial}: logout`; await tapLabel(serial, "Cuenta"); await tapLabel(serial, "Cerrar sesión");
       let closed = false;
       for (let attempt = 0; attempt < 10; attempt++) { await pause(600); if ((await snapshot(serial)).includes("Ingresar a mi empresa")) { closed = true; break; } }
-      assert.ok(closed); console.log(`PASS CV native ${serial}: education create/read across devices, private/unverified entry, audit and logout.`);
+      assert.ok(closed); console.log(`PASS native ${serial}: education create/read across devices, private/unverified entry, notification read, audit and logout.`);
     }
     assert.equal(await prisma.verificationToken.count({ where: { identifier: `portal-session:${workspace.id}:${user.id}` } }), 0);
   } finally {

@@ -6,7 +6,8 @@ import type { WorkspacePortalToken } from "../lib/server/workspace-portal-sessio
 async function main() {
   const original = { billing: prisma.terraqoBillingAccount.findUnique, module: prisma.terraqoWorkspaceModule.findUnique,
     clients: prisma.client.findMany, find: prisma.client.findFirst, create: prisma.client.create, update: prisma.client.updateMany,
-    notes: prisma.terraqoPrivateNote.findMany, notification: prisma.notification.findMany, files: prisma.terraqoWorkspaceFile.findMany };
+    notes: prisma.terraqoPrivateNote.findMany, notification: prisma.notification.findMany, files: prisma.terraqoWorkspaceFile.findMany,
+    notificationUpdate: prisma.notification.updateMany, notificationFind: prisma.notification.findFirst };
   let enabled = true, versionMatches = true;
   let queries = 0, creations = 0;
   let saved: Record<string, unknown> | null = null;
@@ -42,6 +43,16 @@ async function main() {
   }) as unknown as typeof original.files;
   const token: WorkspacePortalToken = { sub: "user", workspaceId: "workspace", workspaceSlug: "fixture", role: "ADMIN", iat: 1, exp: 2 };
   const forbidden = (status: number) => (error: unknown) => error instanceof PortalResourceError && error.status === status;
+  let readAt: Date | null = null;
+  prisma.notification.updateMany = (async (args: { where: Record<string, unknown>; data: { readAt: Date } }) => {
+    assert.deepEqual(args.where, { id: "notice", userId: "user", terraqoWorkspaceId: "workspace", readAt: null });
+    if (readAt) return { count: 0 };
+    readAt = args.data.readAt; return { count: 1 };
+  }) as unknown as typeof original.notificationUpdate;
+  prisma.notification.findFirst = (async (args: { where: Record<string, unknown> }) => {
+    assert.deepEqual(args.where, { id: "notice", userId: "user", terraqoWorkspaceId: "workspace" });
+    return { id: "notice", title: "Aviso", body: "Detalle", readAt, createdAt: new Date("2026-01-01") };
+  }) as unknown as typeof original.notificationFind;
   try {
     await listPortalResource(token, "clients");
     const before = queries;
@@ -51,6 +62,15 @@ async function main() {
     assert.equal(queries, before);
     await listPortalResource({ ...token, role: "MEMBER" }, "notes");
     await listPortalResource({ ...token, role: "MEMBER" }, "notifications");
+    const read = await savePortalResource(token, "notifications", { action: "READ" }, null, "notice");
+    const repeated = await savePortalResource(token, "notifications", { action: "READ" }, null, "notice");
+    assert.equal(read.status, "READ"); assert.equal(read.fields.readAt, repeated.fields.readAt);
+    assert.equal(read.editable, false);
+    await assert.rejects(savePortalResource(token, "notifications", { action: "READ", userId: "other" }, null, "notice"));
+    await assert.rejects(savePortalResource(token, "notifications", { action: "UNREAD" }, null, "notice"));
+    await assert.rejects(savePortalResource(token, "notifications", { action: "READ" }, null), forbidden(422));
+    prisma.notification.findFirst = (async () => null) as unknown as typeof original.notificationFind;
+    await assert.rejects(savePortalResource(token, "notifications", { action: "READ" }, null, "notice"), forbidden(404));
     const files = await listPortalResource(token, "files");
     assert.equal(files.records[0].canDelete, true); assert.equal(files.records[1].canDelete, false);
     assert.ok(files.records.every(file => !("userId" in file.fields)), "Internal owner IDs are not part of the public field contract.");
@@ -72,6 +92,7 @@ async function main() {
     prisma.client.findMany = original.clients; prisma.client.findFirst = original.find; prisma.client.create = original.create; prisma.client.updateMany = original.update;
     prisma.terraqoPrivateNote.findMany = original.notes; prisma.notification.findMany = original.notification;
     prisma.terraqoWorkspaceFile.findMany = original.files;
+    prisma.notification.updateMany = original.notificationUpdate; prisma.notification.findFirst = original.notificationFind;
     await prisma.$disconnect();
   }
 }
