@@ -47,7 +47,8 @@
     "test:portal-project-route": "node --require ./scripts/portal-route-test-preload.cjs --import tsx scripts/test-portal-project-route.ts",
     "test:portal-revocation": "tsx scripts/test-portal-revocation.ts",
     "test:portal-resources": "tsx scripts/test-portal-resources.ts",
-    "test:portal-resources-route": "node --require ./scripts/portal-route-test-preload.cjs --import tsx scripts/test-portal-resources-route.ts"
+    "test:portal-resources-route": "node --require ./scripts/portal-route-test-preload.cjs --import tsx scripts/test-portal-resources-route.ts",
+    "test:portal-task-edit": "tsx scripts/test-portal-task-edit.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",

@@ -32,6 +32,9 @@ const leadSchema = z.object({ name: z.string().trim().min(2).max(160), email: z.
   company: nullableText, phone: z.string().trim().max(40).default(""), message: z.string().trim().min(1).max(8000),
   status: z.enum(["NEW", "CONTACTED", "QUALIFIED", "EVALUATION", "QUOTED", "NEGOTIATION", "WON", "LOST", "REQUIRES_TECH_SUPPORT"]) }).strict();
 const noteSchema = z.object({ title: z.string().trim().min(1).max(140), body: z.string().trim().min(1).max(24000) }).strict();
+const taskSchema = z.object({ title: z.string().trim().min(1).max(160), description: z.string().trim().max(8000).default(""),
+  status: z.enum(["TODO", "IN_PROGRESS", "BLOCKED", "DONE", "CANCELLED"]) }).strict();
+const taskSelect = { id: true, title: true, description: true, status: true, dueDate: true, completedAt: true, updatedAt: true } as const;
 const clientSelect = { id: true, name: true, email: true, company: true, phone: true, status: true, updatedAt: true } as const;
 const leadSelect = { ...clientSelect, message: true } as const;
 const noteSelect = { id: true, title: true, body: true, updatedAt: true } as const;
@@ -46,7 +49,7 @@ function record(row: Row, resource: ResourceCode) {
   const title = String(row.title ?? row.name ?? row.number ?? row.customerName ?? "Registro");
   return { id: row.id, title, subtitle: String(row.company ?? row.email ?? row.summary ?? row.body ?? row.location ?? ""),
     status: String(row.status ?? row.evidenceStatus ?? ""), updatedAt: row.updatedAt.toISOString(), fields,
-    editable: ["clients", "leads", "notes"].includes(resource) };
+    editable: ["clients", "leads", "notes", "tasks"].includes(resource) };
 }
 export async function listPortalResource(token: WorkspacePortalToken, resource: ResourceCode, cursor?: string) {
   await authorizeResource(token, resource);
@@ -58,7 +61,7 @@ export async function listPortalResource(token: WorkspacePortalToken, resource: 
     case "leads": rows = await prisma.lead.findMany({ ...window, where: tenant, select: leadSelect }); break;
     case "notes": rows = await prisma.terraqoPrivateNote.findMany({ ...window, where: { workspaceId: token.workspaceId, userId: token.sub, kind: "SIMPLE" }, select: noteSelect }); break;
     case "tasks": rows = await prisma.task.findMany({ ...window, where: { deletedAt: null, project: tenant },
-      select: { id: true, title: true, description: true, status: true, dueDate: true, updatedAt: true } }); break;
+      select: taskSelect }); break;
     case "files": rows = await prisma.terraqoWorkspaceFile.findMany({ ...window,
       where: { workspaceId: token.workspaceId, OR: [{ userId: token.sub }, ...(token.role === "ADMIN" ? [{ visibility: "WORKSPACE" as const }] : [])] },
       select: { id: true, title: true, description: true, fileName: true, contentType: true, size: true, category: true, visibility: true, updatedAt: true } }); break;
@@ -89,6 +92,7 @@ export async function listPortalResource(token: WorkspacePortalToken, resource: 
 export async function savePortalResource(token: WorkspacePortalToken, resource: ResourceCode,
   input: unknown, key: string | null, id?: string, version?: string) {
   await authorizeResource(token, resource);
+  if (resource === "tasks") return saveTask(token, input, id, version);
   if (!["clients", "leads", "notes"].includes(resource)) throw new PortalResourceError("Esta sección no admite edición desde este contrato.", 403);
   if (id && (!version || !z.string().datetime().safeParse(version).success)) throw new PortalResourceError("Actualiza el registro antes de guardarlo.", 409);
   if (!id && (!key || !/^[a-f0-9]{32}$/.test(key))) throw new PortalResourceError("La operación necesita una clave válida.", 422);
@@ -124,4 +128,28 @@ export async function savePortalResource(token: WorkspacePortalToken, resource: 
       throw new PortalResourceError("La operación ya existe. Recarga para revisar el resultado antes de volver a guardar.", 409);
     throw error;
   }
+}
+
+async function saveTask(token: WorkspacePortalToken, input: unknown, id?: string, version?: string) {
+  if (!id) throw new PortalResourceError("Selecciona una tarea existente para editarla.", 422);
+  if (!version || !z.string().datetime().safeParse(version).success)
+    throw new PortalResourceError("Actualiza la tarea antes de guardarla.", 409);
+  const data = taskSchema.parse(input);
+  const where = { id, deletedAt: null, project: { terraqoWorkspaceId: token.workspaceId, deletedAt: null } };
+  return prisma.$transaction(async tx => {
+    const current = await tx.task.findFirst({ where, select: { ...taskSelect, projectId: true } });
+    if (!current) throw new PortalResourceError("Tarea no disponible.", 404);
+    // Completion and audit are committed together. Reopening clears completion;
+    // editing an already completed task preserves its original completion time.
+    const changed = await tx.task.updateMany({ where: { ...where, updatedAt: new Date(version) },
+      data: { ...data, completedAt: data.status === "DONE" ? current.completedAt ?? new Date() : null } });
+    if (changed.count !== 1) throw new PortalResourceError("La tarea cambió. Recarga antes de editar.", 409);
+    await tx.activityLog.create({ data: { actorId: token.sub, terraqoWorkspaceId: token.workspaceId,
+      projectId: current.projectId, taskId: id, entityType: "Task", entityId: id,
+      action: current.status === data.status ? "UPDATED" : "STATUS_CHANGED", title: "Tarea actualizada",
+      metadata: { previousStatus: current.status, status: data.status, source: "portal" } } });
+    const saved = await tx.task.findFirst({ where, select: taskSelect });
+    if (!saved) throw new PortalResourceError("Tarea no disponible.", 404);
+    return record(saved, "tasks");
+  });
 }
