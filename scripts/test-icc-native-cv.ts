@@ -42,7 +42,10 @@ async function main() {
       }
       shell(serial, "input keyevent 4"); await pause(500); shell(serial, "input keyevent 4"); await pause(500);
       stage = `${serial}: notification read`;
-      await tapLabel(serial, "Abrir herramientas"); await tapLabel(serial, "Notificaciones"); await tapLabel(serial, noticeTitle);
+      stage = `${serial}: notification tools`; await tapLabel(serial, "Abrir herramientas");
+      stage = `${serial}: notification module`; await tapLabel(serial, "Notificaciones");
+      stage = `${serial}: notification detail`; await tapLabel(serial, noticeTitle);
+      stage = `${serial}: notification action`;
       await tapLabel(serial, "Marcar como leída");
       let read = false;
       for (let attempt = 0; attempt < 8; attempt++) {

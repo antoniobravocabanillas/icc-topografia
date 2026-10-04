@@ -34,7 +34,7 @@ export async function scroll(serial: string, down = false) {
   shell(serial, `input swipe ${x} ${down ? top : bottom} ${x} ${down ? bottom : top} 350`); await pause(300);
 }
 export async function tapLabel(serial: string, label: string) {
-  for (let attempt = 0; attempt < 9; attempt++) {
+  for (let attempt = 0; attempt < 15; attempt++) {
     const node = nodes(await snapshot(serial)).find(node => node.includes(`content-desc="${label}`) && node.includes('clickable="true"'));
     if (node) { shell(serial, `input tap ${center(node)}`); await pause(500); return; }
     await scroll(serial);
