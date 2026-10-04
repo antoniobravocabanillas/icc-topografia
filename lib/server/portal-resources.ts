@@ -1,0 +1,127 @@
+import { createHash } from "node:crypto";
+import { Prisma } from "@prisma/client";
+import { z } from "zod";
+import { prisma } from "@/lib/prisma";
+import { hasWorkspaceModule } from "@/lib/terraqo/workspace-scope";
+import type { WorkspacePortalToken } from "./workspace-portal-session";
+
+export const resourceCodes = ["clients", "leads", "notes", "tasks", "files", "worklogs", "quotes", "orders", "notifications"] as const;
+export type ResourceCode = typeof resourceCodes[number];
+export class PortalResourceError extends Error {
+  constructor(message: string, readonly status: number) { super(message); }
+}
+// Personal workspace files retain the existing portal ownership and quota policy;
+// PROJECTS/DOCUMENTS entitlements refer to project documents, a different resource.
+const modules = { clients: "CRM", leads: "CRM", notes: null, tasks: "PROJECTS", files: null,
+  worklogs: "PROFESSIONAL_NETWORK", quotes: "CRM", orders: "TECHNICAL_STORE", notifications: null } as const;
+export async function authorizeResource(token: WorkspacePortalToken, resource: ResourceCode) {
+  if (["clients", "leads", "tasks"].includes(resource) && token.role !== "ADMIN")
+    throw new PortalResourceError("Esta sección requiere administración empresarial.", 403);
+  if (["quotes", "orders"].includes(resource) && !["ADMIN", "CLIENT"].includes(token.role))
+    throw new PortalResourceError("Tu rol no permite consultar esta sección.", 403);
+  if (resource === "worklogs" && !["ADMIN", "PROFESSIONAL"].includes(token.role))
+    throw new PortalResourceError("Esta sección requiere un perfil profesional.", 403);
+  const entitlementCode = modules[resource];
+  if (entitlementCode && !await hasWorkspaceModule(entitlementCode, token.workspaceId))
+    throw new PortalResourceError("El módulo no está habilitado para tu empresa.", 403);
+}
+const nullableText = z.string().trim().max(240).default("");
+const clientSchema = z.object({ name: z.string().trim().min(2).max(160), email: z.string().trim().email().max(254),
+  company: nullableText, phone: z.string().trim().max(40).default(""), status: z.string().trim().min(1).max(40) }).strict();
+const leadSchema = z.object({ name: z.string().trim().min(2).max(160), email: z.string().trim().email().max(254),
+  company: nullableText, phone: z.string().trim().max(40).default(""), message: z.string().trim().min(1).max(8000),
+  status: z.enum(["NEW", "CONTACTED", "QUALIFIED", "EVALUATION", "QUOTED", "NEGOTIATION", "WON", "LOST", "REQUIRES_TECH_SUPPORT"]) }).strict();
+const noteSchema = z.object({ title: z.string().trim().min(1).max(140), body: z.string().trim().min(1).max(24000) }).strict();
+const clientSelect = { id: true, name: true, email: true, company: true, phone: true, status: true, updatedAt: true } as const;
+const leadSelect = { ...clientSelect, message: true } as const;
+const noteSelect = { id: true, title: true, body: true, updatedAt: true } as const;
+type Row = { id: string; updatedAt: Date; [key: string]: unknown };
+function record(row: Row, resource: ResourceCode) {
+  const fields: Record<string, string> = {};
+  for (const [key, value] of Object.entries(row)) if (!["id", "updatedAt"].includes(key)) {
+    if (value instanceof Date) fields[key] = value.toISOString();
+    else if (value !== null && value !== undefined) fields[key] = String(value);
+    else fields[key] = "";
+  }
+  const title = String(row.title ?? row.name ?? row.number ?? row.customerName ?? "Registro");
+  return { id: row.id, title, subtitle: String(row.company ?? row.email ?? row.summary ?? row.body ?? row.location ?? ""),
+    status: String(row.status ?? row.evidenceStatus ?? ""), updatedAt: row.updatedAt.toISOString(), fields,
+    editable: ["clients", "leads", "notes"].includes(resource) };
+}
+export async function listPortalResource(token: WorkspacePortalToken, resource: ResourceCode, cursor?: string) {
+  await authorizeResource(token, resource);
+  const window = { take: 31, orderBy: { id: "asc" as const }, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}) };
+  const tenant = { terraqoWorkspaceId: token.workspaceId, deletedAt: null };
+  let rows: Row[];
+  switch (resource) {
+    case "clients": rows = await prisma.client.findMany({ ...window, where: tenant, select: clientSelect }); break;
+    case "leads": rows = await prisma.lead.findMany({ ...window, where: tenant, select: leadSelect }); break;
+    case "notes": rows = await prisma.terraqoPrivateNote.findMany({ ...window, where: { workspaceId: token.workspaceId, userId: token.sub, kind: "SIMPLE" }, select: noteSelect }); break;
+    case "tasks": rows = await prisma.task.findMany({ ...window, where: { deletedAt: null, project: tenant },
+      select: { id: true, title: true, description: true, status: true, dueDate: true, updatedAt: true } }); break;
+    case "files": rows = await prisma.terraqoWorkspaceFile.findMany({ ...window,
+      where: { workspaceId: token.workspaceId, OR: [{ userId: token.sub }, ...(token.role === "ADMIN" ? [{ visibility: "WORKSPACE" as const }] : [])] },
+      select: { id: true, title: true, description: true, fileName: true, contentType: true, size: true, category: true, visibility: true, updatedAt: true } }); break;
+    case "worklogs": rows = await prisma.terraqoWorklogEntry.findMany({ ...window,
+      where: { workspaceId: token.workspaceId, deletedAt: null, ...(token.role === "ADMIN" ? {} : { authorId: token.sub }) },
+      select: { id: true, title: true, summary: true, outcome: true, evidenceStatus: true, occurredAt: true, updatedAt: true } }); break;
+    case "quotes": {
+      const account = token.role === "CLIENT" ? await prisma.clientAccount.findFirst({ where: { userId: token.sub, terraqoWorkspaceId: token.workspaceId, deletedAt: null }, select: { clientId: true } }) : null;
+      if (token.role === "CLIENT" && !account?.clientId) { rows = []; break; }
+      rows = await prisma.quote.findMany({ ...window, where: { ...tenant, ...(token.role === "CLIENT" ? { clientId: account!.clientId! } : {}) },
+        select: { id: true, number: true, customerName: true, status: true, currency: true, total: true, validUntil: true, updatedAt: true } }); break;
+    }
+    case "orders": rows = await prisma.order.findMany({ ...window, where: { terraqoWorkspaceId: token.workspaceId, ...(token.role === "CLIENT" ? { userId: token.sub } : {}) },
+      select: { id: true, customerName: true, status: true, currency: true, total: true, notes: true, updatedAt: true } }); break;
+    case "notifications": {
+      const notifications = await prisma.notification.findMany({ ...window, where: { terraqoWorkspaceId: token.workspaceId, userId: token.sub },
+        select: { id: true, title: true, body: true, readAt: true, createdAt: true } });
+      rows = notifications.map(row => ({ ...row, updatedAt: row.createdAt, status: row.readAt ? "READ" : "UNREAD" })); break;
+    }
+  }
+  return { schemaVersion: 1, workspaceSlug: token.workspaceSlug, resource,
+    records: rows.slice(0, 30).map(row => record(row, resource)), nextCursor: rows.length > 30 ? rows[29].id : null,
+    canCreate: ["clients", "leads", "notes"].includes(resource) };
+}
+
+/** Creation IDs are scoped to actor, tenant and operation. A repeated key cannot
+ * create a second row; reusing it with different validated input is a conflict. */
+export async function savePortalResource(token: WorkspacePortalToken, resource: ResourceCode,
+  input: unknown, key: string | null, id?: string, version?: string) {
+  await authorizeResource(token, resource);
+  if (!["clients", "leads", "notes"].includes(resource)) throw new PortalResourceError("Esta sección no admite edición desde este contrato.", 403);
+  if (id && (!version || !z.string().datetime().safeParse(version).success)) throw new PortalResourceError("Actualiza el registro antes de guardarlo.", 409);
+  if (!id && (!key || !/^[a-f0-9]{32}$/.test(key))) throw new PortalResourceError("La operación necesita una clave válida.", 422);
+  const createdId = id || createHash("sha256").update(JSON.stringify([token.workspaceId, token.sub, resource, key])).digest("hex").slice(0, 32);
+  const data = resource === "clients" ? clientSchema.parse(input) : resource === "leads" ? leadSchema.parse(input) : noteSchema.parse(input);
+  const where = { id: createdId, ...(resource === "notes" ? { workspaceId: token.workspaceId, userId: token.sub, kind: "SIMPLE" as const } : { terraqoWorkspaceId: token.workspaceId, deletedAt: null }) };
+  const existing = resource === "clients" ? await prisma.client.findFirst({ where, select: clientSelect }) : resource === "leads"
+    ? await prisma.lead.findFirst({ where, select: leadSelect }) : await prisma.terraqoPrivateNote.findFirst({ where, select: noteSelect });
+  if (!id && existing) {
+    if (!Object.entries(data).every(([field, value]) => String((existing as Record<string, unknown>)[field] ?? "") === String(value)))
+      throw new PortalResourceError("La clave de operación ya fue utilizada con otros datos.", 409);
+    return record(existing, resource);
+  }
+  if (id && !existing) throw new PortalResourceError("Registro no disponible.", 404);
+  if (id) {
+    const guarded = { ...where, updatedAt: new Date(version!) };
+    // Compare-and-swap prevents a stale device from overwriting a newer edit.
+    const result = resource === "clients" ? await prisma.client.updateMany({ where: guarded, data: data as z.infer<typeof clientSchema> }) : resource === "leads"
+      ? await prisma.lead.updateMany({ where: guarded, data: data as z.infer<typeof leadSchema> }) : await prisma.terraqoPrivateNote.updateMany({ where: guarded, data: data as z.infer<typeof noteSchema> });
+    if (result.count !== 1) throw new PortalResourceError("Otro usuario actualizó este registro. Recarga antes de editar.", 409);
+    const saved = resource === "clients" ? await prisma.client.findFirst({ where, select: clientSelect }) : resource === "leads"
+      ? await prisma.lead.findFirst({ where, select: leadSelect }) : await prisma.terraqoPrivateNote.findFirst({ where, select: noteSelect });
+    if (!saved) throw new PortalResourceError("Registro no disponible.", 404);
+    return record(saved, resource);
+  }
+  try {
+    const saved = resource === "clients" ? await prisma.client.create({ data: { id: createdId, terraqoWorkspaceId: token.workspaceId, ...data as z.infer<typeof clientSchema> }, select: clientSelect }) : resource === "leads"
+      ? await prisma.lead.create({ data: { id: createdId, terraqoWorkspaceId: token.workspaceId, ...data as z.infer<typeof leadSchema> }, select: leadSelect })
+      : await prisma.terraqoPrivateNote.create({ data: { id: createdId, workspaceId: token.workspaceId, userId: token.sub, ...data as z.infer<typeof noteSchema> }, select: noteSelect });
+    return record(saved, resource);
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")
+      throw new PortalResourceError("La operación ya existe. Recarga para revisar el resultado antes de volver a guardar.", 409);
+    throw error;
+  }
+}

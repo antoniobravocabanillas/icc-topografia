@@ -44,7 +44,10 @@
     "test:portal-login": "node --conditions=react-server --import tsx scripts/test-portal-login.ts",
     "test:portal-deployed": "tsx scripts/test-deployed-portal.ts",
     "test:portal-project": "tsx scripts/test-portal-project.ts",
-    "test:portal-project-route": "node --require ./scripts/portal-route-test-preload.cjs --import tsx scripts/test-portal-project-route.ts"
+    "test:portal-project-route": "node --require ./scripts/portal-route-test-preload.cjs --import tsx scripts/test-portal-project-route.ts",
+    "test:portal-revocation": "tsx scripts/test-portal-revocation.ts",
+    "test:portal-resources": "tsx scripts/test-portal-resources.ts",
+    "test:portal-resources-route": "node --require ./scripts/portal-route-test-preload.cjs --import tsx scripts/test-portal-resources-route.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",

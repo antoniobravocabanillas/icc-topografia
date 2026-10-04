@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { fail, handleApiError, ok, parseJson } from "@/lib/server/api";
-import { createWorkspacePortalToken } from "@/lib/server/workspace-portal-session";
+import { createRevocablePortalToken } from "@/lib/server/workspace-portal-session";
 import { toWorkspacePortalRole } from "@/lib/server/workspace-portal-policy";
 
 type RouteContext = { params: Promise<{ workspaceSlug: string }> };
@@ -45,7 +45,7 @@ export async function POST(request: Request, { params }: RouteContext) {
 
     const role = toWorkspacePortalRole(membership.role);
     if (!role) return fail("Tu membresia no permite acceder a este portal.", 403);
-    const session = createWorkspacePortalToken({
+    const session = await createRevocablePortalToken({
       sub: user.id,
       workspaceId: workspace.id,
       workspaceSlug: workspace.slug,

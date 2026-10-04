@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { createHmac, randomBytes, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { prisma } from "../lib/prisma";
 import type { WorkspacePortalToken } from "../lib/server/workspace-portal-session";
 import { toWorkspacePortalRole } from "../lib/server/workspace-portal-policy";
 
-// Read-only checks against the actual runtime. Supply secrets through the
+// Customer records are read-only. Temporary session grants are always removed.
+// Supply secrets through the
 // process environment; tokens, credentials and customer records are never logged.
 async function main() {
   const origin = new URL(process.env.TEST_PORTAL_URL || "https://api.terraqoglobal.com");
@@ -38,6 +39,39 @@ async function main() {
     const payload = { sub: membership.userId, workspaceId: membership.workspaceId,
       workspaceSlug: membership.workspace.slug, role: expected };
     const token = issue(payload);
+    for (const resource of ["clients", "leads", "notes", "tasks", "files", "worklogs", "quotes", "orders", "notifications"]) {
+      assert.equal((await request(payload.workspaceSlug, undefined, `resources/${resource}`)).status, 401);
+      const result = await request(payload.workspaceSlug, token, `resources/${resource}`);
+      assert.ok([200, 403].includes(result.status), `Unexpected ${role}/${resource} status: ${result.status}`);
+      if (result.status === 200) {
+        const page = (await result.json()).data;
+        assert.equal(page.schemaVersion, 1);
+        assert.equal(page.workspaceSlug, payload.workspaceSlug);
+        assert.equal(page.resource, resource);
+        assert.ok(Array.isArray(page.records) && page.records.length <= 30);
+        if (expected !== "ADMIN") assert.ok(!["clients", "leads", "tasks"].includes(resource));
+      }
+    }
+    if (tested === 0) {
+      const jti = randomUUID();
+      const identifier = `portal-session:${payload.workspaceId}:${payload.sub}`;
+      const hashed = createHash("sha256").update(jti).digest("hex");
+      await prisma.verificationToken.create({ data: { identifier, token: hashed, expires: new Date(Date.now() + 600000) } });
+      try {
+        const revocable = issue({ ...payload, jti });
+        assert.equal((await request(payload.workspaceSlug, revocable)).status, 200);
+        const logout = await fetch(new URL(`/api/public/workspaces/${encodeURIComponent(payload.workspaceSlug)}/portal/logout`, origin), {
+          method: "POST", headers: { Authorization: `Bearer ${revocable}` }, redirect: "error", signal: AbortSignal.timeout(60000),
+        });
+        assert.equal(logout.status, 200);
+        assert.equal((await logout.json()).data.revoked, true);
+        assert.equal((await request(payload.workspaceSlug, revocable)).status, 401);
+        assert.equal((await request(payload.workspaceSlug, token)).status, 200, "Other sessions must remain valid.");
+      } finally {
+        await prisma.verificationToken.deleteMany({ where: { identifier, token: hashed } });
+      }
+      console.log("PASS deployed revocation: temporary grant revoked, rejected and cleaned up.");
+    }
     const response = await request(payload.workspaceSlug, token);
     assert.equal(response.status, 200, `Legitimate ${role} session was rejected.`);
     const cacheDirectives = response.headers.get("cache-control")?.split(",").map((value) => value.trim());
@@ -95,7 +129,7 @@ async function main() {
     redirect: "error", signal: AbortSignal.timeout(60000),
   });
   assert.equal(rejectedLogin.status, 401, "Invalid credentials must fail normally instead of causing a runtime error.");
-  console.log(`PASS deployed portal: ${tested} real membership roles checked; no database mutations.`);
+  console.log(`PASS deployed portal: ${tested} real membership roles checked; customer records unchanged; temporary session grant cleaned up.`);
 }
 main().catch((error: unknown) => {
   console.error(error instanceof assert.AssertionError ? error.message : "Runtime verification failed; sensitive diagnostics suppressed.");

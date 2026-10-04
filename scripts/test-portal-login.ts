@@ -7,7 +7,13 @@ import { verifyWorkspacePortalToken } from "../lib/server/workspace-portal-sessi
 
 async function main() {
   process.env.AUTH_SECRET = randomBytes(32).toString("hex");
-  const originals = { workspace: prisma.terraqoWorkspace.findFirst, user: prisma.user.findUnique };
+  const originals = { workspace: prisma.terraqoWorkspace.findFirst, user: prisma.user.findUnique, grant: prisma.verificationToken.create };
+  prisma.verificationToken.create = (async (args: { data: { identifier: string; token: string; expires: Date } }) => {
+    assert.equal(args.data.identifier, "portal-session:fixture-workspace:fixture-user");
+    assert.match(args.data.token, /^[a-f0-9]{64}$/);
+    assert.ok(args.data.expires > new Date());
+    return args.data;
+  }) as unknown as typeof originals.grant;
   const password = randomBytes(16).toString("hex");
   const passwordHash = await bcrypt.hash(password, 4);
   let membershipRole: string | null = "MEMBER";
@@ -35,6 +41,7 @@ async function main() {
       assert.equal(response.headers.get("cache-control"), "private, no-store");
       const payload = await response.json();
       assert.equal(verifyWorkspacePortalToken(payload.data.token, "fixture")?.role, expected);
+      assert.ok(verifyWorkspacePortalToken(payload.data.token, "fixture")?.jti);
       assert.equal(payload.data.user.role, expected.toLowerCase());
     }
     membershipRole = "SUPER_ADMIN";
@@ -47,6 +54,7 @@ async function main() {
   } finally {
     prisma.terraqoWorkspace.findFirst = originals.workspace;
     prisma.user.findUnique = originals.user;
+    prisma.verificationToken.create = originals.grant;
     await prisma.$disconnect();
   }
 }
