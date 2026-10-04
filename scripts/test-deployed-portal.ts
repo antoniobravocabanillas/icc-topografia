@@ -22,8 +22,8 @@ async function main() {
   };
   const roles = ["OWNER", "ADMIN", "MANAGER", "MEMBER", "VIEWER", "CLIENT", "PROFESSIONAL"] as const;
   let tested = 0;
-  const request = async (slug: string, token?: string) => {
-    const response = await fetch(new URL(`/api/public/workspaces/${encodeURIComponent(slug)}/portal/session`, origin), {
+  const request = async (slug: string, token?: string, action = "session") => {
+    const response = await fetch(new URL(`/api/public/workspaces/${encodeURIComponent(slug)}/portal/${action}`, origin), {
       headers: token ? { Authorization: `Bearer ${token}` } : {}, redirect: "error", signal: AbortSignal.timeout(60000),
     });
     return response;
@@ -50,6 +50,28 @@ async function main() {
         assert.ok(Array.isArray(list) && list.length <= 20);
       }
     } else assert.equal(data.enterprise, null, "Limited roles cannot receive enterprise records.");
+    const projectRequest = (id: string, authorization: string | undefined = token) => request(payload.workspaceSlug, authorization, `projects/${encodeURIComponent(id)}`);
+    // Explicit anonymous request avoids the default test authorization.
+    assert.equal((await request(payload.workspaceSlug, undefined, `projects/${randomUUID()}`)).status, 401);
+    const missingProject = await projectRequest(randomUUID());
+    if (["MEMBER", "VIEWER"].includes(expected)) assert.equal(missingProject.status, 403);
+    else assert.ok([403, 404].includes(missingProject.status));
+    const projects = expected === "ADMIN" ? data.enterprise.projects : expected === "CLIENT"
+      ? data.client?.client?.projects : data.professionalNetwork?.projects;
+    if (projects?.length) {
+      const detailResponse = await projectRequest(projects[0].id);
+      assert.ok([200, 403].includes(detailResponse.status), "Listed project must be readable or denied by module entitlement.");
+      if (detailResponse.status === 200) {
+        const detail = (await detailResponse.json()).data;
+        assert.equal(detail.schemaVersion, 1);
+        assert.equal(detail.workspaceSlug, payload.workspaceSlug);
+        assert.equal(detail.project.id, projects[0].id);
+        assert.deepEqual(Object.keys(detail.project).sort(), ["id", "title", "status", "summary", "location", "category", "servicesApplied", "updatedAt"].sort());
+        console.log(`PASS ${role}: authorized project detail and bounded field contract.`);
+      }
+    } else console.log(`SKIP ${role}: no listed project available for a positive detail check.`);
+    const foreignProject = await prisma.project.findFirst({ where: { terraqoWorkspaceId: { not: payload.workspaceId }, deletedAt: null }, select: { id: true } });
+    if (foreignProject) assert.ok([403, 404].includes((await projectRequest(foreignProject.id)).status));
     const incompatible = issue({ ...payload, role: expected === "ADMIN" ? "VIEWER" : "ADMIN" });
     assert.equal((await request(payload.workspaceSlug, incompatible)).status, 401, "Token role must match current membership.");
     const removed = issue({ ...payload, sub: randomUUID() });
