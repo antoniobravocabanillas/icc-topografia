@@ -7,7 +7,7 @@ type RouteContext = { params: Promise<{ workspaceSlug: string }> };
 
 export async function POST(request: Request, { params }: RouteContext) {
   const { workspaceSlug } = await params;
-  const token = getWorkspacePortalToken(request, workspaceSlug);
+  const token = await getWorkspacePortalToken(request, workspaceSlug);
   if (!token) return fail("La sesion no es valida o ha vencido.", 401);
 
   try {

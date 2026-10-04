@@ -1,17 +1,20 @@
 import { prisma } from "@/lib/prisma";
 import { fail, handleApiError, ok } from "@/lib/server/api";
 import { getWorkspacePortalToken } from "@/lib/server/workspace-portal-session";
+import { toWorkspacePortalRole } from "@/lib/server/workspace-portal-policy";
+import { getPortalEnterpriseSummary } from "@/lib/server/portal-enterprise-summary";
 
 type RouteContext = { params: Promise<{ workspaceSlug: string }> };
 
 export async function GET(request: Request, { params }: RouteContext) {
   try {
     const { workspaceSlug } = await params;
-    const token = getWorkspacePortalToken(request, workspaceSlug);
+    const token = await getWorkspacePortalToken(request, workspaceSlug);
     if (!token) return fail("La sesion no es valida o ha vencido.", 401);
 
     const membership = await prisma.terraqoWorkspaceMember.findFirst({
-      where: { workspaceId: token.workspaceId, userId: token.sub, active: true },
+      where: { workspaceId: token.workspaceId, userId: token.sub, active: true,
+        workspace: { slug: workspaceSlug, active: true, deletedAt: null } },
       select: {
         role: true,
         title: true,
@@ -20,6 +23,8 @@ export async function GET(request: Request, { params }: RouteContext) {
       },
     });
     if (!membership || membership.workspace.slug !== workspaceSlug) return fail("Acceso no autorizado para este workspace.", 403);
+    const role = toWorkspacePortalRole(membership.role);
+    if (!role || role !== token.role) return fail("Tu membresia ha cambiado. Vuelve a iniciar sesion.", 401);
 
     const professional = membership.role === "PROFESSIONAL"
       ? await prisma.terraqoProfessionalProfile.findUnique({
@@ -194,11 +199,12 @@ export async function GET(request: Request, { params }: RouteContext) {
 
     return ok({
       workspace: membership.workspace,
-      user: { ...membership.user, role: membership.role.toLowerCase(), title: membership.title },
+      user: { ...membership.user, role: role.toLowerCase(), membershipRole: membership.role.toLowerCase(), title: membership.title },
       professional,
       professionalNetwork: professionalNetwork ? { projects: professionalNetwork[0], opportunities: professionalNetwork[1] } : null,
       client,
-    });
+      enterprise: role === "ADMIN" ? await getPortalEnterpriseSummary(token.workspaceId) : null,
+    }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     return handleApiError(error);
   }

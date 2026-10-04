@@ -2,7 +2,8 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { fail, handleApiError, ok, parseJson } from "@/lib/server/api";
-import { createWorkspacePortalToken, type WorkspacePortalRole } from "@/lib/server/workspace-portal-session";
+import { createWorkspacePortalToken } from "@/lib/server/workspace-portal-session";
+import { toWorkspacePortalRole } from "@/lib/server/workspace-portal-policy";
 
 type RouteContext = { params: Promise<{ workspaceSlug: string }> };
 
@@ -10,11 +11,6 @@ const loginSchema = z.object({
   email: z.string().trim().email().transform((value) => value.toLowerCase()),
   password: z.string().min(8).max(100),
 });
-
-function toPortalRole(role: string): WorkspacePortalRole {
-  if (role === "CLIENT" || role === "PROFESSIONAL") return role;
-  return "ADMIN";
-}
 
 export async function POST(request: Request, { params }: RouteContext) {
   try {
@@ -47,7 +43,8 @@ export async function POST(request: Request, { params }: RouteContext) {
       return fail("El correo o la contrasena no son correctos para este portal.", 401);
     }
 
-    const role = toPortalRole(membership.role);
+    const role = toWorkspacePortalRole(membership.role);
+    if (!role) return fail("Tu membresia no permite acceder a este portal.", 403);
     const session = createWorkspacePortalToken({
       sub: user.id,
       workspaceId: workspace.id,
@@ -59,7 +56,7 @@ export async function POST(request: Request, { params }: RouteContext) {
       ...session,
       workspace,
       user: { id: user.id, name: user.name, email: user.email, role: role.toLowerCase() },
-    });
+    }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     return handleApiError(error);
   }

@@ -107,9 +107,13 @@ async function createChallenge(input: {
   });
 }
 
-async function getChallenge(userId: string, challengeId: string, purpose: TerraqoWebAuthnPurpose) {
+async function getChallenge(userId: string, challengeId: string, purpose: TerraqoWebAuthnPurpose, workspaceId: string) {
+  const membership = await requireMembership(userId, workspaceId);
+  if (purpose === "WORKLOG_VALIDATION" && !SUPERVISOR_ROLES.includes(membership.role)) {
+    throw new FieldVerificationError("Tu rol no permite validar bitacoras.", 403);
+  }
   const challenge = await prisma.terraqoWebAuthnChallenge.findFirst({
-    where: { id: challengeId, userId, purpose, consumedAt: null, expiresAt: { gt: new Date() } }
+    where: { id: challengeId, userId, workspaceId, purpose, consumedAt: null, expiresAt: { gt: new Date() } }
   });
   if (!challenge) throw new FieldVerificationError("La verificacion vencio. Inicia el proceso nuevamente.", 410);
   return challenge;
@@ -250,11 +254,12 @@ export async function createPasskeyRegistrationOptions(input: {
 
 export async function verifyPasskeyRegistration(input: {
   userId: string;
+  workspaceId: string;
   challengeId: string;
   response: RegistrationResponseJSON;
   deviceName?: string;
 }) {
-  const challenge = await getChallenge(input.userId, input.challengeId, "REGISTRATION");
+  const challenge = await getChallenge(input.userId, input.challengeId, "REGISTRATION", input.workspaceId);
   const verification = await verifyRegistrationResponse({
     response: input.response,
     expectedChallenge: challenge.challenge,
@@ -326,11 +331,12 @@ async function createAuthenticationChallenge(input: {
 
 async function verifyAuthentication(input: {
   userId: string;
+  workspaceId: string;
   challengeId: string;
   purpose: Exclude<TerraqoWebAuthnPurpose, "REGISTRATION">;
   response: AuthenticationResponseJSON;
 }) {
-  const challenge = await getChallenge(input.userId, input.challengeId, input.purpose);
+  const challenge = await getChallenge(input.userId, input.challengeId, input.purpose, input.workspaceId);
   const credential = await prisma.terraqoWebAuthnCredential.findFirst({
     where: { userId: input.userId, rpId: challenge.rpId, credentialId: input.response.id }
   });
@@ -456,7 +462,7 @@ export async function createAttendanceOptions(input: {
   });
 }
 
-export async function verifyAttendance(input: { userId: string; challengeId: string; response: AuthenticationResponseJSON; fingerprint: AttendanceRequestFingerprint }) {
+export async function verifyAttendance(input: { userId: string; workspaceId: string; challengeId: string; response: AuthenticationResponseJSON; fingerprint: AttendanceRequestFingerprint }) {
   const { challenge, credential } = await verifyAuthentication({ ...input, purpose: "ATTENDANCE" });
   const payload = challenge.payload as unknown as LocationPayload & { projectId: string | null; distanceMeters: number | null; geofenceRadiusMeters: number | null; geofencePolicy: "FIXED_RADIUS" | "LOCATION_ONLY" | null; networkFingerprint: string | null; userAgentFingerprint: string | null };
   if (!challenge.workspaceId || !payload?.context) throw new FieldVerificationError("La solicitud de asistencia esta incompleta.", 422);
@@ -742,7 +748,7 @@ export async function createWorklogValidationOptions(input: {
   });
 }
 
-export async function verifyWorklogValidation(input: { userId: string; challengeId: string; response: AuthenticationResponseJSON }) {
+export async function verifyWorklogValidation(input: { userId: string; workspaceId: string; challengeId: string; response: AuthenticationResponseJSON }) {
   const { challenge, credential } = await verifyAuthentication({ ...input, purpose: "WORKLOG_VALIDATION" });
   const payload = challenge.payload as { validationId?: string } | null;
   if (!challenge.workspaceId || !payload?.validationId) throw new FieldVerificationError("La solicitud de validacion esta incompleta.", 422);

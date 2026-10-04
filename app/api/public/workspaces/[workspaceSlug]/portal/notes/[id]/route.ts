@@ -6,14 +6,14 @@ type Context = { params: Promise<{ workspaceSlug: string; id: string }> };
 
 export async function PATCH(request: Request, { params }: Context) {
   const { workspaceSlug, id } = await params;
-  const token = getWorkspacePortalToken(request, workspaceSlug);
+  const token = await getWorkspacePortalToken(request, workspaceSlug);
   if (!token) return fail("La sesion no es valida o ha vencido.", 401);
   return updatePrivateNote(request, token.sub, id, token.workspaceId);
 }
 
 export async function DELETE(request: Request, { params }: Context) {
   const { workspaceSlug, id } = await params;
-  const token = getWorkspacePortalToken(request, workspaceSlug);
+  const token = await getWorkspacePortalToken(request, workspaceSlug);
   if (!token) return fail("La sesion no es valida o ha vencido.", 401);
   return deletePrivateNote(token.sub, id, token.workspaceId);
 }

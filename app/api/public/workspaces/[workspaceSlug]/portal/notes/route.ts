@@ -6,14 +6,14 @@ type Context = { params: Promise<{ workspaceSlug: string }> };
 
 export async function GET(request: Request, { params }: Context) {
   const { workspaceSlug } = await params;
-  const token = getWorkspacePortalToken(request, workspaceSlug);
+  const token = await getWorkspacePortalToken(request, workspaceSlug);
   if (!token) return fail("La sesion no es valida o ha vencido.", 401);
   return listPrivateNotes(token.sub, token.workspaceId);
 }
 
 export async function POST(request: Request, { params }: Context) {
   const { workspaceSlug } = await params;
-  const token = getWorkspacePortalToken(request, workspaceSlug);
+  const token = await getWorkspacePortalToken(request, workspaceSlug);
   if (!token) return fail("La sesion no es valida o ha vencido.", 401);
   return createPrivateNote(request, token.sub, token.workspaceId);
 }

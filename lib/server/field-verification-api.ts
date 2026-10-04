@@ -51,6 +51,7 @@ export async function runFieldVerificationAction(input: {
     case "passkey_registration_verify":
       return verifyPasskeyRegistration({
         userId: input.userId,
+        workspaceId: input.workspaceId,
         challengeId: body.challengeId,
         response: body.response as unknown as RegistrationResponseJSON,
         deviceName: body.deviceName
@@ -58,7 +59,7 @@ export async function runFieldVerificationAction(input: {
     case "attendance_options":
       return createAttendanceOptions({ userId: input.userId, workspaceId: input.workspaceId, context, location: body.data, fingerprint });
     case "attendance_verify":
-      return verifyAttendance({ userId: input.userId, challengeId: body.challengeId, response: body.response as unknown as AuthenticationResponseJSON, fingerprint });
+      return verifyAttendance({ userId: input.userId, workspaceId: input.workspaceId, challengeId: body.challengeId, response: body.response as unknown as AuthenticationResponseJSON, fingerprint });
     case "location_samples_sync":
       return syncAttendanceLocationSamples({
         userId: input.userId,
@@ -78,6 +79,6 @@ export async function runFieldVerificationAction(input: {
     case "validation_options":
       return createWorklogValidationOptions({ userId: input.userId, workspaceId: input.workspaceId, validationId: body.validationId, context });
     case "validation_verify":
-      return verifyWorklogValidation({ userId: input.userId, challengeId: body.challengeId, response: body.response as unknown as AuthenticationResponseJSON });
+      return verifyWorklogValidation({ userId: input.userId, workspaceId: input.workspaceId, challengeId: body.challengeId, response: body.response as unknown as AuthenticationResponseJSON });
   }
 }

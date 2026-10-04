@@ -11,7 +11,7 @@ export const revalidate = 0;
 export async function GET(request: Request, { params }: RouteContext) {
   try {
     const { workspaceSlug, id } = await params;
-    const token = getWorkspacePortalToken(request, workspaceSlug);
+    const token = await getWorkspacePortalToken(request, workspaceSlug);
     if (!token) return fail("La sesion no es valida o ha vencido.", 401);
 
     const document = await prisma.terraqoProfessionalDocument.findFirst({

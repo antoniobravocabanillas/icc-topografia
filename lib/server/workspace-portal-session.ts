@@ -1,6 +1,8 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { prisma } from "@/lib/prisma";
+import { toWorkspacePortalRole, type WorkspacePortalRole } from "./workspace-portal-policy";
 
-export type WorkspacePortalRole = "CLIENT" | "PROFESSIONAL" | "ADMIN";
+export type { WorkspacePortalRole } from "./workspace-portal-policy";
 
 export type WorkspacePortalToken = {
   sub: string;
@@ -42,6 +44,7 @@ export function createWorkspacePortalToken(
 }
 
 export function verifyWorkspacePortalToken(token: string, workspaceSlug: string) {
+  if (token.length > 8192 || token.split(".").length !== 3) return null;
   const [header, body, signature] = token.split(".");
   if (!header || !body || !signature) return null;
 
@@ -53,17 +56,27 @@ export function verifyWorkspacePortalToken(token: string, workspaceSlug: string)
   try {
     const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as WorkspacePortalToken;
     const now = Math.floor(Date.now() / 1000);
-    if (!payload.sub || !payload.workspaceId || payload.workspaceSlug !== workspaceSlug || payload.exp <= now) return null;
-    if (!["CLIENT", "PROFESSIONAL", "ADMIN"].includes(payload.role)) return null;
+    if (typeof payload.sub !== "string" || !payload.sub || typeof payload.workspaceId !== "string" || !payload.workspaceId || payload.workspaceSlug !== workspaceSlug) return null;
+    if (!Number.isSafeInteger(payload.exp) || !Number.isSafeInteger(payload.iat) || payload.exp <= now || payload.iat > now || payload.exp <= payload.iat || payload.exp - payload.iat > TOKEN_TTL_SECONDS) return null;
+    if (!["CLIENT", "PROFESSIONAL", "ADMIN", "MEMBER", "VIEWER"].includes(payload.role)) return null;
     return payload;
   } catch {
     return null;
   }
 }
 
-export function getWorkspacePortalToken(request: Request, workspaceSlug: string) {
+export async function getWorkspacePortalToken(request: Request, workspaceSlug: string) {
   const authorization = request.headers.get("authorization");
   if (!authorization?.startsWith("Bearer ")) return null;
-  return verifyWorkspacePortalToken(authorization.slice(7), workspaceSlug);
+  const token = verifyWorkspacePortalToken(authorization.slice(7), workspaceSlug);
+  if (!token) return null;
+  // A signed token is identity evidence, not durable authorization. Every caller
+  // must await this shared guard so removals, demotions and workspace suspension
+  // take effect before any reads, downloads or mutations are reached.
+  const membership = await prisma.terraqoWorkspaceMember.findFirst({
+    where: { userId: token.sub, workspaceId: token.workspaceId, active: true,
+      workspace: { slug: workspaceSlug, active: true, deletedAt: null } },
+    select: { role: true },
+  });
+  return membership && toWorkspacePortalRole(membership.role) === token.role ? token : null;
 }
-

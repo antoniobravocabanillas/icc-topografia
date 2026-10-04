@@ -37,7 +37,12 @@
     "db:migrate-location-identity": "tsx scripts/migrate-location-identity.ts",
     "workspace:test-isolation": "tsx prisma/test-workspace-isolation.ts",
     "demo:create-accesses": "tsx prisma/create-demo-accesses.ts",
-    "ml:export-cv-feedback": "tsx scripts/export-cv-feedback.ts"
+    "ml:export-cv-feedback": "tsx scripts/export-cv-feedback.ts",
+    "test:portal-access": "tsx scripts/test-portal-access.ts",
+    "test:portal-field": "tsx scripts/test-portal-field-boundaries.ts",
+    "test:portal-enterprise": "tsx scripts/test-portal-enterprise.ts",
+    "test:portal-login": "node --conditions=react-server --import tsx scripts/test-portal-login.ts",
+    "test:portal-deployed": "tsx scripts/test-deployed-portal.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",
