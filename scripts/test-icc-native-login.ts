@@ -40,9 +40,9 @@ async function tapLabel(serial: string, label: string, exact = false) {
   }
   throw new Error(`Native control unavailable: ${label}`);
 }
-async function fill(serial: string, index: number, value: string) {
+async function fill(serial: string, index: number, value: string, observedInputs?: string[]) {
   assert.match(value, /^[a-zA-Z0-9@._-]+$/);
-  const inputs = nodes(await snapshot(serial)).filter(node => node.includes('class="android.widget.EditText"'));
+  const inputs = observedInputs ?? nodes(await snapshot(serial)).filter(node => node.includes('class="android.widget.EditText"'));
   assert.ok(inputs[index], "Native input not available.");
   shell(serial, `input tap ${center(inputs[index])}`); await pause(600);
   shell(serial, `input text ${value}`); shell(serial, "input keyevent 4"); await pause(300);
@@ -79,9 +79,13 @@ async function main() {
         await pause(700);
       }
       assert.ok(loginReady, "Test requires an empty login screen.");
-      stage = `${serial}: filling workspace`; await fill(serial, 0, "icc-topografia");
-      stage = `${serial}: filling email`; await fill(serial, 1, email);
-      stage = `${serial}: filling password`; await fill(serial, 2, password);
+      const loginInputs = nodes(await snapshot(serial)).filter(node => node.includes('class="android.widget.EditText"'));
+      assert.equal(loginInputs.length, 3);
+      // Keyboard dismissal restores these observed bounds. Avoid requesting an
+      // accessibility dump while Android autofill is updating after each field.
+      stage = `${serial}: filling workspace`; await fill(serial, 0, "icc-topografia", loginInputs);
+      stage = `${serial}: filling email`; await fill(serial, 1, email, loginInputs);
+      stage = `${serial}: filling password`; await fill(serial, 2, password, loginInputs);
       stage = `${serial}: submitting login`;
       await tapLabel(serial, "Ingresar a mi empresa");
       let ready = false;
@@ -168,4 +172,9 @@ async function main() {
     console.log("CLEANUP: native fixture account, memberships, grants and notes removed.");
   }
 }
-main().catch((error: unknown) => { console.error(`Native stage: ${stage}`); console.error(error instanceof assert.AssertionError ? error.message : `Native validation failed (${(error as { code?: string }).code ?? "control unavailable"}); credential diagnostics suppressed.`); process.exitCode = 1; }).finally(async () => prisma.$disconnect());
+main().catch((error: unknown) => { console.error(`Native stage: ${stage}`);
+  const diagnostic = error as { code?: string; name?: string; status?: number; signal?: string; message?: string };
+  const safeReason = diagnostic.message === "Android accessibility root unavailable." ? "accessibility_unavailable" : diagnostic.code ?? "control_unavailable";
+  console.error(error instanceof assert.AssertionError ? error.message : `Native validation failed (${safeReason}; ${diagnostic.name}; exit=${diagnostic.status}; signal=${diagnostic.signal}); credential diagnostics suppressed.`);
+  process.exitCode = 1;
+}).finally(async () => prisma.$disconnect());
