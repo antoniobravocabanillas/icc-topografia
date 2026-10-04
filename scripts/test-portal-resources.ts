@@ -6,7 +6,7 @@ import type { WorkspacePortalToken } from "../lib/server/workspace-portal-sessio
 async function main() {
   const original = { billing: prisma.terraqoBillingAccount.findUnique, module: prisma.terraqoWorkspaceModule.findUnique,
     clients: prisma.client.findMany, find: prisma.client.findFirst, create: prisma.client.create, update: prisma.client.updateMany,
-    notes: prisma.terraqoPrivateNote.findMany, notification: prisma.notification.findMany };
+    notes: prisma.terraqoPrivateNote.findMany, notification: prisma.notification.findMany, files: prisma.terraqoWorkspaceFile.findMany };
   let enabled = true, versionMatches = true;
   let queries = 0, creations = 0;
   let saved: Record<string, unknown> | null = null;
@@ -34,6 +34,12 @@ async function main() {
   prisma.notification.findMany = (async (args: { where: unknown }) => {
     assert.deepEqual(args.where, { terraqoWorkspaceId: "workspace", userId: "user" }); return [];
   }) as unknown as typeof original.notification;
+  prisma.terraqoWorkspaceFile.findMany = (async (args: { where: { workspaceId: string; OR: unknown[] }; select: { userId: boolean } }) => {
+    assert.equal(args.where.workspaceId, "workspace"); assert.equal(args.select.userId, true);
+    const own = { id: "own-file", title: "Own", userId: "user", visibility: "PRIVATE", updatedAt: new Date() };
+    const shared = { id: "shared-file", title: "Shared", userId: "another-user", visibility: "WORKSPACE", updatedAt: new Date() };
+    return args.where.OR.length === 1 ? [own] : [own, shared];
+  }) as unknown as typeof original.files;
   const token: WorkspacePortalToken = { sub: "user", workspaceId: "workspace", workspaceSlug: "fixture", role: "ADMIN", iat: 1, exp: 2 };
   const forbidden = (status: number) => (error: unknown) => error instanceof PortalResourceError && error.status === status;
   try {
@@ -45,6 +51,10 @@ async function main() {
     assert.equal(queries, before);
     await listPortalResource({ ...token, role: "MEMBER" }, "notes");
     await listPortalResource({ ...token, role: "MEMBER" }, "notifications");
+    const files = await listPortalResource(token, "files");
+    assert.equal(files.records[0].canDelete, true); assert.equal(files.records[1].canDelete, false);
+    assert.ok(files.records.every(file => !("userId" in file.fields)), "Internal owner IDs are not part of the public field contract.");
+    assert.equal((await listPortalResource({ ...token, role: "MEMBER" }, "files")).records.length, 1);
     const fields = { name: "Fixture", email: "fixture@example.test", company: "", phone: "", status: "activo" };
     const key = "a".repeat(32);
     const first = await savePortalResource(token, "clients", fields, key);
@@ -61,6 +71,7 @@ async function main() {
     prisma.terraqoBillingAccount.findUnique = original.billing; prisma.terraqoWorkspaceModule.findUnique = original.module;
     prisma.client.findMany = original.clients; prisma.client.findFirst = original.find; prisma.client.create = original.create; prisma.client.updateMany = original.update;
     prisma.terraqoPrivateNote.findMany = original.notes; prisma.notification.findMany = original.notification;
+    prisma.terraqoWorkspaceFile.findMany = original.files;
     await prisma.$disconnect();
   }
 }

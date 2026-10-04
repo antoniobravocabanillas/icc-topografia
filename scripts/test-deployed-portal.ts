@@ -39,7 +39,7 @@ async function main() {
     const payload = { sub: membership.userId, workspaceId: membership.workspaceId,
       workspaceSlug: membership.workspace.slug, role: expected };
     const token = issue(payload);
-    for (const resource of ["clients", "leads", "notes", "tasks", "files", "worklogs", "quotes", "orders", "notifications"]) {
+    for (const resource of ["clients", "leads", "notes", "tasks", "files", "worklogs", "quotes", "orders", "notifications", "profile"]) {
       assert.equal((await request(payload.workspaceSlug, undefined, `resources/${resource}`)).status, 401);
       const result = await request(payload.workspaceSlug, token, `resources/${resource}`);
       assert.ok([200, 403].includes(result.status), `Unexpected ${role}/${resource} status: ${result.status}`);

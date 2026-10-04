@@ -2,6 +2,7 @@ import { fail, handleApiError, ok } from "@/lib/server/api";
 import { getWorkspacePortalToken } from "@/lib/server/workspace-portal-session";
 import { listPortalResource, savePortalResource, resourceCodes, PortalResourceError, type ResourceCode } from "@/lib/server/portal-resources";
 import { z } from "zod";
+import { revalidatePath } from "next/cache";
 
 type Context = { params: Promise<{ workspaceSlug: string; resource: string }> };
 const command = z.object({ id: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/).optional(), version: z.string().optional(), fields: z.record(z.string(), z.string()) }).strict();
@@ -31,6 +32,12 @@ async function handle(request: Request, context: Context, write: boolean) {
     const payload = command.parse(body);
     const record = await savePortalResource(token, resource as ResourceCode, payload.fields,
       request.headers.get("Idempotency-Key"), payload.id, payload.version);
+    if (resource === "profile") {
+      revalidatePath("/portal");
+      revalidatePath("/portal/perfil");
+      revalidatePath("/cv/[username]", "page");
+      revalidatePath("/red");
+    }
     return ok({ schemaVersion: 1, workspaceSlug, resource, record }, cache);
   } catch (error) { if (error instanceof PortalResourceError) return fail(error.message, error.status); return handleApiError(error); }
 }

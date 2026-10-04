@@ -4,8 +4,9 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { hasWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 import type { WorkspacePortalToken } from "./workspace-portal-session";
+import { listProfessionalProfile, updateProfessionalProfile } from "./portal-professional-profile";
 
-export const resourceCodes = ["clients", "leads", "notes", "tasks", "files", "worklogs", "quotes", "orders", "notifications"] as const;
+export const resourceCodes = ["clients", "leads", "notes", "tasks", "files", "worklogs", "quotes", "orders", "notifications", "profile"] as const;
 export type ResourceCode = typeof resourceCodes[number];
 export class PortalResourceError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
@@ -13,8 +14,10 @@ export class PortalResourceError extends Error {
 // Personal workspace files retain the existing portal ownership and quota policy;
 // PROJECTS/DOCUMENTS entitlements refer to project documents, a different resource.
 const modules = { clients: "CRM", leads: "CRM", notes: null, tasks: "PROJECTS", files: null,
-  worklogs: "PROFESSIONAL_NETWORK", quotes: "CRM", orders: "TECHNICAL_STORE", notifications: null } as const;
+  worklogs: "PROFESSIONAL_NETWORK", quotes: "CRM", orders: "TECHNICAL_STORE", notifications: null, profile: "PROFESSIONAL_NETWORK" } as const;
 export async function authorizeResource(token: WorkspacePortalToken, resource: ResourceCode) {
+  if (resource === "profile" && token.role !== "PROFESSIONAL")
+    throw new PortalResourceError("Esta sección requiere tu cuenta profesional.", 403);
   if (["clients", "leads", "tasks"].includes(resource) && token.role !== "ADMIN")
     throw new PortalResourceError("Esta sección requiere administración empresarial.", 403);
   if (["quotes", "orders"].includes(resource) && !["ADMIN", "CLIENT"].includes(token.role))
@@ -39,9 +42,9 @@ const clientSelect = { id: true, name: true, email: true, company: true, phone: 
 const leadSelect = { ...clientSelect, message: true } as const;
 const noteSelect = { id: true, title: true, body: true, updatedAt: true } as const;
 type Row = { id: string; updatedAt: Date; [key: string]: unknown };
-function record(row: Row, resource: ResourceCode) {
+function record(row: Row, resource: ResourceCode, actorId?: string) {
   const fields: Record<string, string> = {};
-  for (const [key, value] of Object.entries(row)) if (!["id", "updatedAt"].includes(key)) {
+  for (const [key, value] of Object.entries(row)) if (!["id", "updatedAt", "userId"].includes(key)) {
     if (value instanceof Date) fields[key] = value.toISOString();
     else if (value !== null && value !== undefined) fields[key] = String(value);
     else fields[key] = "";
@@ -49,10 +52,12 @@ function record(row: Row, resource: ResourceCode) {
   const title = String(row.title ?? row.name ?? row.number ?? row.customerName ?? "Registro");
   return { id: row.id, title, subtitle: String(row.company ?? row.email ?? row.summary ?? row.body ?? row.location ?? ""),
     status: String(row.status ?? row.evidenceStatus ?? ""), updatedAt: row.updatedAt.toISOString(), fields,
-    editable: ["clients", "leads", "notes", "tasks"].includes(resource) };
+    editable: ["clients", "leads", "notes", "tasks"].includes(resource),
+    canDelete: resource === "files" && typeof actorId === "string" && row.userId === actorId };
 }
 export async function listPortalResource(token: WorkspacePortalToken, resource: ResourceCode, cursor?: string) {
   await authorizeResource(token, resource);
+  if (resource === "profile") return listProfessionalProfile(token);
   const window = { take: 31, orderBy: { id: "asc" as const }, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}) };
   const tenant = { terraqoWorkspaceId: token.workspaceId, deletedAt: null };
   let rows: Row[];
@@ -64,7 +69,7 @@ export async function listPortalResource(token: WorkspacePortalToken, resource: 
       select: taskSelect }); break;
     case "files": rows = await prisma.terraqoWorkspaceFile.findMany({ ...window,
       where: { workspaceId: token.workspaceId, OR: [{ userId: token.sub }, ...(token.role === "ADMIN" ? [{ visibility: "WORKSPACE" as const }] : [])] },
-      select: { id: true, title: true, description: true, fileName: true, contentType: true, size: true, category: true, visibility: true, updatedAt: true } }); break;
+      select: { id: true, userId: true, title: true, description: true, fileName: true, contentType: true, size: true, category: true, visibility: true, updatedAt: true } }); break;
     case "worklogs": rows = await prisma.terraqoWorklogEntry.findMany({ ...window,
       where: { workspaceId: token.workspaceId, deletedAt: null, ...(token.role === "ADMIN" ? {} : { authorId: token.sub }) },
       select: { id: true, title: true, summary: true, outcome: true, evidenceStatus: true, occurredAt: true, updatedAt: true } }); break;
@@ -83,7 +88,7 @@ export async function listPortalResource(token: WorkspacePortalToken, resource: 
     }
   }
   return { schemaVersion: 1, workspaceSlug: token.workspaceSlug, resource,
-    records: rows.slice(0, 30).map(row => record(row, resource)), nextCursor: rows.length > 30 ? rows[29].id : null,
+    records: rows.slice(0, 30).map(row => record(row, resource, token.sub)), nextCursor: rows.length > 30 ? rows[29].id : null,
     canCreate: ["clients", "leads", "notes"].includes(resource) };
 }
 
@@ -92,6 +97,12 @@ export async function listPortalResource(token: WorkspacePortalToken, resource: 
 export async function savePortalResource(token: WorkspacePortalToken, resource: ResourceCode,
   input: unknown, key: string | null, id?: string, version?: string) {
   await authorizeResource(token, resource);
+  if (resource === "profile") {
+    const saved = await updateProfessionalProfile(token, input, id, version);
+    if (saved.failure === "missing") throw new PortalResourceError("Perfil no disponible.", 404);
+    if (saved.failure === "version") throw new PortalResourceError("El perfil cambió. Recarga antes de editar.", 409);
+    return saved.record;
+  }
   if (resource === "tasks") return saveTask(token, input, id, version);
   if (!["clients", "leads", "notes"].includes(resource)) throw new PortalResourceError("Esta sección no admite edición desde este contrato.", 403);
   if (id && (!version || !z.string().datetime().safeParse(version).success)) throw new PortalResourceError("Actualiza el registro antes de guardarlo.", 409);
