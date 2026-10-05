@@ -9,10 +9,11 @@ async function main() {
   const workspace = await prisma.terraqoWorkspace.findFirst({where: {slug: 'icc-topografia', active: true, deletedAt: null,
     companies: {some: {document: '20616116313', deletedAt: null}}}, select: {id: true}}); assert.ok(workspace);
   const run = randomUUID(), email = `projects-native-${run}@example.test`, password = randomBytes(24).toString('hex');
-  const titles = [`Proyecto-celular-${run}`, `Proyecto-tablet-${run}`];
+  const titles = [`Campo-celular-${run.slice(0, 8)}`, `Campo-tablet-${run.slice(0, 8)}`];
   const user = await prisma.user.create({data: {email, name: 'Prueba proyectos Android', role: 'CUSTOMER', emailVerified: new Date(), passwordHash: await bcrypt.hash(password, 12),
     terraqoMemberships: {create: {workspaceId: workspace.id, role: 'ADMIN', active: true}}}, select: {id: true}});
   try {
+    assert.equal(await prisma.project.count({where: {terraqoWorkspaceId: workspace.id, title: {in: titles}}}), 0);
     for (const [index, serial] of ['emulator-5554', 'emulator-5556'].entries()) {
       stage = `${serial}: login`; await login(serial, email, password);
       stage = `${serial}: project management`; await tapLabel(serial, 'Proyectos'); await tapLabel(serial, 'Gestionar proyectos'); await tapLabel(serial, 'Crear proyecto');
@@ -45,7 +46,7 @@ async function main() {
     }
     assert.equal(await prisma.verificationToken.count({where: {identifier: `portal-session:${workspace.id}:${user.id}`}}), 0);
   } finally {
-    const projects = await prisma.project.findMany({where: {terraqoWorkspaceId: workspace.id, title: {in: titles}, slug: {startsWith: 'portal-'}}, select: {id: true}});
+    const projects = await prisma.project.findMany({where: {terraqoWorkspaceId: workspace.id, title: {in: titles}, slug: {startsWith: 'portal-'}, activities: {some: {actorId: user.id, action: 'CREATED'}}}, select: {id: true}});
     const ids = projects.map(project => project.id);
     await prisma.activityLog.deleteMany({where: {projectId: {in: ids}, terraqoWorkspaceId: workspace.id, actorId: user.id}});
     await prisma.project.deleteMany({where: {id: {in: ids}, terraqoWorkspaceId: workspace.id, title: {in: titles}}});
