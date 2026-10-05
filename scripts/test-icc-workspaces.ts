@@ -20,7 +20,7 @@ async function main(){
     assert.equal((await request('workspaces')).status,401);
     const logged=await request('login',undefined,{email,password});assert.equal(logged.status,200);
     const original=(await logged.json()).data.token as string;
-    const listed=await request('workspaces',original);assert.equal(listed.status,200);assert.equal(listed.headers.get('cache-control'),'private, no-store');
+    const listed=await request('workspaces',original);assert.equal(listed.status,200);assert.equal(listed.headers.get('cache-control')?.replace(/\s/g,''),'private,no-store');
     const data=(await listed.json()).data;assert.equal(data.workspaces.length,1);assert.equal(data.nextCursor,null);
     assert.equal(data.workspaces[0].slug,'icc-topografia');assert.equal(data.workspaces[0].current,true);
     assert.deepEqual(Object.keys(data.workspaces[0]).sort(),['current','name','role','slug']);
