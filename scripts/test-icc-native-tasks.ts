@@ -17,7 +17,8 @@ async function main() {
     for (const serial of ["emulator-5554", "emulator-5556"]) {
       stage = `${serial}: login`; await login(serial, email, password);
       stage = `${serial}: tasks`; await tapLabel(serial, "Abrir herramientas"); await tapLabel(serial, "Tareas"); await tapLabel(serial, "Nuevo registro");
-      stage = `${serial}: choose project`; await tapLabel(serial, "Proyecto"); await tapLabel(serial, "Proyecto-prueba-Android");
+      stage = `${serial}: project picker`; await tapLabel(serial, "Sin seleccionar, Elegir proyecto");
+      stage = `${serial}: project selection`; await tapLabel(serial, "Proyecto-prueba-Android");
       const title = serial === "emulator-5554" ? "Tarea-celular" : "Tarea-tablet";
       stage = `${serial}: title`; await fillLabel(serial, "Título", title);
       stage = `${serial}: description`; await fillLabel(serial, "Descripción", "Validacion-operativa");
