@@ -15,6 +15,7 @@ export async function getPortalProject(token: WorkspacePortalToken, projectId: s
     });
     if (!account?.clientId) return null;
     where.clientId = account.clientId;
+    where.client = { terraqoWorkspaceId: token.workspaceId, deletedAt: null };
   } else if (token.role === "PROFESSIONAL") {
     const profile = await prisma.terraqoProfessionalProfile.findUnique({ where: { userId: token.sub }, select: { id: true } });
     if (!profile) return null;

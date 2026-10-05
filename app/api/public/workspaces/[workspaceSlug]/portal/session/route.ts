@@ -145,7 +145,8 @@ export async function GET(request: Request, { params }: RouteContext) {
 
     const client = membership.role === "CLIENT"
       ? await prisma.clientAccount.findFirst({
-          where: { terraqoWorkspaceId: token.workspaceId, userId: token.sub, deletedAt: null },
+          where: { terraqoWorkspaceId: token.workspaceId, userId: token.sub, deletedAt: null,
+            client: { terraqoWorkspaceId: token.workspaceId, deletedAt: null } },
           select: {
             status: true,
             client: {
@@ -155,13 +156,13 @@ export async function GET(request: Request, { params }: RouteContext) {
                 company: true,
                 phone: true,
                 quotes: {
-                  where: { terraqoWorkspaceId: token.workspaceId },
+                  where: { terraqoWorkspaceId: token.workspaceId, deletedAt: null },
                   orderBy: { createdAt: "desc" },
                   take: 20,
                   select: { id: true, number: true, status: true, total: true, currency: true, createdAt: true },
                 },
                 projects: {
-                  where: { terraqoWorkspaceId: token.workspaceId },
+                  where: { terraqoWorkspaceId: token.workspaceId, deletedAt: null },
                   orderBy: { updatedAt: "desc" },
                   take: 20,
                   select: { id: true, title: true, slug: true, status: true, location: true, updatedAt: true },

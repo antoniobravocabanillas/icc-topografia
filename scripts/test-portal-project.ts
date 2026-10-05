@@ -19,7 +19,10 @@ async function main() {
     queries++;
     assert.equal(args.where.id, "project"); assert.equal(args.where.terraqoWorkspaceId, "workspace"); assert.equal(args.where.deletedAt, null);
     assert.equal(args.select.documents, undefined); assert.equal(args.select.latitude, undefined); assert.equal(args.select.sale, undefined);
-    if (role === "CLIENT") assert.equal(args.where.clientId, "authorized-client");
+    if (role === "CLIENT") {
+      assert.equal(args.where.clientId, "authorized-client");
+      assert.deepEqual(args.where.client, {terraqoWorkspaceId: 'workspace', deletedAt: null});
+    }
     if (role === "PROFESSIONAL") assert.deepEqual(args.where.OR, [
       { terraqoExperiences: { some: { professionalProfileId: "authorized-profile" } } },
       { terraqoJobPosts: { some: { applications: { some: { professionalProfileId: "authorized-profile", status: "ACCEPTED" } } } } },

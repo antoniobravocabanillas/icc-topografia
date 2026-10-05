@@ -6,24 +6,24 @@ import { hasWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 import type { WorkspacePortalToken } from "./workspace-portal-session";
 import { listProfessionalProfile, updateProfessionalProfile } from "./portal-professional-profile";
 import { listCvEntries, saveCvEntry } from "./portal-cv-entries";
-import { portalProjectSelect, writePortalProject } from "./portal-project-write";
+import { canChangeProjectClient, portalProjectSelect, writePortalProject } from "./portal-project-write";
 import { createPortalTask } from "./portal-task-create";
 import { taskFieldsSchema, taskMutation, taskSelect, lockTaskAssignee } from "./portal-task-fields";
 
-export const resourceCodes = ["clients", "leads", "notes", "projects", "tasks", "taskProjects", "taskAssignees", "files", "worklogs", "quotes", "orders", "notifications", "profile", "experiences", "education"] as const;
+export const resourceCodes = ["clients", "leads", "notes", "projects", "projectClients", "tasks", "taskProjects", "taskAssignees", "files", "worklogs", "quotes", "orders", "notifications", "profile", "experiences", "education"] as const;
 export type ResourceCode = typeof resourceCodes[number];
 export class PortalResourceError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
 // Personal workspace files retain the existing portal ownership and quota policy;
 // PROJECTS/DOCUMENTS entitlements refer to project documents, a different resource.
-const modules = { clients: "CRM", leads: "CRM", notes: null, projects: "PROJECTS", tasks: "PROJECTS", taskProjects: "PROJECTS", taskAssignees: "PROJECTS", files: null,
+const modules = { clients: "CRM", leads: "CRM", notes: null, projects: "PROJECTS", projectClients: "PROJECTS", tasks: "PROJECTS", taskProjects: "PROJECTS", taskAssignees: "PROJECTS", files: null,
   worklogs: "PROFESSIONAL_NETWORK", quotes: "CRM", orders: "TECHNICAL_STORE", notifications: null, profile: "PROFESSIONAL_NETWORK",
   experiences: "PROFESSIONAL_NETWORK", education: "PROFESSIONAL_NETWORK" } as const;
 export async function authorizeResource(token: WorkspacePortalToken, resource: ResourceCode) {
   if (["profile", "experiences", "education"].includes(resource) && token.role !== "PROFESSIONAL")
     throw new PortalResourceError("Esta sección requiere tu cuenta profesional.", 403);
-  if (["clients", "leads", "projects", "tasks", "taskProjects", "taskAssignees"].includes(resource) && token.role !== "ADMIN")
+  if (["clients", "leads", "projects", "projectClients", "tasks", "taskProjects", "taskAssignees"].includes(resource) && token.role !== "ADMIN")
     throw new PortalResourceError("Esta sección requiere administración empresarial.", 403);
   if (["quotes", "orders"].includes(resource) && !["ADMIN", "CLIENT"].includes(token.role))
     throw new PortalResourceError("Tu rol no permite consultar esta sección.", 403);
@@ -53,7 +53,15 @@ function record(row: Row, resource: ResourceCode, actorId?: string, workspaceId?
       assignedProfileName: scoped ? profile!.displayName : "",
       dueDate: row.dueDate instanceof Date ? row.dueDate.toISOString().slice(0, 10) : "" };
   }
-  if (resource === 'projects') row = {...row, servicesApplied: Array.isArray(row.servicesApplied) ? row.servicesApplied.join('\n') : ''};
+  if (resource === 'projects') {
+    const {client, companyId, opportunityId, saleId, ...publicRow} = row;
+    const customer = client as {id: string; name: string; company: string | null; terraqoWorkspaceId: string | null; deletedAt: Date | null} | null;
+    const scoped = !!customer && customer.terraqoWorkspaceId === workspaceId && !customer.deletedAt;
+    const editable = workspaceId !== undefined && canChangeProjectClient({clientId: row.clientId as string | null,
+      companyId: companyId as string | null, opportunityId: opportunityId as string | null, saleId: saleId as string | null, client: customer}, workspaceId);
+    row = {...publicRow, clientId: scoped ? customer.id : '', clientName: scoped ? customer.company || customer.name : '',
+      clientLinkEditable: editable, servicesApplied: Array.isArray(row.servicesApplied) ? row.servicesApplied.join('\n') : ''};
+  }
   const fields: Record<string, string> = {};
   for (const [key, value] of Object.entries(row)) if (!["id", "updatedAt", "userId"].includes(key)) {
     if (value instanceof Date) fields[key] = value.toISOString();
@@ -75,6 +83,12 @@ export async function listPortalResource(token: WorkspacePortalToken, resource: 
   let rows: Row[];
   switch (resource) {
     case "projects": rows = await prisma.project.findMany({ ...window, where: tenant, select: portalProjectSelect }); break;
+    case "projectClients": {
+      const clients = await prisma.client.findMany({ ...window, where: tenant,
+        select: { id: true, name: true, company: true, updatedAt: true } });
+      rows = clients.map(client => ({ id: client.id, title: client.company || client.name,
+        summary: client.company ? client.name : '', updatedAt: client.updatedAt })); break;
+    }
     case "taskAssignees": {
       const people = await prisma.staffProfile.findMany({ ...window, where: { terraqoWorkspaceId: token.workspaceId, active: true },
         select: { id: true, displayName: true, roleTitle: true, updatedAt: true } });

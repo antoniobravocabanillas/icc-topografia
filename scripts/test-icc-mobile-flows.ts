@@ -11,7 +11,7 @@ async function main() {
     companies: { some: { document: "20616116313", deletedAt: null } } }, select: { id: true } });
   assert.ok(workspace, "ICC workspace and authorized RUC must match.");
   const run = randomUUID();
-  const users: { id: string; token?: string }[] = [];
+  const users: { id: string; role: string; token?: string }[] = [];
   const projectId = randomUUID(), taskId = randomUUID(), profileId = randomUUID();
   let clientId: string | undefined;
   let managedProjectId: string | undefined;
@@ -30,7 +30,7 @@ async function main() {
       const email = `mobile-${role.toLowerCase()}-${run}@example.test`;
       const user: { id: string } = await prisma.user.create({ data: { email, name: "Prueba Android Terraqo", role: "CUSTOMER", passwordHash: await bcrypt.hash(password, 12),
         emailVerified: new Date(), terraqoMemberships: { create: { workspaceId: workspace.id, role, active: true } } }, select: { id: true } });
-      const fixture: { id: string; token?: string } = { id: user.id }; users.push(fixture);
+      const fixture: { id: string; role: string; token?: string } = { id: user.id, role }; users.push(fixture);
       const login = await call("login", undefined, { email, password }); assert.equal(login.status, 200, `Password login failed for ${role}.`);
       fixture.token = (await login.json()).data.token;
       assert.ok(fixture.token);
@@ -38,6 +38,7 @@ async function main() {
       assert.equal((await session.json()).data.user.role, role.toLowerCase());
       if (role !== "ADMIN") assert.equal((await call("resources/clients", fixture.token)).status, 403);
       if (role !== "ADMIN") assert.equal((await call("resources/projects", fixture.token)).status, 403);
+      if (role !== "ADMIN") assert.equal((await call("resources/projectClients", fixture.token)).status, 403);
       if (role !== "ADMIN") assert.equal((await call("resources/taskProjects", fixture.token)).status, 403);
       if (role !== "ADMIN") assert.equal((await call("resources/taskAssignees", fixture.token)).status, 403);
       console.log(`PASS real password login: temporary ${role} account.`);
@@ -149,6 +150,35 @@ async function main() {
         const publicVersion = await prisma.project.findUniqueOrThrow({where: {id: managedProjectId}});
         assert.equal((await call('resources/projects', fixture.token, {...editProject, version: publicVersion.updatedAt.toISOString()})).status, 403);
         await prisma.project.update({where: {id: managedProjectId}, data: {status: 'IN_PROGRESS'}});
+        const clientUser = users.find(user => user.role === 'CLIENT'); assert.ok(clientUser);
+        const company = await prisma.company.findFirstOrThrow({where: {terraqoWorkspaceId: workspace.id, document: '20616116313', deletedAt: null}, select: {id: true}});
+        await prisma.clientAccount.create({data: {userId: clientUser.id, companyId: company.id, clientId, terraqoWorkspaceId: workspace.id, status: 'active'}});
+        const clientOptions = await call('resources/projectClients', fixture.token); assert.equal(clientOptions.status, 200);
+        const options = (await clientOptions.json()).data;
+        assert.ok(options.records.every((record: {fields: Record<string, string>}) => !('email' in record.fields) && !('phone' in record.fields)));
+        assert.equal((await call(`projects/${managedProjectId}`, clientUser.token)).status, 404);
+        const current = await prisma.project.findUniqueOrThrow({where: {id: managedProjectId}});
+        const linkedResponse = await call('resources/projects', fixture.token, {id: managedProjectId, version: current.updatedAt.toISOString(), fields: {...projectFields, clientId}});
+        assert.equal(linkedResponse.status, 200);
+        const linked = (await linkedResponse.json()).data.record; assert.equal(linked.fields.clientId, clientId);
+        assert.equal(linked.fields.clientName, 'Empresa de prueba');
+        assert.equal((await call(`projects/${managedProjectId}`, clientUser.token)).status, 200);
+        const linkedSession = await call('session', clientUser.token);
+        assert.ok((await linkedSession.json()).data.client.client.projects.some((project: {id: string}) => project.id === managedProjectId));
+        await prisma.client.update({where: {id: clientId}, data: {deletedAt: new Date()}});
+        assert.equal((await call(`projects/${managedProjectId}`, clientUser.token)).status, 404);
+        assert.equal((await (await call('session', clientUser.token)).json()).data.client, null);
+        await prisma.client.update({where: {id: clientId}, data: {deletedAt: null}});
+        const retained = await call('resources/projects', fixture.token, {id: managedProjectId, version: linked.updatedAt, fields: projectFields});
+        assert.equal(retained.status, 200); assert.equal((await retained.json()).data.record.fields.clientId, clientId);
+        const beforeUnlink = await prisma.project.findUniqueOrThrow({where: {id: managedProjectId}});
+        const unlinked = await call('resources/projects', fixture.token, {id: managedProjectId, version: beforeUnlink.updatedAt.toISOString(), fields: {...projectFields, clientId: ''}});
+        assert.equal(unlinked.status, 200);
+        assert.equal((await call(`projects/${managedProjectId}`, clientUser.token)).status, 404);
+        const removedSession = await call('session', clientUser.token);
+        assert.ok(!(await removedSession.json()).data.client.client.projects.some((project: {id: string}) => project.id === managedProjectId));
+        assert.equal((await prisma.project.findUniqueOrThrow({where: {id: managedProjectId}})).clientId, null);
+        console.log('PASS real client link: minimal selector, grant/private project lookup, legacy omission retains link, removal revokes lookup.');
         console.log('PASS real project management: concurrent private creation, one audit, strict publication/relations, versioned edit, stale conflict and published-project protection.');
         const creationKey = randomBytes(16).toString("hex");
         const creationFields = { projectId, title: "Tarea nueva Android", description: "Registro temporal", status: "TODO", assignedProfileId: profileId, dueDate: "2027-01-15" };
@@ -204,6 +234,7 @@ async function main() {
       await prisma.project.deleteMany({where: {id: managedProjectId, terraqoWorkspaceId: workspace.id, title: `Proyecto-HTTP-${run}`}});
     }
     await prisma.staffProfile.deleteMany({where: {id: profileId, terraqoWorkspaceId: workspace.id}});
+    await prisma.clientAccount.deleteMany({where: {terraqoWorkspaceId: workspace.id, userId: {in: users.map(user => user.id)}}});
     if (clientId) await prisma.client.deleteMany({ where: { id: clientId, terraqoWorkspaceId: workspace.id } });
     for (const user of users) await prisma.user.delete({ where: { id: user.id } });
     console.log("CLEANUP: temporary accounts, grants, notes, private files, client, project, task and test audit removed.");

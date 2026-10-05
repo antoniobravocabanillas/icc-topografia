@@ -10,26 +10,31 @@ async function main() {
     companies: {some: {document: '20616116313', deletedAt: null}}}, select: {id: true}}); assert.ok(workspace);
   const run = randomUUID(), email = `projects-native-${run}@example.test`, password = randomBytes(24).toString('hex');
   const titles = [`Campo-celular-${run.slice(0, 8)}`, `Campo-tablet-${run.slice(0, 8)}`];
+  const clientId = `000-native-client-${run}`, clientName = `Cliente-Android-${run.slice(0, 8)}`;
   const user = await prisma.user.create({data: {email, name: 'Prueba proyectos Android', role: 'CUSTOMER', emailVerified: new Date(), passwordHash: await bcrypt.hash(password, 12),
     terraqoMemberships: {create: {workspaceId: workspace.id, role: 'ADMIN', active: true}}}, select: {id: true}});
   try {
+    await prisma.client.create({data: {id: clientId, name: clientName, email: `native-client-${run}@example.test`, terraqoWorkspaceId: workspace.id}});
     assert.equal(await prisma.project.count({where: {terraqoWorkspaceId: workspace.id, title: {in: titles}}}), 0);
     for (const [index, serial] of ['emulator-5554', 'emulator-5556'].entries()) {
       stage = `${serial}: login`; await login(serial, email, password);
       stage = `${serial}: project management`; await tapLabel(serial, 'Proyectos'); await tapLabel(serial, 'Gestionar proyectos'); await tapLabel(serial, 'Crear proyecto');
       stage = `${serial}: project form`; await fillLabel(serial, 'Nombre del proyecto', titles[index]);
+      await tapLabel(serial, 'Sin cliente, Elegir cliente'); await tapLabel(serial, clientName);
       await fillLabel(serial, 'Alcance del proyecto', 'Levantamiento-de-terreno');
       await fillLabel(serial, 'Ubicación', 'Lima'); await fillLabel(serial, 'Servicios', 'GPS');
       for (let i = 0; i < 4; i++) await scroll(serial, true);
       capture(serial, index === 0 ? 'project-editor-phone.png' : 'project-editor-tablet.png');
       stage = `${serial}: create`; await tapLabel(serial, 'Guardar');
+      capture(serial, index === 0 ? 'project-client-confirm-phone.png' : 'project-client-confirm-tablet.png');
+      await tapLabel(serial, 'Vincular y guardar');
       let project: Awaited<ReturnType<typeof prisma.project.findFirst>> = null;
       for (let attempt = 0; attempt < 12; attempt++) {
         project = await prisma.project.findFirst({where: {title: titles[index], terraqoWorkspaceId: workspace.id}});
         if (project) break; await pause(800);
       }
       assert.ok(project); assert.equal(project.isPublic, false); assert.equal(project.isFeatured, false); assert.equal(project.status, 'PLANNING');
-      assert.equal(project.clientId, null); assert.deepEqual(project.servicesApplied, ['GPS']);
+      assert.equal(project.clientId, clientId); assert.equal(project.clientName, clientName); assert.deepEqual(project.servicesApplied, ['GPS']);
       assert.equal(await prisma.activityLog.count({where: {projectId: project.id, actorId: user.id, action: 'CREATED'}}), 1);
       stage = `${serial}: edit`; await tapLabel(serial, titles[index]); await fillLabel(serial, 'Especialidad', 'Topografia'); await tapLabel(serial, 'Guardar');
       for (let attempt = 0; attempt < 12; attempt++) {
@@ -37,6 +42,7 @@ async function main() {
         if (project.category === 'Topografia') break; await pause(800);
       }
       assert.equal(project.category, 'Topografia'); assert.equal(project.isPublic, false);
+      assert.equal(project.clientId, clientId);
       assert.equal(await prisma.activityLog.count({where: {projectId: project.id, actorId: user.id, action: 'UPDATED'}}), 1);
       shell(serial, 'input keyevent 4'); await pause(700);
       stage = `${serial}: logout`; await tapLabel(serial, 'Cuenta'); await tapLabel(serial, 'Cerrar sesión');
@@ -50,6 +56,7 @@ async function main() {
     const ids = projects.map(project => project.id);
     await prisma.activityLog.deleteMany({where: {projectId: {in: ids}, terraqoWorkspaceId: workspace.id, actorId: user.id}});
     await prisma.project.deleteMany({where: {id: {in: ids}, terraqoWorkspaceId: workspace.id, title: {in: titles}}});
+    await prisma.client.deleteMany({where: {id: clientId, terraqoWorkspaceId: workspace.id, email: `native-client-${run}@example.test`}});
     await prisma.verificationToken.deleteMany({where: {identifier: {in: [`portal-session:${workspace.id}:${user.id}`, `portal-login-attempt:${workspace.id}:${user.id}`]}}});
     await prisma.user.delete({where: {id: user.id}});
     for (const serial of ['emulator-5554', 'emulator-5556']) shell(serial, 'rm -f /sdcard/terraqo-native-test.xml');
