@@ -1,5 +1,6 @@
 import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import { toWorkspacePortalRole, type WorkspacePortalRole } from "./workspace-portal-policy";
 
 export type { WorkspacePortalRole } from "./workspace-portal-policy";
@@ -29,10 +30,11 @@ function grantHash(jti: string) { return createHash("sha256").update(jti).digest
 
 /** Store only a session identifier hash. A stolen bearer token can be revoked
  * without changing the account password or invalidating other devices. */
-export async function createRevocablePortalToken(payload: Omit<WorkspacePortalToken, "iat" | "exp" | "jti">) {
+export async function createRevocablePortalToken(payload: Omit<WorkspacePortalToken, "iat" | "exp" | "jti">,
+  database: Pick<Prisma.TransactionClient, "verificationToken"> = prisma) {
   const jti = randomUUID();
   const session = createWorkspacePortalToken({ ...payload, jti });
-  await prisma.verificationToken.create({ data: { identifier: grantIdentifier(payload),
+  await database.verificationToken.create({ data: { identifier: grantIdentifier(payload),
     token: grantHash(jti), expires: new Date(Date.now() + session.expiresIn * 1000) } });
   return session;
 }
