@@ -43,6 +43,7 @@
     "test:portal-enterprise": "tsx scripts/test-portal-enterprise.ts",
     "test:portal-login": "node --conditions=react-server --import tsx scripts/test-portal-login.ts",
     "test:portal-deployed": "tsx scripts/test-deployed-portal.ts",
+    "test:portal-project-write": "tsx scripts/test-portal-project-write.ts",
     "test:portal-project": "tsx scripts/test-portal-project.ts",
     "test:portal-project-route": "node --require ./scripts/portal-route-test-preload.cjs --import tsx scripts/test-portal-project-route.ts",
     "test:portal-revocation": "tsx scripts/test-portal-revocation.ts",
