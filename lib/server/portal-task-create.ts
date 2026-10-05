@@ -3,19 +3,19 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import type { WorkspacePortalToken } from "./workspace-portal-session";
+import { taskFieldsSchema, taskMutation, taskSelect, lockTaskAssignee } from "./portal-task-fields";
 
 export class PortalTaskCreateError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
-const schema = z.object({ projectId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/),
-  title: z.string().trim().min(1).max(160), description: z.string().trim().max(8000).default(""),
-  status: z.enum(["TODO", "IN_PROGRESS", "BLOCKED", "DONE", "CANCELLED"]) }).strict();
-const select = { id: true, projectId: true, title: true, description: true, status: true,
-  dueDate: true, completedAt: true, updatedAt: true } as const;
+const schema = taskFieldsSchema.extend({ projectId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/) }).strict();
+const select = { ...taskSelect, projectId: true } as const;
 
 /** Caller enforces the active ADMIN membership and PROJECTS entitlement. */
 export async function createPortalTask(token: WorkspacePortalToken, input: unknown, key: string | null) {
-  const data = schema.parse(input);
+  const parsed = schema.parse(input);
+  const data = { ...taskMutation(parsed), assignedProfileId: parsed.assignedProfileId || null,
+    dueDate: parsed.dueDate ? new Date(`${parsed.dueDate}T00:00:00.000Z`) : null, projectId: parsed.projectId };
   if (!key || !/^[a-f0-9]{32}$/.test(key)) throw new PortalTaskCreateError("La operación necesita una clave válida.", 422);
   const id = createHash("sha256").update(JSON.stringify([token.workspaceId, token.sub, "tasks", key])).digest("hex").slice(0, 32);
   try {
@@ -29,10 +29,16 @@ export async function createPortalTask(token: WorkspacePortalToken, input: unkno
       const existing = await tx.task.findFirst({ where: { id, deletedAt: null,
         project: { terraqoWorkspaceId: token.workspaceId, deletedAt: null } }, select });
       if (existing) {
-        if (!Object.entries(data).every(([field, value]) => String(existing[field as keyof typeof existing] ?? "") === value))
+        if (!Object.entries(data).every(([field, value]) => {
+          const current = existing[field as keyof typeof existing];
+          return (current instanceof Date ? current.toISOString() : String(current ?? "")) ===
+            (value instanceof Date ? value.toISOString() : String(value ?? ""));
+        }))
           throw new PortalTaskCreateError("La clave de operación ya fue utilizada con otros datos.", 409);
         return existing;
       }
+      if (data.assignedProfileId && !await lockTaskAssignee(tx, token.workspaceId, data.assignedProfileId))
+        throw new PortalTaskCreateError("Responsable no disponible para esta empresa.", 422);
       if (await tx.task.count({ where: { projectId: data.projectId, deletedAt: null } }) >= 5000)
         throw new PortalTaskCreateError("Este proyecto alcanzó el límite de tareas activas.", 409);
       const saved = await tx.task.create({ data: { id, ...data, completedAt: data.status === "DONE" ? new Date() : null }, select });

@@ -2,18 +2,19 @@ import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "../lib/prisma";
-import { shell, snapshot, pause, login, tapLabel, fillLabel, capture } from "./native-android-controls";
+import { shell, snapshot, pause, login, tapLabel, fillLabel, capture, scroll } from "./native-android-controls";
 let stage = "initialization";
 async function main() {
   assert.equal(process.env.TERRAQO_MUTATING_TESTS, "icc-topografia:20616116313");
   const workspace = await prisma.terraqoWorkspace.findFirst({ where: { slug: "icc-topografia", active: true, deletedAt: null,
     companies: { some: { document: "20616116313", deletedAt: null } } }, select: { id: true } }); assert.ok(workspace);
-  const run = randomUUID(), projectId = `000-native-${run}`, email = `tasks-native-${run}@example.test`, password = randomBytes(24).toString("hex");
+  const run = randomUUID(), projectId = `000-native-${run}`, profileId = `000-native-profile-${run}`, email = `tasks-native-${run}@example.test`, password = randomBytes(24).toString("hex");
   const user: { id: string } = await prisma.user.create({ data: { email, name: "Prueba tareas Android", role: "CUSTOMER", emailVerified: new Date(), passwordHash: await bcrypt.hash(password, 12),
     terraqoMemberships: { create: { workspaceId: workspace.id, role: "ADMIN", active: true } } }, select: { id: true } });
   try {
     await prisma.project.create({ data: { id: projectId, title: "Proyecto-prueba-Android", slug: `native-task-${run}`,
       terraqoWorkspaceId: workspace.id, summary: "Prueba temporal", description: "Prueba temporal", servicesApplied: [], isPublic: false } });
+    await prisma.staffProfile.create({ data: {id: profileId, terraqoWorkspaceId: workspace.id, displayName: 'Responsable-prueba-Android', roleTitle: 'Topografia', certifications: [], documents: [], specialties: [], tools: {}, active: true} });
     for (const serial of ["emulator-5554", "emulator-5556"]) {
       stage = `${serial}: login`; await login(serial, email, password);
       stage = `${serial}: tasks`; await tapLabel(serial, "Abrir herramientas"); await tapLabel(serial, "Tareas"); await tapLabel(serial, "Nuevo registro");
@@ -21,14 +22,19 @@ async function main() {
       stage = `${serial}: project selection`; await tapLabel(serial, "Proyecto-prueba-Android");
       const title = serial === "emulator-5554" ? "Tarea-celular" : "Tarea-tablet";
       stage = `${serial}: title`; await fillLabel(serial, "Título", title);
+      stage = `${serial}: assignee`; await tapLabel(serial, 'Sin responsable, Elegir responsable');
+      await tapLabel(serial, 'Responsable-prueba-Android');
+      stage = `${serial}: deadline`; await fillLabel(serial, 'Fecha límite', '2027-01-15');
       stage = `${serial}: description`; await fillLabel(serial, "Descripción", "Validacion-operativa");
+      for (let i = 0; i < 3; i++) await scroll(serial, true);
       capture(serial, serial === "emulator-5554" ? "task-editor-phone.png" : "task-editor-tablet.png");
       stage = `${serial}: save`; await tapLabel(serial, "Guardar");
-      let tasks: { id: string; status: string }[] = [];
+      let tasks: { id: string; status: string; assignedProfileId: string | null; dueDate: Date | null }[] = [];
       for (let attempt = 0; attempt < 10; attempt++) {
-        tasks = await prisma.task.findMany({ where: { projectId, title }, select: { id: true, status: true } });
+        tasks = await prisma.task.findMany({ where: { projectId, title }, select: { id: true, status: true, assignedProfileId: true, dueDate: true } });
         if (tasks.length) break; await pause(800);
       }
+      assert.equal(tasks[0]?.assignedProfileId, profileId); assert.equal(tasks[0]?.dueDate?.toISOString(), '2027-01-15T00:00:00.000Z');
       assert.equal(tasks.length, 1); assert.equal(tasks[0].status, "TODO");
       assert.equal(await prisma.activityLog.count({ where: { taskId: tasks[0].id, actorId: user.id, action: "CREATED" } }), 1);
       shell(serial, "input keyevent 4"); await pause(500); shell(serial, "input keyevent 4"); await pause(500);
@@ -41,6 +47,7 @@ async function main() {
   } finally {
     await prisma.activityLog.deleteMany({ where: { actorId: user.id, projectId, terraqoWorkspaceId: workspace.id } });
     await prisma.project.deleteMany({ where: { id: projectId, slug: `native-task-${run}`, terraqoWorkspaceId: workspace.id } });
+    await prisma.staffProfile.deleteMany({where: {id: profileId, terraqoWorkspaceId: workspace.id}});
     await prisma.verificationToken.deleteMany({ where: { identifier: { in: [`portal-session:${workspace.id}:${user.id}`, `portal-login-attempt:${workspace.id}:${user.id}`] } } });
     await prisma.user.delete({ where: { id: user.id } });
     for (const serial of ["emulator-5554", "emulator-5556"]) shell(serial, "rm -f /sdcard/terraqo-native-test.xml");

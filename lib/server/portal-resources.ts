@@ -7,21 +7,22 @@ import type { WorkspacePortalToken } from "./workspace-portal-session";
 import { listProfessionalProfile, updateProfessionalProfile } from "./portal-professional-profile";
 import { listCvEntries, saveCvEntry } from "./portal-cv-entries";
 import { createPortalTask } from "./portal-task-create";
+import { taskFieldsSchema, taskMutation, taskSelect, lockTaskAssignee } from "./portal-task-fields";
 
-export const resourceCodes = ["clients", "leads", "notes", "tasks", "taskProjects", "files", "worklogs", "quotes", "orders", "notifications", "profile", "experiences", "education"] as const;
+export const resourceCodes = ["clients", "leads", "notes", "tasks", "taskProjects", "taskAssignees", "files", "worklogs", "quotes", "orders", "notifications", "profile", "experiences", "education"] as const;
 export type ResourceCode = typeof resourceCodes[number];
 export class PortalResourceError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
 // Personal workspace files retain the existing portal ownership and quota policy;
 // PROJECTS/DOCUMENTS entitlements refer to project documents, a different resource.
-const modules = { clients: "CRM", leads: "CRM", notes: null, tasks: "PROJECTS", taskProjects: "PROJECTS", files: null,
+const modules = { clients: "CRM", leads: "CRM", notes: null, tasks: "PROJECTS", taskProjects: "PROJECTS", taskAssignees: "PROJECTS", files: null,
   worklogs: "PROFESSIONAL_NETWORK", quotes: "CRM", orders: "TECHNICAL_STORE", notifications: null, profile: "PROFESSIONAL_NETWORK",
   experiences: "PROFESSIONAL_NETWORK", education: "PROFESSIONAL_NETWORK" } as const;
 export async function authorizeResource(token: WorkspacePortalToken, resource: ResourceCode) {
   if (["profile", "experiences", "education"].includes(resource) && token.role !== "PROFESSIONAL")
     throw new PortalResourceError("Esta sección requiere tu cuenta profesional.", 403);
-  if (["clients", "leads", "tasks", "taskProjects"].includes(resource) && token.role !== "ADMIN")
+  if (["clients", "leads", "tasks", "taskProjects", "taskAssignees"].includes(resource) && token.role !== "ADMIN")
     throw new PortalResourceError("Esta sección requiere administración empresarial.", 403);
   if (["quotes", "orders"].includes(resource) && !["ADMIN", "CLIENT"].includes(token.role))
     throw new PortalResourceError("Tu rol no permite consultar esta sección.", 403);
@@ -38,14 +39,19 @@ const leadSchema = z.object({ name: z.string().trim().min(2).max(160), email: z.
   company: nullableText, phone: z.string().trim().max(40).default(""), message: z.string().trim().min(1).max(8000),
   status: z.enum(["NEW", "CONTACTED", "QUALIFIED", "EVALUATION", "QUOTED", "NEGOTIATION", "WON", "LOST", "REQUIRES_TECH_SUPPORT"]) }).strict();
 const noteSchema = z.object({ title: z.string().trim().min(1).max(140), body: z.string().trim().min(1).max(24000) }).strict();
-const taskSchema = z.object({ title: z.string().trim().min(1).max(160), description: z.string().trim().max(8000).default(""),
-  status: z.enum(["TODO", "IN_PROGRESS", "BLOCKED", "DONE", "CANCELLED"]) }).strict();
-const taskSelect = { id: true, title: true, description: true, status: true, dueDate: true, completedAt: true, updatedAt: true } as const;
 const clientSelect = { id: true, name: true, email: true, company: true, phone: true, status: true, updatedAt: true } as const;
 const leadSelect = { ...clientSelect, message: true } as const;
 const noteSelect = { id: true, title: true, body: true, updatedAt: true } as const;
 type Row = { id: string; updatedAt: Date; [key: string]: unknown };
-function record(row: Row, resource: ResourceCode, actorId?: string) {
+function record(row: Row, resource: ResourceCode, actorId?: string, workspaceId?: string) {
+  if (resource === "tasks") {
+    const { assignedProfile, ...publicRow } = row;
+    const profile = assignedProfile as { displayName: string; terraqoWorkspaceId: string } | null | undefined;
+    const scoped = profile?.terraqoWorkspaceId === workspaceId && workspaceId !== undefined;
+    row = { ...publicRow, assignedProfileId: scoped ? publicRow.assignedProfileId : null,
+      assignedProfileName: scoped ? profile!.displayName : "",
+      dueDate: row.dueDate instanceof Date ? row.dueDate.toISOString().slice(0, 10) : "" };
+  }
   const fields: Record<string, string> = {};
   for (const [key, value] of Object.entries(row)) if (!["id", "updatedAt", "userId"].includes(key)) {
     if (value instanceof Date) fields[key] = value.toISOString();
@@ -66,6 +72,11 @@ export async function listPortalResource(token: WorkspacePortalToken, resource: 
   const tenant = { terraqoWorkspaceId: token.workspaceId, deletedAt: null };
   let rows: Row[];
   switch (resource) {
+    case "taskAssignees": {
+      const people = await prisma.staffProfile.findMany({ ...window, where: { terraqoWorkspaceId: token.workspaceId, active: true },
+        select: { id: true, displayName: true, roleTitle: true, updatedAt: true } });
+      rows = people.map(person => ({ id: person.id, title: person.displayName, summary: person.roleTitle, updatedAt: person.updatedAt })); break;
+    }
     case "taskProjects": rows = await prisma.project.findMany({ ...window, where: tenant,
       select: { id: true, title: true, status: true, updatedAt: true } }); break;
     case "clients": rows = await prisma.client.findMany({ ...window, where: tenant, select: clientSelect }); break;
@@ -94,7 +105,7 @@ export async function listPortalResource(token: WorkspacePortalToken, resource: 
     }
   }
   return { schemaVersion: 1, workspaceSlug: token.workspaceSlug, resource,
-    records: rows.slice(0, 30).map(row => record(row, resource, token.sub)), nextCursor: rows.length > 30 ? rows[29].id : null,
+    records: rows.slice(0, 30).map(row => record(row, resource, token.sub, token.workspaceId)), nextCursor: rows.length > 30 ? rows[29].id : null,
     canCreate: ["clients", "leads", "notes", "tasks"].includes(resource) };
 }
 
@@ -126,7 +137,7 @@ export async function savePortalResource(token: WorkspacePortalToken, resource: 
       const saved = await createPortalTask(token, input, key);
       const { projectId: _projectId, ...publicRow } = saved;
       void _projectId;
-      return record(publicRow, resource);
+      return record(publicRow, resource, token.sub, token.workspaceId);
     }
     return saveTask(token, input, id, version);
   }
@@ -171,11 +182,14 @@ async function saveTask(token: WorkspacePortalToken, input: unknown, id?: string
   if (!id) throw new PortalResourceError("Selecciona una tarea existente para editarla.", 422);
   if (!version || !z.string().datetime().safeParse(version).success)
     throw new PortalResourceError("Actualiza la tarea antes de guardarla.", 409);
-  const data = taskSchema.parse(input);
+  const data = taskMutation(taskFieldsSchema.parse(input));
   const where = { id, deletedAt: null, project: { terraqoWorkspaceId: token.workspaceId, deletedAt: null } };
   return prisma.$transaction(async tx => {
     const current = await tx.task.findFirst({ where, select: { ...taskSelect, projectId: true } });
     if (!current) throw new PortalResourceError("Tarea no disponible.", 404);
+    if (data.assignedProfileId && data.assignedProfileId !== current.assignedProfileId &&
+      !await lockTaskAssignee(tx, token.workspaceId, data.assignedProfileId))
+      throw new PortalResourceError("Responsable no disponible para esta empresa.", 422);
     // Completion and audit are committed together. Reopening clears completion;
     // editing an already completed task preserves its original completion time.
     const changed = await tx.task.updateMany({ where: { ...where, updatedAt: new Date(version) },
@@ -187,6 +201,6 @@ async function saveTask(token: WorkspacePortalToken, input: unknown, id?: string
       metadata: { previousStatus: current.status, status: data.status, source: "portal" } } });
     const saved = await tx.task.findFirst({ where, select: taskSelect });
     if (!saved) throw new PortalResourceError("Tarea no disponible.", 404);
-    return record(saved, "tasks");
+    return record(saved, "tasks", token.sub, token.workspaceId);
   });
 }

@@ -12,7 +12,7 @@ async function main() {
   assert.ok(workspace, "ICC workspace and authorized RUC must match.");
   const run = randomUUID();
   const users: { id: string; token?: string }[] = [];
-  const projectId = randomUUID(), taskId = randomUUID();
+  const projectId = randomUUID(), taskId = randomUUID(), profileId = randomUUID();
   let clientId: string | undefined;
   let privateFileId: string | undefined;
   const call = async (action: string, token?: string, body?: unknown, key?: string, method?: string) => {
@@ -37,6 +37,7 @@ async function main() {
       assert.equal((await session.json()).data.user.role, role.toLowerCase());
       if (role !== "ADMIN") assert.equal((await call("resources/clients", fixture.token)).status, 403);
       if (role !== "ADMIN") assert.equal((await call("resources/taskProjects", fixture.token)).status, 403);
+      if (role !== "ADMIN") assert.equal((await call("resources/taskAssignees", fixture.token)).status, 403);
       console.log(`PASS real password login: temporary ${role} account.`);
       const notice: { id: string } = await prisma.notification.create({ data: { userId: user.id, terraqoWorkspaceId: workspace.id,
         title: "Aviso temporal Android", body: "Prueba de lectura" } });
@@ -123,8 +124,10 @@ async function main() {
         await prisma.project.create({ data: { id: projectId, title: "Proyecto temporal de validación Android", slug: `mobile-test-${run}`,
           terraqoWorkspaceId: workspace.id, summary: "Prueba temporal", description: "Prueba temporal", servicesApplied: [], isPublic: false,
           tasks: { create: { id: taskId, title: "Tarea temporal" } } } });
+        await prisma.staffProfile.create({data: {id: profileId, terraqoWorkspaceId: workspace.id, displayName: 'Responsable temporal', roleTitle: 'Topografia', certifications: [], documents: [], specialties: [], tools: {}, active: true}});
+        const people = await call('resources/taskAssignees', fixture.token); assert.equal(people.status, 200);
         const creationKey = randomBytes(16).toString("hex");
-        const creationFields = { projectId, title: "Tarea nueva Android", description: "Registro temporal", status: "TODO" };
+        const creationFields = { projectId, title: "Tarea nueva Android", description: "Registro temporal", status: "TODO", assignedProfileId: profileId, dueDate: "2027-01-15" };
         const creates: Response[] = await Promise.all(Array.from({ length: 4 }, () => call("resources/tasks", fixture.token, { fields: creationFields }, creationKey)));
         for (const response of creates) assert.equal(response.status, 200);
         const results = await Promise.all(creates.map(response => response.json()));
@@ -142,6 +145,18 @@ async function main() {
         const done = (await edited.json()).data.record; assert.equal(done.status, "DONE"); assert.ok(done.fields.completedAt);
         assert.equal((await call("resources/tasks", fixture.token, command)).status, 409);
         assert.equal(await prisma.activityLog.count({ where: { taskId, actorId: user.id, terraqoWorkspaceId: workspace.id } }), 1);
+        const scheduledTask = await prisma.task.findUniqueOrThrow({where: {id: createdTaskId}});
+        assert.equal(scheduledTask.assignedProfileId, profileId); assert.equal(scheduledTask.dueDate?.toISOString(), '2027-01-15T00:00:00.000Z');
+        const oldFields = {title: creationFields.title, description: creationFields.description, status: 'TODO'};
+        const preserved = await call('resources/tasks', fixture.token, {id: createdTaskId, version: scheduledTask.updatedAt.toISOString(), fields: oldFields}); assert.equal(preserved.status, 200);
+        const preservedRow = (await preserved.json()).data.record;
+        assert.equal(preservedRow.fields.assignedProfileId, profileId); assert.equal(preservedRow.fields.assignedProfileName, 'Responsable temporal'); assert.equal(preservedRow.fields.dueDate, '2027-01-15');
+        const cleared = await call('resources/tasks', fixture.token, {id: createdTaskId, version: preservedRow.updatedAt, fields: {...oldFields, assignedProfileId: '', dueDate: ''}}); assert.equal(cleared.status, 200);
+        const clearedRow = (await cleared.json()).data.record; assert.equal(clearedRow.fields.assignedProfileId, ''); assert.equal(clearedRow.fields.dueDate, '');
+        await prisma.staffProfile.update({where: {id: profileId}, data: {active: false}});
+        assert.equal((await call('resources/tasks', fixture.token, {fields: creationFields}, randomBytes(16).toString('hex'))).status, 422);
+        assert.equal((await call('resources/tasks', fixture.token, {fields: {...creationFields, assignedProfileId: '', dueDate: '2027-02-29'}}, randomBytes(16).toString('hex'))).status, 422);
+        console.log('PASS real task scheduling: active tenant assignment, UTC deadline, older-client preservation, explicit clearing, inactive rejection and calendar validation.');
         console.log("PASS real enterprise writes: client creation/replay; task completion, audit and stale rejection.");
       }
     }
@@ -160,6 +175,7 @@ async function main() {
     await prisma.activityLog.deleteMany({ where: { projectId, terraqoWorkspaceId: workspace.id, actorId: { in: users.map(user => user.id) } } });
     await prisma.activityLog.deleteMany({ where: { entityType: "ProfessionalCv", terraqoWorkspaceId: workspace.id, actorId: { in: users.map(user => user.id) } } });
     await prisma.project.deleteMany({ where: { id: projectId, terraqoWorkspaceId: workspace.id, slug: `mobile-test-${run}` } });
+    await prisma.staffProfile.deleteMany({where: {id: profileId, terraqoWorkspaceId: workspace.id}});
     if (clientId) await prisma.client.deleteMany({ where: { id: clientId, terraqoWorkspaceId: workspace.id } });
     for (const user of users) await prisma.user.delete({ where: { id: user.id } });
     console.log("CLEANUP: temporary accounts, grants, notes, private files, client, project, task and test audit removed.");
