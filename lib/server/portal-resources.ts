@@ -7,23 +7,24 @@ import type { WorkspacePortalToken } from "./workspace-portal-session";
 import { listProfessionalProfile, updateProfessionalProfile } from "./portal-professional-profile";
 import { listCvEntries, saveCvEntry } from "./portal-cv-entries";
 import { canChangeProjectClient, portalProjectSelect, writePortalProject } from "./portal-project-write";
+import { isProjectOperation, listProjectOperations, saveProjectOperation } from "./portal-project-operations";
 import { createPortalTask } from "./portal-task-create";
 import { taskFieldsSchema, taskMutation, taskSelect, lockTaskAssignee } from "./portal-task-fields";
 
-export const resourceCodes = ["clients", "leads", "notes", "projects", "projectClients", "tasks", "taskProjects", "taskAssignees", "files", "worklogs", "quotes", "orders", "notifications", "profile", "experiences", "education"] as const;
+export const resourceCodes = ["clients", "leads", "notes", "projectMembers", "milestones", "projectProgress", "operationalProjects", "projects", "projectClients", "tasks", "taskProjects", "taskAssignees", "files", "worklogs", "quotes", "orders", "notifications", "profile", "experiences", "education"] as const;
 export type ResourceCode = typeof resourceCodes[number];
 export class PortalResourceError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
 // Personal workspace files retain the existing portal ownership and quota policy;
 // PROJECTS/DOCUMENTS entitlements refer to project documents, a different resource.
-const modules = { clients: "CRM", leads: "CRM", notes: null, projects: "PROJECTS", projectClients: "PROJECTS", tasks: "PROJECTS", taskProjects: "PROJECTS", taskAssignees: "PROJECTS", files: null,
+const modules = { clients: "CRM", leads: "CRM", notes: null, projects: "PROJECTS", operationalProjects: "PROJECTS", projectMembers: "PROJECTS", milestones: "PROJECTS", projectProgress: "PROJECTS", projectClients: "PROJECTS", tasks: "PROJECTS", taskProjects: "PROJECTS", taskAssignees: "PROJECTS", files: null,
   worklogs: "PROFESSIONAL_NETWORK", quotes: "CRM", orders: "TECHNICAL_STORE", notifications: null, profile: "PROFESSIONAL_NETWORK",
   experiences: "PROFESSIONAL_NETWORK", education: "PROFESSIONAL_NETWORK" } as const;
 export async function authorizeResource(token: WorkspacePortalToken, resource: ResourceCode) {
   if (["profile", "experiences", "education"].includes(resource) && token.role !== "PROFESSIONAL")
     throw new PortalResourceError("Esta sección requiere tu cuenta profesional.", 403);
-  if (["clients", "leads", "projects", "projectClients", "tasks", "taskProjects", "taskAssignees"].includes(resource) && token.role !== "ADMIN")
+  if (["clients", "leads", "projectMembers", "milestones", "projectProgress", "operationalProjects", "projects", "projectClients", "tasks", "taskProjects", "taskAssignees"].includes(resource) && token.role !== "ADMIN")
     throw new PortalResourceError("Esta sección requiere administración empresarial.", 403);
   if (["quotes", "orders"].includes(resource) && !["ADMIN", "CLIENT"].includes(token.role))
     throw new PortalResourceError("Tu rol no permite consultar esta sección.", 403);
@@ -76,6 +77,7 @@ function record(row: Row, resource: ResourceCode, actorId?: string, workspaceId?
 }
 export async function listPortalResource(token: WorkspacePortalToken, resource: ResourceCode, cursor?: string) {
   await authorizeResource(token, resource);
+  if (isProjectOperation(resource)) return listProjectOperations(token, resource, cursor);
   if (resource === "profile") return listProfessionalProfile(token);
   if (resource === "experiences" || resource === "education") return listCvEntries(token, resource, cursor);
   const window = { take: 31, orderBy: { id: "asc" as const }, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}) };
@@ -94,6 +96,8 @@ export async function listPortalResource(token: WorkspacePortalToken, resource: 
         select: { id: true, displayName: true, roleTitle: true, updatedAt: true } });
       rows = people.map(person => ({ id: person.id, title: person.displayName, summary: person.roleTitle, updatedAt: person.updatedAt })); break;
     }
+    case "operationalProjects": rows = await prisma.project.findMany({ ...window, where: {...tenant, isPublic: false, status: {not: "PUBLISHED"}},
+      select: {id: true, title: true, status: true, updatedAt: true} }); break;
     case "taskProjects": rows = await prisma.project.findMany({ ...window, where: tenant,
       select: { id: true, title: true, status: true, updatedAt: true } }); break;
     case "clients": rows = await prisma.client.findMany({ ...window, where: tenant, select: clientSelect }); break;
@@ -131,6 +135,7 @@ export async function listPortalResource(token: WorkspacePortalToken, resource: 
 export async function savePortalResource(token: WorkspacePortalToken, resource: ResourceCode,
   input: unknown, key: string | null, id?: string, version?: string) {
   await authorizeResource(token, resource);
+  if (isProjectOperation(resource)) return saveProjectOperation(token, resource, input, key, id, version);
   if (resource === "notifications") {
     z.object({ action: z.literal("READ") }).strict().parse(input);
     if (!id) throw new PortalResourceError("Selecciona una notificación.", 422);

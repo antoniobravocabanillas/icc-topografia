@@ -5,6 +5,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { PortalCvError } from "@/lib/server/portal-cv-entries";
 import { PortalProjectWriteError } from "@/lib/server/portal-project-write";
+import { PortalProjectOperationError } from "@/lib/server/portal-project-operations";
 import { PortalTaskCreateError } from "@/lib/server/portal-task-create";
 
 type Context = { params: Promise<{ workspaceSlug: string; resource: string }> };
@@ -45,7 +46,7 @@ async function handle(request: Request, context: Context, write: boolean) {
       revalidatePath("/cv/[username]/experiencias/[experienceId]", "page");
     }
     return ok({ schemaVersion: 1, workspaceSlug, resource, record }, cache);
-  } catch (error) { if (error instanceof PortalResourceError || error instanceof PortalCvError || error instanceof PortalTaskCreateError || error instanceof PortalProjectWriteError) return fail(error.message, error.status); return handleApiError(error); }
+  } catch (error) { if (error instanceof PortalProjectOperationError || error instanceof PortalResourceError || error instanceof PortalCvError || error instanceof PortalTaskCreateError || error instanceof PortalProjectWriteError) return fail(error.message, error.status); return handleApiError(error); }
 }
 export function GET(request: Request, context: Context) { return handle(request, context, false); }
 export function POST(request: Request, context: Context) { return handle(request, context, true); }
