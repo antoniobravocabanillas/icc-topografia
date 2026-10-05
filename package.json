@@ -48,6 +48,7 @@
     "test:portal-revocation": "tsx scripts/test-portal-revocation.ts",
     "test:portal-resources": "tsx scripts/test-portal-resources.ts",
     "test:portal-resources-route": "node --require ./scripts/portal-route-test-preload.cjs --import tsx scripts/test-portal-resources-route.ts",
+    "test:portal-task-create": "tsx scripts/test-portal-task-create.ts",
     "test:portal-task-edit": "tsx scripts/test-portal-task-edit.ts",
     "test:portal-login-limit": "tsx scripts/test-portal-login-limit.ts",
     "test:portal-profile": "tsx scripts/test-portal-profile.ts",

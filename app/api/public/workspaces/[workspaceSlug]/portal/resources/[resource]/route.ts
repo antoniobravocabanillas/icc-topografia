@@ -4,6 +4,7 @@ import { listPortalResource, savePortalResource, resourceCodes, PortalResourceEr
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { PortalCvError } from "@/lib/server/portal-cv-entries";
+import { PortalTaskCreateError } from "@/lib/server/portal-task-create";
 
 type Context = { params: Promise<{ workspaceSlug: string; resource: string }> };
 const command = z.object({ id: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/).optional(), version: z.string().optional(), fields: z.record(z.string(), z.string()) }).strict();
@@ -43,7 +44,7 @@ async function handle(request: Request, context: Context, write: boolean) {
       revalidatePath("/cv/[username]/experiencias/[experienceId]", "page");
     }
     return ok({ schemaVersion: 1, workspaceSlug, resource, record }, cache);
-  } catch (error) { if (error instanceof PortalResourceError || error instanceof PortalCvError) return fail(error.message, error.status); return handleApiError(error); }
+  } catch (error) { if (error instanceof PortalResourceError || error instanceof PortalCvError || error instanceof PortalTaskCreateError) return fail(error.message, error.status); return handleApiError(error); }
 }
 export function GET(request: Request, context: Context) { return handle(request, context, false); }
 export function POST(request: Request, context: Context) { return handle(request, context, true); }

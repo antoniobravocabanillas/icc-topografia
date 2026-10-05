@@ -6,21 +6,22 @@ import { hasWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 import type { WorkspacePortalToken } from "./workspace-portal-session";
 import { listProfessionalProfile, updateProfessionalProfile } from "./portal-professional-profile";
 import { listCvEntries, saveCvEntry } from "./portal-cv-entries";
+import { createPortalTask } from "./portal-task-create";
 
-export const resourceCodes = ["clients", "leads", "notes", "tasks", "files", "worklogs", "quotes", "orders", "notifications", "profile", "experiences", "education"] as const;
+export const resourceCodes = ["clients", "leads", "notes", "tasks", "taskProjects", "files", "worklogs", "quotes", "orders", "notifications", "profile", "experiences", "education"] as const;
 export type ResourceCode = typeof resourceCodes[number];
 export class PortalResourceError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
 // Personal workspace files retain the existing portal ownership and quota policy;
 // PROJECTS/DOCUMENTS entitlements refer to project documents, a different resource.
-const modules = { clients: "CRM", leads: "CRM", notes: null, tasks: "PROJECTS", files: null,
+const modules = { clients: "CRM", leads: "CRM", notes: null, tasks: "PROJECTS", taskProjects: "PROJECTS", files: null,
   worklogs: "PROFESSIONAL_NETWORK", quotes: "CRM", orders: "TECHNICAL_STORE", notifications: null, profile: "PROFESSIONAL_NETWORK",
   experiences: "PROFESSIONAL_NETWORK", education: "PROFESSIONAL_NETWORK" } as const;
 export async function authorizeResource(token: WorkspacePortalToken, resource: ResourceCode) {
   if (["profile", "experiences", "education"].includes(resource) && token.role !== "PROFESSIONAL")
     throw new PortalResourceError("Esta sección requiere tu cuenta profesional.", 403);
-  if (["clients", "leads", "tasks"].includes(resource) && token.role !== "ADMIN")
+  if (["clients", "leads", "tasks", "taskProjects"].includes(resource) && token.role !== "ADMIN")
     throw new PortalResourceError("Esta sección requiere administración empresarial.", 403);
   if (["quotes", "orders"].includes(resource) && !["ADMIN", "CLIENT"].includes(token.role))
     throw new PortalResourceError("Tu rol no permite consultar esta sección.", 403);
@@ -65,6 +66,8 @@ export async function listPortalResource(token: WorkspacePortalToken, resource: 
   const tenant = { terraqoWorkspaceId: token.workspaceId, deletedAt: null };
   let rows: Row[];
   switch (resource) {
+    case "taskProjects": rows = await prisma.project.findMany({ ...window, where: tenant,
+      select: { id: true, title: true, status: true, updatedAt: true } }); break;
     case "clients": rows = await prisma.client.findMany({ ...window, where: tenant, select: clientSelect }); break;
     case "leads": rows = await prisma.lead.findMany({ ...window, where: tenant, select: leadSelect }); break;
     case "notes": rows = await prisma.terraqoPrivateNote.findMany({ ...window, where: { workspaceId: token.workspaceId, userId: token.sub, kind: "SIMPLE" }, select: noteSelect }); break;
@@ -92,7 +95,7 @@ export async function listPortalResource(token: WorkspacePortalToken, resource: 
   }
   return { schemaVersion: 1, workspaceSlug: token.workspaceSlug, resource,
     records: rows.slice(0, 30).map(row => record(row, resource, token.sub)), nextCursor: rows.length > 30 ? rows[29].id : null,
-    canCreate: ["clients", "leads", "notes"].includes(resource) };
+    canCreate: ["clients", "leads", "notes", "tasks"].includes(resource) };
 }
 
 /** Creation IDs are scoped to actor, tenant and operation. A repeated key cannot
@@ -118,7 +121,15 @@ export async function savePortalResource(token: WorkspacePortalToken, resource: 
     if (saved.failure === "version") throw new PortalResourceError("El perfil cambió. Recarga antes de editar.", 409);
     return saved.record;
   }
-  if (resource === "tasks") return saveTask(token, input, id, version);
+  if (resource === "tasks") {
+    if (!id) {
+      const saved = await createPortalTask(token, input, key);
+      const { projectId: _projectId, ...publicRow } = saved;
+      void _projectId;
+      return record(publicRow, resource);
+    }
+    return saveTask(token, input, id, version);
+  }
   if (!["clients", "leads", "notes"].includes(resource)) throw new PortalResourceError("Esta sección no admite edición desde este contrato.", 403);
   if (id && (!version || !z.string().datetime().safeParse(version).success)) throw new PortalResourceError("Actualiza el registro antes de guardarlo.", 409);
   if (!id && (!key || !/^[a-f0-9]{32}$/.test(key))) throw new PortalResourceError("La operación necesita una clave válida.", 422);

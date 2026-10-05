@@ -35,7 +35,8 @@ export async function scroll(serial: string, down = false) {
 }
 export async function tapLabel(serial: string, label: string) {
   for (let attempt = 0; attempt < 15; attempt++) {
-    const node = nodes(await snapshot(serial)).find(node => node.includes(`content-desc="${label}`) && node.includes('clickable="true"'));
+    const node = nodes(await snapshot(serial)).find(node =>
+      (node.includes(`content-desc="${label}`) || node.includes(`hint="${label}"`)) && node.includes('clickable="true"'));
     if (node) { shell(serial, `input tap ${center(node)}`); await pause(500); return; }
     await scroll(serial);
   }
@@ -68,7 +69,7 @@ export async function login(serial: string, email: string, password: string) {
   assert.ok(ready, "Native login must reach the workspace."); assert.ok(!(await snapshot(serial)).includes("VISTA PREVIA"));
 }
 export function capture(serial: string, fileName: string) {
-  assert.match(fileName, /^cv-[a-z-]+\.png$/);
+  assert.match(fileName, /^(?:cv|task)-[a-z-]+\.png$/);
   const directory = join(process.env.USERPROFILE!, "Documents/ICC TOPOGRAFIA/terraqo_mobile/review"); assert.ok(existsSync(directory));
   writeFileSync(join(directory, fileName), execFileSync(adb, ["-s", serial, "exec-out", "screencap", "-p"], { env: environment, timeout: 30000, stdio: ["ignore", "pipe", "pipe"] }));
 }

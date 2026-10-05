@@ -36,6 +36,7 @@ async function main() {
       const session = await call("session", fixture.token); assert.equal(session.status, 200);
       assert.equal((await session.json()).data.user.role, role.toLowerCase());
       if (role !== "ADMIN") assert.equal((await call("resources/clients", fixture.token)).status, 403);
+      if (role !== "ADMIN") assert.equal((await call("resources/taskProjects", fixture.token)).status, 403);
       console.log(`PASS real password login: temporary ${role} account.`);
       const notice: { id: string } = await prisma.notification.create({ data: { userId: user.id, terraqoWorkspaceId: workspace.id,
         title: "Aviso temporal Android", body: "Prueba de lectura" } });
@@ -122,6 +123,19 @@ async function main() {
         await prisma.project.create({ data: { id: projectId, title: "Proyecto temporal de validación Android", slug: `mobile-test-${run}`,
           terraqoWorkspaceId: workspace.id, summary: "Prueba temporal", description: "Prueba temporal", servicesApplied: [], isPublic: false,
           tasks: { create: { id: taskId, title: "Tarea temporal" } } } });
+        const creationKey = randomBytes(16).toString("hex");
+        const creationFields = { projectId, title: "Tarea nueva Android", description: "Registro temporal", status: "TODO" };
+        const creates: Response[] = await Promise.all(Array.from({ length: 4 }, () => call("resources/tasks", fixture.token, { fields: creationFields }, creationKey)));
+        for (const response of creates) assert.equal(response.status, 200);
+        const results = await Promise.all(creates.map(response => response.json()));
+        const createdTaskId: string = results[0].data.record.id;
+        assert.ok(results.every(result => result.data.record.id === createdTaskId));
+        assert.equal(await prisma.task.count({ where: { projectId, title: creationFields.title } }), 1);
+        assert.equal(await prisma.activityLog.count({ where: { taskId: createdTaskId, actorId: user.id, action: "CREATED" } }), 1);
+        assert.equal((await call("resources/tasks", fixture.token, { fields: { ...creationFields, title: "Cambio" } }, creationKey)).status, 409);
+        assert.equal((await call("resources/tasks", fixture.token, { fields: { ...creationFields, assignedProfileId: "other" } }, randomBytes(16).toString("hex"))).status, 422);
+        assert.equal((await call("resources/tasks", fixture.token, { fields: { ...creationFields, projectId: "missing-project" } }, randomBytes(16).toString("hex"))).status, 404);
+        console.log("PASS real task creation: four concurrent replays, one task/audit, conflicting payload and arbitrary assignment rejected; missing project denied.");
         const task = await prisma.task.findUniqueOrThrow({ where: { id: taskId }, select: { updatedAt: true } });
         const command = { id: taskId, version: task.updatedAt.toISOString(), fields: { title: "Tarea validada", description: "Prueba temporal", status: "DONE" } };
         const edited = await call("resources/tasks", fixture.token, command); assert.equal(edited.status, 200);
@@ -143,7 +157,7 @@ async function main() {
       }
       await prisma.verificationToken.deleteMany({ where: { identifier: { in: [`portal-session:${workspace.id}:${user.id}`, `portal-login-attempt:${workspace.id}:${user.id}`] } } });
     }
-    await prisma.activityLog.deleteMany({ where: { taskId, terraqoWorkspaceId: workspace.id, actorId: { in: users.map(user => user.id) } } });
+    await prisma.activityLog.deleteMany({ where: { projectId, terraqoWorkspaceId: workspace.id, actorId: { in: users.map(user => user.id) } } });
     await prisma.activityLog.deleteMany({ where: { entityType: "ProfessionalCv", terraqoWorkspaceId: workspace.id, actorId: { in: users.map(user => user.id) } } });
     await prisma.project.deleteMany({ where: { id: projectId, terraqoWorkspaceId: workspace.id, slug: `mobile-test-${run}` } });
     if (clientId) await prisma.client.deleteMany({ where: { id: clientId, terraqoWorkspaceId: workspace.id } });

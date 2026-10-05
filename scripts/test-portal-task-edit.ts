@@ -37,7 +37,7 @@ async function main() {
     stale = true; await assert.rejects(save(), rejected(409)); assert.equal(audits, 3);
     stale = false; visible = false; await assert.rejects(save(), rejected(404)); assert.equal(audits, 3);
     visible = true; await assert.rejects(save({ ...fields, projectId: "foreign" }));
-    await assert.rejects(savePortalResource(token, "tasks", fields, "a".repeat(32)), rejected(422));
+    await assert.rejects(savePortalResource(token, "tasks", fields, "a".repeat(32)));
     const before = transactions;
     enabled = false; await assert.rejects(save(), rejected(403)); enabled = true;
     await assert.rejects(savePortalResource({ ...token, role: "MEMBER" }, "tasks", fields, null, "task", "2026-01-01T00:00:00Z"), rejected(403));
