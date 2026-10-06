@@ -1,6 +1,8 @@
 "use server";
 
 import bcrypt from "bcryptjs";
+import {randomUUID} from "node:crypto";
+import type {StaffPolicyState} from "@/lib/staff-policy-state";
 import {QuoteStatus} from "@prisma/client";
 import {transitionQuote, QuoteStateError} from "./quote-state";
 import {staffFinancialPolicy, StaffFinancialPolicyError} from "./staff-financial-policy";
@@ -120,46 +122,53 @@ function staffToolsFromForm(formData: FormData) {
   };
 }
 
-function staffCommercialFieldsFromForm(formData: FormData, destination: "/admin/equipo" | "/admin/ventas") {
-  try {
-    const {commissionCurrency, ...financial} = staffFinancialPolicy(formData);
-    return {financial: {...financial, avatar: value(formData, "avatar"),
-      territory: value(formData, "territory"), internalNotes: value(formData, "internalNotes")}, commissionCurrency};
-  } catch (error) {
-    if (error instanceof StaffFinancialPolicyError) redirect(`${destination}?policy=review`);
-    throw error;
-  }
+function staffCommercialFieldsFromForm(formData: FormData) {
+  const {commissionCurrency, ...financial} = staffFinancialPolicy(formData);
+  return {financial: {...financial, avatar: value(formData, "avatar"),
+    territory: value(formData, "territory"), internalNotes: value(formData, "internalNotes")}, commissionCurrency};
+}
+
+function staffPolicyResult(status: "saved" | "review" | "conflict", version?: string): StaffPolicyState {
+  const messages = {saved: "Política guardada correctamente.",
+    review: "Revisa los importes: hasta dos decimales, porcentaje entre 0 y 100 y moneda explícita para una comisión fija positiva.",
+    conflict: "El perfil cambió o la versión no es válida. Recarga y revisa los valores antes de guardar."};
+  return {status, message: messages[status], submissionId: randomUUID(), version};
 }
 
 async function saveStaffPolicy(id: string, workspaceId: string, actorId: string, formData: FormData,
-  destination: "/admin/equipo" | "/admin/ventas", fullProfile: boolean) {
-  const parsed = staffCommercialFieldsFromForm(formData, destination);
+  fullProfile: boolean): Promise<StaffPolicyState> {
+  let parsed: ReturnType<typeof staffCommercialFieldsFromForm>;
+  try {parsed = staffCommercialFieldsFromForm(formData);} catch(error) {
+    if(error instanceof StaffFinancialPolicyError) return staffPolicyResult("review");
+    throw error;
+  }
   const version = value(formData, "version");
-  if (!version || !Number.isFinite(Date.parse(version))) redirect(`${destination}?policy=conflict`);
+  if (!version || !Number.isFinite(Date.parse(version))) return staffPolicyResult("conflict");
   const result = await prisma.$transaction(async tx => {
     // Serialize policy updates with quote acceptance; preserve unrelated private tools.
     await tx.$queryRaw`SELECT id FROM "icc"."StaffProfile" WHERE id=${id} AND "terraqoWorkspaceId"=${workspaceId} FOR UPDATE`;
     const current = await tx.staffProfile.findFirst({where: {id, terraqoWorkspaceId: workspaceId}});
-    if (!current || current.updatedAt.toISOString() !== version) return false;
+    if (!current || current.updatedAt.toISOString() !== version) return null;
     const previousTools = current.tools && typeof current.tools === "object" && !Array.isArray(current.tools) ? current.tools : {};
     const tools = {...previousTools, ...(fullProfile ? staffToolsFromForm(formData) : {}), commissionCurrency: parsed.commissionCurrency};
+    const changedAt = new Date(Math.max(Date.now(), current.updatedAt.getTime()+1));
     const changed = await tx.staffProfile.updateMany({where: {id, terraqoWorkspaceId: workspaceId, updatedAt: current.updatedAt}, data: {
       ...parsed.financial, tools: tools as Prisma.InputJsonValue,
       ...(fullProfile ? {displayName: value(formData, "displayName") || "", email: value(formData, "email"),
         phone: value(formData, "phone"), roleTitle: value(formData, "roleTitle") || "",
         department: (value(formData, "department") as StaffDepartment | undefined) || "SALES",
         specialties: listFromTextarea(formData, "specialties"), active: checked(formData, "active")} : {}),
-      updatedAt: new Date(Math.max(Date.now(), current.updatedAt.getTime()+1))
+      updatedAt: changedAt
     }});
-    if (changed.count !== 1) return false;
+    if (changed.count !== 1) return null;
     await tx.activityLog.create({data: {actorId, terraqoWorkspaceId: workspaceId, action: "UPDATED", entityType: "StaffProfile",
       entityId: id, title: "Política comercial actualizada", metadata: {source: "staff-policy", type: parsed.financial.commissionType,
         currency: parsed.commissionCurrency || null}}});
-    return true;
+    return changedAt.toISOString();
   }, {timeout: 15000, maxWait: 5000});
-  if (!result) redirect(`${destination}?policy=conflict`);
+  if (!result) return staffPolicyResult("conflict");
   revalidatePath("/admin/equipo"); revalidatePath("/admin/ventas"); revalidatePath("/admin/chat");
-  redirect(`${destination}?policy=saved`);
+  return staffPolicyResult("saved", result);
 }
 
 function staffTechnicalFieldsFromForm(formData: FormData) {
@@ -1222,9 +1231,14 @@ export async function sendAdminChatMessageAction(id: string, formData: FormData)
   revalidatePath("/admin/chat");
 }
 
-export async function createStaffProfileAction(formData: FormData) {
+export async function createStaffProfileAction(_previous: StaffPolicyState, formData: FormData): Promise<StaffPolicyState> {
+  void _previous;
   const {workspaceId, session} = await requireActionRole(["ADMIN"]);
-  const parsed = staffCommercialFieldsFromForm(formData, "/admin/equipo");
+  let parsed: ReturnType<typeof staffCommercialFieldsFromForm>;
+  try {parsed = staffCommercialFieldsFromForm(formData);} catch(error) {
+    if(error instanceof StaffFinancialPolicyError) return staffPolicyResult("review");
+    throw error;
+  }
   await prisma.$transaction(async tx => {
     const profile = await tx.staffProfile.create({data: {
       displayName: value(formData, "displayName") || "", email: value(formData, "email"), phone: value(formData, "phone"),
@@ -1238,17 +1252,19 @@ export async function createStaffProfileAction(formData: FormData) {
       metadata: {source: "staff-policy", type: parsed.financial.commissionType, currency: parsed.commissionCurrency || null}}});
   });
   revalidatePath("/admin/equipo"); revalidatePath("/admin/chat");
-  redirect("/admin/equipo?policy=saved");
+  return staffPolicyResult("saved");
 }
 
-export async function updateStaffProfileAction(id: string, formData: FormData) {
+export async function updateStaffProfileAction(id: string, _previous: StaffPolicyState, formData: FormData): Promise<StaffPolicyState> {
+  void _previous;
   const {workspaceId, session} = await requireActionRole(["ADMIN"]);
-  await saveStaffPolicy(id, workspaceId, session.user.id, formData, "/admin/equipo", true);
+  return saveStaffPolicy(id, workspaceId, session.user.id, formData, true);
 }
 
-export async function updateSellerCommercialAction(id: string, formData: FormData) {
+export async function updateSellerCommercialAction(id: string, _previous: StaffPolicyState, formData: FormData): Promise<StaffPolicyState> {
+  void _previous;
   const {workspaceId, session} = await requireActionRole(["ADMIN", "SUPER_ADMIN"]);
-  await saveStaffPolicy(id, workspaceId, session.user.id, formData, "/admin/ventas", false);
+  return saveStaffPolicy(id, workspaceId, session.user.id, formData, false);
 }
 
 const createProjectClientValue = "__new_client__";

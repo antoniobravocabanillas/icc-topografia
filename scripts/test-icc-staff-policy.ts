@@ -37,27 +37,33 @@ async function main() {
     const session=await encode({secret:process.env.AUTH_SECRET!,salt:cookieName,maxAge:600,token:{sub:user.id,role:"ADMIN",name:"Validación temporal",email}});
     const headers={Cookie:`${cookieName}=${session}; terraqo_admin_workspace=${workspace.id}`,Origin:origin};
     const get=async(path:string)=>{const response=await fetch(origin+path,{headers,redirect:"manual",cache:"no-store"});assert.equal(response.status,200);return response.text();};
-    const post=(path:string,form:FormData)=>fetch(origin+path,{method:"POST",headers,body:form,redirect:"manual"});
+    const post=async(path:string,form:FormData)=>{
+      const response=await fetch(origin+path,{method:"POST",headers,body:form,redirect:"manual"});assert.equal(response.status,200);
+      const html=await response.text();
+      const own=[...html.matchAll(/<form\b([^>]*)>([\s\S]*?)<\/form>/g)].find(item=>item[1].includes(`data-policy-profile="${id}"`));assert.ok(own);
+      const messages=[...own[2].matchAll(/<p\b[^>]*role="(?:status|alert)"[^>]*>([\s\S]*?)<\/p>/g)].map(item=>decode(item[1].replace(/<[^>]*>/g,"")));
+      return messages.some(value=>value.includes("Política guardada correctamente.")) ? "saved" : messages.some(value=>value.includes("Revisa los importes:")) ? "review" : messages.some(value=>value.includes("El perfil cambió")) ? "conflict" : "missing";
+    };
     phase="protected-sales-form";
     const initial=await get("/admin/ventas"), invalid=ownForm(initial,id);invalid.set("commissionCurrency","");
-    let response=await post("/admin/ventas",invalid);assert.equal(response.status,303);assert.match(response.headers.get("location")??"",/policy=review/);
+    let response=await post("/admin/ventas",invalid);assert.equal(response,"review");
     const before=await prisma.staffProfile.findUniqueOrThrow({where:{id}});
     assert.equal(before.fixedCommission.toFixed(2),"7.23");
     assert.equal(await prisma.activityLog.count({where:{entityType:"StaffProfile",entityId:id}}),0);
     phase="concurrent-policy-save";
     const commandA=ownForm(initial,id),commandB=ownForm(initial,id);commandA.set("fixedCommission","8.23");commandB.set("fixedCommission","9.23");
     const results=await Promise.allSettled([post("/admin/ventas",commandA),post("/admin/ventas",commandB)]);
-    assert.equal(results.filter(item=>item.status==="fulfilled" && item.value.status===303 && item.value.headers.get("location")?.includes("policy=saved")).length,1);
-    assert.equal(results.filter(item=>item.status==="fulfilled" && item.value.status===303 && item.value.headers.get("location")?.includes("policy=conflict")).length,1);
+    assert.equal(results.filter(item=>item.status==="fulfilled" && item.value==="saved").length,1);
+    assert.equal(results.filter(item=>item.status==="fulfilled" && item.value==="conflict").length,1);
     const after=await prisma.staffProfile.findUniqueOrThrow({where:{id}});assert.ok(["8.23","9.23"].includes(after.fixedCommission.toFixed(2)));
     assert.equal((after.tools as {privatePreserved:string}).privatePreserved,"fixture");
     assert.equal(await prisma.activityLog.count({where:{entityType:"StaffProfile",entityId:id}}),1);
     phase="protected-team-save";
     const team=await get("/admin/equipo"), teamForm=ownForm(team,id);teamForm.set("commissionCurrency","USD");teamForm.set("checklist","Comprobar alcance");
-    response=await post("/admin/equipo",teamForm);assert.equal(response.status,303);assert.match(response.headers.get("location")??"",/policy=saved/);
+    response=await post("/admin/equipo",teamForm);assert.equal(response,"saved");
     const updated=await prisma.staffProfile.findUniqueOrThrow({where:{id}});assert.equal((updated.tools as {commissionCurrency:string}).commissionCurrency,"USD");
     assert.equal((updated.tools as {privatePreserved:string}).privatePreserved,"fixture");assert.equal(updated.fixedCommission.toFixed(2),"7.23");
-    response=await post("/admin/equipo",teamForm);assert.equal(response.status,303);assert.match(response.headers.get("location")??"",/policy=conflict/);
+    response=await post("/admin/equipo",teamForm);assert.equal(response,"conflict");
     assert.equal(await prisma.activityLog.count({where:{entityType:"StaffProfile",entityId:id}}),2);
     if(process.env.TEST_STAFF_BROWSER === "1") {
       phase="browser-policy-feedback";
@@ -110,13 +116,19 @@ async function main() {
         }
         phase="browser-save";
         const form=page.locator(`[data-policy-profile="${id}"]`);
+        await page.route(origin+"/admin/ventas",async route=>{
+          if(route.request().method()==="POST") await new Promise(resolve=>setTimeout(resolve,300));
+          await route.continue();
+        });
         await form.getByRole("button",{name:"Guardar reglas comerciales"}).click();
-        await page.waitForURL(/policy=saved/);
+        assert.ok(await form.getByLabel("Comisión fija",{exact:true}).isDisabled());
+        assert.ok(await form.getByRole("button",{name:"Guardar reglas comerciales"}).isDisabled());
+        await form.getByRole("status").filter({hasText:"Política guardada correctamente."}).waitFor({state:"visible"});
         phase="browser-persisted-amount";
         assert.equal((await prisma.staffProfile.findUniqueOrThrow({where:{id}})).fixedCommission.toFixed(2),"8.23");
         phase="browser-saved-feedback";
         if(process.env.TEST_STAFF_NAV_TRACE === "1") {const {decode}=await import("next-auth/jwt");const current=(await context.cookies(origin)).find(cookie=>cookie.name===cookieName);const claims=current ? await decode({token:current.value,secret:process.env.AUTH_SECRET!,salt:cookieName}) : null;console.log(JSON.stringify({currentCookie:!!current,adminClaim:claims?.role==="ADMIN",sameAccount:claims?.sub===user.id}));}
-        const feedback=page.getByRole("status").filter({hasText:"Política guardada correctamente."});
+        const feedback=form.getByRole("status").filter({hasText:"Política guardada correctamente."});
         try {await feedback.waitFor({state:"visible",timeout:5000});} catch {
           console.log(JSON.stringify({phase,knownSuccessText:await page.getByText("Política guardada correctamente.",{exact:true}).count(),
             statuses:await page.getByRole("status").count(),policy:new URL(page.url()).searchParams.get("policy"),

@@ -187,8 +187,7 @@ export default async function AdminSalesPage({searchParams}: {searchParams: Prom
                   <SmallStat label="Pendiente" value={commercialMoneyTotals(pendingTotal)} />
                 </div>
                 {canManageCommercialConditions ? (
-                  <StaffPolicyForm key={seller.updatedAt.toISOString()} action={updateSellerCommercialAction.bind(null, seller.id)} profileId={seller.id}>
-                    <input type="hidden" name="version" value={seller.updatedAt.toISOString()} />
+                  <StaffPolicyForm key={seller.id} action={updateSellerCommercialAction.bind(null, seller.id)} profileId={seller.id} version={seller.updatedAt.toISOString()}>
                     <select aria-label="Tipo de comisión" name="commissionType" defaultValue={seller.commissionType} className="h-11 rounded-md border bg-background px-3 text-sm">
                       {commissionTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                     </select>

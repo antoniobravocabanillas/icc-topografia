@@ -1,3 +1,4 @@
+import type {StaffPolicyState} from "@/lib/staff-policy-state";
 import {StaffPolicyForm} from "@/components/admin/staff-policy-form";
 import {staffFixedCommissionCurrency} from "@/lib/server/staff-financial-policy";
 import {FormSubmitButton} from "@/components/admin/form-submit-button";
@@ -191,7 +192,7 @@ function StaffProfileForm({
   submitLabel,
   defaults
 }: {
-  action: (formData: FormData) => Promise<void>;
+  action: (previous: StaffPolicyState, formData: FormData) => Promise<StaffPolicyState>;
   submitLabel: string;
   defaults?: {
     id: string; version: string; commissionCurrency: string;
@@ -215,8 +216,7 @@ function StaffProfileForm({
   };
 }) {
   return (
-    <StaffPolicyForm key={defaults?.version || "new-profile"} action={action} profileId={defaults?.id}>
-      {defaults ? <input type="hidden" name="version" value={defaults.version} /> : null}
+    <StaffPolicyForm key={defaults?.id || "new-profile"} action={action} profileId={defaults?.id} version={defaults?.version}>
       <Input name="displayName" placeholder="Nombre visible" defaultValue={defaults?.displayName} required />
       <Input name="roleTitle" placeholder="Cargo o perfil comercial" defaultValue={defaults?.roleTitle} required />
       <Input name="email" type="email" placeholder="Correo" defaultValue={defaults?.email} />
