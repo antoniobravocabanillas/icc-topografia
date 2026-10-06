@@ -26,10 +26,17 @@ async function main(){
       for(let attempt=0;attempt<12;attempt++){contact=await prisma.contact.findFirst({where:{companyId,name}});if(contact)break;await pause(800);}
       assert.ok(contact);assert.equal(contact.phone,'123456');assert.equal(contact.isPrimary,false);
       assert.equal(await prisma.activityLog.count({where:{actorId:user.id,contactId:contact.id,action:'CREATED'}}),1);
+      stage=`${device}: contact edit`;await tapLabel(serial,name);
+      await fillLabel(serial,'Cargo','-editado');
+      for(let i=0;i<3;i++)await scroll(serial,true);capture(serial,`contact-edit-${device}.png`);
+      await tapLabel(serial,'Guardar');let edited=false;
+      for(let attempt=0;attempt<12;attempt++){const current=await prisma.contact.findUniqueOrThrow({where:{id:contact.id}});
+        if(current.roleTitle==='Coordinacion-editado'){assert.equal(current.companyId,companyId);assert.equal(current.isPrimary,false);edited=true;break;}await pause(800);}
+      assert.ok(edited);assert.equal(await prisma.activityLog.count({where:{actorId:user.id,contactId:contact.id,action:'UPDATED'}}),1);
       shell(serial,'input keyevent 4');await pause(600);shell(serial,'input keyevent 4');await pause(600);
       stage=`${device}: logout`;await tapLabel(serial,'Cuenta');await tapLabel(serial,'Cerrar sesión');
       let closed=false;for(let attempt=0;attempt<12;attempt++){await pause(700);if((await snapshot(serial)).includes('Ingresar a mi empresa')){closed=true;break;}}
-      assert.ok(closed);console.log(`PASS native contacts ${device}: company selector, contact creation, preserved primary/access policy, single audit, logout.`);
+      assert.ok(closed);console.log(`PASS native contacts ${device}: company selector, creation/edit, preserved company/primary/access policy, single audit per write, logout.`);
     }
     assert.equal(await prisma.verificationToken.count({where:{identifier:`portal-session:${workspace.id}:${user.id}`}}),0);
   }finally{
