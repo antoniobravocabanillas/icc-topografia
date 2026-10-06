@@ -45,6 +45,8 @@ export async function tapLabel(serial: string, label: string) {
 async function fillNode(serial: string, node: string, value: string) {
   assert.match(value, /^[a-zA-Z0-9@._-]+$/);
   shell(serial, `input tap ${center(node)}`); await pause(600);
+  // Tap placement can put the caret inside existing text. Append explicitly.
+  shell(serial, "input keyevent 123");
   // Credentials enter via stdin, never a process argument, screenshot or log.
   shell(serial, `input text ${value}`); shell(serial, "input keyevent 4"); await pause(300);
 }
@@ -69,7 +71,7 @@ export async function login(serial: string, email: string, password: string) {
   assert.ok(ready, "Native login must reach the workspace."); assert.ok(!(await snapshot(serial)).includes("VISTA PREVIA"));
 }
 export function capture(serial: string, fileName: string) {
-  assert.match(fileName, /^(?:cv|task|project|workspace|contact|company)-[a-z-]+\.png$/);
+  assert.match(fileName, /^(?:cv|task|project|workspace|contact|company|opportunity)-[a-z-]+\.png$/);
   const directory = join(process.env.USERPROFILE!, "Documents/ICC TOPOGRAFIA/terraqo_mobile/review"); assert.ok(existsSync(directory));
   writeFileSync(join(directory, fileName), execFileSync(adb, ["-s", serial, "exec-out", "screencap", "-p"], { env: environment, timeout: 30000, stdio: ["ignore", "pipe", "pipe"] }));
 }

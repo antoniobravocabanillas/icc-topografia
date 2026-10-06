@@ -1,3 +1,4 @@
+import {listPortalOpportunities, savePortalOpportunity} from "./portal-opportunities";
 import { listPortalCompanies, savePortalCompany } from "./portal-companies";
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
@@ -14,20 +15,20 @@ import { taskFieldsSchema, taskMutation, taskSelect, lockTaskAssignee } from "./
 
 import { listPortalContacts, savePortalContact } from "./portal-contacts";
 
-export const resourceCodes = ["companies", "contacts", "contactCompanies", "clients", "leads", "notes", "projectMembers", "milestones", "projectProgress", "operationalProjects", "projects", "projectClients", "tasks", "taskProjects", "taskAssignees", "files", "worklogs", "quotes", "orders", "notifications", "profile", "experiences", "education"] as const;
+export const resourceCodes = ["opportunities", "companies", "contacts", "contactCompanies", "clients", "leads", "notes", "projectMembers", "milestones", "projectProgress", "operationalProjects", "projects", "projectClients", "tasks", "taskProjects", "taskAssignees", "files", "worklogs", "quotes", "orders", "notifications", "profile", "experiences", "education"] as const;
 export type ResourceCode = typeof resourceCodes[number];
 export class PortalResourceError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
 // Personal workspace files retain the existing portal ownership and quota policy;
 // PROJECTS/DOCUMENTS entitlements refer to project documents, a different resource.
-const modules = { companies: "CRM", contacts: "CRM", contactCompanies: "CRM", clients: "CRM", leads: "CRM", notes: null, projects: "PROJECTS", operationalProjects: "PROJECTS", projectMembers: "PROJECTS", milestones: "PROJECTS", projectProgress: "PROJECTS", projectClients: "PROJECTS", tasks: "PROJECTS", taskProjects: "PROJECTS", taskAssignees: "PROJECTS", files: null,
+const modules = { opportunities: "CRM", companies: "CRM", contacts: "CRM", contactCompanies: "CRM", clients: "CRM", leads: "CRM", notes: null, projects: "PROJECTS", operationalProjects: "PROJECTS", projectMembers: "PROJECTS", milestones: "PROJECTS", projectProgress: "PROJECTS", projectClients: "PROJECTS", tasks: "PROJECTS", taskProjects: "PROJECTS", taskAssignees: "PROJECTS", files: null,
   worklogs: "PROFESSIONAL_NETWORK", quotes: "CRM", orders: "TECHNICAL_STORE", notifications: null, profile: "PROFESSIONAL_NETWORK",
   experiences: "PROFESSIONAL_NETWORK", education: "PROFESSIONAL_NETWORK" } as const;
 export async function authorizeResource(token: WorkspacePortalToken, resource: ResourceCode) {
   if (["profile", "experiences", "education"].includes(resource) && token.role !== "PROFESSIONAL")
     throw new PortalResourceError("Esta sección requiere tu cuenta profesional.", 403);
-  if (["companies", "contacts", "contactCompanies", "clients", "leads", "projectMembers", "milestones", "projectProgress", "operationalProjects", "projects", "projectClients", "tasks", "taskProjects", "taskAssignees"].includes(resource) && token.role !== "ADMIN")
+  if (["opportunities", "companies", "contacts", "contactCompanies", "clients", "leads", "projectMembers", "milestones", "projectProgress", "operationalProjects", "projects", "projectClients", "tasks", "taskProjects", "taskAssignees"].includes(resource) && token.role !== "ADMIN")
     throw new PortalResourceError("Esta sección requiere administración empresarial.", 403);
   if (["quotes", "orders"].includes(resource) && !["ADMIN", "CLIENT"].includes(token.role))
     throw new PortalResourceError("Tu rol no permite consultar esta sección.", 403);
@@ -80,6 +81,7 @@ function record(row: Row, resource: ResourceCode, actorId?: string, workspaceId?
 }
 export async function listPortalResource(token: WorkspacePortalToken, resource: ResourceCode, cursor?: string) {
   await authorizeResource(token, resource);
+  if (resource === "opportunities") return listPortalOpportunities(token, cursor);
   if (resource === "companies") return listPortalCompanies(token, cursor);
   if (resource === "contacts") return listPortalContacts(token, cursor);
   if (isProjectOperation(resource)) return listProjectOperations(token, resource, cursor);
@@ -144,6 +146,7 @@ export async function listPortalResource(token: WorkspacePortalToken, resource: 
 export async function savePortalResource(token: WorkspacePortalToken, resource: ResourceCode,
   input: unknown, key: string | null, id?: string, version?: string) {
   await authorizeResource(token, resource);
+  if (resource === "opportunities") return savePortalOpportunity(token, input, key, id, version);
   if (resource === "companies") return savePortalCompany(token, input, key, id, version);
   if (resource === "contacts") return savePortalContact(token, input, key, id, version);
   if (isProjectOperation(resource)) return saveProjectOperation(token, resource, input, key, id, version);
