@@ -1,4 +1,5 @@
 import {calculateQuoteAmounts} from "./quote-amounts";
+import {staffFixedCommissionCurrency} from "./staff-financial-policy";
 import {createHash, randomBytes} from "node:crypto";
 import {Prisma, QuoteStatus} from "@prisma/client";
 import {prisma} from "@/lib/prisma";
@@ -102,6 +103,8 @@ export async function transitionQuote(command: Command) {
           commissionAmount = quote.total.mul(seller.commissionRate).div(100).toDecimalPlaces(2,Prisma.Decimal.ROUND_HALF_UP);
         } else if (seller.commissionType === "FIXED_AMOUNT") {
           commissionAmount = seller.fixedCommission;
+          if(commissionAmount.gt(0) && staffFixedCommissionCurrency(seller.tools)!==quote.currency)
+            throw new QuoteStateError("La moneda de la comisión fija requiere revisión comercial.",422);
           if (!commissionAmount.isFinite() || commissionAmount.isNegative() || commissionAmount.decimalPlaces() > 2 || commissionAmount.gt(quote.total))
             throw new QuoteStateError("La comisión fija requiere revisión.",422);
         } else throw new QuoteStateError("Esta comisión requiere un cálculo de margen o categoría antes de confirmar.",422);

@@ -1,3 +1,7 @@
+import {StaffPolicyForm} from "@/components/admin/staff-policy-form";
+import {staffFixedCommissionCurrency} from "@/lib/server/staff-financial-policy";
+import {FormSubmitButton} from "@/components/admin/form-submit-button";
+import {StaffPolicyFeedback} from "@/components/admin/staff-policy-feedback";
 import { Role, StaffDepartment } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -52,7 +56,8 @@ type StaffTools = {
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export default async function AdminTeamPage() {
+export default async function AdminTeamPage({searchParams}: {searchParams: Promise<{policy?: string}>}) {
+  const {policy} = await searchParams;
   await requireAdminPage(["ADMIN"]);
   const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
   const profiles = await prisma.staffProfile.findMany({
@@ -63,6 +68,7 @@ export default async function AdminTeamPage() {
 
   return (
     <section className="space-y-8">
+      <StaffPolicyFeedback status={policy} />
       <div>
         <p className="text-sm font-semibold uppercase text-primary">Equipo comercial</p>
         <h1 className="font-display text-3xl font-bold">Perfiles de vendedores y tecnicos</h1>
@@ -101,6 +107,7 @@ export default async function AdminTeamPage() {
                   action={updateStaffProfileAction.bind(null, profile.id)}
                   submitLabel="Guardar cambios"
                   defaults={{
+                    id: profile.id, version: profile.updatedAt.toISOString(), commissionCurrency: staffFixedCommissionCurrency(profile.tools) || "",
                     displayName: profile.displayName,
                     email: profile.email || "",
                     phone: profile.phone || "",
@@ -187,6 +194,7 @@ function StaffProfileForm({
   action: (formData: FormData) => Promise<void>;
   submitLabel: string;
   defaults?: {
+    id: string; version: string; commissionCurrency: string;
     displayName: string;
     email: string;
     phone: string;
@@ -207,7 +215,8 @@ function StaffProfileForm({
   };
 }) {
   return (
-    <form action={action} className="grid gap-3 md:grid-cols-2">
+    <StaffPolicyForm key={defaults?.version || "new-profile"} action={action} profileId={defaults?.id}>
+      {defaults ? <input type="hidden" name="version" value={defaults.version} /> : null}
       <Input name="displayName" placeholder="Nombre visible" defaultValue={defaults?.displayName} required />
       <Input name="roleTitle" placeholder="Cargo o perfil comercial" defaultValue={defaults?.roleTitle} required />
       <Input name="email" type="email" placeholder="Correo" defaultValue={defaults?.email} />
@@ -217,12 +226,18 @@ function StaffProfileForm({
       <select name="department" defaultValue={defaults?.department || "SALES"} className="h-11 rounded-md border bg-background px-3 text-sm">
         {departments.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
       </select>
-      <select name="commissionType" defaultValue={defaults?.commissionType || "SALE_PERCENTAGE"} className="h-11 rounded-md border bg-background px-3 text-sm">
+      <select aria-label="Tipo de comisión" name="commissionType" defaultValue={defaults?.commissionType || "SALE_PERCENTAGE"} className="h-11 rounded-md border bg-background px-3 text-sm">
         {commissionTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
       </select>
-      <Input name="commissionRate" type="number" step="0.01" placeholder="% comision" defaultValue={defaults?.commissionRate || "5"} />
-      <Input name="fixedCommission" type="number" step="0.01" placeholder="Comision fija" defaultValue={defaults?.fixedCommission || "0"} />
-      <Input name="monthlyGoal" type="number" step="0.01" placeholder="Meta mensual" defaultValue={defaults?.monthlyGoal || "0"} />
+      <label className="grid gap-1 text-sm font-medium">Porcentaje de comisión<Input name="commissionRate" type="number" step="0.01" placeholder="% comision" defaultValue={defaults?.commissionRate || "5"} /></label>
+      <label className="grid gap-1 text-sm font-medium">Comisión fija<Input name="fixedCommission" type="number" step="0.01" placeholder="Comision fija" defaultValue={defaults?.fixedCommission || "0"} /></label>
+      <label className="grid gap-1 text-sm font-medium">Moneda de comisión fija
+        <select name="commissionCurrency" defaultValue={defaults?.commissionCurrency || ""} className="h-11 rounded-md border bg-background px-3 text-sm">
+          <option value="">Seleccionar moneda</option><option value="PEN">PEN · Soles</option><option value="USD">USD · Dólares</option>
+        </select>
+        <span className="text-xs font-normal text-muted-foreground">Debe coincidir con la cotización. No se convierte automáticamente.</span>
+      </label>
+      <label className="grid gap-1 text-sm font-medium">Meta mensual declarada<Input name="monthlyGoal" type="number" step="0.01" placeholder="Meta mensual" defaultValue={defaults?.monthlyGoal || "0"} /></label>
       <label className="flex items-center gap-2 rounded-md border bg-background px-3 text-sm">
         <input type="checkbox" name="active" defaultChecked={defaults?.active ?? true} />
         Activo para asignacion
@@ -233,9 +248,9 @@ function StaffProfileForm({
       <Textarea name="whatsappTemplate" placeholder="Plantilla sugerida de WhatsApp o email" defaultValue={defaults?.whatsappTemplate} />
       <Textarea name="internalNotes" placeholder="Observaciones internas del perfil" defaultValue={defaults?.internalNotes} />
       <div className="md:col-span-2">
-        <Button type="submit">{submitLabel}</Button>
+        <FormSubmitButton idleLabel={submitLabel} pendingLabel="Guardando política…" />
       </div>
-    </form>
+    </StaffPolicyForm>
   );
 }
 

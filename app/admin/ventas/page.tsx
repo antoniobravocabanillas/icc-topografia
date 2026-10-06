@@ -1,3 +1,9 @@
+import {StaffPolicyForm} from "@/components/admin/staff-policy-form";
+import {Prisma} from "@prisma/client";
+import {commercialMoney, commercialMoneyTotals} from "@/lib/server/commercial-money";
+import {staffFixedCommissionCurrency} from "@/lib/server/staff-financial-policy";
+import {FormSubmitButton} from "@/components/admin/form-submit-button";
+import {StaffPolicyFeedback} from "@/components/admin/staff-policy-feedback";
 import { BarChart3, Target, WalletCards } from "lucide-react";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { Button } from "@/components/ui/button";
@@ -5,7 +11,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { prisma } from "@/lib/prisma";
-import { formatCurrency } from "@/lib/utils";
 import { createProjectFromSaleAction, updateCommissionStatusAction, updateSellerCommercialAction } from "@/lib/server/admin-actions";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
 import { getSessionTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
@@ -20,7 +25,8 @@ const commissionTypes = [
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export default async function AdminSalesPage() {
+export default async function AdminSalesPage({searchParams}: {searchParams: Promise<{policy?: string}>}) {
+  const {policy} = await searchParams;
   const session = await requireAdminPage(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
   const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
   await requireWorkspaceModule("CRM", terraqoWorkspaceId);
@@ -42,7 +48,7 @@ export default async function AdminSalesPage() {
       include: {
         assignedLeads: true,
         quotes: true,
-        commissions: true
+        commissions: {include: {quote: {select: {currency: true}}}}
       },
       orderBy: [{ active: "desc" }, { displayName: "asc" }]
     });
@@ -69,7 +75,8 @@ export default async function AdminSalesPage() {
       orderBy: { createdAt: "desc" },
       take: 80
     }),
-    prisma.quote.aggregate({
+    prisma.quote.groupBy({
+      by: ["currency"],
       where: canManageCommercialConditions
         ? { status: "ACCEPTED", deletedAt: null, terraqoWorkspaceId }
         : { status: "ACCEPTED", deletedAt: null, terraqoWorkspaceId, sellerProfileId: { in: restrictedSellerIds } },
@@ -78,11 +85,12 @@ export default async function AdminSalesPage() {
   ]);
 
   const pendingCommissionTotal = commissions
-    .filter((commission) => commission.status !== "PAID")
-    .reduce((sum, commission) => sum + Number(commission.amount), 0);
+    .filter((commission) => ["PENDING", "APPROVED"].includes(commission.status))
+    .map(commission => ({amount: commission.amount, currency: commission.quote?.currency}));
 
   return (
     <section className="space-y-8">
+      <StaffPolicyFeedback status={policy} />
       <div>
         <p className="text-sm font-semibold uppercase text-primary">Workspace comercial</p>
         <h1 className="font-display text-3xl font-bold">Ventas, vendedores y comisiones</h1>
@@ -94,8 +102,8 @@ export default async function AdminSalesPage() {
       </div>
 
       <div className="grid gap-5 md:grid-cols-3">
-        <MetricCard icon={BarChart3} label="Ventas aceptadas" value={`USD ${Number(wonQuotes._sum.total || 0).toLocaleString("en-US")}`} />
-        <MetricCard icon={WalletCards} label="Comisiones pendientes" value={`USD ${pendingCommissionTotal.toLocaleString("en-US")}`} />
+        <MetricCard icon={BarChart3} label="Ventas aceptadas" value={commercialMoneyTotals(wonQuotes.map(group => ({amount: group._sum.total || new Prisma.Decimal(0), currency: group.currency})))} />
+        <MetricCard icon={WalletCards} label="Comisiones pendientes" value={commercialMoneyTotals(pendingCommissionTotal)} />
         <MetricCard icon={Target} label="Vendedores activos" value={String(sellers.filter((seller) => seller.active).length)} />
       </div>
 
@@ -133,7 +141,7 @@ export default async function AdminSalesPage() {
                         <div className="text-xs text-muted-foreground">{sale.contact?.email || sale.client?.email || "-"}</div>
                       </td>
                       <td className="p-3">{sale.sellerProfile?.displayName || "-"}</td>
-                      <td className="p-3 font-semibold">{formatCurrency(Number(sale.amount), sale.currency)}</td>
+                      <td className="p-3 font-semibold">{commercialMoney(sale.amount, sale.currency)}</td>
                       <td className="p-3"><StatusBadge status={sale.status} /></td>
                       <td className="p-3">{sale.projects[0]?.title || "Pendiente de apertura"}</td>
                       <td className="p-3">
@@ -162,7 +170,7 @@ export default async function AdminSalesPage() {
 
       <div className="grid gap-5 xl:grid-cols-2">
         {sellers.map((seller) => {
-          const pendingTotal = seller.commissions.filter((commission) => commission.status !== "PAID").reduce((sum, commission) => sum + Number(commission.amount), 0);
+          const pendingTotal = seller.commissions.filter((commission) => ["PENDING", "APPROVED"].includes(commission.status)).map(commission => ({amount: commission.amount, currency: commission.quote?.currency}));
           const closeRate = seller.quotes.length ? Math.round((seller.quotes.filter((quote) => quote.status === "ACCEPTED").length / seller.quotes.length) * 100) : 0;
 
           return (
@@ -176,25 +184,32 @@ export default async function AdminSalesPage() {
                   <SmallStat label="Leads" value={seller.assignedLeads.length} />
                   <SmallStat label="Cotizaciones" value={seller.quotes.length} />
                   <SmallStat label="Cierre" value={`${closeRate}%`} />
-                  <SmallStat label="Pendiente" value={`USD ${pendingTotal.toLocaleString("en-US")}`} />
+                  <SmallStat label="Pendiente" value={commercialMoneyTotals(pendingTotal)} />
                 </div>
                 {canManageCommercialConditions ? (
-                  <form action={updateSellerCommercialAction.bind(null, seller.id)} className="grid gap-3 md:grid-cols-2">
-                    <select name="commissionType" defaultValue={seller.commissionType} className="h-11 rounded-md border bg-background px-3 text-sm">
+                  <StaffPolicyForm key={seller.updatedAt.toISOString()} action={updateSellerCommercialAction.bind(null, seller.id)} profileId={seller.id}>
+                    <input type="hidden" name="version" value={seller.updatedAt.toISOString()} />
+                    <select aria-label="Tipo de comisión" name="commissionType" defaultValue={seller.commissionType} className="h-11 rounded-md border bg-background px-3 text-sm">
                       {commissionTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                     </select>
-                    <Input name="commissionRate" type="number" step="0.01" defaultValue={String(seller.commissionRate)} placeholder="% comision" />
-                    <Input name="fixedCommission" type="number" step="0.01" defaultValue={String(seller.fixedCommission)} placeholder="Monto fijo" />
-                    <Input name="monthlyGoal" type="number" step="0.01" defaultValue={String(seller.monthlyGoal)} placeholder="Meta mensual" />
+                    <label className="grid gap-1 text-sm font-medium">Porcentaje de comisión<Input name="commissionRate" type="number" step="0.01" defaultValue={String(seller.commissionRate)} placeholder="% comision" /></label>
+                    <label className="grid gap-1 text-sm font-medium">Comisión fija<Input name="fixedCommission" type="number" step="0.01" defaultValue={String(seller.fixedCommission)} placeholder="Monto fijo" /></label>
+      <label className="grid gap-1 text-sm font-medium">Moneda de comisión fija
+        <select name="commissionCurrency" defaultValue={staffFixedCommissionCurrency(seller.tools) || ""} className="h-11 rounded-md border bg-background px-3 text-sm">
+          <option value="">Seleccionar moneda</option><option value="PEN">PEN · Soles</option><option value="USD">USD · Dólares</option>
+        </select>
+        <span className="text-xs font-normal text-muted-foreground">Debe coincidir con la cotización. No se convierte automáticamente.</span>
+      </label>
+                    <label className="grid gap-1 text-sm font-medium">Meta mensual declarada<Input name="monthlyGoal" type="number" step="0.01" defaultValue={String(seller.monthlyGoal)} placeholder="Meta mensual" /></label>
                     <Input name="territory" defaultValue={seller.territory || ""} placeholder="Zona / cartera" />
                     <Input name="internalNotes" defaultValue={seller.internalNotes || ""} placeholder="Observaciones internas" />
-                    <Button type="submit" className="md:col-span-2">Guardar reglas comerciales</Button>
-                  </form>
+                    <FormSubmitButton className="md:col-span-2" idleLabel="Guardar reglas comerciales" pendingLabel="Guardando política…" />
+                  </StaffPolicyForm>
                 ) : (
                   <div className="grid gap-3 md:grid-cols-2">
                     <ReadOnlyField label="Tipo de comision" value={commissionTypes.find(([value]) => value === seller.commissionType)?.[1] || seller.commissionType} />
-                    <ReadOnlyField label="Comision" value={`${Number(seller.commissionRate || 0)}%`} />
-                    <ReadOnlyField label="Meta mensual" value={formatCurrency(Number(seller.monthlyGoal || 0))} />
+                    <ReadOnlyField label="Comision" value={seller.commissionType === "FIXED_AMOUNT" ? `${staffFixedCommissionCurrency(seller.tools) || "Moneda pendiente"} ${seller.fixedCommission.toFixed(2)}` : `${seller.commissionRate.toFixed(2)}%`} />
+                    <ReadOnlyField label="Meta mensual" value={commercialMoney(seller.monthlyGoal, null)} />
                     <ReadOnlyField label="Cartera" value={seller.territory || "Sin cartera asignada"} />
                   </div>
                 )}
@@ -227,8 +242,8 @@ export default async function AdminSalesPage() {
                   <tr key={commission.id} className="border-t">
                     <td className="p-3 font-medium">{commission.sellerProfile.displayName}</td>
                     <td className="p-3">{commission.quote?.number || "-"}</td>
-                    <td className="p-3">USD {Number(commission.baseAmount).toLocaleString("en-US")}</td>
-                    <td className="p-3 font-semibold">USD {Number(commission.amount).toLocaleString("en-US")}</td>
+                    <td className="p-3">{commercialMoney(commission.baseAmount, commission.quote?.currency)}</td>
+                    <td className="p-3 font-semibold">{commercialMoney(commission.amount, commission.quote?.currency)}</td>
                     <td className="p-3"><StatusBadge status={commission.status} /></td>
                     <td className="p-3">
                       {canManageCommercialConditions ? (

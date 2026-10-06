@@ -3,10 +3,11 @@
 import bcrypt from "bcryptjs";
 import {QuoteStatus} from "@prisma/client";
 import {transitionQuote, QuoteStateError} from "./quote-state";
+import {staffFinancialPolicy, StaffFinancialPolicyError} from "./staff-financial-policy";
 import {saveQuoteDraft} from "./quote-drafts";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { ActivityAction, BotQuestionStatus, CommissionType, Prisma, Role, StaffDepartment, TechnicalAvailability, TicketCategory, TicketPriority, TicketStatus } from "@prisma/client";
+import { ActivityAction, BotQuestionStatus, Prisma, Role, StaffDepartment, TechnicalAvailability, TicketCategory, TicketPriority, TicketStatus } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/server/api";
@@ -119,16 +120,46 @@ function staffToolsFromForm(formData: FormData) {
   };
 }
 
-function staffCommercialFieldsFromForm(formData: FormData) {
-  return {
-    avatar: value(formData, "avatar"),
-    commissionType: (value(formData, "commissionType") as CommissionType | undefined) || "SALE_PERCENTAGE",
-    commissionRate: numberValue(formData, "commissionRate", 5),
-    fixedCommission: numberValue(formData, "fixedCommission"),
-    monthlyGoal: numberValue(formData, "monthlyGoal"),
-    territory: value(formData, "territory"),
-    internalNotes: value(formData, "internalNotes")
-  };
+function staffCommercialFieldsFromForm(formData: FormData, destination: "/admin/equipo" | "/admin/ventas") {
+  try {
+    const {commissionCurrency, ...financial} = staffFinancialPolicy(formData);
+    return {financial: {...financial, avatar: value(formData, "avatar"),
+      territory: value(formData, "territory"), internalNotes: value(formData, "internalNotes")}, commissionCurrency};
+  } catch (error) {
+    if (error instanceof StaffFinancialPolicyError) redirect(`${destination}?policy=review`);
+    throw error;
+  }
+}
+
+async function saveStaffPolicy(id: string, workspaceId: string, actorId: string, formData: FormData,
+  destination: "/admin/equipo" | "/admin/ventas", fullProfile: boolean) {
+  const parsed = staffCommercialFieldsFromForm(formData, destination);
+  const version = value(formData, "version");
+  if (!version || !Number.isFinite(Date.parse(version))) redirect(`${destination}?policy=conflict`);
+  const result = await prisma.$transaction(async tx => {
+    // Serialize policy updates with quote acceptance; preserve unrelated private tools.
+    await tx.$queryRaw`SELECT id FROM "icc"."StaffProfile" WHERE id=${id} AND "terraqoWorkspaceId"=${workspaceId} FOR UPDATE`;
+    const current = await tx.staffProfile.findFirst({where: {id, terraqoWorkspaceId: workspaceId}});
+    if (!current || current.updatedAt.toISOString() !== version) return false;
+    const previousTools = current.tools && typeof current.tools === "object" && !Array.isArray(current.tools) ? current.tools : {};
+    const tools = {...previousTools, ...(fullProfile ? staffToolsFromForm(formData) : {}), commissionCurrency: parsed.commissionCurrency};
+    const changed = await tx.staffProfile.updateMany({where: {id, terraqoWorkspaceId: workspaceId, updatedAt: current.updatedAt}, data: {
+      ...parsed.financial, tools: tools as Prisma.InputJsonValue,
+      ...(fullProfile ? {displayName: value(formData, "displayName") || "", email: value(formData, "email"),
+        phone: value(formData, "phone"), roleTitle: value(formData, "roleTitle") || "",
+        department: (value(formData, "department") as StaffDepartment | undefined) || "SALES",
+        specialties: listFromTextarea(formData, "specialties"), active: checked(formData, "active")} : {}),
+      updatedAt: new Date(Math.max(Date.now(), current.updatedAt.getTime()+1))
+    }});
+    if (changed.count !== 1) return false;
+    await tx.activityLog.create({data: {actorId, terraqoWorkspaceId: workspaceId, action: "UPDATED", entityType: "StaffProfile",
+      entityId: id, title: "Política comercial actualizada", metadata: {source: "staff-policy", type: parsed.financial.commissionType,
+        currency: parsed.commissionCurrency || null}}});
+    return true;
+  }, {timeout: 15000, maxWait: 5000});
+  if (!result) redirect(`${destination}?policy=conflict`);
+  revalidatePath("/admin/equipo"); revalidatePath("/admin/ventas"); revalidatePath("/admin/chat");
+  redirect(`${destination}?policy=saved`);
 }
 
 function staffTechnicalFieldsFromForm(formData: FormData) {
@@ -1192,55 +1223,32 @@ export async function sendAdminChatMessageAction(id: string, formData: FormData)
 }
 
 export async function createStaffProfileAction(formData: FormData) {
-  const { workspaceId } = await requireActionRole(["ADMIN"]);
-  await prisma.staffProfile.create({
-    data: {
-      displayName: value(formData, "displayName") || "",
-      email: value(formData, "email"),
-      phone: value(formData, "phone"),
-      roleTitle: value(formData, "roleTitle") || "",
-      department: (value(formData, "department") as StaffDepartment | undefined) || "SALES",
-      ...staffCommercialFieldsFromForm(formData),
-      specialties: listFromTextarea(formData, "specialties"),
-      tools: staffToolsFromForm(formData) as Prisma.InputJsonValue,
-      active: checked(formData, "active"),
-      terraqoWorkspaceId: workspaceId
-    }
+  const {workspaceId, session} = await requireActionRole(["ADMIN"]);
+  const parsed = staffCommercialFieldsFromForm(formData, "/admin/equipo");
+  await prisma.$transaction(async tx => {
+    const profile = await tx.staffProfile.create({data: {
+      displayName: value(formData, "displayName") || "", email: value(formData, "email"), phone: value(formData, "phone"),
+      roleTitle: value(formData, "roleTitle") || "", department: (value(formData, "department") as StaffDepartment | undefined) || "SALES",
+      ...parsed.financial, specialties: listFromTextarea(formData, "specialties"),
+      tools: {...staffToolsFromForm(formData), commissionCurrency: parsed.commissionCurrency},
+      active: checked(formData, "active"), terraqoWorkspaceId: workspaceId
+    }});
+    await tx.activityLog.create({data: {actorId: session.user.id, terraqoWorkspaceId: workspaceId, action: "CREATED",
+      entityType: "StaffProfile", entityId: profile.id, title: "Perfil comercial creado",
+      metadata: {source: "staff-policy", type: parsed.financial.commissionType, currency: parsed.commissionCurrency || null}}});
   });
-  revalidatePath("/admin/equipo");
-  revalidatePath("/admin/chat");
+  revalidatePath("/admin/equipo"); revalidatePath("/admin/chat");
+  redirect("/admin/equipo?policy=saved");
 }
 
 export async function updateStaffProfileAction(id: string, formData: FormData) {
-  const { workspaceId } = await requireActionRole(["ADMIN"]);
-  await requireOwnedEntity("Perfil", prisma.staffProfile.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
-  await prisma.staffProfile.update({
-    where: { id },
-    data: {
-      displayName: value(formData, "displayName") || "",
-      email: value(formData, "email"),
-      phone: value(formData, "phone"),
-      roleTitle: value(formData, "roleTitle") || "",
-      department: (value(formData, "department") as StaffDepartment | undefined) || "SALES",
-      ...staffCommercialFieldsFromForm(formData),
-      specialties: listFromTextarea(formData, "specialties"),
-      tools: staffToolsFromForm(formData) as Prisma.InputJsonValue,
-      active: checked(formData, "active")
-    }
-  });
-  revalidatePath("/admin/equipo");
-  revalidatePath("/admin/chat");
+  const {workspaceId, session} = await requireActionRole(["ADMIN"]);
+  await saveStaffPolicy(id, workspaceId, session.user.id, formData, "/admin/equipo", true);
 }
 
 export async function updateSellerCommercialAction(id: string, formData: FormData) {
-  const { workspaceId } = await requireActionRole(["ADMIN", "SUPER_ADMIN"]);
-  await requireOwnedEntity("Perfil", prisma.staffProfile.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
-  await prisma.staffProfile.update({
-    where: { id },
-    data: staffCommercialFieldsFromForm(formData)
-  });
-  revalidatePath("/admin/ventas");
-  revalidatePath("/admin/equipo");
+  const {workspaceId, session} = await requireActionRole(["ADMIN", "SUPER_ADMIN"]);
+  await saveStaffPolicy(id, workspaceId, session.user.id, formData, "/admin/ventas", false);
 }
 
 const createProjectClientValue = "__new_client__";
