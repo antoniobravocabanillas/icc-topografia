@@ -27,7 +27,8 @@ function publicOrderCode(notes?: string | null) {
   return notes?.match(/Codigo publico: ([A-Z0-9-]+)/)?.[1] || null;
 }
 
-export default async function CommercialOperationsPage() {
+export default async function CommercialOperationsPage({searchParams}:{searchParams:Promise<{error?:string;success?:string}>}) {
+  const notice=await searchParams;
   const session = await auth();
   if (!session?.user?.email) redirect("/cuenta");
 
@@ -42,7 +43,7 @@ export default async function CommercialOperationsPage() {
       company: true,
       client: {
         include: {
-          quotes: { where: { terraqoWorkspaceId }, include: { items: true, sellerProfile: true }, orderBy: { createdAt: "desc" } },
+          quotes: { where: { terraqoWorkspaceId,deletedAt:null,status:{not:"DRAFT"} }, include: { items: true, sellerProfile: true }, orderBy: { createdAt: "desc" } },
           projects: { where: { terraqoWorkspaceId }, include: { images: { orderBy: { position: "asc" }, take: 1 }, progress: { orderBy: { createdAt: "desc" }, take: 3 } }, orderBy: { updatedAt: "desc" } },
           tickets: { where: { terraqoWorkspaceId }, include: { assignedProfile: true, messages: { orderBy: { createdAt: "asc" } } }, orderBy: { updatedAt: "desc" } },
           documents: { orderBy: { createdAt: "desc" } },
@@ -67,6 +68,7 @@ export default async function CommercialOperationsPage() {
 
   return (
     <div className="min-w-0 space-y-8 py-6 lg:py-8">
+      {notice.error?.startsWith("quote_") ? <p role="alert" className="rounded-md border p-4 text-sm">La cotización cambió, venció o requiere revisión. Consulta su detalle antes de confirmar.</p> : notice.success==="quote_accepted" || notice.success==="quote_rejected" ? <p role="status" className="rounded-md border p-4 text-sm">Respuesta comercial registrada.</p> : null}
       <header className="rounded-lg border bg-[#03111D] p-7 text-white shadow-xl lg:p-8">
         <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-[#24C8EE]">Portal Terraqo</p>
         <h1 className="mt-3 font-display text-4xl font-bold">Operaciones comerciales</h1>
@@ -160,15 +162,17 @@ export default async function CommercialOperationsPage() {
                     <div className="mt-4 flex flex-wrap gap-2">
                       {quote.publicToken ? <Button asChild variant="outline" size="sm"><Link href={`/cotizaciones/${quote.publicToken}`}>Ver detalle</Link></Button> : null}
                       <Button asChild variant="outline" size="sm"><Link href={`/api/quotes/${quote.id}/pdf`} target="_blank">Descargar PDF</Link></Button>
-                      {quote.publicToken ? (
+                      {quote.publicToken && ["SENT","VIEWED"].includes(quote.status) ? (
                         <>
                           <form action={respondPublicQuoteFromFormAction.bind(null, quote.publicToken)}>
-                            <input type="hidden" name="status" value="ACCEPTED" />
+                            <input type="hidden" name="version" value={quote.updatedAt.toISOString()} />
+                        <input type="hidden" name="status" value="ACCEPTED" />
                             <input type="hidden" name="redirectTo" value="/portal/operaciones?success=quote_accepted" />
                             <SubmitButton size="sm" pendingText="Aceptando...">Aceptar</SubmitButton>
                           </form>
                           <form action={respondPublicQuoteFromFormAction.bind(null, quote.publicToken)}>
-                            <input type="hidden" name="status" value="REJECTED" />
+                            <input type="hidden" name="version" value={quote.updatedAt.toISOString()} />
+                        <input type="hidden" name="status" value="REJECTED" />
                             <input type="hidden" name="redirectTo" value="/portal/operaciones?success=quote_rejected" />
                             <SubmitButton size="sm" variant="outline" pendingText="Enviando...">Rechazar</SubmitButton>
                           </form>

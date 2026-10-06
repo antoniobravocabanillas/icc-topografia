@@ -18,7 +18,7 @@ async function main() {
   }) as unknown as typeof original.quote;
   prisma.clientAccount.findFirst=(async(args:{where:Record<string,unknown>})=>{
     assert.equal(args.where.userId,"user");assert.equal(args.where.terraqoWorkspaceId,"workspace");assert.equal(args.where.deletedAt,null);
-    assert.deepEqual(args.where.client,{terraqoWorkspaceId:"workspace",deletedAt:null});return account?{clientId:"owned-client"}:null;
+    assert.deepEqual(args.where.status,{in:["active","approved"]});assert.deepEqual(args.where.client,{terraqoWorkspaceId:"workspace",deletedAt:null});return account?{clientId:"owned-client"}:null;
   }) as unknown as typeof original.account;
   const request=(query="",bearer?:string)=>new Request(`https://example.test/quote/pdf${query}`,{headers:bearer?{authorization:`Bearer ${bearer}`}:{}});
   try {

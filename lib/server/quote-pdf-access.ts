@@ -34,7 +34,7 @@ export async function quotePdfScope(request: Request, id: string, getWebSession 
   }
   if (!await hasWorkspaceModule("CRM",workspaceId)) return null;
   if (role==="ADMIN") return {terraqoWorkspaceId:workspaceId};
-  const account=await prisma.clientAccount.findFirst({where:{userId,terraqoWorkspaceId:workspaceId,deletedAt:null,
+  const account=await prisma.clientAccount.findFirst({where:{userId,terraqoWorkspaceId:workspaceId,deletedAt:null,status:{in:["active","approved"]},
     client:{terraqoWorkspaceId:workspaceId,deletedAt:null}},select:{clientId:true}});
   return account?.clientId ? {terraqoWorkspaceId:workspaceId,clientId:account.clientId,status:{not:"DRAFT" as const}} : null;
 }

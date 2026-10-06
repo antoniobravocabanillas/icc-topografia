@@ -16,7 +16,7 @@ function secure(response: NextResponse, request?: NextRequest) {
 
   response.headers.set("X-Frame-Options", allowsSameOriginPreview ? "SAMEORIGIN" : "DENY");
   response.headers.set("X-Content-Type-Options", "nosniff");
-  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.headers.set("Referrer-Policy", pathname.startsWith("/cotizaciones/") || /^\/api\/quotes\/[^/]+\/pdf$/.test(pathname) ? "no-referrer" : "strict-origin-when-cross-origin");
   return response;
 }
 

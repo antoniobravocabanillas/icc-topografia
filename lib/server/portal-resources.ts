@@ -125,7 +125,7 @@ export async function listPortalResource(token: WorkspacePortalToken, resource: 
     case "quotes": {
       const account = token.role === "CLIENT" ? await prisma.clientAccount.findFirst({ where: { userId: token.sub, terraqoWorkspaceId: token.workspaceId, deletedAt: null }, select: { clientId: true } }) : null;
       if (token.role === "CLIENT" && !account?.clientId) { rows = []; break; }
-      rows = await prisma.quote.findMany({ ...window, where: { ...tenant, ...(token.role === "CLIENT" ? { clientId: account!.clientId! } : {}) },
+      rows = await prisma.quote.findMany({ ...window, where: { ...tenant, ...(token.role === "CLIENT" ? { clientId: account!.clientId!,status:{not:"DRAFT" as const} } : {}) },
         select: { id: true, number: true, customerName: true, status: true, currency: true, total: true, validUntil: true, updatedAt: true } }); break;
     }
     case "orders": rows = await prisma.order.findMany({ ...window, where: { terraqoWorkspaceId: token.workspaceId, ...(token.role === "CLIENT" ? { userId: token.sub } : {}) },

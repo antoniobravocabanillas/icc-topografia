@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { QuoteStatus, TicketCategory, TicketPriority } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import {transitionQuote,QuoteStateError} from "./quote-state";
+import {hasWorkspaceModule} from "@/lib/terraqo/workspace-scope";
 import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 
 function value(formData: FormData, key: string) {
@@ -185,60 +187,26 @@ export async function replyCustomerTicketAction(ticketId: string, formData: Form
   redirect("/portal?success=reply");
 }
 
-export async function respondPublicQuoteAction(token: string, status: QuoteStatus) {
-  if (status !== "ACCEPTED" && status !== "REJECTED") return;
-  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
-  const ownedQuote = await prisma.quote.findFirst({
-    where: { publicToken: token, terraqoWorkspaceId },
-    select: { id: true }
-  });
-  if (!ownedQuote) throw new Error("Cotizacion no disponible.");
-  const quote = await prisma.quote.update({
-    where: { id: ownedQuote.id },
-    data: {
-      status,
-      acceptedAt: status === "ACCEPTED" ? new Date() : null,
-      rejectedAt: status === "REJECTED" ? new Date() : null
-    },
-    include: { sellerProfile: true, commissions: true }
-  });
-
-  if (status === "ACCEPTED" && quote.sellerProfileId && !quote.commissions.length) {
-    const rate = Number(quote.sellerProfile?.commissionRate || 0);
-    await prisma.commission.create({
-      data: {
-        quoteId: quote.id,
-        sellerProfileId: quote.sellerProfileId,
-        terraqoWorkspaceId: quote.terraqoWorkspaceId,
-        type: quote.sellerProfile?.commissionType || "SALE_PERCENTAGE",
-        baseAmount: quote.total,
-        rate,
-        amount: Number(quote.total) * (rate / 100)
-      }
-    });
-  }
-
-  await prisma.notification.create({
-    data: {
-      terraqoWorkspaceId: quote.terraqoWorkspaceId,
-      type: "QUOTE",
-      title: status === "ACCEPTED" ? "Cotizacion aceptada" : "Cotizacion rechazada",
-      body: `${quote.customerName} actualizo ${quote.number}`,
-      href: "/admin/cotizaciones"
-    }
-  });
-
-  revalidatePath(`/cotizaciones/${token}`);
-  revalidatePath("/portal");
-  revalidatePath("/admin/cotizaciones");
-  revalidatePath("/admin/ventas");
-  revalidatePath("/admin/notificaciones");
+export async function respondPublicQuoteAction(token: string, status: QuoteStatus, version?:string) {
+  if (!["ACCEPTED","REJECTED"].includes(status) || !/^[a-zA-Z0-9_-]{16,128}$/.test(token)) throw new QuoteStateError("Respuesta no válida.",422);
+  const quote=await prisma.quote.findFirst({where:{publicToken:token,deletedAt:null,status:{not:"DRAFT"},terraqoWorkspace:{active:true,deletedAt:null}},select:{terraqoWorkspaceId:true}});
+  if (!quote || !await hasWorkspaceModule("CRM",quote.terraqoWorkspaceId)) throw new QuoteStateError("Cotización no disponible.",404);
+  await transitionQuote({workspaceId:quote.terraqoWorkspaceId,publicToken:token,source:"public",status,version});
+  for (const path of [`/cotizaciones/${token}`,"/portal","/portal/operaciones","/admin/cotizaciones","/admin/ventas","/admin/notificaciones"]) revalidatePath(path);
 }
 
 export async function respondPublicQuoteFromFormAction(token: string, formData: FormData) {
-  const status = value(formData, "status") as QuoteStatus | undefined;
-  if (!status) return;
-  await respondPublicQuoteAction(token, status);
-  const redirectTo = value(formData, "redirectTo");
-  redirect(redirectTo || `/cotizaciones/${token}?success=${status === "ACCEPTED" ? "quote_accepted" : "quote_rejected"}`);
+  const status=value(formData,"status"),version=value(formData,"version");
+  const requested=value(formData,"redirectTo");
+  // Accept only the two existing portal destinations. Never navigate to an
+  // arbitrary URL supplied in a public form.
+  const destination=requested?.startsWith("/portal/operaciones?") ? "/portal/operaciones" : requested?.startsWith("/portal?") ? "/portal" : `/cotizaciones/${encodeURIComponent(token)}`;
+  try {
+    if (!version || !Number.isFinite(Date.parse(version)) || status!=="ACCEPTED" && status!=="REJECTED") throw new QuoteStateError("Respuesta no válida.",422);
+    await respondPublicQuoteAction(token,status,version);
+  } catch(error) {
+    if (!(error instanceof QuoteStateError)) throw error;
+    redirect(`${destination}?error=${error.status===409?"quote_conflict":error.status===422?"quote_review":"quote_unavailable"}`);
+  }
+  redirect(`${destination}?success=${status==="ACCEPTED"?"quote_accepted":"quote_rejected"}`);
 }

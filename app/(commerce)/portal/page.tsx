@@ -28,7 +28,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 type ClientPortalPageProps = {
-  searchParams: Promise<{ success?: string; status?: string }>;
+  searchParams: Promise<{ success?: string; status?: string; error?:string }>;
 };
 
 const ticketCategories = [
@@ -76,7 +76,7 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
       client: {
         include: {
           quotes: {
-            where: { terraqoWorkspaceId },
+            where: { terraqoWorkspaceId,deletedAt:null,status:{not:"DRAFT"} },
             include: { items: true, sellerProfile: true },
             orderBy: { createdAt: "desc" },
           },
@@ -527,6 +527,7 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
 
   return (
     <div className="min-w-0 space-y-8 py-6 lg:py-8">
+      {params.error?.startsWith("quote_") ? <p role="alert" className="rounded-md border p-4 text-sm">La cotización cambió, venció o requiere revisión. Abre el detalle y consulta a tu asesor antes de confirmar.</p> : null}
       {params.success && successMessages[params.success] ? <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">{successMessages[params.success]}</div> : null}
       {params.status && statusMessages[params.status] ? <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">{statusMessages[params.status]}</div> : null}
 
@@ -618,9 +619,10 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
                       Descargar PDF
                     </Link>
                   </Button>
-                  {quote.publicToken ? (
+                  {quote.publicToken && ["SENT","VIEWED"].includes(quote.status) ? (
                     <>
                       <form action={respondPublicQuoteFromFormAction.bind(null, quote.publicToken)}>
+                        <input type="hidden" name="version" value={quote.updatedAt.toISOString()} />
                         <input type="hidden" name="status" value="ACCEPTED" />
                         <input type="hidden" name="redirectTo" value="/portal?success=quote_accepted" />
                         <SubmitButton size="sm" pendingText="Aceptando...">
@@ -628,6 +630,7 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
                         </SubmitButton>
                       </form>
                       <form action={respondPublicQuoteFromFormAction.bind(null, quote.publicToken)}>
+                        <input type="hidden" name="version" value={quote.updatedAt.toISOString()} />
                         <input type="hidden" name="status" value="REJECTED" />
                         <input type="hidden" name="redirectTo" value="/portal?success=quote_rejected" />
                         <SubmitButton size="sm" variant="outline" pendingText="Enviando...">

@@ -9,12 +9,14 @@ import { createQuoteAction, updateQuoteStatusAction } from "@/lib/server/admin-a
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
 import { getSessionTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 
-const quoteStatuses = ["DRAFT", "SENT", "VIEWED", "ACCEPTED", "REJECTED", "EXPIRED", "CONVERTED"];
+import {quoteTransitions} from "@/lib/server/quote-state";
+import {FormSubmitButton} from "@/components/admin/form-submit-button";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export default async function AdminQuotesPage() {
+export default async function AdminQuotesPage({searchParams}:{searchParams:Promise<{error?:string;success?:string}>}) {
+  const notice=await searchParams;
   await requireAdminPage(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
   const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
   await requireWorkspaceModule("CRM", terraqoWorkspaceId);
@@ -38,6 +40,7 @@ export default async function AdminQuotesPage() {
 
   return (
     <section className="space-y-8">
+      {notice.error ? <p role="alert" className="rounded-md border p-4 text-sm">{notice.error==="quote_conflict" ? "La cotización cambió o esta transición no está permitida. Revisa su estado." : "La cotización requiere revisión antes de confirmar."}</p> : notice.success==="quote_updated" ? <p role="status" className="rounded-md border p-4 text-sm">Estado comercial actualizado.</p> : null}
       <div>
         <p className="text-sm font-semibold uppercase text-primary">Cotizador B2B</p>
         <h1 className="font-display text-3xl font-bold">Cotizaciones</h1>
@@ -124,13 +127,14 @@ export default async function AdminQuotesPage() {
                     <td className="p-3"><StatusBadge status={quote.status} /></td>
                     <td className="p-3 space-y-2">
                       <form action={updateQuoteStatusAction.bind(null, quote.id)} className="flex gap-2">
+                        <input type="hidden" name="version" value={quote.updatedAt.toISOString()} />
                         <select name="status" defaultValue={quote.status} className="h-9 rounded-md border bg-background px-2 text-xs">
-                          {quoteStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
+                          {[quote.status,...quoteTransitions[quote.status]].map((status) => <option key={status} value={status}>{status}</option>)}
                         </select>
-                        <Button type="submit" size="sm" variant="outline">Guardar</Button>
+                        <FormSubmitButton size="sm" variant="outline" idleLabel="Guardar" pendingLabel="Confirmando..." />
                       </form>
                       <div className="flex flex-wrap gap-2">
-                        {quote.publicToken ? <Button asChild size="sm" variant="outline"><Link href={`/cotizaciones/${quote.publicToken}`} target="_blank">Link cliente</Link></Button> : null}
+                        {quote.publicToken && quote.status!=="DRAFT" ? <Button asChild size="sm" variant="outline"><Link href={`/cotizaciones/${quote.publicToken}`} target="_blank">Link cliente</Link></Button> : null}
                         <Button asChild size="sm" variant="outline"><Link href={`/api/quotes/${quote.id}/pdf`} target="_blank">PDF</Link></Button>
                       </div>
                     </td>

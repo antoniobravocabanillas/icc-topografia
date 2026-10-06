@@ -1,44 +1,38 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CheckCircle2, Download, XCircle } from "lucide-react";
+import { Download } from "lucide-react";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
 import { respondPublicQuoteFromFormAction } from "@/lib/server/customer-actions";
-import { createMetadata } from "@/lib/seo";
-import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
+import type {Metadata} from "next";
+import {FormSubmitButton} from "@/components/admin/form-submit-button";
+import {transitionQuote,QuoteStateError,commercialDay} from "@/lib/server/quote-state";
+import {hasWorkspaceModule} from "@/lib/terraqo/workspace-scope";
 import { formatCurrency } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export async function generateMetadata({ params }: { params: Promise<{ token: string }> }) {
-  const { token } = await params;
-  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
-  const quote = await prisma.quote.findFirst({ where: { publicToken: token, terraqoWorkspaceId }, select: { number: true } });
-  return createMetadata({
-    title: quote ? `Cotizacion ${quote.number}` : "Cotizacion ICC",
-    description: "Propuesta comercial privada de ICC Topografia.",
-    path: `/cotizaciones/${token}`
-  });
-}
+export const metadata:Metadata={title:"Propuesta comercial privada",description:"Consulta y respuesta de propuesta comercial.",robots:{index:false,follow:false},referrer:"no-referrer"};
 
-export default async function PublicQuotePage({ params }: { params: Promise<{ token: string }> }) {
-  const { token } = await params;
-  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
-  const quote = await prisma.quote.findFirst({
-    where: { publicToken: token, terraqoWorkspaceId },
-    include: { items: { include: { product: true } }, sellerProfile: true, client: true }
-  });
-  if (!quote) notFound();
-
-  if (quote.status === "SENT") {
-    await prisma.quote.update({
-      where: { id: quote.id },
-      data: { status: "VIEWED", viewedAt: new Date() }
-    });
+export default async function PublicQuotePage({params,searchParams}: {params:Promise<{token:string}>;searchParams:Promise<{error?:string;success?:string}>}) {
+  const {token}=await params;
+  if (!/^[a-zA-Z0-9_-]{16,128}$/.test(token)) notFound();
+  const where={publicToken:token,deletedAt:null,status:{not:"DRAFT" as const},terraqoWorkspace:{active:true,deletedAt:null}};
+  const include={items:{include:{product:true}},sellerProfile:true,client:true,terraqoWorkspace:{select:{country:true,settings:true}}} as const;
+  let quote=await prisma.quote.findFirst({where,include});
+  if (!quote || !await hasWorkspaceModule("CRM",quote.terraqoWorkspaceId)) notFound();
+  if (quote.status==="SENT") {
+    try {await transitionQuote({workspaceId:quote.terraqoWorkspaceId,publicToken:token,source:"public",status:"VIEWED"});}
+    catch(error) {if (!(error instanceof QuoteStateError) || error.status!==409) throw error;}
+    quote=await prisma.quote.findFirst({where,include});if (!quote) notFound();
   }
+  const expired=!!quote.validUntil && quote.validUntil.toISOString().slice(0,10)<commercialDay(new Date(),quote.terraqoWorkspace.country,quote.terraqoWorkspace.settings);
+  const canRespond=!expired && ["SENT","VIEWED"].includes(quote.status);
+  const notice=await searchParams;
+  const feedback=notice.error==="quote_conflict" ? "La propuesta cambió, venció o ya recibió una respuesta. Revisa el estado antes de continuar." : notice.error==="quote_review" ? "La propuesta requiere revisión comercial antes de confirmar. Contacta a tu asesor." : notice.error==="quote_unavailable" ? "La propuesta no está disponible para responder." : notice.success==="quote_accepted" ? "Aceptación registrada." : notice.success==="quote_rejected" ? "Respuesta registrada. Tu asesor podrá preparar un ajuste." : null;
 
   return (
     <section className="bg-[#f6fbff] py-12">
@@ -100,31 +94,30 @@ export default async function PublicQuotePage({ params }: { params: Promise<{ to
             </CardHeader>
             <CardContent className="space-y-4">
               <StatusBadge status={quote.status} />
+              {feedback ? <p role="status" aria-live="polite" className="rounded-md border p-3 text-sm">{feedback}</p> : null}
               <div className="rounded-md border bg-muted/40 p-4">
                 <p className="text-xs font-semibold uppercase text-muted-foreground">Total</p>
                 <p className="mt-1 font-display text-3xl font-bold">{formatCurrency(Number(quote.total), quote.currency)}</p>
               </div>
               <p className="text-sm text-muted-foreground">Asesor: {quote.sellerProfile?.displayName || "Equipo ICC Topografia"}</p>
               <Button asChild variant="outline" className="w-full">
-                <Link href={`/api/quotes/${quote.id}/pdf?token=${encodeURIComponent(token)}`} target="_blank">
+                <Link href={`/api/quotes/${quote.id}/pdf?token=${encodeURIComponent(token)}`} target="_blank" rel="noopener noreferrer">
                   <Download className="h-4 w-4" />
                   Descargar PDF
                 </Link>
               </Button>
-              <form action={respondPublicQuoteFromFormAction.bind(null, token)} className="grid gap-2">
-                <input type="hidden" name="status" value="ACCEPTED" />
-                <Button type="submit" className="w-full">
-                  <CheckCircle2 className="h-4 w-4" />
-                  Aceptar cotizacion
-                </Button>
-              </form>
-              <form action={respondPublicQuoteFromFormAction.bind(null, token)}>
-                <input type="hidden" name="status" value="REJECTED" />
-                <Button type="submit" variant="outline" className="w-full">
-                  <XCircle className="h-4 w-4" />
-                  Rechazar / solicitar ajuste
-                </Button>
-              </form>
+              {canRespond ? <>
+                <form action={respondPublicQuoteFromFormAction.bind(null,token)}>
+                  <input type="hidden" name="version" value={quote.updatedAt.toISOString()} />
+                  <input type="hidden" name="status" value="ACCEPTED" />
+                  <FormSubmitButton className="w-full" idleLabel="Aceptar cotización" pendingLabel="Registrando aceptación..." />
+                </form>
+                <form action={respondPublicQuoteFromFormAction.bind(null,token)}>
+                  <input type="hidden" name="version" value={quote.updatedAt.toISOString()} />
+                  <input type="hidden" name="status" value="REJECTED" />
+                  <FormSubmitButton className="w-full" variant="outline" idleLabel="Rechazar / solicitar ajuste" pendingLabel="Registrando respuesta..." />
+                </form>
+              </> : <p className="text-sm text-muted-foreground">{expired?"La propuesta ha vencido. Solicita una actualización a tu asesor.":"Esta propuesta ya recibió una decisión comercial."}</p>}
             </CardContent>
           </Card>
         </aside>

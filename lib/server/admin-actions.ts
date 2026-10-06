@@ -1,6 +1,8 @@
 "use server";
 
 import bcrypt from "bcryptjs";
+import {QuoteStatus} from "@prisma/client";
+import {transitionQuote, QuoteStateError} from "./quote-state";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { ActivityAction, BotQuestionStatus, CommissionType, Prisma, Role, StaffDepartment, TechnicalAvailability, TicketCategory, TicketPriority, TicketStatus } from "@prisma/client";
@@ -198,11 +200,6 @@ function ticketClosedAt(status?: string) {
 function opportunityCode() {
   const now = new Date();
   return `OPP-${now.getFullYear()}-${String(now.getTime()).slice(-7)}`;
-}
-
-function saleNumber() {
-  const now = new Date();
-  return `SALE-${now.getFullYear()}-${String(now.getTime()).slice(-7)}`;
 }
 
 async function createActivityLog(data: {
@@ -722,85 +719,22 @@ export async function createQuoteAction(formData: FormData) {
 }
 
 export async function updateQuoteStatusAction(id: string, formData: FormData) {
-  const { workspaceId } = await requireActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
-  await requireOwnedEntity("Cotizacion", prisma.quote.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
-  const status = value(formData, "status") as "DRAFT" | "SENT" | "VIEWED" | "ACCEPTED" | "REJECTED" | "EXPIRED" | "CONVERTED";
-  const quote = await prisma.quote.update({
-    where: { id },
-    data: {
-      status,
-      viewedAt: status === "VIEWED" ? new Date() : undefined,
-      acceptedAt: status === "ACCEPTED" ? new Date() : undefined,
-      rejectedAt: status === "REJECTED" ? new Date() : undefined
-    },
-    include: { sellerProfile: true, commissions: true, sale: true, client: true }
-  });
-
-  if (status === "ACCEPTED" && quote.sellerProfileId && !quote.commissions.length) {
-    const rate = Number(quote.sellerProfile?.commissionRate || 0);
-    const amount = Number(quote.total) * (rate / 100);
-    await prisma.commission.create({
-      data: {
-        quoteId: quote.id,
-        sellerProfileId: quote.sellerProfileId,
-        type: quote.sellerProfile?.commissionType || "SALE_PERCENTAGE",
-        baseAmount: quote.total,
-        rate,
-        amount,
-        terraqoWorkspaceId: workspaceId
-      }
-    });
+  const {workspaceId,session} = await requireActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  await requireWorkspaceModule("CRM",workspaceId);
+  const status=value(formData,"status"),version=value(formData,"version");
+  let publicToken:string|null=null;
+  try {
+    if (!status || !Object.values(QuoteStatus).includes(status as QuoteStatus) || !version || !Number.isFinite(Date.parse(version)))
+      throw new QuoteStateError("Operación no válida.",422);
+    const quote=await transitionQuote({workspaceId,quoteId:id,actorId:session.user.id,source:"admin",status:status as QuoteStatus,version});
+    publicToken=quote.publicToken;
+  } catch(error) {
+    if (!(error instanceof QuoteStateError)) throw error;
+    redirect(`/admin/cotizaciones?error=${error.status===409?"quote_conflict":error.status===422?"quote_review":"quote_unavailable"}`);
   }
-
-  if (status === "ACCEPTED" && !quote.sale) {
-    const sale = await prisma.sale.create({
-      data: {
-        number: saleNumber(),
-        quoteId: quote.id,
-        opportunityId: quote.opportunityId,
-        clientId: quote.clientId,
-        companyId: quote.companyId || quote.client?.companyId,
-        contactId: quote.contactId,
-        sellerProfileId: quote.sellerProfileId,
-        terraqoWorkspaceId: quote.terraqoWorkspaceId,
-        status: "CONFIRMED",
-        currency: quote.currency,
-        amount: quote.total,
-        commissionAmount: quote.sellerProfile ? Number(quote.total) * (Number(quote.sellerProfile.commissionRate || 0) / 100) : 0
-      }
-    });
-    await createActivityLog({
-      action: "CONVERTED",
-      entityType: "Sale",
-      entityId: sale.id,
-      title: `Venta ${sale.number} creada desde cotizacion`,
-      quoteId: quote.id,
-      saleId: sale.id,
-      companyId: sale.companyId,
-      contactId: sale.contactId,
-      opportunityId: sale.opportunityId
-      ,terraqoWorkspaceId: quote.terraqoWorkspaceId
-    });
-  }
-
-  await createActivityLog({
-    action: "STATUS_CHANGED",
-    entityType: "Quote",
-    entityId: quote.id,
-    title: `Cotizacion ${quote.number} cambio a ${status}`,
-    quoteId: quote.id,
-    companyId: quote.companyId,
-    contactId: quote.contactId,
-    opportunityId: quote.opportunityId
-    ,terraqoWorkspaceId: quote.terraqoWorkspaceId
-  });
-
-  revalidatePath("/admin/cotizaciones");
-  revalidatePath("/admin/ventas");
-  revalidatePath("/admin/clientes");
-  revalidatePath("/admin/oportunidades");
-  revalidatePath("/admin");
-  if (quote.publicToken) revalidatePath(`/cotizaciones/${quote.publicToken}`);
+  for (const path of ["/admin/cotizaciones","/admin/ventas","/admin/clientes","/admin/oportunidades","/admin"]) revalidatePath(path);
+  if (publicToken) revalidatePath(`/cotizaciones/${publicToken}`);
+  redirect("/admin/cotizaciones?success=quote_updated");
 }
 
 export async function updateCommissionStatusAction(id: string, formData: FormData) {
