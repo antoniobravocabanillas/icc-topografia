@@ -64,7 +64,7 @@ async function main() {
     await save(editedFields,undefined,draft,409);
     phase="decision";
     const sent=(await save({action:"STATUS",status:"SENT"},undefined,edited))!;
-    if(!http){assert.ok(/^\/cotizaciones\/[a-f0-9]{64}$/.test(new URL(sent.fields.publicLink).pathname),"Issued proposal must have a scoped public link.");const clientRows=(await list(true)).records;assert.equal(clientRows.find((row:RecordDto)=>row.id===draft.id)?.fields.publicLink,"");}
+    {assert.ok(/^\/cotizaciones\/[a-f0-9]{64}$/.test(new URL(sent.fields.publicLink).pathname),"Issued proposal must have a scoped public link.");if(http)assert.equal(new URL(sent.fields.publicLink).origin,"https://terraqoglobal.com");const clientRows=(await list(true)).records;assert.equal(clientRows.find((row:RecordDto)=>row.id===draft.id)?.fields.publicLink,"");}
     if(http){
       const pdf=await fetch(`${process.env.TEST_PORTAL_URL}/api/quotes/${draft.id}/pdf?workspace=icc-topografia`,{headers:{Authorization:`Bearer ${clientBearer}`},redirect:"error"});
       assert.equal(pdf.status,200);assert.equal(pdf.headers.get("content-type"),"application/pdf");assert.equal((await pdf.text()).slice(0,5),"%PDF-");

@@ -34,6 +34,13 @@ async function main(){
       stage=`${device}: issue`;await tapLabel(serial,quote.number);await tapLabel(serial,'Enviar propuesta');await tapLabel(serial,'Confirmar');
       let sent=false;for(let i=0;i<15;i++){const row=await prisma.quote.findUniqueOrThrow({where:{id:quote.id}});if(row.status==='SENT'){assert.match(row.publicToken!,/^[a-f0-9]{64}$/);sent=true;break;}await pause(800);}assert.ok(sent);
       await tapLabel(serial,quote.number);for(let i=0;i<4;i++)await scroll(serial,true);capture(serial,`quote-issued-${device}.png`);assert.ok(!(await snapshot(serial)).includes("Guardar borrador"));
+      if(process.env.TEST_QUOTE_SHARE==="1"){
+        stage=`${device}: proposal link`;
+        await tapLabel(serial,'Copiar enlace de la propuesta');
+        capture(serial,`quote-share-${device}.png`);await tapLabel(serial,'Copiar enlace');
+        assert.ok((await snapshot(serial)).includes('Enlace copiado.'));
+        for(let i=0;i<5;i++)await scroll(serial,true);
+      }
       assert.equal(await prisma.sale.count({where:{quoteId:quote.id}}),0);
       shell(serial,'input keyevent 4');await pause(500);shell(serial,'input keyevent 4');await pause(500);shell(serial,'input keyevent 4');await pause(500);
       await tapLabel(serial,'Cuenta');await tapLabel(serial,'Cerrar sesión');
