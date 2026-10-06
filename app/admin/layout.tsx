@@ -84,9 +84,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         workspaceOptions={workspaceOptions}
       />
       <main className="mx-auto w-full max-w-[1680px] px-4 py-7 sm:px-6 sm:py-9 lg:px-8 lg:py-10">
+        <AdminNotificationMonitor />
         {children}
       </main>
-      <AdminNotificationMonitor />
       {modules.some((module) => module.code === "AI_WRITING_ASSISTANT") ? <ClientFeatureBoundary feature="writing-assistant"><WorkspaceWritingAssistant /></ClientFeatureBoundary> : null}
     </div>
     </>

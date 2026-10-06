@@ -81,19 +81,19 @@ export function AdminNotificationMonitor() {
   }, [poll]);
 
   return (
-    <div className="fixed bottom-5 right-5 z-50 flex max-w-[calc(100vw-2.5rem)] flex-col items-end gap-3">
-      <details className="group relative">
+    <aside aria-label="Avisos y preferencias de sonido" className="mb-6 flex flex-wrap items-center justify-end gap-3">
+      <details className="group relative order-2">
         <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-xl border bg-background px-3 text-sm font-bold shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary [&::-webkit-details-marker]:hidden">
           <Settings2 className="h-4 w-4" aria-hidden="true" />
           Sonidos
         </summary>
-        <div className="absolute bottom-[calc(100%+8px)] right-0 rounded-2xl border bg-white p-4 text-slate-900 shadow-2xl">
-          <AlertPreferencesPanel />
+        <div className="absolute top-[calc(100%+8px)] right-0 z-50 w-[min(394px,calc(100vw-2rem))] rounded-2xl border bg-white p-4 text-slate-900 shadow-2xl">
+          <AlertPreferencesPanel className="w-full" />
         </div>
       </details>
 
       {isVisible && event ? (
-        <div className="w-[360px] max-w-full rounded-lg border bg-background p-4 shadow-technical">
+        <div className="order-last w-full rounded-lg border bg-background p-4 shadow-technical">
           <div className="flex items-start justify-between gap-3">
             <div className="flex gap-3">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
@@ -116,11 +116,11 @@ export function AdminNotificationMonitor() {
           </div>
         </div>
       ) : unreadCount > 0 ? (
-        <Link href="/admin/notificaciones" className="flex items-center gap-2 rounded-full border bg-background px-4 py-2 text-sm font-semibold shadow-lg">
+        <Link href="/admin/notificaciones" className="order-1 flex min-h-11 items-center gap-2 rounded-full border bg-background px-4 py-2 text-sm font-semibold shadow-lg">
           <Bell className="h-4 w-4 text-primary" />
           {unreadCount} sin leer
         </Link>
       ) : null}
-    </div>
+    </aside>
   );
 }

@@ -62,7 +62,8 @@ async function main() {
       const {chromium}=await import("playwright");
       const {mkdir}=await import("node:fs/promises");
       await mkdir("output/staff-policy",{recursive:true});
-      const browser=await chromium.launch({headless:true});
+      phase="browser-launch";
+      const browser=await chromium.launch({headless:true, env:Object.fromEntries(["PATH","SystemRoot","WINDIR","USERPROFILE","LOCALAPPDATA","TEMP","TMP"].flatMap(key=>process.env[key] ? [[key,process.env[key]!]] : []))});
       try {
         const context=await browser.newContext();
         await context.addCookies([{name:cookieName,value:session,domain:"admin.terraqoglobal.com",path:"/",secure:true,httpOnly:true,sameSite:"Lax"},
@@ -70,17 +71,36 @@ async function main() {
         const page=await context.newPage();
         for(const width of [390,1280]) {
           await page.setViewportSize({width,height:900});
+          phase=`browser-render-${width}`;
           await page.goto(origin+"/admin/ventas",{waitUntil:"networkidle"});
           const form=page.locator(`[data-policy-profile="${id}"]`);await form.waitFor();
           await form.getByLabel("Comisión fija",{exact:true}).fill("8.23");
           assert.equal(await form.getByRole("status").textContent(),"Cambios sin guardar.");
           await form.screenshot({path:`output/staff-policy/form-${width}.png`});
+          if(process.env.TEST_STAFF_ALERT_LAYOUT === "1") {
+            const aside=page.getByRole("complementary",{name:"Avisos y preferencias de sonido"});
+            const asideBox=await aside.boundingBox(),formBox=await form.boundingBox();
+            assert.ok(asideBox && formBox && asideBox.y+asideBox.height<=formBox.y);
+            await aside.getByText("Sonidos",{exact:true}).click();
+            const panel=page.locator('section[aria-labelledby="sound-preferences-heading"]');await panel.waitFor({state:"visible"});
+            const box=await panel.boundingBox();assert.ok(box && box.x>=0 && box.x+box.width<=width);
+            await panel.screenshot({path:`output/staff-policy/sound-${width}.png`});
+            await aside.getByText("Sonidos",{exact:true}).click();
+          }
         }
+        phase="browser-save";
         const form=page.locator(`[data-policy-profile="${id}"]`);
         await form.getByRole("button",{name:"Guardar reglas comerciales"}).click();
         await page.waitForURL(/policy=saved/);
-        assert.ok(await page.getByRole("status").filter({hasText:"Política guardada correctamente."}).isVisible());
+        phase="browser-persisted-amount";
         assert.equal((await prisma.staffProfile.findUniqueOrThrow({where:{id}})).fixedCommission.toFixed(2),"8.23");
+        phase="browser-saved-feedback";
+        const feedback=page.getByRole("status").filter({hasText:"Política guardada correctamente."});
+        try {await feedback.waitFor({state:"visible",timeout:5000});} catch {
+          console.log(JSON.stringify({phase,knownSuccessText:await page.getByText("Política guardada correctamente.",{exact:true}).count(),
+            statuses:await page.getByRole("status").count(),policy:new URL(page.url()).searchParams.get("policy"),
+            path:new URL(page.url()).pathname}));throw new Error("Saved feedback was not accessible.");
+        }
         await context.clearCookies();
         console.log("PASS browser staff form: visible labels, dirty feedback, saved result and exact persisted amount at 390/1280 px.");
       } finally {await browser.close();}
@@ -93,4 +113,4 @@ async function main() {
     console.log("CLEANUP STAFF POLICY: own temporary staff, membership, audit and account removed; no customer records changed.");
   }
 }
-main().catch(()=>{console.error(`Staff policy validation failed in ${phase}; private diagnostics suppressed.`);process.exitCode=1;}).finally(()=>prisma.$disconnect());
+main().catch((error:unknown)=>{console.error(`Staff policy validation failed in ${phase} (${error instanceof Error ? error.name : "unknown"}); private diagnostics suppressed.`);process.exitCode=1;}).finally(()=>prisma.$disconnect());

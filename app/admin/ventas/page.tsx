@@ -103,7 +103,7 @@ export default async function AdminSalesPage({searchParams}: {searchParams: Prom
 
       <div className="grid gap-5 md:grid-cols-3">
         <MetricCard icon={BarChart3} label="Ventas aceptadas" value={commercialMoneyTotals(wonQuotes.map(group => ({amount: group._sum.total || new Prisma.Decimal(0), currency: group.currency})))} />
-        <MetricCard icon={WalletCards} label="Comisiones pendientes" value={commercialMoneyTotals(pendingCommissionTotal)} />
+        <MetricCard icon={WalletCards} label="Pendientes en esta lista" value={commercialMoneyTotals(pendingCommissionTotal)} />
         <MetricCard icon={Target} label="Vendedores activos" value={String(sellers.filter((seller) => seller.active).length)} />
       </div>
 

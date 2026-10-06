@@ -18,7 +18,7 @@ const soundOptions: Array<{ value: TerraqoSoundPreset; label: string }> = [
   { value: "soft", label: "Suave" },
 ];
 
-export function AlertPreferencesPanel() {
+export function AlertPreferencesPanel({className}: {className?: string} = {}) {
   const [preferences, setPreferences] = useState<TerraqoAlertPreferences>(
     defaultTerraqoAlertPreferences,
   );
@@ -40,7 +40,7 @@ export function AlertPreferencesPanel() {
   }
 
   return (
-    <section className="w-[min(360px,calc(100vw-24px))]" aria-labelledby="sound-preferences-heading">
+    <section className={className || "w-[min(360px,calc(100vw-24px))]"} aria-labelledby="sound-preferences-heading">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 id="sound-preferences-heading" className="font-display text-base font-bold text-[#0e1a26]">
