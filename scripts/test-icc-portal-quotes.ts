@@ -46,7 +46,7 @@ async function main() {
     const key=randomBytes(16).toString("hex");const outcomes=await Promise.allSettled([save(fields,key),save(fields,key),save(fields,key),save(fields,key)]);
     const failed=outcomes.find(value=>value.status==="rejected");if(failed?.status==="rejected")throw failed.reason;
     const copies=outcomes.map(value=>{assert.equal(value.status,"fulfilled");return value.status==="fulfilled"?value.value:null;});
-    const draft=copies[0]!;ids.push(draft.id);assert.ok((await list()).records.some((row:RecordDto)=>row.id===draft.id),"Created quote must appear in the latest page.");assert.ok(copies.every(row=>row!.id===draft.id));assert.equal(draft.fields.total,"0.34");
+    const draft=copies[0]!;ids.push(draft.id);assert.ok((await list()).records.some((row:RecordDto)=>row.id===draft.id),"Created quote must appear in the latest page.");assert.ok(copies.every(row=>row!.id===draft.id));assert.equal(draft.fields.total,"0.34");assert.equal(draft.fields.publicLink,"");
     assert.ok(!(await list(true)).records.some((row:RecordDto)=>row.id===draft.id));
     if(http) {
       const pdf=await fetch(`${process.env.TEST_PORTAL_URL}/api/quotes/${draft.id}/pdf?workspace=icc-topografia`,{headers:{Authorization:`Bearer ${bearer}`},redirect:"error"});assert.equal(pdf.status,200);assert.equal((await pdf.text()).slice(0,5),"%PDF-");
@@ -64,6 +64,11 @@ async function main() {
     await save(editedFields,undefined,draft,409);
     phase="decision";
     const sent=(await save({action:"STATUS",status:"SENT"},undefined,edited))!;
+    if(!http){assert.ok(/^\/cotizaciones\/[a-f0-9]{64}$/.test(new URL(sent.fields.publicLink).pathname),"Issued proposal must have a scoped public link.");const clientRows=(await list(true)).records;assert.equal(clientRows.find((row:RecordDto)=>row.id===draft.id)?.fields.publicLink,"");}
+    if(http){
+      const pdf=await fetch(`${process.env.TEST_PORTAL_URL}/api/quotes/${draft.id}/pdf?workspace=icc-topografia`,{headers:{Authorization:`Bearer ${clientBearer}`},redirect:"error"});
+      assert.equal(pdf.status,200);assert.equal(pdf.headers.get("content-type"),"application/pdf");assert.equal((await pdf.text()).slice(0,5),"%PDF-");
+    }
     await save(editedFields,undefined,sent,409);assert.ok((await list(true)).records.some((row:RecordDto)=>row.id===draft.id));
     const accepted=(await save({action:"STATUS",status:"ACCEPTED"},undefined,sent,200,true))!;
     await save({action:"STATUS",status:"ACCEPTED"},undefined,sent,200,true);
@@ -73,6 +78,9 @@ async function main() {
     await prisma.clientAccount.updateMany({where:{userId:client.id,terraqoWorkspaceId:workspace.id},data:{status:"blocked"}});
     assert.ok(!(await list(true)).records.some((row:RecordDto)=>row.id===draft.id));
     await save({action:"STATUS",status:"ACCEPTED"},undefined,accepted,403,true);
+    if(http){
+      const pdf=await fetch(`${process.env.TEST_PORTAL_URL}/api/quotes/${draft.id}/pdf?workspace=icc-topografia`,{headers:{Authorization:`Bearer ${clientBearer}`},redirect:"error"});assert.equal(pdf.status,404);
+    }
     console.log(`PASS ${http?"HTTP":"service"} mobile quotations: scoped drafts, client draft privacy, exact totals, create/edit retries, forged totals/foreign company/stale edits denied, issued scope immutable, owned client acceptance idempotent, blocked account denied.`);
   } finally {
     const own=await prisma.quote.findMany({where:{companyId,terraqoWorkspaceId:workspace.id},select:{id:true}});ids.push(...own.map(row=>row.id));

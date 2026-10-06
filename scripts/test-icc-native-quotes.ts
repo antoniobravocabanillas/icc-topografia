@@ -18,9 +18,13 @@ async function main(){
       await fillLabel(serial,'Nombre del destinatario',`Cliente-${device}`);
       for(let i=0;i<3;i++)await scroll(serial,true);
       await tapLabel(serial,'Seleccionar empresa');await tapLabel(serial,companyName);
-      await fillLabel(serial,'Descripción',`Servicio-${device}-uno`);await fillLabel(serial,'Precio unitario','.10');
-      await tapLabel(serial,'Agregar línea');await fillLastLabel(serial,'Descripción',`Servicio-${device}-dos`);await fillLastLabel(serial,'Precio unitario','.20');
-      await fillLabel(serial,'Impuesto total','.05');await fillLabel(serial,'Tiempo de entrega','Entrega-inicial');
+      for(let i=0;i<4;i++)await scroll(serial,true);
+      stage=`${device}: first line`;
+      console.log(`NATIVE QUOTES ${device}: preparing first line.`);
+      await fillLabel(serial,'Descripción',`Servicio-${device}-uno`);await fillLabel(serial,'Precio unitario · PEN','.10');
+      await tapLabel(serial,'Agregar línea');await fillLastLabel(serial,'Descripción',`Servicio-${device}-dos`);await fillLastLabel(serial,'Precio unitario · PEN','.20');
+      console.log(`NATIVE QUOTES ${device}: preparing second line and conditions.`);
+      await fillLabel(serial,'Impuesto total · PEN','.05');await fillLabel(serial,'Tiempo de entrega','Entrega-inicial');
       for(let i=0;i<4;i++)await scroll(serial,true);capture(serial,`quote-editor-${device}.png`);
       await tapLabel(serial,'Guardar borrador');let quote=null;
       for(let i=0;i<15;i++){quote=await prisma.quote.findFirst({where:{companyId,customerName:`Cliente-${device}`},include:{items:{orderBy:{id:'asc'}}}});if(quote)break;await pause(800);}
@@ -29,7 +33,7 @@ async function main(){
       let edited=false;for(let i=0;i<15;i++){const row=await prisma.quote.findUniqueOrThrow({where:{id:quote.id}});if(row.deliveryTime==='Entrega-inicial-confirmada'){edited=true;break;}await pause(800);}assert.ok(edited);
       stage=`${device}: issue`;await tapLabel(serial,quote.number);await tapLabel(serial,'Enviar propuesta');await tapLabel(serial,'Confirmar');
       let sent=false;for(let i=0;i<15;i++){const row=await prisma.quote.findUniqueOrThrow({where:{id:quote.id}});if(row.status==='SENT'){assert.match(row.publicToken!,/^[a-f0-9]{64}$/);sent=true;break;}await pause(800);}assert.ok(sent);
-      await tapLabel(serial,quote.number);for(let i=0;i<4;i++)await scroll(serial,true);capture(serial,`quote-issued-${device}.png`);
+      await tapLabel(serial,quote.number);for(let i=0;i<4;i++)await scroll(serial,true);capture(serial,`quote-issued-${device}.png`);assert.ok(!(await snapshot(serial)).includes("Guardar borrador"));
       assert.equal(await prisma.sale.count({where:{quoteId:quote.id}}),0);
       shell(serial,'input keyevent 4');await pause(500);shell(serial,'input keyevent 4');await pause(500);shell(serial,'input keyevent 4');await pause(500);
       await tapLabel(serial,'Cuenta');await tapLabel(serial,'Cerrar sesión');
@@ -47,4 +51,4 @@ async function main(){
     console.log('CLEANUP NATIVE QUOTES: own temporary quotes, company, account, audits and grants removed.');
   }
 }
-main().catch((error:unknown)=>{console.error(`Native quote stage: ${stage}`);console.error(error instanceof assert.AssertionError?error.message:'Private diagnostics suppressed.');process.exitCode=1;}).finally(()=>prisma.$disconnect());
+main().catch((error:unknown)=>{console.error(`Native quote stage: ${stage}`);console.error(error instanceof assert.AssertionError?error.message:error instanceof Error && /^Native (input|control|login)/.test(error.message)?error.message:'Private diagnostics suppressed.');process.exitCode=1;}).finally(()=>prisma.$disconnect());

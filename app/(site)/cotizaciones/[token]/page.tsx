@@ -21,7 +21,7 @@ export default async function PublicQuotePage({params,searchParams}: {params:Pro
   const {token}=await params;
   if (!/^[a-zA-Z0-9_-]{16,128}$/.test(token)) notFound();
   const where={publicToken:token,deletedAt:null,status:{not:"DRAFT" as const},terraqoWorkspace:{active:true,deletedAt:null}};
-  const include={items:{include:{product:true}},sellerProfile:true,client:true,terraqoWorkspace:{select:{country:true,settings:true}}} as const;
+  const include={items:{orderBy:{id:"asc" as const},include:{product:true}},sellerProfile:true,client:true,terraqoWorkspace:{select:{country:true,settings:true,name:true,brandName:true}}} as const;
   let quote=await prisma.quote.findFirst({where,include});
   if (!quote || !await hasWorkspaceModule("CRM",quote.terraqoWorkspaceId)) notFound();
   if (quote.status==="SENT") {
@@ -39,7 +39,7 @@ export default async function PublicQuotePage({params,searchParams}: {params:Pro
       <div className="container grid gap-8 lg:grid-cols-[1fr_360px]">
         <div className="space-y-6">
           <div className="rounded-lg border bg-[#03111D] p-8 text-white shadow-xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#24C8EE]">Propuesta comercial ICC</p>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#24C8EE]">{quote.terraqoWorkspace.brandName || quote.terraqoWorkspace.name}</p>
             <h1 className="mt-4 font-display text-4xl font-bold">{quote.number}</h1>
             <p className="mt-4 text-white/72">
               Cotizacion para {quote.customerName}{quote.company ? ` - ${quote.company}` : ""}. Valida hasta {quote.validUntil ? quote.validUntil.toLocaleDateString("es-PE") : "fecha por confirmar"}.
@@ -99,7 +99,7 @@ export default async function PublicQuotePage({params,searchParams}: {params:Pro
                 <p className="text-xs font-semibold uppercase text-muted-foreground">Total</p>
                 <p className="mt-1 font-display text-3xl font-bold">{formatCurrency(Number(quote.total), quote.currency)}</p>
               </div>
-              <p className="text-sm text-muted-foreground">Asesor: {quote.sellerProfile?.displayName || "Equipo ICC Topografia"}</p>
+              <p className="text-sm text-muted-foreground">Asesor: {quote.sellerProfile?.displayName || quote.terraqoWorkspace.brandName || quote.terraqoWorkspace.name}</p>
               <Button asChild variant="outline" className="w-full">
                 <Link href={`/api/quotes/${quote.id}/pdf?token=${encodeURIComponent(token)}`} target="_blank" rel="noopener noreferrer">
                   <Download className="h-4 w-4" />
