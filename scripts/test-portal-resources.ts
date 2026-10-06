@@ -58,7 +58,9 @@ async function main() {
     const before = queries;
     for (const role of ["CLIENT", "PROFESSIONAL", "MEMBER", "VIEWER"] as const)
       await assert.rejects(listPortalResource({ ...token, role }, "clients"), forbidden(403));
-    enabled = false; await assert.rejects(listPortalResource(token, "clients"), forbidden(403)); enabled = true;
+    enabled = false;
+    for (const code of ["companies", "contacts", "contactCompanies", "clients"] as const) await assert.rejects(listPortalResource(token, code), forbidden(403));
+    enabled = true;
     assert.equal(queries, before);
     await listPortalResource({ ...token, role: "MEMBER" }, "notes");
     await listPortalResource({ ...token, role: "MEMBER" }, "notifications");
