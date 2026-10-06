@@ -15,11 +15,12 @@ async function main(){
       const device=index===0?'phone':'tablet';stage=`${device}: login`;
       await login(serial,email,password);await tapLabel(serial,'Abrir herramientas');await tapLabel(serial,'Cotizaciones');
       stage=`${device}: create`;await tapLabel(serial,'Crear propuesta');
-      await tapLabel(serial,'Seleccionar empresa');await tapLabel(serial,companyName);
       await fillLabel(serial,'Nombre del destinatario',`Cliente-${device}`);
+      for(let i=0;i<3;i++)await scroll(serial,true);
+      await tapLabel(serial,'Seleccionar empresa');await tapLabel(serial,companyName);
       await fillLabel(serial,'Descripción',`Servicio-${device}-uno`);await fillLabel(serial,'Precio unitario','.10');
       await tapLabel(serial,'Agregar línea');await fillLastLabel(serial,'Descripción',`Servicio-${device}-dos`);await fillLastLabel(serial,'Precio unitario','.20');
-      await fillLabel(serial,'Impuesto','.05');await fillLabel(serial,'Tiempo de entrega','Entrega-inicial');
+      await fillLabel(serial,'Impuesto total','.05');await fillLabel(serial,'Tiempo de entrega','Entrega-inicial');
       for(let i=0;i<4;i++)await scroll(serial,true);capture(serial,`quote-editor-${device}.png`);
       await tapLabel(serial,'Guardar borrador');let quote=null;
       for(let i=0;i<15;i++){quote=await prisma.quote.findFirst({where:{companyId,customerName:`Cliente-${device}`},include:{items:{orderBy:{id:'asc'}}}});if(quote)break;await pause(800);}
@@ -28,9 +29,9 @@ async function main(){
       let edited=false;for(let i=0;i<15;i++){const row=await prisma.quote.findUniqueOrThrow({where:{id:quote.id}});if(row.deliveryTime==='Entrega-inicial-confirmada'){edited=true;break;}await pause(800);}assert.ok(edited);
       stage=`${device}: issue`;await tapLabel(serial,quote.number);await tapLabel(serial,'Enviar propuesta');await tapLabel(serial,'Confirmar');
       let sent=false;for(let i=0;i<15;i++){const row=await prisma.quote.findUniqueOrThrow({where:{id:quote.id}});if(row.status==='SENT'){assert.match(row.publicToken!,/^[a-f0-9]{64}$/);sent=true;break;}await pause(800);}assert.ok(sent);
-      for(let i=0;i<4;i++)await scroll(serial,true);capture(serial,`quote-issued-${device}.png`);
+      await tapLabel(serial,quote.number);for(let i=0;i<4;i++)await scroll(serial,true);capture(serial,`quote-issued-${device}.png`);
       assert.equal(await prisma.sale.count({where:{quoteId:quote.id}}),0);
-      shell(serial,'input keyevent 4');await pause(500);shell(serial,'input keyevent 4');await pause(500);
+      shell(serial,'input keyevent 4');await pause(500);shell(serial,'input keyevent 4');await pause(500);shell(serial,'input keyevent 4');await pause(500);
       await tapLabel(serial,'Cuenta');await tapLabel(serial,'Cerrar sesión');
       let closed=false;for(let i=0;i<12;i++){await pause(700);if((await snapshot(serial)).includes('Ingresar a mi empresa')){closed=true;break;}}assert.ok(closed);
       console.log(`PASS native quotations ${device}: two lines, exact amount, draft edit, issuance token, read-only proposal and logout.`);
