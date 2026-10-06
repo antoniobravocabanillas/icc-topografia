@@ -16,7 +16,7 @@ export const quoteTransitions: Record<QuoteStatus, readonly QuoteStatus[]> = {
   REJECTED: ["DRAFT"], EXPIRED: ["DRAFT"], CONVERTED: [],
 };
 type Command = {workspaceId: string; quoteId?: string; publicToken?: string;
-  status: QuoteStatus; actorId?: string; version?: string; source: "admin" | "portal" | "public"};
+  status: QuoteStatus; clientUserId?:string; actorId?: string; version?: string; source: "admin" | "portal" | "public"};
 export function commercialDay(now: Date, country: string, settings: Prisma.JsonValue | null) {
   const configured = settings && typeof settings === "object" && !Array.isArray(settings) ? settings.commercialTimezone : null;
   const timezone = typeof configured === "string" ? configured : country === "PE" ? "America/Lima" : "UTC";
@@ -41,6 +41,11 @@ export async function transitionQuote(command: Command) {
     await tx.$queryRaw`SELECT id FROM "icc"."Quote" WHERE id=${target.id} AND "terraqoWorkspaceId"=${workspaceId} AND "deletedAt" IS NULL FOR UPDATE`;
     const quote = await tx.quote.findFirst({where,include:{companyRef:true,contact:true,client:true,sellerProfile:true,sale:true,commissions:true,items:true}});
     if (!quote) throw new QuoteStateError("Cotización no disponible.",404);
+    if(command.clientUserId) {
+      if(source!=="portal" || command.actorId!==command.clientUserId || !quote.clientId || quote.status==="DRAFT" || !["ACCEPTED","REJECTED"].includes(status) ||
+        !await tx.clientAccount.findFirst({where:{userId:command.clientUserId,clientId:quote.clientId,terraqoWorkspaceId:workspaceId,deletedAt:null,status:{in:["active","approved"]},client:{terraqoWorkspaceId:workspaceId,deletedAt:null}},select:{id:true}}))
+        throw new QuoteStateError("Propuesta no disponible para responder.",403);
+    }
     // A repeated state returns the committed outcome without duplicating sales,
     // commissions, notifications, audit rows, or acceptance timestamps.
     if (quote.status === status) return quote;
@@ -51,7 +56,7 @@ export async function transitionQuote(command: Command) {
     if (!quoteTransitions[quote.status].includes(status)) throw new QuoteStateError("Esta transición comercial no está permitida.",409);
     const now = new Date();
     const workspace = await tx.terraqoWorkspace.findUniqueOrThrow({where:{id:workspaceId},select:{country:true,settings:true}});
-    if (["ACCEPTED", "REJECTED", "VIEWED"].includes(status) && quote.validUntil &&
+    if (["SENT", "ACCEPTED", "REJECTED", "VIEWED"].includes(status) && quote.validUntil &&
         quote.validUntil.toISOString().slice(0,10) < commercialDay(now,workspace.country,workspace.settings))
       throw new QuoteStateError("La cotización ha vencido. Solicita una propuesta vigente.",409);
     for (const relation of [quote.companyRef,quote.contact,quote.client,quote.sellerProfile]) {
@@ -65,6 +70,7 @@ export async function transitionQuote(command: Command) {
     if (quote.client?.companyId && quote.companyId && quote.client.companyId !== quote.companyId)
       throw new QuoteStateError("El cliente no corresponde a la empresa.",409);
     if (quote.opportunityId) {
+      await tx.$queryRaw`SELECT id FROM "icc"."Opportunity" WHERE id=${quote.opportunityId} AND "terraqoWorkspaceId"=${workspaceId} AND "deletedAt" IS NULL FOR UPDATE`;
       const opportunity = await tx.opportunity.findFirst({where:{id:quote.opportunityId,terraqoWorkspaceId:workspaceId,deletedAt:null},select:{companyId:true}});
       if (!opportunity || quote.companyId && opportunity.companyId !== quote.companyId) throw new QuoteStateError("La oportunidad requiere revisión.",409);
     }
@@ -101,8 +107,8 @@ export async function transitionQuote(command: Command) {
         } else throw new QuoteStateError("Esta comisión requiere un cálculo de margen o categoría antes de confirmar.",422);
         if (quote.commissions.length > 1) throw new QuoteStateError("Existen comisiones duplicadas que requieren revisión.",409);
         if (!quote.commissions.length) await tx.commission.create({data:{quoteId:quote.id,sellerProfileId:seller.id,
-          terraqoWorkspaceId:workspaceId,type:seller.commissionType,baseAmount:quote.total,rate:seller.commissionRate,amount:commissionAmount}});
-        else if (quote.commissions[0].sellerProfileId !== seller.id || !quote.commissions[0].baseAmount.eq(quote.total) || !quote.commissions[0].amount.eq(commissionAmount)) throw new QuoteStateError("La comisión existente requiere revisión.",409);
+          terraqoWorkspaceId:workspaceId,type:seller.commissionType,baseAmount:quote.total,rate:seller.commissionType==="SALE_PERCENTAGE"?seller.commissionRate:new Prisma.Decimal(0),amount:commissionAmount}});
+        else if (quote.commissions[0].type!==seller.commissionType || !quote.commissions[0].rate.eq(seller.commissionType==="SALE_PERCENTAGE"?seller.commissionRate:0) || quote.commissions[0].sellerProfileId !== seller.id || !quote.commissions[0].baseAmount.eq(quote.total) || !quote.commissions[0].amount.eq(commissionAmount)) throw new QuoteStateError("La comisión existente requiere revisión.",409);
       }
       if (!quote.sale) {
         const saleId = createHash("sha256").update(JSON.stringify([workspaceId,quote.id,"accepted-sale"])).digest("hex").slice(0,32);
@@ -114,6 +120,7 @@ export async function transitionQuote(command: Command) {
       } else if (quote.sale.currency !== quote.currency || !quote.sale.amount.eq(quote.total) || !quote.sale.commissionAmount.eq(commissionAmount))
         throw new QuoteStateError("La venta existente requiere revisión.",409);
     }
+    if(status === "ACCEPTED" && quote.opportunityId) await tx.opportunity.update({where:{id:quote.opportunityId},data:{status:"WON"}});
     if (status === "CONVERTED" && !quote.sale) throw new QuoteStateError("La cotización no tiene una venta confirmada.",409);
     const saved = await tx.quote.update({where:{id:quote.id},data:{status,updatedAt:new Date(Math.max(Date.now(),quote.updatedAt.getTime()+1)),
       ...(status === "SENT" ? {publicToken:randomBytes(32).toString("hex")} : {}),
@@ -121,8 +128,8 @@ export async function transitionQuote(command: Command) {
       ...(status === "VIEWED" ? {viewedAt:now} : {}), ...(status === "ACCEPTED" ? {acceptedAt:now} : {}), ...(status === "REJECTED" ? {rejectedAt:now} : {})}});
     await tx.activityLog.create({data:{actorId:command.actorId,terraqoWorkspaceId:workspaceId,action:"STATUS_CHANGED",entityType:"Quote",entityId:quote.id,
       quoteId:quote.id,title:"Estado de cotización actualizado",metadata:{source,from:quote.status,to:status}}});
-    if (source === "public" && status !== "VIEWED") await tx.notification.create({data:{id:createHash("sha256").update(JSON.stringify([workspaceId,quote.id,quote.publicToken,status,"quote-response-notice"])).digest("hex").slice(0,32),terraqoWorkspaceId:workspaceId,type:"QUOTE",
+    if ((source === "public" || command.clientUserId) && status !== "VIEWED") await tx.notification.create({data:{id:createHash("sha256").update(JSON.stringify([workspaceId,quote.id,quote.publicToken,status,"quote-response-notice"])).digest("hex").slice(0,32),terraqoWorkspaceId:workspaceId,type:"QUOTE",
       title:status === "ACCEPTED" ? "Cotización aceptada" : "Cotización rechazada",body:"Una propuesta comercial recibió una respuesta.",href:`/admin/cotizaciones?quote=${quote.id}`}});
     return saved;
-  });
+  },{maxWait:5000,timeout:15000});
 }

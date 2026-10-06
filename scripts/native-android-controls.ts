@@ -59,6 +59,15 @@ export async function fillLabel(serial: string, label: string, value: string) {
   }
   throw new Error(`Native input unavailable: ${label}`);
 }
+export async function fillLastLabel(serial: string, label: string, value: string) {
+  for (let attempt=0;attempt<9;attempt++) {
+    const node=nodes(await snapshot(serial)).reverse().find(node=>node.includes('class="android.widget.EditText"') &&
+      (node.includes(`content-desc="${label}`) || node.includes(`text="${label}`) || node.includes(`hint="${label}"`)));
+    if(node){await fillNode(serial,node,value);return;}
+    await scroll(serial);
+  }
+  throw new Error(`Native input unavailable: ${label}`);
+}
 export async function login(serial: string, email: string, password: string) {
   shell(serial, "am force-stop com.terraqo.terraqo_mobile"); shell(serial, "am start -n com.terraqo.terraqo_mobile/.MainActivity");
   let ready = false;
@@ -71,7 +80,7 @@ export async function login(serial: string, email: string, password: string) {
   assert.ok(ready, "Native login must reach the workspace."); assert.ok(!(await snapshot(serial)).includes("VISTA PREVIA"));
 }
 export function capture(serial: string, fileName: string) {
-  assert.match(fileName, /^(?:cv|task|project|workspace|contact|company|opportunity)-[a-z-]+\.png$/);
+  assert.match(fileName, /^(?:cv|task|project|workspace|contact|company|opportunity|quote)-[a-z-]+\.png$/);
   const directory = join(process.env.USERPROFILE!, "Documents/ICC TOPOGRAFIA/terraqo_mobile/review"); assert.ok(existsSync(directory));
   writeFileSync(join(directory, fileName), execFileSync(adb, ["-s", serial, "exec-out", "screencap", "-p"], { env: environment, timeout: 30000, stdio: ["ignore", "pipe", "pipe"] }));
 }

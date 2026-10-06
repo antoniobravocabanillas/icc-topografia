@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  outputFileTracingIncludes: {"/api/quotes/[id]/pdf": ["./public/fonts/noto-sans/noto-sans.ttf"]},
   experimental: {
     serverActions: { bodySizeLimit: "50mb" }
   },

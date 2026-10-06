@@ -1,4 +1,5 @@
 import Link from "next/link";
+import {randomBytes} from "node:crypto";
 import { ArrowRight, FileText } from "lucide-react";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { Button } from "@/components/ui/button";
@@ -79,7 +80,9 @@ export default async function OpportunitiesPage() {
                 <p className="font-semibold">Convertir a cotizacion</p>
                 <Input name="description" placeholder="Alcance / item cotizado" defaultValue={opportunity.interest || opportunity.title} />
                 <Input name="quantity" type="number" min="1" defaultValue="1" />
-                <Input name="unitPrice" type="number" step="0.01" placeholder="Precio unitario" defaultValue={String(opportunity.estimatedValue || "")} />
+                <input type="hidden" name="operationKey" value={randomBytes(16).toString("hex")} />
+                        <select name="currency" aria-label="Moneda de la propuesta" required defaultValue="PEN" className="h-9 rounded-md border bg-background px-2 text-xs"><option value="PEN">PEN · Soles</option><option value="USD">USD · Dólares</option></select>
+                        <Input name="unitPrice" type="number" step="0.01" placeholder="Precio unitario" required min="0" />
                 <Textarea name="observations" placeholder="Observaciones comerciales" defaultValue={opportunity.notes || ""} />
                 <Button type="submit">
                   <FileText className="h-4 w-4" />

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import {randomBytes} from "node:crypto";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,7 +21,7 @@ export default async function AdminQuotesPage({searchParams}:{searchParams:Promi
   await requireAdminPage(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
   const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
   await requireWorkspaceModule("CRM", terraqoWorkspaceId);
-  const [quotes, sellers, products, leads, opportunities] = await Promise.all([
+  const [quotes, sellers, products, leads, opportunities,clients] = await Promise.all([
     prisma.quote.findMany({
       where: { deletedAt: null, terraqoWorkspaceId },
       include: { sellerProfile: true, items: true, lead: true, companyRef: true, contact: true, opportunity: true, sale: true },
@@ -35,12 +36,13 @@ export default async function AdminQuotesPage({searchParams}:{searchParams:Promi
       include: { company: true },
       orderBy: { createdAt: "desc" },
       take: 80
-    })
+    }),
+    prisma.client.findMany({where:{terraqoWorkspaceId,deletedAt:null},select:{id:true,name:true,company:true},orderBy:{name:"asc"},take:100})
   ]);
 
   return (
     <section className="space-y-8">
-      {notice.error ? <p role="alert" className="rounded-md border p-4 text-sm">{notice.error==="quote_conflict" ? "La cotización cambió o esta transición no está permitida. Revisa su estado." : "La cotización requiere revisión antes de confirmar."}</p> : notice.success==="quote_updated" ? <p role="status" className="rounded-md border p-4 text-sm">Estado comercial actualizado.</p> : null}
+      {notice.error ? <p role="alert" className="rounded-md border p-4 text-sm">{notice.error==="quote_conflict" ? "La cotización cambió o esta transición no está permitida. Revisa su estado." : "La cotización requiere revisión antes de confirmar."}</p> : ["quote_updated","quote_created"].includes(notice.success??"") ? <p role="status" className="rounded-md border p-4 text-sm">{notice.success==="quote_created"?"Borrador de propuesta creado.":"Estado comercial actualizado."}</p> : null}
       <div>
         <p className="text-sm font-semibold uppercase text-primary">Cotizador B2B</p>
         <h1 className="font-display text-3xl font-bold">Cotizaciones</h1>
@@ -54,9 +56,12 @@ export default async function AdminQuotesPage({searchParams}:{searchParams:Promi
         </CardHeader>
         <CardContent>
           <form action={createQuoteAction} className="grid gap-3 md:grid-cols-3">
+            <input type="hidden" name="operationKey" value={randomBytes(16).toString("hex")} />
+            <select name="currency" aria-label="Moneda de la propuesta" className="h-11 rounded-md border bg-background px-3 text-sm" required defaultValue="PEN"><option value="PEN">PEN · Soles</option><option value="USD">USD · Dólares</option></select>
             <Input name="customerName" placeholder="Cliente" required />
             <Input name="customerEmail" type="email" placeholder="Correo" />
             <Input name="company" placeholder="Empresa" />
+            <select name="clientId" aria-label="Cliente vinculado al portal" className="h-11 rounded-md border bg-background px-3 text-sm"><option value="">Cliente del portal (opcional)</option>{clients.map(client=><option key={client.id} value={client.id}>{client.name}{client.company?` · ${client.company}`:""}</option>)}</select>
             <select name="sellerProfileId" className="h-11 rounded-md border bg-background px-3 text-sm">
               <option value="">Vendedor responsable</option>
               {sellers.map((seller) => <option key={seller.id} value={seller.id}>{seller.displayName}</option>)}
@@ -78,13 +83,13 @@ export default async function AdminQuotesPage({searchParams}:{searchParams:Promi
             </select>
             <Input name="description" placeholder="Producto, servicio o alcance" required />
             <Input name="quantity" type="number" defaultValue="1" min="1" />
-            <Input name="unitPrice" type="number" step="0.01" placeholder="Precio unitario" />
+            <Input name="unitPrice" type="number" step="0.01" min="0" required placeholder="Precio unitario" />
             <Input name="discount" type="number" step="0.01" placeholder="Descuento" />
             <Input name="tax" type="number" step="0.01" placeholder="Impuesto" />
             <Input name="deliveryTime" placeholder="Tiempo de entrega" />
             <Textarea name="terms" placeholder="Terminos comerciales" />
-            <Textarea name="observations" placeholder="Observaciones internas o para cliente" />
-            <Button type="submit" className="md:col-span-3">Crear cotizacion</Button>
+            <Textarea name="observations" placeholder="Observaciones para el cliente" />
+            <FormSubmitButton className="md:col-span-3" idleLabel="Crear cotización" pendingLabel="Guardando borrador..." />
           </form>
         </CardContent>
       </Card>

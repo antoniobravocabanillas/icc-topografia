@@ -8,7 +8,7 @@ function responseForm(html:string,status:"ACCEPTED"|"REJECTED") {
     const data=new FormData();
     for(const input of form[1].matchAll(/<input\b[^>]*>/g)) {
       const name=input[0].match(/\bname="([^"]*)"/)?.[1],value=input[0].match(/\bvalue="([^"]*)"/)?.[1];
-      if(name && value!==undefined)data.append(decode(name),decode(value));
+      if(name)data.append(decode(name),decode(value??""));
     }
     if(data.get("status")===status) {assert.ok(data.get("version"));assert.ok([...data.keys()].some(key=>key.startsWith("$ACTION_")));return data;}
   }

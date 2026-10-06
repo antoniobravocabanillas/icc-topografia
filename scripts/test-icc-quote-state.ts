@@ -56,6 +56,7 @@ async function main() {
     await prisma.staffProfile.update({where:{id:staffId},data:{commissionType:"FIXED_AMOUNT",fixedCommission:"7.23",commissionRate:"95"}});
     const fixed=await create();await transitionQuote({workspaceId:workspace.id,publicToken:fixed.publicToken!,source:"public",status:"ACCEPTED"});
     assert.equal((await prisma.sale.findUniqueOrThrow({where:{quoteId:fixed.id}})).commissionAmount.toFixed(2),"7.23");
+    assert.equal((await prisma.commission.findFirstOrThrow({where:{quoteId:fixed.id}})).rate.toFixed(2),"0.00");
     await prisma.staffProfile.update({where:{id:staffId},data:{commissionType:"MARGIN_PERCENTAGE"}});
     const unsupported=await create();
     await assert.rejects(transitionQuote({workspaceId:workspace.id,publicToken:unsupported.publicToken!,source:"public",status:"ACCEPTED"}),rejected(422));

@@ -3,6 +3,7 @@
 import bcrypt from "bcryptjs";
 import {QuoteStatus} from "@prisma/client";
 import {transitionQuote, QuoteStateError} from "./quote-state";
+import {saveQuoteDraft} from "./quote-drafts";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { ActivityAction, BotQuestionStatus, CommissionType, Prisma, Role, StaffDepartment, TechnicalAvailability, TicketCategory, TicketPriority, TicketStatus } from "@prisma/client";
@@ -243,87 +244,6 @@ function nullableNumberValue(formData: FormData, key: string) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-async function upsertCompanyAndContactFromForm(formData: FormData) {
-  const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
-  const companyName = value(formData, "company") || value(formData, "companyName");
-  const contactEmail = value(formData, "customerEmail") || value(formData, "email");
-  const contactName = value(formData, "customerName") || value(formData, "name");
-  if (!companyName && !contactEmail && !contactName) return { company: null, contact: null };
-
-  const explicitCompanyId = value(formData, "companyId");
-  const document = value(formData, "document");
-  const companyLookup = [
-    document ? { document } : undefined,
-    companyName ? { legalName: companyName } : undefined,
-    companyName ? { tradeName: companyName } : undefined,
-    contactEmail ? { email: contactEmail } : undefined
-  ].filter(Boolean) as Prisma.CompanyWhereInput[];
-  const existing = explicitCompanyId
-    ? await prisma.company.findFirst({ where: { id: explicitCompanyId, terraqoWorkspaceId } })
-    : companyLookup.length
-      ? await prisma.company.findFirst({
-        where: {
-          terraqoWorkspaceId,
-          deletedAt: null,
-          OR: companyLookup
-        }
-      })
-      : null;
-
-  const company = existing
-    ? await prisma.company.update({
-        where: { id: existing.id },
-        data: {
-          tradeName: companyName || existing.tradeName,
-          document: document || existing.document,
-          email: contactEmail || existing.email,
-          phone: value(formData, "phone") || existing.phone,
-          terraqoWorkspaceId: existing.terraqoWorkspaceId || terraqoWorkspaceId
-        }
-      })
-    : await prisma.company.create({
-        data: {
-          legalName: companyName || contactName || contactEmail || "Empresa sin nombre",
-          tradeName: companyName,
-          document,
-          email: contactEmail,
-          phone: value(formData, "phone"),
-          terraqoWorkspaceId
-        }
-      });
-
-  const contact = contactEmail || contactName
-    ? await prisma.contact.upsert({
-        where: { companyId_email: { companyId: company.id, email: contactEmail || "" } },
-        update: {
-          name: contactName || contactEmail || "Contacto",
-          phone: value(formData, "phone")
-        },
-        create: {
-          companyId: company.id,
-          terraqoWorkspaceId,
-          name: contactName || contactEmail || "Contacto",
-          email: contactEmail,
-          phone: value(formData, "phone"),
-          whatsapp: value(formData, "phone"),
-          isPrimary: true
-        }
-      }).catch(async () => prisma.contact.create({
-        data: {
-          companyId: company.id,
-          terraqoWorkspaceId,
-          name: contactName || contactEmail || "Contacto",
-          email: contactEmail,
-          phone: value(formData, "phone"),
-          whatsapp: value(formData, "phone"),
-          isPrimary: true
-        }
-      }))
-    : null;
-
-  return { company, contact };
-}
-
 async function upsertCompanyAndContactFromLead(leadId: string) {
   const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
   const lead = await prisma.lead.findFirst({ where: { id: leadId, terraqoWorkspaceId } });
@@ -359,70 +279,6 @@ async function upsertCompanyAndContactFromLead(leadId: string) {
     data: { companyId: company.id, contactId: contact.id }
   });
   return { lead, company, contact };
-}
-
-async function upsertClientFromContact(formData: FormData) {
-  const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
-  const email = value(formData, "customerEmail") || value(formData, "email");
-  const name = value(formData, "customerName") || value(formData, "name") || "Cliente sin nombre";
-  if (!email) return null;
-  const { company, contact } = await upsertCompanyAndContactFromForm(formData);
-
-  const existingClient = await prisma.client.findFirst({
-    where: { email, terraqoWorkspaceId, deletedAt: null }
-  });
-  const client = existingClient
-    ? await prisma.client.update({
-      where: { id: existingClient.id },
-      data: {
-      name,
-      company: value(formData, "company"),
-      phone: value(formData, "phone"),
-      companyId: company?.id,
-      terraqoWorkspaceId
-      }
-    })
-    : await prisma.client.create({
-      data: {
-      name,
-      email,
-      company: value(formData, "company"),
-      phone: value(formData, "phone"),
-      contactName: name,
-      companyId: company?.id,
-      terraqoWorkspaceId
-      }
-    });
-
-  if (company) {
-    const existingAccount = await prisma.clientAccount.findFirst({
-      where: { clientId: client.id, terraqoWorkspaceId }
-    });
-    if (existingAccount) {
-      await prisma.clientAccount.update({
-        where: { id: existingAccount.id },
-        data: {
-        companyId: company.id,
-        contactId: contact?.id,
-        terraqoWorkspaceId
-        }
-      });
-    } else {
-      await prisma.clientAccount.create({
-        data: {
-        clientId: client.id,
-        userId: client.userId,
-        companyId: company.id,
-        contactId: contact?.id,
-        terraqoWorkspaceId,
-        status: client.userId ? "active" : "invited",
-        invitedAt: client.userId ? null : new Date()
-        }
-      });
-    }
-  }
-
-  return client;
 }
 
 export async function deleteLeadAction(id: string) {
@@ -538,89 +394,24 @@ export async function convertLeadToOpportunityAction(id: string) {
   revalidatePath("/admin/notificaciones");
 }
 
+async function saveAdminDraft(command:Parameters<typeof saveQuoteDraft>[0]) {
+  try {return await saveQuoteDraft(command);}
+  catch(error) {if(error instanceof QuoteStateError)redirect("/admin/cotizaciones?error=quote_review");throw error;}
+}
 export async function convertOpportunityToQuoteAction(id: string, formData: FormData) {
-  const { workspaceId } = await requireActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
-  await requireWorkspaceModule("CRM", workspaceId);
-  const opportunity = await prisma.opportunity.findFirst({
-    where: { id, terraqoWorkspaceId: workspaceId },
-    include: { company: true, contact: true, lead: true, quotes: true }
-  });
-  if (!opportunity) throw new Error("Oportunidad no encontrada.");
-  const now = new Date();
-  const number = `COT-${now.getFullYear()}-${String(now.getTime()).slice(-7)}`;
-  const unitPrice = numberValue(formData, "unitPrice", Number(opportunity.estimatedValue || 0));
-  const quantity = Math.max(numberValue(formData, "quantity", 1), 1);
-  const subtotal = unitPrice * quantity;
-  const existingClient = opportunity.contact?.email
-    ? await prisma.client.findFirst({ where: { email: opportunity.contact.email, terraqoWorkspaceId: workspaceId, deletedAt: null } })
-    : null;
-  const client = opportunity.contact?.email
-    ? existingClient
-      ? await prisma.client.update({
-        where: { id: existingClient.id },
-        data: {
-          name: opportunity.contact.name,
-          company: opportunity.company.tradeName || opportunity.company.legalName,
-          phone: opportunity.contact.phone,
-          companyId: opportunity.companyId,
-          terraqoWorkspaceId: workspaceId
-        }
-      })
-      : await prisma.client.create({
-        data: {
-          name: opportunity.contact.name,
-          email: opportunity.contact.email,
-          company: opportunity.company.tradeName || opportunity.company.legalName,
-          phone: opportunity.contact.phone,
-          contactName: opportunity.contact.name,
-          companyId: opportunity.companyId,
-          terraqoWorkspaceId: workspaceId
-        }
-      })
-    : null;
-
-  const quote = await prisma.quote.create({
-    data: {
-      number,
-      clientId: client?.id,
-      companyId: opportunity.companyId,
-      contactId: opportunity.contactId,
-      opportunityId: opportunity.id,
-      leadId: opportunity.leadId,
-      terraqoWorkspaceId: opportunity.terraqoWorkspaceId,
-      sellerProfileId: opportunity.sellerProfileId,
-      customerName: opportunity.contact?.name || opportunity.company.tradeName || opportunity.company.legalName,
-      customerEmail: opportunity.contact?.email,
-      company: opportunity.company.tradeName || opportunity.company.legalName,
-      subtotal,
-      total: subtotal,
-      observations: value(formData, "observations") || opportunity.notes,
-      items: {
-        create: {
-          type: value(formData, "itemType") || "service",
-          description: value(formData, "description") || opportunity.title,
-          quantity,
-          unitPrice,
-          subtotal
-        }
-      }
-    }
-  });
-  await prisma.opportunity.update({ where: { id }, data: { status: "PROPOSAL" } });
-  await createActivityLog({
-    action: "CONVERTED",
-    entityType: "Quote",
-    entityId: quote.id,
-    title: `Oportunidad convertida en cotizacion ${quote.number}`,
-    leadId: opportunity.leadId,
-    opportunityId: opportunity.id,
-    quoteId: quote.id,
-    companyId: opportunity.companyId,
-    contactId: opportunity.contactId
-    ,terraqoWorkspaceId: opportunity.terraqoWorkspaceId
-  });
-  revalidatePath("/admin/oportunidades");
-  revalidatePath("/admin/cotizaciones");
+  const {workspaceId,session}=await requireActionRole(["SALES","ADMIN","SUPER_ADMIN","COMMERCIAL_ADMIN"]);
+  await requireWorkspaceModule("CRM",workspaceId);
+  const opportunity=await prisma.opportunity.findFirst({where:{id,terraqoWorkspaceId:workspaceId,deletedAt:null},include:{company:true,contact:true}});
+  if(!opportunity) throw new Error("Oportunidad no disponible.");
+  const client=opportunity.contact?.email?await prisma.client.findFirst({where:{email:opportunity.contact.email,companyId:opportunity.companyId,terraqoWorkspaceId:workspaceId,deletedAt:null},select:{id:true}}):null;
+  await saveAdminDraft({workspaceId,actorId:session.user.id,source:"admin",key:value(formData,"operationKey")??null,convertOpportunity:true,input:{
+    clientId:client?.id??"",companyId:opportunity.companyId,contactId:opportunity.contactId??"",opportunityId:id,leadId:opportunity.leadId??"",sellerProfileId:opportunity.sellerProfileId??"",
+    customerName:opportunity.contact?.name||opportunity.company.tradeName||opportunity.company.legalName,customerEmail:opportunity.contact?.email??"",
+    company:opportunity.company.tradeName||opportunity.company.legalName,currency:value(formData,"currency"),
+    items:[{description:value(formData,"description")||opportunity.title,quantity:Number(value(formData,"quantity")||"1"),unitPrice:value(formData,"unitPrice"),type:value(formData,"itemType")||"service"}],
+    observations:value(formData,"observations")||opportunity.notes||""}});
+  revalidatePath("/admin/oportunidades");revalidatePath("/admin/cotizaciones");
+  redirect("/admin/cotizaciones?success=quote_created");
 }
 
 export async function updateOrderStatusAction(id: string, formData: FormData) {
@@ -641,81 +432,26 @@ export async function deleteOrderAction(id: string) {
   revalidatePath("/admin");
 }
 
-export async function createQuoteAction(formData: FormData) {
-  const { workspaceId: terraqoWorkspaceId } = await requireActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
-  await requireWorkspaceModule("CRM", terraqoWorkspaceId);
-  const client = await upsertClientFromContact(formData);
-  const { company, contact } = await upsertCompanyAndContactFromForm(formData);
-  const quantity = Math.max(numberValue(formData, "quantity", 1), 1);
-  const unitPrice = numberValue(formData, "unitPrice");
-  const discount = numberValue(formData, "discount");
-  const subtotal = Math.max(quantity * unitPrice - discount, 0);
-  const tax = numberValue(formData, "tax");
-  const total = subtotal + tax;
-  const now = new Date();
-  const number = `COT-${now.getFullYear()}-${String(now.getTime()).slice(-7)}`;
-  const opportunityId = nullableValue(formData, "opportunityId");
-  const leadId = nullableValue(formData, "leadId");
-  const sellerProfileId = nullableValue(formData, "sellerProfileId");
-  const productId = nullableValue(formData, "productId");
-  await Promise.all([
-    opportunityId ? requireOwnedEntity("Oportunidad", prisma.opportunity.findFirst({ where: { id: opportunityId, terraqoWorkspaceId }, select: { id: true } })) : null,
-    leadId ? requireOwnedEntity("Lead", prisma.lead.findFirst({ where: { id: leadId, terraqoWorkspaceId }, select: { id: true } })) : null,
-    sellerProfileId ? requireOwnedEntity("Perfil", prisma.staffProfile.findFirst({ where: { id: sellerProfileId, terraqoWorkspaceId }, select: { id: true } })) : null,
-    productId ? requireOwnedEntity("Producto", prisma.product.findFirst({ where: { id: productId, terraqoWorkspaceId }, select: { id: true } })) : null
-  ]);
-
-  const quote = await prisma.quote.create({
-    data: {
-      number,
-      clientId: client?.id,
-      companyId: company?.id || client?.companyId,
-      contactId: contact?.id,
-      opportunityId,
-      leadId,
-      terraqoWorkspaceId,
-      sellerProfileId,
-      customerName: value(formData, "customerName") || client?.name || "",
-      customerEmail: value(formData, "customerEmail") || client?.email,
-      company: value(formData, "company") || client?.company,
-      status: "DRAFT",
-      currency: value(formData, "currency") || "USD",
-      subtotal,
-      discount,
-      tax,
-      total,
-      validUntil: dateValue(formData, "validUntil"),
-      terms: value(formData, "terms"),
-      deliveryTime: value(formData, "deliveryTime"),
-      observations: value(formData, "observations"),
-      items: {
-        create: {
-          productId,
-          type: value(formData, "itemType") || "product",
-          description: value(formData, "description") || "Item comercial",
-          quantity,
-          unitPrice,
-          discount,
-          subtotal
-        }
-      }
-    }
-  });
-  await createActivityLog({
-    action: "CREATED",
-    entityType: "Quote",
-    entityId: quote.id,
-    title: `Cotizacion ${number} creada`,
-    body: value(formData, "description"),
-    companyId: company?.id || client?.companyId,
-    contactId: contact?.id,
-    leadId,
-    opportunityId
-    ,terraqoWorkspaceId
-  });
-  revalidatePath("/admin/cotizaciones");
-  revalidatePath("/admin/oportunidades");
-  revalidatePath("/admin");
+export async function createQuoteAction(formData:FormData) {
+  const {workspaceId,session}=await requireActionRole(["SALES","ADMIN","SUPER_ADMIN","COMMERCIAL_ADMIN"]);
+  await requireWorkspaceModule("CRM",workspaceId);
+  // A quote does not implicitly create or overwrite a customer identity.
+  // Explicit relations are checked again within the draft transaction.
+  const opportunityId=value(formData,"opportunityId");
+  const opportunity=opportunityId?await prisma.opportunity.findFirst({where:{id:opportunityId,terraqoWorkspaceId:workspaceId,deletedAt:null},select:{companyId:true,contactId:true}}):null;
+  if(opportunityId && !opportunity)redirect("/admin/cotizaciones?error=quote_review");
+  const clientId=value(formData,"clientId");
+  const client=clientId?await prisma.client.findFirst({where:{id:clientId,terraqoWorkspaceId:workspaceId,deletedAt:null},select:{companyId:true}}):null;
+  if(clientId && !client)redirect("/admin/cotizaciones?error=quote_review");
+  await saveAdminDraft({workspaceId,actorId:session.user.id,source:"admin",key:value(formData,"operationKey")??null,input:{
+    customerName:value(formData,"customerName"),customerEmail:value(formData,"customerEmail")||"",company:value(formData,"company")||"",
+    companyId:opportunity?.companyId||client?.companyId||value(formData,"companyId")||"",contactId:opportunity?.contactId||"",opportunityId:opportunityId||"",
+    clientId:value(formData,"clientId")||"",leadId:value(formData,"leadId")||"",sellerProfileId:value(formData,"sellerProfileId")||"",currency:value(formData,"currency"),
+    tax:value(formData,"tax")||"0",validUntil:value(formData,"validUntil")||"",terms:value(formData,"terms")||"",deliveryTime:value(formData,"deliveryTime")||"",observations:value(formData,"observations")||"",
+    items:[{description:value(formData,"description"),quantity:Number(value(formData,"quantity")||"1"),unitPrice:value(formData,"unitPrice"),discount:value(formData,"discount")||"0",productId:value(formData,"productId")||"",type:value(formData,"itemType")||"service"}]
+  }});
+  for(const path of ["/admin/cotizaciones","/admin/oportunidades","/admin"])revalidatePath(path);
+  redirect("/admin/cotizaciones?success=quote_created");
 }
 
 export async function updateQuoteStatusAction(id: string, formData: FormData) {

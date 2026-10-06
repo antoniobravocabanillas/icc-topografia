@@ -1,3 +1,4 @@
+import {QuoteStateError} from "@/lib/server/quote-state";
 import {PortalOpportunityError} from "@/lib/server/portal-opportunities";
 import { PortalCompanyError } from "@/lib/server/portal-companies";
 import { fail, handleApiError, ok } from "@/lib/server/api";
@@ -48,8 +49,12 @@ async function handle(request: Request, context: Context, write: boolean) {
       revalidatePath("/cv/[username]/experiencias", "page");
       revalidatePath("/cv/[username]/experiencias/[experienceId]", "page");
     }
+    if(resource === "quotes") {
+      for(const path of ["/admin/cotizaciones","/admin/ventas","/admin/oportunidades","/admin/notificaciones","/portal","/portal/operaciones"]) revalidatePath(path);
+      revalidatePath("/cotizaciones/[token]","page");
+    }
     return ok({ schemaVersion: 1, workspaceSlug, resource, record }, cache);
-  } catch (error) { if (error instanceof PortalOpportunityError || error instanceof PortalCompanyError || error instanceof PortalContactError || error instanceof PortalProjectOperationError || error instanceof PortalResourceError || error instanceof PortalCvError || error instanceof PortalTaskCreateError || error instanceof PortalProjectWriteError) return fail(error.message, error.status); return handleApiError(error); }
+  } catch (error) { if (error instanceof QuoteStateError || error instanceof PortalOpportunityError || error instanceof PortalCompanyError || error instanceof PortalContactError || error instanceof PortalProjectOperationError || error instanceof PortalResourceError || error instanceof PortalCvError || error instanceof PortalTaskCreateError || error instanceof PortalProjectWriteError) return fail(error.message, error.status); return handleApiError(error); }
 }
 export function GET(request: Request, context: Context) { return handle(request, context, false); }
 export function POST(request: Request, context: Context) { return handle(request, context, true); }
