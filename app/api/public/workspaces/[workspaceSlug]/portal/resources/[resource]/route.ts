@@ -1,6 +1,7 @@
 import { fail, handleApiError, ok } from "@/lib/server/api";
 import { getWorkspacePortalToken } from "@/lib/server/workspace-portal-session";
 import { listPortalResource, savePortalResource, resourceCodes, PortalResourceError, type ResourceCode } from "@/lib/server/portal-resources";
+import { PortalContactError } from "@/lib/server/portal-contacts";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { PortalCvError } from "@/lib/server/portal-cv-entries";
@@ -46,7 +47,7 @@ async function handle(request: Request, context: Context, write: boolean) {
       revalidatePath("/cv/[username]/experiencias/[experienceId]", "page");
     }
     return ok({ schemaVersion: 1, workspaceSlug, resource, record }, cache);
-  } catch (error) { if (error instanceof PortalProjectOperationError || error instanceof PortalResourceError || error instanceof PortalCvError || error instanceof PortalTaskCreateError || error instanceof PortalProjectWriteError) return fail(error.message, error.status); return handleApiError(error); }
+  } catch (error) { if (error instanceof PortalContactError || error instanceof PortalProjectOperationError || error instanceof PortalResourceError || error instanceof PortalCvError || error instanceof PortalTaskCreateError || error instanceof PortalProjectWriteError) return fail(error.message, error.status); return handleApiError(error); }
 }
 export function GET(request: Request, context: Context) { return handle(request, context, false); }
 export function POST(request: Request, context: Context) { return handle(request, context, true); }

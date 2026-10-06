@@ -69,7 +69,7 @@ export async function login(serial: string, email: string, password: string) {
   assert.ok(ready, "Native login must reach the workspace."); assert.ok(!(await snapshot(serial)).includes("VISTA PREVIA"));
 }
 export function capture(serial: string, fileName: string) {
-  assert.match(fileName, /^(?:cv|task|project|workspace)-[a-z-]+\.png$/);
+  assert.match(fileName, /^(?:cv|task|project|workspace|contact)-[a-z-]+\.png$/);
   const directory = join(process.env.USERPROFILE!, "Documents/ICC TOPOGRAFIA/terraqo_mobile/review"); assert.ok(existsSync(directory));
   writeFileSync(join(directory, fileName), execFileSync(adb, ["-s", serial, "exec-out", "screencap", "-p"], { env: environment, timeout: 30000, stdio: ["ignore", "pipe", "pipe"] }));
 }
