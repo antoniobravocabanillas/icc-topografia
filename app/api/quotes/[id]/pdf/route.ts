@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
+import {quotePdfScope} from "@/lib/server/quote-pdf-access";
 import { formatCurrency } from "@/lib/utils";
 
 type QuotePdfRouteProps = {
@@ -9,16 +9,17 @@ type QuotePdfRouteProps = {
 
 export const runtime = "nodejs";
 
-export async function GET(_request: Request, { params }: QuotePdfRouteProps) {
+export async function GET(request: Request, { params }: QuotePdfRouteProps) {
   const { id } = await params;
-  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+  const scope=await quotePdfScope(request,id);
+  if (!scope) return NextResponse.json({error:"Cotización no disponible"},{status:404,headers:{"Cache-Control":"private, no-store"}});
   const quote = await prisma.quote.findFirst({
-    where: { id, terraqoWorkspaceId },
+    where: { id, ...scope, deletedAt:null, terraqoWorkspace:{active:true,deletedAt:null} },
     include: { items: true, sellerProfile: true }
   });
 
   if (!quote) {
-    return NextResponse.json({ error: "Cotizacion no encontrada" }, { status: 404 });
+    return NextResponse.json({ error: "Cotizacion no encontrada" }, { status: 404, headers:{"Cache-Control":"private, no-store"} });
   }
 
   const lines = [
@@ -54,7 +55,10 @@ export async function GET(_request: Request, { params }: QuotePdfRouteProps) {
   return new NextResponse(pdf, {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="${quote.number}.pdf"`
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
+      "Content-Disposition": `inline; filename="${quote.number.replace(/[^a-zA-Z0-9_-]/g,"-").slice(0,80)}.pdf"`
     }
   });
 }

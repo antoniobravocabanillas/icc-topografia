@@ -106,7 +106,7 @@ export default async function PublicQuotePage({ params }: { params: Promise<{ to
               </div>
               <p className="text-sm text-muted-foreground">Asesor: {quote.sellerProfile?.displayName || "Equipo ICC Topografia"}</p>
               <Button asChild variant="outline" className="w-full">
-                <Link href={`/api/quotes/${quote.id}/pdf`} target="_blank">
+                <Link href={`/api/quotes/${quote.id}/pdf?token=${encodeURIComponent(token)}`} target="_blank">
                   <Download className="h-4 w-4" />
                   Descargar PDF
                 </Link>
