@@ -76,10 +76,11 @@ export async function renderQuotePdf(quote: QuotePdfInput): Promise<Uint8Array> 
     paragraph(`Descuento: ${quote.currency} ${item.discount.toFixed(2)}   ·   Importe: ${quote.currency} ${item.subtotal.toFixed(2)}`,9,muted,20);
     ensure(12);page.drawLine({start:{x:left,y:y+2},end:{x:right,y:y+2},thickness:.5,color:rgb(.86,.89,.91)});y-=12;
   });
-  ensure(142);section("Resumen económico");
+  ensure(166);section("Resumen económico");
   for(const [label,amount] of [["Subtotal",quote.subtotal],["Descuento",quote.discount],["Impuesto",quote.tax]] as const){
     draw(label,left,y);const value=`${quote.currency} ${amount.toFixed(2)}`;draw(value,right-font.widthOfTextAtSize(value,10),y);y-=20;
   }
+  y-=12;
   const total=`${quote.currency} ${quote.total.toFixed(2)}`;
   page.drawRectangle({x:left-8,y:y-12,width:right-left+16,height:35,color:rgb(.91,.96,.96)});
   draw("Total",left,y,13,teal);draw(total,right-font.widthOfTextAtSize(total,13),y,13,teal);y-=32;
