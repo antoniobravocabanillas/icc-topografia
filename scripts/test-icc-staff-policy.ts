@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import {randomUUID} from "node:crypto";
+import bcrypt from "bcryptjs";
+import {randomBytes,randomUUID} from "node:crypto";
 import {encode} from "next-auth/jwt";
 import {prisma} from "../lib/prisma";
 let phase="fixture";
@@ -23,9 +24,10 @@ async function main() {
   assert.ok(process.env.AUTH_SECRET);
   const workspace=await prisma.terraqoWorkspace.findFirstOrThrow({where:{slug:"icc-topografia",active:true,deletedAt:null,companies:{some:{document:"20616116313",deletedAt:null}}},select:{id:true}});
   const run=randomUUID(), id=`test-staff-policy-${run}`, email=`staff-policy-${run}@example.test`;
+  const password=randomBytes(24).toString("hex");
   let userId:string|undefined;
   try {
-    const user=await prisma.user.create({data:{email,name:"Validación temporal de política comercial",role:"ADMIN",emailVerified:new Date(),
+    const user=await prisma.user.create({data:{email,name:"Validación temporal de política comercial",role:"ADMIN",emailVerified:new Date(),passwordHash:await bcrypt.hash(password,10),
       terraqoMemberships:{create:{workspaceId:workspace.id,role:"ADMIN",active:true}}},select:{id:true}});
     userId=user.id;
     await prisma.staffProfile.create({data:{id,terraqoWorkspaceId:workspace.id,displayName:"Validación temporal comercial",roleTitle:"Pruebas",department:"SALES",
@@ -68,7 +70,25 @@ async function main() {
         const context=await browser.newContext();
         await context.addCookies([{name:cookieName,value:session,domain:"admin.terraqoglobal.com",path:"/",secure:true,httpOnly:true,sameSite:"Lax"},
           {name:"terraqo_admin_workspace",value:workspace.id,domain:"admin.terraqoglobal.com",path:"/",secure:true,sameSite:"Lax"}]);
+        if(process.env.TEST_STAFF_CREDENTIAL_LOGIN === "1") {
+          phase="web-credential-login";
+          await context.clearCookies();
+          const csrfResponse=await context.request.get(origin+"/api/auth/csrf");assert.equal(csrfResponse.status(),200);
+          const {csrfToken}=await csrfResponse.json();assert.equal(typeof csrfToken,"string");
+          const login=await context.request.post(origin+"/api/auth/callback/credentials",{form:{csrfToken,email,password,callbackUrl:origin+"/admin/ventas"},headers:{Origin:origin},maxRedirects:0});
+          assert.ok([302,303].includes(login.status()));
+          const issued=(await context.cookies(origin)).find(cookie=>cookie.name===cookieName);assert.ok(issued && issued.secure && issued.httpOnly);
+          await context.addCookies([{name:"terraqo_admin_workspace",value:workspace.id,domain:"admin.terraqoglobal.com",path:"/",secure:true,sameSite:"Lax"}]);
+          console.log("PASS web credentials: own temporary password login issues a secure HttpOnly session cookie.");
+        }
         const page=await context.newPage();
+        if(process.env.TEST_STAFF_NAV_TRACE === "1") {
+          page.on("framenavigated",frame=>{if(frame===page.mainFrame()){const u=new URL(frame.url());console.log(JSON.stringify({origin:u.origin,navigation:u.pathname,policy:u.searchParams.get("policy")}));}});
+          page.on("response",response=>{if(response.request().method()==="POST" && new URL(response.url()).pathname==="/admin/ventas"){
+            const redirect=response.headers()["x-action-redirect"] || response.headers().location || "";
+            console.log(JSON.stringify({actionStatus:response.status(),destination:redirect.startsWith("/admin") ? redirect : "suppressed",cookieNames:(response.headers()["set-cookie"] || "").split(/,(?=[^;]*=)/).map(value=>value.split("=")[0].trim())}));
+          }});
+        }
         for(const width of [390,1280]) {
           await page.setViewportSize({width,height:900});
           phase=`browser-render-${width}`;
@@ -95,11 +115,20 @@ async function main() {
         phase="browser-persisted-amount";
         assert.equal((await prisma.staffProfile.findUniqueOrThrow({where:{id}})).fixedCommission.toFixed(2),"8.23");
         phase="browser-saved-feedback";
+        if(process.env.TEST_STAFF_NAV_TRACE === "1") {const {decode}=await import("next-auth/jwt");const current=(await context.cookies(origin)).find(cookie=>cookie.name===cookieName);const claims=current ? await decode({token:current.value,secret:process.env.AUTH_SECRET!,salt:cookieName}) : null;console.log(JSON.stringify({currentCookie:!!current,adminClaim:claims?.role==="ADMIN",sameAccount:claims?.sub===user.id}));}
         const feedback=page.getByRole("status").filter({hasText:"Política guardada correctamente."});
         try {await feedback.waitFor({state:"visible",timeout:5000});} catch {
           console.log(JSON.stringify({phase,knownSuccessText:await page.getByText("Política guardada correctamente.",{exact:true}).count(),
             statuses:await page.getByRole("status").count(),policy:new URL(page.url()).searchParams.get("policy"),
             path:new URL(page.url()).pathname}));throw new Error("Saved feedback was not accessible.");
+        }
+        if(process.env.TEST_STAFF_CREDENTIAL_LOGIN === "1") {
+          phase="web-credential-logout";
+          const {csrfToken}=await (await context.request.get(origin+"/api/auth/csrf")).json();
+          const logout=await context.request.post(origin+"/api/auth/signout",{form:{csrfToken,callbackUrl:origin+"/cuenta"},headers:{Origin:origin},maxRedirects:0});
+          assert.ok([302,303].includes(logout.status()));
+          assert.ok(!(await context.cookies(origin)).some(cookie=>cookie.name===cookieName && cookie.value));
+          console.log("PASS web credentials logout: own browser session cookie removed.");
         }
         await context.clearCookies();
         console.log("PASS browser staff form: visible labels, dirty feedback, saved result and exact persisted amount at 390/1280 px.");

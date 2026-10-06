@@ -22,6 +22,9 @@ const socialProviders = [
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   adapter: PrismaAdapter(prisma),
+  // Production is HTTPS even when an internal proxy render uses an HTTP origin.
+  // Keep the secure cookie name consistent during Server Action redirects.
+  useSecureCookies: process.env.NODE_ENV === "production" ? true : undefined,
   session: { strategy: "jwt", maxAge: 12 * 60 * 60 },
   jwt: { maxAge: 12 * 60 * 60 },
   pages: {
