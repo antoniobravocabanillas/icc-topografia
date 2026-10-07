@@ -5,6 +5,13 @@ import { getDefaultModulesForTier } from "@/lib/workspace";
 import { getBillingPlan } from "@/lib/terraqo/billing/catalog";
 import type { WorkspacePortalToken } from "./workspace-portal-session";
 import { cvPublicationFingerprint, cvPublicationOperationId, parseCvPublicationPayload } from "./cv-publication-payload";
+import { webCvGrantHash, webCvGrantIdentifier } from "./web-cv-session-grant";
+
+export type WebCvPublicationIdentity = {
+  source: "web"; sub: string; workspaceId: string; workspaceSlug: string;
+  role: "PROFESSIONAL"; exp: number; sessionId: string;
+};
+type CvPublicationIdentity = WorkspacePortalToken | WebCvPublicationIdentity;
 
 export class CvPublicationError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
@@ -19,10 +26,12 @@ const receipt = (row: Prisma.TerraqoCvPublicationOperationGetPayload<object>) =>
 });
 const transact = <T>(work: (tx: Prisma.TransactionClient) => Promise<T>) => prisma.$transaction(work, { maxWait: 5000, timeout: 15000 });
 
-async function lockAccess(tx: Prisma.TransactionClient, token: WorkspacePortalToken) {
+async function lockAccess(tx: Prisma.TransactionClient, token: CvPublicationIdentity) {
+  const webSession = "source" in token && token.source === "web";
   if (token.role !== "PROFESSIONAL" || token.exp <= Math.floor(Date.now() / 1000))
     throw new CvPublicationError("Tu sesión profesional ya no está disponible.", 403);
-  if (!token.jti) throw new CvPublicationError("Inicia sesión nuevamente para administrar la publicación.", 401);
+  const sessionId = "sessionId" in token ? token.sessionId : token.jti;
+  if (!sessionId) throw new CvPublicationError("Inicia sesión nuevamente para administrar la publicación.", 401);
   const owner = await tx.terraqoProfessionalProfile.findUnique({ where: { userId: token.sub }, select: { id: true } });
   if (!owner) throw new CvPublicationError("Perfil no disponible.", 404);
   const profiles = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT id FROM icc."TerraqoProfessionalProfile" WHERE id=${owner.id} AND "userId"=${token.sub} FOR UPDATE`);
@@ -34,12 +43,14 @@ async function lockAccess(tx: Prisma.TransactionClient, token: WorkspacePortalTo
   const billing = await tx.$queryRaw<{ planCode: string; paidThrough: Date | null }[]>(Prisma.sql`SELECT "planCode","paidThrough" FROM icc."TerraqoBillingAccount" WHERE "ownerKey"=${`workspace:${token.workspaceId}`} AND mode='live' FOR SHARE`);
   if (!modules.length || (billing[0] && !getDefaultModulesForTier(billing[0].paidThrough && billing[0].paidThrough > new Date() ? getBillingPlan(billing[0].planCode).tier : "FREE").includes("PROFESSIONAL_NETWORK")))
     throw new CvPublicationError("El módulo profesional no está habilitado.", 403);
-  const grants = await tx.$queryRaw<{ token: string }[]>(Prisma.sql`SELECT token FROM icc."VerificationToken" WHERE identifier=${`portal-session:${token.workspaceId}:${token.sub}`} AND token=${createHash("sha256").update(token.jti).digest("hex")} AND expires>${new Date()} FOR SHARE`);
+  const identifier = webSession ? webCvGrantIdentifier(token.sub) : `portal-session:${token.workspaceId}:${token.sub}`;
+  const hash = webSession ? webCvGrantHash(sessionId) : createHash("sha256").update(sessionId).digest("hex");
+  const grants = await tx.$queryRaw<{ token: string }[]>(Prisma.sql`SELECT token FROM icc."VerificationToken" WHERE identifier=${identifier} AND token=${hash} AND expires>${new Date()} FOR SHARE`);
   if (!grants.length) throw new CvPublicationError("La sesión fue revocada.", 401);
   return tx.terraqoProfessionalProfile.findUniqueOrThrow({ where: { id: owner.id }, select: selected });
 }
 
-export async function readCvPublication(token: WorkspacePortalToken, operationKey?: string) {
+export async function readCvPublication(token: CvPublicationIdentity, operationKey?: string) {
   if (operationKey !== undefined && !/^[a-f0-9]{32}$/.test(operationKey)) throw new CvPublicationError("Operación no válida.", 422);
   return transact(async tx => {
     const profile = await lockAccess(tx, token);
@@ -50,7 +61,7 @@ export async function readCvPublication(token: WorkspacePortalToken, operationKe
   });
 }
 
-export async function writeCvPublication(token: WorkspacePortalToken, input: unknown) {
+export async function writeCvPublication(token: CvPublicationIdentity, input: unknown) {
   const payload = parseCvPublicationPayload(input);
   return transact(async tx => {
     const profile = await lockAccess(tx, token);

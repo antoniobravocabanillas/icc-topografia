@@ -8,6 +8,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import {currentWebSessionRole} from "@/lib/server/web-session-role";
 import { prisma } from "@/lib/prisma";
+import { createWebCvSessionGrant, revokeWebCvSessionGrant } from "@/lib/server/web-cv-session-grant";
 
 const credentialsSchema = z.object({ email: z.string().trim().toLowerCase().email(), password: z.string().optional(), passkeyToken: z.string().optional() });
 
@@ -70,6 +71,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     ...socialProviders,
   ],
   events: {
+    async signOut(message) {
+      if ("token" in message) await revokeWebCvSessionGrant(message.token);
+    },
     async createUser({ user }) {
       if (!user.id) return;
       await prisma.terraqoProfessionalProfile.upsert({
@@ -87,10 +91,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
   },
   callbacks: {
-    async jwt({ token }) {
+    async jwt({ token, user }) {
       const role = await currentWebSessionRole(token.sub);
       if (!role) return null;
       token.role = role;
+      // Only an authenticated sign-in issues this permission. Session reads,
+      // refreshes and client update payloads cannot recreate a revoked grant.
+      if (user) {
+        const grant = await createWebCvSessionGrant(token.sub!);
+        if (grant) {
+          token.cvSessionId = grant.sessionId;
+          token.cvSessionExpires = grant.expires;
+        } else {
+          delete token.cvSessionId;
+          delete token.cvSessionExpires;
+        }
+      }
       return token;
     },
     session({ session, token }) {
