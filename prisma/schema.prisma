@@ -2713,6 +2713,7 @@ model TerraqoProfessionalProfile {
   applications               TerraqoProjectApplication[]
   documents                  TerraqoProfessionalDocument[]
   cvImports                  TerraqoCvImport[]
+  publicationOperations      TerraqoCvPublicationOperation[]
   worklogs                   TerraqoWorklogEntry[]
   attendanceEvents           TerraqoAttendanceEvent[]
   createdAt                  DateTime                          @default(now())
@@ -2722,6 +2723,25 @@ model TerraqoProfessionalProfile {
   @@index([city])
   @@index([country, locationSubdivisionCode, locationCity])
   @@index([identityVerificationStatus])
+  @@schema("icc")
+}
+
+model TerraqoCvPublicationOperation {
+  id                    String                     @id
+  professionalProfileId String
+  professionalProfile   TerraqoProfessionalProfile @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
+  operationKey          String
+  fingerprint           String
+  action                String
+  originalVersion       DateTime
+  resultVersion         DateTime
+  published             Boolean
+  username              String?
+  consentVersion        String?
+  createdAt             DateTime                   @default(now())
+
+  @@unique([professionalProfileId, operationKey])
+  @@index([professionalProfileId, createdAt])
   @@schema("icc")
 }
 
