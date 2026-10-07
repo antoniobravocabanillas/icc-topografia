@@ -38,7 +38,7 @@ export default async function ProfilePage({ searchParams }: PageProps) {
     orderBy: [{ brandName: "asc" }, { name: "asc" }]
   });
   const name = profile.user.name || "Profesional Terraqo";
-  const publicCvHref = profile.username ? `${terraqoDomains.public}/cv/${profile.username}` : null;
+  const publicCvHref = profile.liveCvEnabled && profile.username ? `${terraqoDomains.public}/cv/${profile.username}` : null;
   const skills = [...profile.specialties, ...profile.equipment, ...profile.software];
   const currentExperience = profile.experiences.find((experience) => experience.currentlyWorking);
   const visibleHeadline = profile.headline || (currentExperience ? `${currentExperience.role || currentExperience.title}${currentExperience.companyName ? ` - ${currentExperience.companyName}` : ""} (actualmente)` : "Define tu título profesional visible");
@@ -85,7 +85,7 @@ export default async function ProfilePage({ searchParams }: PageProps) {
           </CardHeader>
           <CardContent className="space-y-4 text-sm">
             <InfoRow label="Identidad" value={identityCopy[profile.identityVerificationStatus] || profile.identityVerificationStatus} />
-            <InfoRow label="CV vivo" value={profile.liveCvEnabled ? "Activo" : "Pendiente de activar"} />
+            <InfoRow label="CV vivo" value={profile.liveCvEnabled ? "Publicado" : "Sin publicar"} />
             <InfoRow label="Usuario público" value={profile.username ? `@${profile.username}` : "Por configurar"} />
             <InfoRow label="Estado laboral" value={profile.status.replaceAll("_", " ").toLowerCase()} />
           </CardContent>

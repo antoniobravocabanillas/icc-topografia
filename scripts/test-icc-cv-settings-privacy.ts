@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { prisma } from "../lib/prisma";
+import { terraqoDomains } from "../lib/terraqo-domains";
 
 // Exercise the real actions and SQL writes. Only Next's request context is
 // replaced; every authenticated identity belongs to this temporary fixture.
@@ -70,6 +71,7 @@ async function main() {
     }
     phase = "settings publication status";
     const { default: SettingsPage } = await import("../app/(commerce)/portal/configuracion/page");
+    const { default: ProfilePage } = await import("../app/(commerce)/portal/perfil/page");
     for (const enabled of [false, true]) {
       await originalUpdate.call(prisma.terraqoProfessionalProfile, { where: { id: profileId }, data: { liveCvEnabled: enabled } });
       const html = renderToStaticMarkup(await SettingsPage({ searchParams: Promise.resolve({}) }));
@@ -77,6 +79,11 @@ async function main() {
       assert.equal(html.includes("Enlace activo:"), enabled);
       assert.equal(html.includes("CV sin publicar."), !enabled);
       assert.equal(html.includes("Guardar este formulario no publica ni reactiva tu CV."), !enabled);
+      phase = `profile publication status: ${enabled}`;
+      const profileHtml = renderToStaticMarkup(await ProfilePage({ searchParams: Promise.resolve({}) }));
+      assert.equal(profileHtml.includes("Ver CV público"), enabled);
+      assert.equal(profileHtml.includes("Sin publicar"), !enabled);
+      assert.equal(profileHtml.includes(`href="${terraqoDomains.public}/cv/${alias}"`), enabled);
     }
     console.log("PASS real settings/alias actions and SQL: preserve publication and visibility, ignore forged publication/owner fields, concurrent withdrawal stays withdrawn.");
   } finally {

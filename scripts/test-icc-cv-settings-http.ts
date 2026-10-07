@@ -101,6 +101,11 @@ async function main() {
       const html = await get(portalOrigin, "/configuracion", portalHeaders);
       assert.equal(html.includes("Ver CV público"), published);
       assert.equal(html.includes("CV sin publicar."), !published);
+      phase = `profile publication status ${published}`;
+      const profileHtml = await get(portalOrigin, "/perfil", portalHeaders);
+      assert.equal(profileHtml.includes("Ver CV público"), published);
+      assert.equal(profileHtml.includes("Sin publicar"), !published);
+      assert.equal(profileHtml.includes(`href="https://terraqoglobal.com/cv/${alias}"`), published);
       await post(portalOrigin, "/configuracion", portalHeaders, settings(html), "success=settings");
       const saved = await current();
       assert.equal(saved.liveCvEnabled, published); assert.equal(saved.liveCvVisibility, "PRIVATE");
