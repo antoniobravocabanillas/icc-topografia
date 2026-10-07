@@ -52,7 +52,11 @@ async function main() {
     response = await fetchOwn("/api/auth/callback/credentials", { method: "POST", headers: {
       origin, "content-type": "application/x-www-form-urlencoded", "x-auth-return-redirect": "1",
     }, body: new URLSearchParams({ csrfToken: csrf, email, password, callbackUrl: origin + "/perfil" }) });
-    assert.equal(response.status, 200); await response.body?.cancel(); assert.ok(sessionJwt());
+    assert.equal(response.status, 200);
+    const sessionCookies = response.headers.getSetCookie().filter(cookie => cookie.startsWith(sessionName));
+    assert.ok(sessionCookies.length > 0 && sessionCookies.every(cookie => /;\s*Secure(?:;|$)/i.test(cookie) &&
+      /;\s*HttpOnly(?:;|$)/i.test(cookie) && /;\s*SameSite=Lax(?:;|$)/i.test(cookie)));
+    await response.body?.cancel(); assert.ok(sessionJwt());
     const originalClaims = await decode({ token: sessionJwt(), secret: process.env.AUTH_SECRET, salt: sessionName });
     assert.equal(originalClaims?.sub, user.id); assert.equal(typeof originalClaims?.cvSessionId, "string");
     assert.equal(await prisma.verificationToken.count({ where: { identifier: grantIdentifier } }), 1);
