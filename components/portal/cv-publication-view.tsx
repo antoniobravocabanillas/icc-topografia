@@ -33,7 +33,7 @@ export function CvPublicationView({ state, consent, onConsent, onPrepare, onCanc
     : failure === "validation" ? "No se pudo aceptar la solicitud. Consulta el estado antes de continuar."
     : "No pudimos consultar el estado del CV. Puedes intentarlo de nuevo.";
 
-  return <section aria-labelledby="cv-publication-title" className="min-w-0 overflow-hidden rounded-2xl border bg-card text-card-foreground">
+  return <section aria-labelledby="cv-publication-title" className="min-w-0 overflow-hidden rounded-2xl border bg-card text-card-foreground [&_button]:h-auto [&_button]:min-h-11 [&_button]:max-w-full [&_button]:py-3 [&_button]:whitespace-normal [&_button:focus-visible]:outline [&_button:focus-visible]:outline-2 [&_button:focus-visible]:outline-offset-2 [&_button:focus-visible]:outline-primary [&_a:focus-visible]:outline [&_a:focus-visible]:outline-2 [&_a:focus-visible]:outline-offset-2 [&_a:focus-visible]:outline-primary">
     <header className="border-b bg-muted/30 px-6 py-6 sm:px-8">
       <p className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-primary"><ShieldCheck aria-hidden="true" className="h-4 w-4" /> Visibilidad profesional</p>
       <h2 id="cv-publication-title" className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">Tú decides cuándo compartir tu CV.</h2>
