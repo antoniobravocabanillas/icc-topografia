@@ -1,3 +1,5 @@
+import { reservePrivateUploadFiles, compensatePrivateUploadFiles } from "../lib/server/native-professional-upload-compensation";
+import { reserveStorage } from "../lib/terraqo/billing/storage-quota";
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
@@ -18,7 +20,7 @@ async function main() {
   const user=await prisma.user.create({data:{email,name:"Prueba recuperación privada",role:"CUSTOMER",emailVerified:new Date(),passwordHash:await bcrypt.hash(password,12),
     terraqoMemberships:{create:{workspaceId:workspace.id,role:"PROFESSIONAL",active:true}},terraqoProfessionalProfile:{create:{}}},select:{id:true,terraqoProfessionalProfile:{select:{id:true}}}});
   const base="https://api.terraqoglobal.com/api/public/workspaces/icc-topografia/portal/";
-  let key:string|undefined;
+  let key:string|undefined;const extraKeys:string[]=[];
   const internal=(body:unknown, authorized=true)=>fetch("https://api.terraqoglobal.com/api/internal/professional-document-cleanup",{method:"POST",headers:{"content-type":"application/json",...(authorized?{authorization:`Bearer ${process.env.PROFESSIONAL_DOCUMENT_CLEANUP_SECRET}`}:{})},body:JSON.stringify(body),redirect:"error",signal:AbortSignal.timeout(55000)});
   try {
     assert.equal((await internal({auditId:"fixture"},false)).status,401);
@@ -48,9 +50,22 @@ async function main() {
     const marker=await prisma.activityLog.findUniqueOrThrow({where:{id:audit.id},select:{metadata:true}});
     assert.deepEqual(marker.metadata,{source:"native-portal",type:"OTHER",storageCleanupState:"COMPLETE"});
     assert.equal((await (await internal({auditId:audit.id})).json()).result,"skipped");
+    const pair=["DNI_FRONT","DNI_BACK"].map(type=>({type,file:new File([png],`${type}.png`,{type:"image/png"}),storageKey:`professional-documents/${user.terraqoProfessionalProfile!.id}/${type.toLowerCase()}/${randomUUID()}.png`}));
+    extraKeys.push(...pair.map(item=>item.storageKey));
+    const reserved:typeof pair=[];await reservePrivateUploadFiles(user.id,pair,reserveStorage,item=>reserved.push(item));
+    assert.equal((await prisma.terraqoUsageBucket.findUniqueOrThrow({where:{id:before.id}})).used,2);
+    for(const item of pair)await store.set(item.storageKey,await item.file.arrayBuffer());
+    await compensatePrivateUploadFiles(user.id,workspace.id,reserved,{delete:async(storageKey:string)=>{if(storageKey===pair[1].storageKey)throw new Error("Synthetic partial failure.");await store.delete(storageKey);}});
+    assert.equal(await store.getWithMetadata(pair[0].storageKey,{type:"arrayBuffer"}),null);assert.ok(await store.getWithMetadata(pair[1].storageKey,{type:"arrayBuffer"}));
+    assert.equal((await prisma.terraqoUsageBucket.findUniqueOrThrow({where:{id:before.id}})).used,1);
+    const retry=await prisma.activityLog.findFirstOrThrow({where:{actorId:user.id,entityId:pair[1].storageKey,entityType:"ProfessionalDocument",action:"DELETED"},select:{id:true,metadata:true}});
+    assert.equal((retry.metadata as {storageCleanupState:string}).storageCleanupState,"PENDING");
+    const retries=await Promise.all([internal({auditId:retry.id}),internal({auditId:retry.id})]);for(const response of retries)assert.equal(response.status,200);
+    assert.equal(await store.getWithMetadata(pair[1].storageKey,{type:"arrayBuffer"}),null);assert.equal((await prisma.terraqoUsageBucket.findUniqueOrThrow({where:{id:before.id}})).used,0);
+    console.log("PASS pair compensation: two rounded reservations, first blob removed/refunded, second failure retains one unit and durable marker, concurrent recovery refunds once.");
     console.log("PASS deployed cleanup: unauthenticated rejection, retained-document guard, actual blob removal, three concurrent retries, one quota refund and replay guard.");
   } finally {
-    if(key)await store.delete(key);
+    if(key)await store.delete(key);for(const extraKey of extraKeys)await store.delete(extraKey);
     await prisma.activityLog.deleteMany({where:{actorId:user.id,terraqoWorkspaceId:workspace.id,entityType:"ProfessionalDocument"}});
     await prisma.terraqoUsageBucket.deleteMany({where:{ownerKey:`user:${user.id}`}});
     await prisma.verificationToken.deleteMany({where:{identifier:{in:[`portal-session:${workspace.id}:${user.id}`,`portal-login-attempt:${workspace.id}:${user.id}`]}}});

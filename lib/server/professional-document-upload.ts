@@ -1,3 +1,5 @@
+import { reservePrivateUploadFiles, compensatePrivateUploadFiles } from "./native-professional-upload-compensation";
+import { recoverProfessionalDocumentCleanup } from "./professional-document-cleanup";
 import { BillingError } from "@/lib/terraqo/billing/provider";
 import { Prisma } from "@prisma/client";
 import { validatePrivateProfessionalFile } from "./professional-file-validation";
@@ -55,7 +57,7 @@ function validateFile(file: File, type: DocumentType) {
   return null;
 }
 
-type UploadDependencies = {store: ReturnType<typeof getProfessionalDocumentStore>; reserve: typeof reserveStorage};
+type UploadDependencies = {store: ReturnType<typeof getProfessionalDocumentStore>; reserve: typeof reserveStorage; recover:typeof recoverProfessionalDocumentCleanup};
 export async function uploadProfessionalDocuments(request: Request, userId: string, requestedWorkspaceId?: string, dependencies?: Partial<UploadDependencies>) {
   const native = request.headers.get("x-terraqo-native-upload") === "1";
   try {
@@ -112,12 +114,19 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
 
     const store = dependencies?.store || getProfessionalDocumentStore();
     const stored: Array<{ type: DocumentType; file: File; storageKey: string }> = [];
-    const reservation=await (dependencies?.reserve || reserveStorage)(userId,requestedFiles.reduce((sum,item)=>sum+item.file.size,0));
+    let reservation: Awaited<ReturnType<typeof reserveStorage>> | undefined;
 
     try {
-      for (const item of requestedFiles) {
-        const storageKey = createProfessionalDocumentKey(profile.id, item.type, item.file.name);
-        stored.push({ ...item, storageKey });
+      if(native){
+        const planned=requestedFiles.map(item=>({...item,storageKey:createProfessionalDocumentKey(profile.id,item.type,item.file.name)}));
+        await reservePrivateUploadFiles(userId,planned,dependencies?.reserve || reserveStorage,item=>stored.push(item));
+      }else{
+        reservation=await (dependencies?.reserve || reserveStorage)(userId,requestedFiles.reduce((sum,item)=>sum+item.file.size,0));
+      }
+      const pending=native ? stored : requestedFiles.map(item=>({...item,storageKey:createProfessionalDocumentKey(profile.id,item.type,item.file.name)}));
+      for (const item of pending) {
+        const storageKey=item.storageKey;
+        if(!native)stored.push(item);
         await store.set(storageKey, await item.file.arrayBuffer(), {
           metadata: {
             contentType: item.file.type,
@@ -207,21 +216,10 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
       // a private durable marker so operational recovery can retry its removal.
       if (!native || !workspaceId) {
         await Promise.all(stored.map(item => store.delete(item.storageKey)));
-        await reservation.release();
+        await reservation?.release();
         throw error;
       }
-      let cleaned = true;
-      for (const item of stored) {
-        try { await store.delete(item.storageKey); }
-        catch {
-          cleaned = false;
-          await prisma.activityLog.create({ data: { actorId: userId, terraqoWorkspaceId: workspaceId,
-            action: "DELETED", entityType: "ProfessionalDocument", entityId: item.storageKey,
-            title: "Limpieza de carga pendiente", metadata: { source: "native-portal", type: item.type,
-              storageCleanupState: "PENDING", storageCleanupKey: item.storageKey, storageCleanupBytes: item.file.size } } });
-        }
-      }
-      if (cleaned) await reservation.release();
+      await compensatePrivateUploadFiles(userId,workspaceId,stored,store,dependencies?.recover);
       throw error;
     }
   } catch (error) {
