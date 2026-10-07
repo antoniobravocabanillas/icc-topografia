@@ -1,3 +1,4 @@
+import { publishedCvProfileWhere } from "./public-cv";
 import { cache } from "react";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -74,7 +75,7 @@ export const getPublicCvSeoProfile = cache(async (username: string) =>
   safeDb(
     `public-cv-seo:${username}`,
     prisma.terraqoProfessionalProfile.findUnique({
-      where: { username },
+      where: publishedCvProfileWhere(username),
       select: publicCvSeoProfileSelect
     }),
     null

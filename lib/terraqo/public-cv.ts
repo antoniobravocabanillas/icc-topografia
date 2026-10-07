@@ -1,5 +1,11 @@
 import type { Prisma } from "@prisma/client";
 
+// A public entry inside a CV never overrides withdrawal of its parent profile.
+// Use the same predicate for content, metadata, social previews and exports.
+export function publishedCvProfileWhere(username: string): Prisma.TerraqoProfessionalProfileWhereUniqueInput {
+  return { username, liveCvEnabled: true };
+}
+
 export const publicCvProfileInclude = {
   user: { select: { name: true, email: true, image: true, lastSeenAt: true, onlineUntil: true } },
   experiences: {

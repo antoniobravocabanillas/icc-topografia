@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { PublicCVPage } from "@/components/terraqo/public-cv";
-import { publicCvProfileInclude } from "@/lib/terraqo/public-cv";
+import { publicCvProfileInclude, publishedCvProfileWhere } from "@/lib/terraqo/public-cv";
 import { getPublicCvSeoProfile, publicCvJsonLd, publicCvSeoFacts } from "@/lib/terraqo/public-cv-seo";
 import { prisma } from "@/lib/prisma";
 import { absoluteUrl } from "@/lib/utils";
@@ -84,7 +84,7 @@ export default async function PublicCvRoute({ params }: PublicCvPageProps) {
   const { username } = await params;
   const [profile, seoProfile] = await Promise.all([
     prisma.terraqoProfessionalProfile.findUnique({
-      where: { username },
+      where: publishedCvProfileWhere(username),
       include: publicCvProfileInclude
     }),
     getPublicCvSeoProfile(username)

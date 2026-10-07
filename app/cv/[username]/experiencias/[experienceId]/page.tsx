@@ -1,3 +1,4 @@
+import { publishedCvProfileWhere } from "@/lib/terraqo/public-cv";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -115,7 +116,7 @@ export async function generateMetadata({ params }: ExperienceDetailPageProps) {
     where: {
       id: experienceId,
       visibility: "PUBLIC",
-      professionalProfile: { username }
+      professionalProfile: { username, liveCvEnabled: true }
     },
     select: {
       title: true,
@@ -137,7 +138,7 @@ export async function generateMetadata({ params }: ExperienceDetailPageProps) {
 export default async function ExperienceDetailPage({ params }: ExperienceDetailPageProps) {
   const { username, experienceId } = await params;
   const profile = await prisma.terraqoProfessionalProfile.findUnique({
-    where: { username },
+    where: publishedCvProfileWhere(username),
     select: {
       id: true,
       username: true,
