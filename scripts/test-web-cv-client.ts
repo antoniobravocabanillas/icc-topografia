@@ -24,9 +24,10 @@ async function main() {
   const calls: Array<{ url: string; init?: RequestInit }> = [];
   let data: unknown = initial;
   const fetcher: typeof fetch = async (url, init) => { calls.push({ url: String(url), init }); return Response.json({ data }); };
-  const api = new WebCvPublicationApi("icc-topografia", fetcher);
+  const api = new WebCvPublicationApi("icc-topografia", "fixture-owner", fetcher);
   await api.load(); await api.reconcile(operationKey);
   assert.ok(calls.every(call => call.init?.method === "GET" && !call.init.body));
+  assert.ok(calls.every(call => new Headers(call.init?.headers).get("x-terraqo-cv-owner") === "fixture-owner"));
   assert.ok(calls[1].url.endsWith(`&operationKey=${operationKey}`));
   data = history; await api.submit(command); await api.submit(command);
   assert.equal(calls[2].init?.body, calls[3].init?.body);
@@ -35,15 +36,15 @@ async function main() {
   await assert.rejects(api.submit(command), error => error instanceof WebCvRequestError && error.kind === "uncertain");
   for (const [status, kind] of [[401, "credentials"], [403, "forbidden"], [409, "conflict"], [422, "validation"], [500, "uncertain"]] as const) {
     let count = 0;
-    const failed = new WebCvPublicationApi("icc-topografia", async () => { count++; return new Response("private diagnostics", { status }); });
+    const failed = new WebCvPublicationApi("icc-topografia", "fixture-owner", async () => { count++; return new Response("private diagnostics", { status }); });
     await assert.rejects(failed.submit(command), error => error instanceof WebCvRequestError && error.kind === kind); assert.equal(count, 1);
   }
-  const oversized = new WebCvPublicationApi("icc-topografia", async () => new Response("x".repeat(16385), { headers: { "content-type": "application/json" } }));
+  const oversized = new WebCvPublicationApi("icc-topografia", "fixture-owner", async () => new Response("x".repeat(16385), { headers: { "content-type": "application/json" } }));
   await assert.rejects(oversized.load(), error => error instanceof WebCvRequestError && error.kind === "uncertain");
-  const malformed = new WebCvPublicationApi("icc-topografia", async () => new Response(new Uint8Array([255]), { headers: { "content-type": "application/json" } }));
+  const malformed = new WebCvPublicationApi("icc-topografia", "fixture-owner", async () => new Response(new Uint8Array([255]), { headers: { "content-type": "application/json" } }));
   await assert.rejects(malformed.load(), error => error instanceof WebCvRequestError && error.kind === "uncertain");
   let timeoutCalls = 0;
-  const timed = new WebCvPublicationApi("icc-topografia", async () => { timeoutCalls++; return new Promise<Response>(() => undefined); }, 5);
+  const timed = new WebCvPublicationApi("icc-topografia", "fixture-owner", async () => { timeoutCalls++; return new Promise<Response>(() => undefined); }, 5);
   await assert.rejects(timed.submit(command), error => error instanceof WebCvRequestError && error.kind === "uncertain"); assert.equal(timeoutCalls, 1);
   console.log("PASS web CV client: strict private DTO/URL/version/receipt, frozen consent payload, bounded JSON/UTF-8, cookie-only GET/POST, exact explicit resend, timeout and no redirects/retries.");
 }

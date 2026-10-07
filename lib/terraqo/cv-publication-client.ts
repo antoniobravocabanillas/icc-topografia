@@ -56,9 +56,10 @@ async function boundedResponse(response: Response) {
  * one request: no redirect following, retries or automatic writes on GET. */
 export class WebCvPublicationApi {
   private readonly endpoint: string;
-  constructor(private readonly workspaceSlug: string, private readonly fetcher: typeof fetch = fetch,
+  constructor(private readonly workspaceSlug: string, private readonly ownerId: string, private readonly fetcher: typeof fetch = fetch,
     private readonly timeoutMs = 30000) {
-    if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(workspaceSlug) || !Number.isInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 30000)
+    if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(workspaceSlug) || !/^[A-Za-z0-9_-]{1,128}$/.test(ownerId) ||
+        !Number.isInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 30000)
       throw new Error("Invalid CV transport configuration.");
     this.endpoint = `/api/terraqo/cv-publication?workspaceSlug=${workspaceSlug}`;
   }
@@ -73,7 +74,8 @@ export class WebCvPublicationApi {
       const work = async () => {
         response = await this.fetcher(this.endpoint + (!command && operationKey ? `&operationKey=${operationKey}` : ""), {
           method: command ? "POST" : "GET", credentials: "same-origin", cache: "no-store", redirect: "error", signal: abort.signal,
-          headers: command ? { "content-type": "application/json", "x-terraqo-cv-command": "1" } : {},
+          headers: { "x-terraqo-cv-owner": this.ownerId,
+            ...(command ? { "content-type": "application/json", "x-terraqo-cv-command": "1" } : {}) },
           body: command ? JSON.stringify(command) : undefined,
         });
         if (response.redirected) throw new Error("Unexpected CV redirect.");

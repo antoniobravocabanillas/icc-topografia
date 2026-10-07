@@ -16,6 +16,11 @@ export async function webCvPublicationIdentity(request: Request, workspaceSlug: 
     cookieName: secure ? "__Secure-authjs.session-token" : "authjs.session-token" });
   const claims = webCvSessionClaims(jwt);
   if (!claims) throw new CvPublicationError("Inicia sesión nuevamente para administrar la publicación del CV.", 401);
+  // Bind the screen's account context to the authenticated cookie. This header
+  // never selects an owner: a changed cookie in another tab invalidates the
+  // request instead of silently applying it to a different person's profile.
+  if (request.headers.get("x-terraqo-cv-owner") !== claims.userId)
+    throw new CvPublicationError("Tu sesión cambió. Actualiza la página antes de continuar.", 401);
   const session = await auth();
   if (!session?.user?.id || session.user.id !== claims.userId)
     throw new CvPublicationError("La sesión no es válida.", 401);

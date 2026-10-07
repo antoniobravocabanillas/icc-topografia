@@ -42,7 +42,7 @@ async function main() {
     const legacy = await encode({ token: { sub: user.id }, secret: process.env.AUTH_SECRET, salt: cookieName, maxAge: 43200 });
     const send = async (body?: object, change: { cookie?: string; headers?: Record<string, string>; url?: string; raw?: string } = {}) => {
       const request = new Request(change.url || base, { method: body ? "POST" : "GET",
-        headers: { cookie: `${cookieName}=${change.cookie ?? jwt}`, ...(body ? {
+        headers: { cookie: `${cookieName}=${change.cookie ?? jwt}`, "x-terraqo-cv-owner": user.id, ...(body ? {
           origin: new URL(terraqoDomains.portal).origin, "content-type": "application/json", "x-terraqo-cv-command": "1",
         } : {}), ...change.headers }, body: body ? (change.raw ?? JSON.stringify(body)) : undefined });
       const response = await (body ? POST(request) : GET(request));
@@ -52,6 +52,8 @@ async function main() {
     };
     phase = "cookie identity";
     assert.equal((await send(undefined, { cookie: legacy })).response.status, 401);
+    assert.equal((await send(undefined, { headers: { "x-terraqo-cv-owner": "another-screen-owner" } })).response.status, 401);
+    assert.equal((await send(undefined, { headers: { "x-terraqo-cv-owner": "" } })).response.status, 401);
     assert.equal((await send(undefined, { cookie: "invalid", headers: { authorization: `Bearer ${jwt}` } })).response.status, 401);
     assert.equal((await send(undefined, { url: base + "&workspaceSlug=icc-topografia" })).response.status, 422);
     assert.equal((await send(undefined, { url: base + "&userId=foreign" })).response.status, 422);

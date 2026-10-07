@@ -24,7 +24,7 @@ async function main() {
   const cookies = () => [...jar].map(([key, value]) => `${key}=${value}`).join("; ");
   const fetchOwn = async (path: string, init: RequestInit = {}, cookieOverride?: string) => {
     const response = await fetch(origin + path, { ...init, headers: {
-      cookie: cookieOverride ?? cookies(), ...init.headers,
+      cookie: cookieOverride ?? cookies(), ...(path.startsWith("/api/terraqo/cv-publication") ? { "x-terraqo-cv-owner": user.id } : {}), ...init.headers,
     }, redirect: "manual", cache: "no-store", signal: AbortSignal.timeout(60000) });
     if (cookieOverride === undefined) for (const item of response.headers.getSetCookie()) {
       const pair = item.split(";", 1)[0], index = pair.indexOf("=");
@@ -72,6 +72,12 @@ async function main() {
     assert.ok(cacheDirectives.includes("private") && cacheDirectives.includes("no-store"));
     const initial = (await response.json()).data; assert.equal(initial.current.published, false);
     assert.deepEqual(Object.keys(initial.current).sort(), ["published", "url", "username", "version"]);
+    phase = "deployed screen owner binding";
+    for (const owner of ["different-screen-owner", ""]) {
+      response = await fetchOwn(base, { headers: { "x-terraqo-cv-owner": owner } });
+      assert.equal(response.status, 401); await response.body?.cancel();
+    }
+    assert.equal(await count(), 0);
     const publish = { action: "PUBLISH", version: initial.current.version, operationKey: randomBytes(16).toString("hex"), consent: true };
     phase = "deployed concurrent publication";
     const result = await Promise.all([post(publish), post(publish)]);
