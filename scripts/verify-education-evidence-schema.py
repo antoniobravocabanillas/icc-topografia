@@ -1,4 +1,4 @@
-"""Test additive education DDL inside a rollback on the verified direct source."""
+"""Verify education schema/rollback cases or scoped physical fixtures on the matched source."""
 import importlib.util
 import json
 import os
@@ -31,12 +31,15 @@ def main():
     print("PASS direct/runtime schema and workspace fingerprints match; credentials remain in child environment only.", flush=True)
     environment = dict(os.environ, DATABASE_URL=direct, NODE_ENV="production", TEST_PORTAL_URL="https://api.terraqoglobal.com",
                        TERRAQO_MUTATING_TESTS="icc-topografia:20616116313")
-    if sys.argv[1:] not in ([], ["--cleanup"], ["--commit"]):
+    if sys.argv[1:] not in ([], ["--cleanup"], ["--commit"], ["--physical"], ["--physical-cleanup"]):
         raise RuntimeError("Unsupported verification mode")
-    script = {"--cleanup": "scripts/test-icc-education-evidence-cleanup.ts", "--commit": "scripts/test-icc-education-evidence-commit.ts"}.get(
+    script = {"--cleanup": "scripts/test-icc-education-evidence-cleanup.ts", "--commit": "scripts/test-icc-education-evidence-commit.ts",
+              "--physical": "scripts/test-icc-education-evidence-physical.ts",
+              "--physical-cleanup": "scripts/test-icc-education-evidence-physical.ts"}.get(
         sys.argv[1] if sys.argv[1:] else "", "scripts/test-icc-education-evidence-schema.ts")
-    result = subprocess.run([shutil.which("node"), "--conditions=react-server", "--import", "tsx", script],
-                            cwd=ROOT, env=environment, timeout=120)
+    arguments = ["--cleanup-interrupted"] if sys.argv[1:] == ["--physical-cleanup"] else []
+    result = subprocess.run([shutil.which("node"), "--conditions=react-server", "--import", "tsx", script, *arguments],
+                            cwd=ROOT, env=environment, timeout=300 if sys.argv[1:] == ["--physical"] else 120)
     if result.returncode:
         return result.returncode
     after = inventory.run_inventory(direct, "direct-after-rollback")
