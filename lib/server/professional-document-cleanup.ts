@@ -2,8 +2,18 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getProfessionalDocumentStore, PROFESSIONAL_DOCUMENT_PREFIX } from "./media";
 
-type Marker = {source?: unknown; type?: unknown; storageCleanupState?: unknown; storageCleanupKey?: unknown; storageCleanupBytes?: unknown};
+type Marker = {source?: unknown; type?: unknown; storageCleanupState?: unknown; storageCleanupKey?: unknown; storageCleanupBytes?: unknown; storageCleanupAttempts?: unknown};
 const marker = (value: unknown): Marker => value && typeof value === "object" && !Array.isArray(value) ? value as Marker : {};
+export function cleanupRetrySchedule(attempts: unknown, now: Date) {
+  const count = Number.isSafeInteger(attempts) && (attempts as number) >= 0 ? Math.min(attempts as number, 7) + 1 : 1;
+  return {storageCleanupAttempts: count, storageCleanupNextAttemptAt: new Date(now.getTime() + Math.min(360, 5 * 2 ** (count - 1)) * 60_000).toISOString()};
+}
+async function parkBlockedCleanup(id: string) {
+  const row = await prisma.activityLog.findFirst({where:{id,entityType:"ProfessionalDocument",action:"DELETED"},select:{metadata:true}});
+  const current=marker(row?.metadata);
+  if (current.source !== "native-portal" || current.storageCleanupState !== "PENDING" || !row?.metadata) return;
+  await prisma.activityLog.updateMany({where:{id,metadata:{equals:row.metadata as Prisma.InputJsonValue}},data:{metadata:{...(row.metadata as Prisma.JsonObject),storageCleanupState:"BLOCKED"}}});
+}
 export async function recoverProfessionalDocumentCleanup(id: string, store?: Pick<ReturnType<typeof getProfessionalDocumentStore>, "delete">) {
   const audit = await prisma.activityLog.findFirst({where:{id,entityType:"ProfessionalDocument",action:"DELETED"},select:{id:true,actorId:true,metadata:true}});
   const pending = marker(audit?.metadata);
@@ -34,14 +44,32 @@ export async function recoverProfessionalDocumentCleanup(id: string, store?: Pic
       await tx.activityLog.update({where:{id},data:{metadata:{source:"native-portal",type:typeof current.type === "string" ? current.type : "OTHER",storageCleanupState:"COMPLETE"}}});
       return "completed";
     },{maxWait:5000,timeout:10000});
-  } catch { return "retry"; }
+  } catch {
+    try {
+      // Snapshot equality prevents a late failure from reopening a completed
+      // marker or overwriting another worker's retry decision.
+      await prisma.activityLog.updateMany({where:{id,metadata:{equals:audit.metadata as Prisma.InputJsonValue}},
+        data:{metadata:{...(audit.metadata as Prisma.JsonObject),...cleanupRetrySchedule(pending.storageCleanupAttempts,new Date())}}});
+    } catch { /* The existing PENDING marker remains recoverable after DB outage. */ }
+    return "retry";
+  }
+}
+export async function dueProfessionalDocumentCleanupIds(now = new Date()) {
+  const rows = await prisma.$queryRaw<{id:string}[]>(Prisma.sql`
+    SELECT id FROM icc."ActivityLog"
+    WHERE "entityType"='ProfessionalDocument' AND action='DELETED' AND "actorId" IS NOT NULL
+      AND "createdAt" <= ${new Date(now.getTime()-5*60_000)}
+      AND metadata->>'source'='native-portal' AND metadata->>'storageCleanupState'='PENDING'
+      AND (metadata->>'storageCleanupNextAttemptAt' IS NULL OR metadata->>'storageCleanupNextAttemptAt' <= ${now.toISOString()})
+    ORDER BY "createdAt", id LIMIT 5`);
+  return rows;
 }
 export async function recoverProfessionalDocumentCleanups(now = new Date()) {
-  const rows = await prisma.activityLog.findMany({where:{entityType:"ProfessionalDocument",action:"DELETED",createdAt:{lte:new Date(now.getTime()-5*60_000)},metadata:{path:["storageCleanupState"],equals:"PENDING"}},
-    orderBy:{createdAt:"asc"},take:5,select:{id:true}});
+  const rows = await dueProfessionalDocumentCleanupIds(now);
   const counts = {completed:0,retry:0,blocked:0,skipped:0};
   for (const row of rows) {
     const result = await recoverProfessionalDocumentCleanup(row.id);
+    if (result === "blocked") await parkBlockedCleanup(row.id);
     counts[result as keyof typeof counts]++;
   }
   return counts;

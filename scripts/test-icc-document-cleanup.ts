@@ -5,6 +5,7 @@ import { join } from "node:path";
 import bcrypt from "bcryptjs";
 import { getStore } from "@netlify/blobs";
 import { prisma } from "../lib/prisma";
+import { dueProfessionalDocumentCleanupIds } from "../lib/server/professional-document-cleanup";
 import { PROFESSIONAL_DOCUMENT_STORE } from "../lib/server/media";
 async function main() {
   assert.equal(process.env.TERRAQO_MUTATING_TESTS,"icc-topografia:20616116313");
@@ -21,6 +22,7 @@ async function main() {
   const internal=(body:unknown, authorized=true)=>fetch("https://api.terraqoglobal.com/api/internal/professional-document-cleanup",{method:"POST",headers:{"content-type":"application/json",...(authorized?{authorization:`Bearer ${process.env.PROFESSIONAL_DOCUMENT_CLEANUP_SECRET}`}:{})},body:JSON.stringify(body),redirect:"error",signal:AbortSignal.timeout(55000)});
   try {
     assert.equal((await internal({auditId:"fixture"},false)).status,401);
+    assert.ok((await dueProfessionalDocumentCleanupIds()).length <= 5, "Deployed database supports the bounded retry eligibility query.");
     const login=await fetch(base+"login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({email,password}),redirect:"error"});assert.equal(login.status,200);
     const bearer=(await login.json()).data.token;
     const png=Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aGMsAAAAASUVORK5CYII=","base64");

@@ -5,6 +5,10 @@ const cleanup = async () => {
   const result = await fetch("https://api.terraqoglobal.com/api/internal/professional-document-cleanup", {
     method:"POST", headers:{authorization:`Bearer ${secret}`}, redirect:"error", signal:AbortSignal.timeout(55000),
   });
+  if (result.ok) {
+    const counters = await result.json();
+    console.info("Private cleanup counters", {completed:counters.completed,retry:counters.retry,blocked:counters.blocked,skipped:counters.skipped});
+  }
   return new Response(result.ok ? "Processed" : "Retry required", {status:result.ok ? 200 : 502});
 };
 export default cleanup;
