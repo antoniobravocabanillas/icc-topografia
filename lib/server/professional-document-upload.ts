@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { reservePrivateUploadFiles, compensatePrivateUploadFiles } from "./native-professional-upload-compensation";
 import { recoverProfessionalDocumentCleanup } from "./professional-document-cleanup";
 import { BillingError } from "@/lib/terraqo/billing/provider";
@@ -69,8 +70,16 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
     if (native && contentLength > 4 * 1024 * 1024 + 65536) return fail("El archivo supera el límite móvil de 4 MB.", 413);
     const formData = await request.formData();
     const purpose = String(formData.get("purpose") || "");
-    if (native && !["document", "cv"].includes(purpose)) return fail("Esta carga móvil requiere una categoría documental.", 422);
+    if (native && !["document", "cv", "identity"].includes(purpose)) return fail("Esta carga móvil requiere una categoría documental.", 422);
     if (!["cv", "identity", "document"].includes(purpose)) return fail("Tipo de carga no valido.", 400);
+
+    if (native && purpose === "identity") {
+      // Reject ambiguous multipart fields before reserving quota or storing either face.
+      const fields = ["purpose", "dniFront", "dniBack"];
+      if ([...formData.keys()].some(key => !fields.includes(key)) || fields.some(key => formData.getAll(key).length !== 1)) {
+        return fail("Selecciona exactamente un frente y un reverso del documento de identidad.", 422);
+      }
+    }
 
     const profile = await prisma.terraqoProfessionalProfile.findUnique({ where: { userId } });
     if (!profile) return fail("Perfil profesional no encontrado.", 404);
@@ -111,11 +120,17 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
       if (native && purpose === "cv" && item.file.type !== "application/pdf") return fail("El currículum móvil debe estar en PDF.", 422);
       const validationError = validateFile(item.file, item.type);
       if (validationError) return fail(validationError, 400);
+      if (native && purpose === "identity" && item.file.size > 2 * 1024 * 1024) return fail("Cada cara de identidad debe pesar como máximo 2 MB.", 413);
       if (native && item.file.size > 4 * 1024 * 1024) return fail("El archivo supera el límite móvil de 4 MB.", 413);
       if (purpose === "document" || purpose === "identity" || (native && purpose === "cv")) {
         const contentError = await validatePrivateProfessionalFile(item.file);
         if (contentError) return fail(contentError, 422);
       }
+    }
+
+    if (native && purpose === "identity") {
+      const hashes = await Promise.all(requestedFiles.map(async item => createHash("sha256").update(Buffer.from(await item.file.arrayBuffer())).digest("hex")));
+      if (hashes[0] === hashes[1]) return fail("El frente y el reverso deben ser archivos distintos.", 422);
     }
 
     const store = dependencies?.store || getProfessionalDocumentStore();

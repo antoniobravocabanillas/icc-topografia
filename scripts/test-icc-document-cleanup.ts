@@ -68,6 +68,19 @@ async function main() {
       const denied=await fetch(base+"documents",{method:"POST",headers:{authorization:`Bearer ${bearer}`},body:identity,redirect:"error",signal:AbortSignal.timeout(55000)});assert.equal(denied.status,409);
       assert.equal(await prisma.terraqoProfessionalDocument.count({where:{professionalProfileId:user.terraqoProfessionalProfile!.id}}),0);assert.equal((await prisma.terraqoUsageBucket.findUniqueOrThrow({where:{id:before.id}})).used,0);
     }
+    await prisma.terraqoProfessionalProfile.update({where:{id:user.terraqoProfessionalProfile!.id},data:{identityVerificationStatus:"PENDING_DOCUMENTS"}});
+    const back=Buffer.from("%PDF-1.7\nSYNTHETIC IDENTITY BACK\n%%EOF");
+    const nativeIdentity=()=>{const body=new FormData();body.set("purpose","identity");body.set("dniFront",new File([png],"synthetic-front.png",{type:"image/png"}));body.set("dniBack",new File([back],"synthetic-back.pdf",{type:"application/pdf"}));return fetch(base+"documents",{method:"POST",headers:{authorization:`Bearer ${bearer}`,"x-terraqo-native-upload":"1"},body,redirect:"error",signal:AbortSignal.timeout(55000)});};
+    const identityResponses=await Promise.all([nativeIdentity(),nativeIdentity()]);assert.deepEqual(identityResponses.map(response=>response.status).sort(),[200,409]);
+    const identityResult=await identityResponses.find(response=>response.status===200)!.json();assert.equal(identityResult.data.identityVerificationStatus,"UNDER_REVIEW");
+    const identityRows=await prisma.terraqoProfessionalDocument.findMany({where:{professionalProfileId:user.terraqoProfessionalProfile!.id},orderBy:{type:"asc"}});assert.equal(identityRows.length,2);
+    for(const row of identityRows){assert.equal(row.reviewStatus,"SUBMITTED");assert.equal(row.workspaceId,workspace.id);assert.deepEqual(Buffer.from((await store.getWithMetadata(row.storageKey,{type:"arrayBuffer"}))!.data),row.type==="DNI_FRONT"?png:back);}
+    assert.equal(await prisma.activityLog.count({where:{actorId:user.id,terraqoWorkspaceId:workspace.id,entityType:"ProfessionalDocument",action:"CREATED",entityId:{in:identityRows.map(row=>row.id)}}}),2);
+    const profileAfter=await prisma.terraqoProfessionalProfile.findUniqueOrThrow({where:{id:user.terraqoProfessionalProfile!.id}});
+    assert.equal(profileAfter.identityVerificationStatus,"UNDER_REVIEW");assert.equal(profileAfter.liveCvEnabled,false);assert.equal(profileAfter.cvUrl,null);assert.equal(profileAfter.bankAccountNumber,null);assert.equal(profileAfter.bankCci,null);
+    assert.equal((await prisma.terraqoUsageBucket.findUniqueOrThrow({where:{id:before.id}})).used,2);
+    assert.equal((await nativeIdentity()).status,409);assert.equal(await prisma.terraqoProfessionalDocument.count({where:{professionalProfileId:user.terraqoProfessionalProfile!.id}}),2);
+    console.log("PASS published native identity: one concurrent joint submission, exact private bytes, two SUBMITTED records and audits, UNDER_REVIEW, replay rejected, publication/CV/bank unchanged.");
     console.log("PASS published identity guard: own verified/under-review fixture rejects resubmission without a native header, no document or quota mutation.");
     console.log("PASS pair compensation: two rounded reservations, first blob removed/refunded, second failure retains one unit and durable marker, concurrent recovery refunds once.");
     console.log("PASS deployed cleanup: unauthenticated rejection, retained-document guard, actual blob removal, three concurrent retries, one quota refund and replay guard.");
