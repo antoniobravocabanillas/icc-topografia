@@ -62,7 +62,11 @@ async function main() {
       phase = `${serial}: native login`; await login(serial, email, password);
       await tapLabel(serial, "Abrir herramientas"); await tapLabel(serial, "Documentos profesionales");
       await tapLabel(serial, "Agregar documento");
-      await tapLabel(serial,"Certificado"); await tapLabel(serial,"Currículum (PDF)");
+      const category = [...(await snapshot(serial)).matchAll(/<node\b[^>]*>/g)].map(value=>value[0]).find(value=>value.includes("Certificado") && value.includes('clickable="true"'));
+      assert.ok(category,"Native category selector unavailable.");
+      const categoryBounds=category.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);assert.ok(categoryBounds);
+      shell(serial,`input tap ${Math.round((+categoryBounds[1]+ +categoryBounds[3])/2)} ${Math.round((+categoryBounds[2]+ +categoryBounds[4])/2)}`);await pause(500);
+      await tapLabel(serial,"Currículum (PDF)");
       capture(serial, `native-cv-empty-${label === "celular" ? "phone" : "tablet"}.png`);
       phase = `${serial}: picker cancel`; await tapLabel(serial, "Seleccionar archivo"); await pause(500);
       shell(serial, "input keyevent 4"); await pause(700);
