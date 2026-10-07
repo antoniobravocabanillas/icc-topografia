@@ -12,24 +12,24 @@ import { listCvEntries, saveCvEntry } from "./portal-cv-entries";
 import { canChangeProjectClient, portalProjectSelect, writePortalProject } from "./portal-project-write";
 import { isProjectOperation, listProjectOperations, saveProjectOperation } from "./portal-project-operations";
 import { createPortalTask } from "./portal-task-create";
-import { taskFieldsSchema, taskMutation, taskSelect, lockTaskAssignee } from "./portal-task-fields";
+import { taskFieldsSchema, taskMutation, taskSelect, lockTaskAssignee, lockTaskMilestone } from "./portal-task-fields";
 
 import { listPortalContacts, savePortalContact } from "./portal-contacts";
 
-export const resourceCodes = ["opportunities", "companies", "contacts", "contactCompanies", "quoteClients", "clients", "leads", "notes", "projectMembers", "milestones", "projectProgress", "operationalProjects", "projects", "projectClients", "tasks", "taskProjects", "taskAssignees", "files", "worklogs", "quotes", "orders", "notifications", "profile", "experiences", "education"] as const;
+export const resourceCodes = ["opportunities", "companies", "contacts", "contactCompanies", "quoteClients", "clients", "leads", "notes", "projectMembers", "milestones", "projectProgress", "operationalProjects", "projects", "projectClients", "tasks", "taskProjects", "taskAssignees", "taskMilestones", "files", "worklogs", "quotes", "orders", "notifications", "profile", "experiences", "education"] as const;
 export type ResourceCode = typeof resourceCodes[number];
 export class PortalResourceError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
 // Personal workspace files retain the existing portal ownership and quota policy;
 // PROJECTS/DOCUMENTS entitlements refer to project documents, a different resource.
-const modules = { opportunities: "CRM", companies: "CRM", contacts: "CRM", contactCompanies: "CRM", quoteClients:"CRM", clients: "CRM", leads: "CRM", notes: null, projects: "PROJECTS", operationalProjects: "PROJECTS", projectMembers: "PROJECTS", milestones: "PROJECTS", projectProgress: "PROJECTS", projectClients: "PROJECTS", tasks: "PROJECTS", taskProjects: "PROJECTS", taskAssignees: "PROJECTS", files: null,
+const modules = { opportunities: "CRM", companies: "CRM", contacts: "CRM", contactCompanies: "CRM", quoteClients:"CRM", clients: "CRM", leads: "CRM", notes: null, projects: "PROJECTS", operationalProjects: "PROJECTS", projectMembers: "PROJECTS", milestones: "PROJECTS", projectProgress: "PROJECTS", projectClients: "PROJECTS", tasks: "PROJECTS", taskProjects: "PROJECTS", taskAssignees: "PROJECTS", taskMilestones: "PROJECTS", files: null,
   worklogs: "PROFESSIONAL_NETWORK", quotes: "CRM", orders: "TECHNICAL_STORE", notifications: null, profile: "PROFESSIONAL_NETWORK",
   experiences: "PROFESSIONAL_NETWORK", education: "PROFESSIONAL_NETWORK" } as const;
 export async function authorizeResource(token: WorkspacePortalToken, resource: ResourceCode) {
   if (["profile", "experiences", "education"].includes(resource) && token.role !== "PROFESSIONAL")
     throw new PortalResourceError("Esta sección requiere tu cuenta profesional.", 403);
-  if (["opportunities", "companies", "contacts", "contactCompanies", "quoteClients", "clients", "leads", "projectMembers", "milestones", "projectProgress", "operationalProjects", "projects", "projectClients", "tasks", "taskProjects", "taskAssignees"].includes(resource) && token.role !== "ADMIN")
+  if (["opportunities", "companies", "contacts", "contactCompanies", "quoteClients", "clients", "leads", "projectMembers", "milestones", "projectProgress", "operationalProjects", "projects", "projectClients", "tasks", "taskProjects", "taskAssignees", "taskMilestones"].includes(resource) && token.role !== "ADMIN")
     throw new PortalResourceError("Esta sección requiere administración empresarial.", 403);
   if (["quotes", "orders"].includes(resource) && !["ADMIN", "CLIENT"].includes(token.role))
     throw new PortalResourceError("Tu rol no permite consultar esta sección.", 403);
@@ -52,10 +52,15 @@ const noteSelect = { id: true, title: true, body: true, updatedAt: true } as con
 type Row = { id: string; updatedAt: Date; [key: string]: unknown };
 function record(row: Row, resource: ResourceCode, actorId?: string, workspaceId?: string) {
   if (resource === "tasks") {
-    const { assignedProfile, ...publicRow } = row;
+    const { assignedProfile, milestone, ...publicRow } = row;
+    const linked = milestone as {title: string; projectId: string; deletedAt: Date | null; project: {terraqoWorkspaceId: string; deletedAt: Date | null}} | null | undefined;
+    const scopedMilestone = !!linked && linked.projectId === row.projectId && linked.project.terraqoWorkspaceId === workspaceId && !linked.project.deletedAt;
     const profile = assignedProfile as { displayName: string; terraqoWorkspaceId: string } | null | undefined;
     const scoped = profile?.terraqoWorkspaceId === workspaceId && workspaceId !== undefined;
     row = { ...publicRow, assignedProfileId: scoped ? publicRow.assignedProfileId : null,
+      milestoneId: scopedMilestone ? publicRow.milestoneId : null,
+      milestoneName: scopedMilestone ? linked.deletedAt ? "Hito retirado" : linked.title : "",
+      milestoneLinkEditable: !publicRow.milestoneId || scopedMilestone,
       assignedProfileName: scoped ? profile!.displayName : "",
       dueDate: row.dueDate instanceof Date ? row.dueDate.toISOString().slice(0, 10) : "" };
   }
@@ -80,7 +85,7 @@ function record(row: Row, resource: ResourceCode, actorId?: string, workspaceId?
     editable: resource === "projects" ? row.isPublic === false && row.status !== "PUBLISHED" : ["clients", "leads", "notes", "tasks"].includes(resource),
     canDelete: resource === "files" && typeof actorId === "string" && row.userId === actorId };
 }
-export async function listPortalResource(token: WorkspacePortalToken, resource: ResourceCode, cursor?: string) {
+export async function listPortalResource(token: WorkspacePortalToken, resource: ResourceCode, cursor?: string, projectId?: string) {
   await authorizeResource(token, resource);
   if(resource === "quotes") return listPortalQuotes(token,cursor);
   if (resource === "opportunities") return listPortalOpportunities(token, cursor);
@@ -107,6 +112,17 @@ export async function listPortalResource(token: WorkspacePortalToken, resource: 
         select: { id: true, name: true, company: true, updatedAt: true } });
       rows = clients.map(client => ({ id: client.id, title: client.company || client.name,
         summary: client.company ? client.name : '', updatedAt: client.updatedAt })); break;
+    }
+    case "taskMilestones": {
+      if (!projectId || !/^[a-zA-Z0-9_-]{1,100}$/.test(projectId)) throw new PortalResourceError("Selecciona un proyecto válido.", 422);
+      if (!await prisma.project.findFirst({where: {id: projectId, ...tenant}, select: {id: true}}))
+        throw new PortalResourceError("Proyecto no disponible.", 404);
+      const milestones = await prisma.milestone.findMany({...window,
+        where: {projectId, deletedAt: null, project: tenant}, select: {id: true, title: true, status: true, updatedAt: true}});
+      return {schemaVersion: 1, workspaceSlug: token.workspaceSlug, resource,
+        records: milestones.slice(0,30).map(item => ({id: item.id, title: item.title, subtitle: "", status: item.status,
+          updatedAt: item.updatedAt.toISOString(), editable: false, canDelete: false, fields: {projectId} as Record<string,string>})),
+        nextCursor: milestones.length>30 ? milestones[29].id : null, canCreate: false};
     }
     case "taskAssignees": {
       const people = await prisma.staffProfile.findMany({ ...window, where: { terraqoWorkspaceId: token.workspaceId, active: true },
@@ -173,9 +189,7 @@ export async function savePortalResource(token: WorkspacePortalToken, resource: 
   if (resource === "tasks") {
     if (!id) {
       const saved = await createPortalTask(token, input, key);
-      const { projectId: _projectId, ...publicRow } = saved;
-      void _projectId;
-      return record(publicRow, resource, token.sub, token.workspaceId);
+      return record(saved, resource, token.sub, token.workspaceId);
     }
     return saveTask(token, input, id, version);
   }
@@ -225,6 +239,12 @@ async function saveTask(token: WorkspacePortalToken, input: unknown, id?: string
   return prisma.$transaction(async tx => {
     const current = await tx.task.findFirst({ where, select: { ...taskSelect, projectId: true } });
     if (!current) throw new PortalResourceError("Tarea no disponible.", 404);
+    const parent = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM "icc"."Project"
+      WHERE id=${current.projectId} AND "terraqoWorkspaceId"=${token.workspaceId} AND "deletedAt" IS NULL FOR SHARE`;
+    if (parent.length !== 1) throw new PortalResourceError("Proyecto no disponible.", 404);
+    if (data.milestoneId && data.milestoneId !== current.milestoneId &&
+      !await lockTaskMilestone(tx, token.workspaceId, current.projectId, data.milestoneId))
+      throw new PortalResourceError("Hito no disponible para este proyecto.", 422);
     if (data.assignedProfileId && data.assignedProfileId !== current.assignedProfileId &&
       !await lockTaskAssignee(tx, token.workspaceId, data.assignedProfileId))
       throw new PortalResourceError("Responsable no disponible para esta empresa.", 422);

@@ -61,7 +61,7 @@ async function main() {
     const first = await savePortalResource(token, "tasks", fields, "a".repeat(32));
     const replay = await savePortalResource(token, "tasks", fields, "a".repeat(32));
     assert.equal(first.id, replay.id); assert.equal(created, 1); assert.equal(audited, 1);
-    assert.ok(first.fields.completedAt); assert.ok(!("projectId" in first.fields));
+    assert.ok(first.fields.completedAt); assert.equal(first.fields.projectId, "project");
     await assert.rejects(savePortalResource(token, "tasks", { ...fields, title: "Other" }, "a".repeat(32)), rejected(409));
     await assert.rejects(savePortalResource(token, "tasks", { ...fields, assignedProfileId: "other" }, "a".repeat(32)));
     await assert.rejects(savePortalResource(token, "tasks", fields, null), rejected(422));

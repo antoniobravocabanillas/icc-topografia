@@ -24,7 +24,8 @@ async function handle(request: Request, context: Context, write: boolean) {
     if (!write) {
       const cursor = new URL(request.url).searchParams.get("cursor") || undefined;
       if (cursor && !/^[a-zA-Z0-9_-]{1,100}$/.test(cursor)) return fail("Página no válida.", 422);
-      return ok(await listPortalResource(token, resource as ResourceCode, cursor), cache);
+      const projectId = new URL(request.url).searchParams.get("projectId") || undefined;
+      return ok(await listPortalResource(token, resource as ResourceCode, cursor, projectId), cache);
     }
     // Bound the decoded input before validation. This endpoint accepts JSON only;
     // binary uploads have a separate contract and storage policy.

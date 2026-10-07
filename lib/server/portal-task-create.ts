@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import type { WorkspacePortalToken } from "./workspace-portal-session";
-import { taskFieldsSchema, taskMutation, taskSelect, lockTaskAssignee } from "./portal-task-fields";
+import { taskFieldsSchema, taskMutation, taskSelect, lockTaskAssignee, lockTaskMilestone } from "./portal-task-fields";
 
 export class PortalTaskCreateError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
@@ -15,6 +15,7 @@ const select = { ...taskSelect, projectId: true } as const;
 export async function createPortalTask(token: WorkspacePortalToken, input: unknown, key: string | null) {
   const parsed = schema.parse(input);
   const data = { ...taskMutation(parsed), assignedProfileId: parsed.assignedProfileId || null,
+    milestoneId: parsed.milestoneId || null,
     dueDate: parsed.dueDate ? new Date(`${parsed.dueDate}T00:00:00.000Z`) : null, projectId: parsed.projectId };
   if (!key || !/^[a-f0-9]{32}$/.test(key)) throw new PortalTaskCreateError("La operación necesita una clave válida.", 422);
   const id = createHash("sha256").update(JSON.stringify([token.workspaceId, token.sub, "tasks", key])).digest("hex").slice(0, 32);
@@ -39,6 +40,8 @@ export async function createPortalTask(token: WorkspacePortalToken, input: unkno
       }
       if (data.assignedProfileId && !await lockTaskAssignee(tx, token.workspaceId, data.assignedProfileId))
         throw new PortalTaskCreateError("Responsable no disponible para esta empresa.", 422);
+      if (data.milestoneId && !await lockTaskMilestone(tx, token.workspaceId, data.projectId, data.milestoneId))
+        throw new PortalTaskCreateError("Hito no disponible para este proyecto.", 422);
       if (await tx.task.count({ where: { projectId: data.projectId, deletedAt: null } }) >= 5000)
         throw new PortalTaskCreateError("Este proyecto alcanzó el límite de tareas activas.", 409);
       const saved = await tx.task.create({ data: { id, ...data, completedAt: data.status === "DONE" ? new Date() : null }, select });

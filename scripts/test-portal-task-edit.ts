@@ -14,6 +14,9 @@ async function main() {
   prisma.terraqoWorkspaceModule.findUnique = (async () => ({ active: enabled })) as unknown as typeof original.module;
   const expected = { id: "task", deletedAt: null, project: { terraqoWorkspaceId: "workspace", deletedAt: null } };
   const tx = { $queryRaw: async (query: TemplateStringsArray, profileId: string, workspaceId: string) => {
+    if (query.join('').includes('"Project"')) {
+      assert.equal(profileId, 'project'); assert.equal(workspaceId, 'workspace'); return [{id:'project'}];
+    }
     assert.ok(query.join('').includes('active = true FOR SHARE'));
     assert.equal(workspaceId, 'workspace'); assert.equal(profileId, 'person');
     return active ? [{id: 'person'}] : [];
