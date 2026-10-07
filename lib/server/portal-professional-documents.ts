@@ -1,3 +1,4 @@
+import { personalRetainedStorageUnits } from "@/lib/terraqo/billing/personal-storage-usage";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getProfessionalDocumentStore } from "./media";
@@ -67,12 +68,7 @@ export async function removeProfessionalDocument(token: WorkspacePortalToken, id
       if ((pending?.metadata as { storageCleanupState?: string } | null)?.storageCleanupState !== "PENDING") return;
     // Historical quota baselines use aggregate rounding. Never refund below the
     // retained bytes of the remaining documents, worklogs and message files.
-    const aggregates = await Promise.all([
-      tx.terraqoProfessionalDocument.aggregate({ where: { professionalProfile: { userId: token.sub } }, _sum: { size: true } }),
-      tx.terraqoWorklogMedia.aggregate({ where: { worklog: { authorId: token.sub } }, _sum: { size: true } }),
-      tx.terraqoMessageAttachment.aggregate({ where: { message: { senderId: token.sub } }, _sum: { size: true } }),
-    ]);
-    const floor = Math.ceil(aggregates.reduce((sum, row) => sum + (row._sum.size || 0), 0) / 1_000_000);
+    const floor = await personalRetainedStorageUnits(tx, token.sub);
     const units = Math.ceil(removed.size / 1_000_000);
     await tx.terraqoUsageBucket.updateMany({ where: { ownerKey: `user:${token.sub}`, period: "retained", metric: "storage-mb", used: { gte: floor + units } }, data: { used: { decrement: units } } });
       await tx.activityLog.update({ where: { id: removed.auditId }, data: { metadata: {

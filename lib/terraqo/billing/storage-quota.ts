@@ -1,4 +1,5 @@
 import "server-only";
+import { personalRetainedStorageUnits } from "./personal-storage-usage";
 import { prisma } from "@/lib/prisma";
 import { effectivePlan } from "./entitlements";
 import { BillingError } from "./provider";
@@ -13,12 +14,7 @@ export async function reserveStorage(userId:string,bytes:number,workspaceId?:str
   if(!exists){
     if(workspaceId){const aggregate=await prisma.terraqoWorkspaceFile.aggregate({where:{workspaceId},_sum:{size:true}});baseline=megabytes(aggregate._sum.size||0);}
     else{
-      const aggregates=await Promise.all([
-        prisma.terraqoProfessionalDocument.aggregate({where:{professionalProfile:{userId}},_sum:{size:true}}),
-        prisma.terraqoWorklogMedia.aggregate({where:{worklog:{authorId:userId}},_sum:{size:true}}),
-        prisma.terraqoMessageAttachment.aggregate({where:{message:{senderId:userId}},_sum:{size:true}}),
-      ]);
-      baseline=megabytes(aggregates.reduce((sum,row)=>sum+(row._sum.size||0),0));
+      baseline=await personalRetainedStorageUnits(prisma,userId);
     }
   }
   await prisma.$transaction(async tx=>{

@@ -14,6 +14,7 @@ async function main() {
   let cleanupState = "PENDING", enabled = true;
   const tx = {
     $queryRaw: async (query: Prisma.Sql) => { assert.ok(query.values.includes("owner") || query.values.includes("profile")); return [{ id: "profile" }]; },
+    terraqoExperienceEvidence:{aggregate:async()=>({_sum:{size:0}})},
     terraqoProfessionalDocument: {
       findFirst: async (args: { where: unknown }) => {
         assert.deepEqual(args.where, { id: "document", professionalProfile: { userId: "owner" }, OR: [{ workspaceId: "workspace" }, { workspaceId: null }] });

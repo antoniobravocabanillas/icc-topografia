@@ -1,3 +1,4 @@
+import { personalRetainedStorageUnits } from "@/lib/terraqo/billing/personal-storage-usage";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getProfessionalDocumentStore, PROFESSIONAL_DOCUMENT_PREFIX } from "./media";
@@ -32,12 +33,7 @@ export async function recoverProfessionalDocumentCleanup(id: string, store?: Pic
       const row = await tx.activityLog.findUnique({where:{id},select:{metadata:true}});
       const current = marker(row?.metadata);
       if (current.storageCleanupState !== "PENDING" || current.storageCleanupKey !== key || current.storageCleanupBytes !== size) return "skipped";
-      const aggregates = await Promise.all([
-        tx.terraqoProfessionalDocument.aggregate({where:{professionalProfile:{userId:audit.actorId!}},_sum:{size:true}}),
-        tx.terraqoWorklogMedia.aggregate({where:{worklog:{authorId:audit.actorId!}},_sum:{size:true}}),
-        tx.terraqoMessageAttachment.aggregate({where:{message:{senderId:audit.actorId!}},_sum:{size:true}}),
-      ]);
-      const floor = Math.ceil(aggregates.reduce((sum,value)=>sum+(value._sum.size||0),0)/1_000_000);
+      const floor = await personalRetainedStorageUnits(tx,audit.actorId!);
       const units = Math.ceil((size as number)/1_000_000);
       await tx.terraqoUsageBucket.updateMany({where:{ownerKey:`user:${audit.actorId}`,period:"retained",metric:"storage-mb",used:{gte:floor+units}},data:{used:{decrement:units}}});
       // The locked audit is the completion fence; concurrent jobs refund once.
