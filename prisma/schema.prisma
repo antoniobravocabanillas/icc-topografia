@@ -2996,6 +2996,9 @@ model TerraqoProfessionalEducation {
   validatorName           String?
   validatorEmail          String?
   evidence                String[]                              @default([])
+  evidenceFiles           TerraqoEducationEvidence[]
+  evidenceOperations      TerraqoEducationEvidenceOperation[]
+  evidenceAttempts        TerraqoEducationEvidenceAttempt[]
   createdAt               DateTime                              @default(now())
   updatedAt               DateTime                              @updatedAt
 
@@ -3003,6 +3006,68 @@ model TerraqoProfessionalEducation {
   @@index([professionalProfileId, verificationStatus])
   @@index([validatorUserId, verificationStatus])
   @@index([country, locationSubdivisionCode, locationCity])
+  @@schema("icc")
+}
+
+// Restrict parent removal while private files, receipts or attempts exist.
+// Recovery must retain its owner/education lock even after a failed upload.
+model TerraqoEducationEvidence {
+  id           String                       @id @default(cuid())
+  educationId  String
+  education    TerraqoProfessionalEducation @relation(fields: [educationId], references: [id], onDelete: Restrict)
+  storageKey   String                       @unique
+  fileName     String
+  contentType  String
+  size         Int
+  uploadedById String
+  operation    TerraqoEducationEvidenceOperation?
+  createdAt    DateTime                     @default(now())
+
+  @@index([educationId, createdAt])
+  @@index([uploadedById])
+  @@schema("icc")
+}
+
+model TerraqoEducationEvidenceOperation {
+  id              String                       @id
+  educationId     String
+  education       TerraqoProfessionalEducation @relation(fields: [educationId], references: [id], onDelete: Restrict)
+  actorId         String
+  operationKey    String
+  fingerprint     String
+  evidenceId      String?                      @unique
+  evidence        TerraqoEducationEvidence?    @relation(fields: [evidenceId], references: [id], onDelete: SetNull)
+  fileName        String
+  contentType     String
+  size            Int
+  originalVersion DateTime
+  resultVersion   DateTime
+  createdAt       DateTime                     @default(now())
+
+  @@unique([educationId, operationKey])
+  @@index([educationId, createdAt])
+  @@schema("icc")
+}
+
+// One immutable blob key per physical attempt, independently of the receipt.
+// Reservation and transition to RESERVED must commit in the same transaction.
+model TerraqoEducationEvidenceAttempt {
+  id            String                       @id @default(cuid())
+  educationId   String
+  education     TerraqoProfessionalEducation @relation(fields: [educationId], references: [id], onDelete: Restrict)
+  actorId       String
+  operationKey  String
+  storageKey    String                       @unique
+  size          Int
+  reservedUnits Int                          @default(0)
+  state         String                       @default("PREPARED")
+  attempts      Int                          @default(0)
+  nextAttemptAt DateTime?
+  createdAt     DateTime                     @default(now())
+  updatedAt     DateTime                     @updatedAt
+
+  @@index([educationId, createdAt])
+  @@index([state, nextAttemptAt])
   @@schema("icc")
 }
 
