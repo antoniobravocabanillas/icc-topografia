@@ -13,6 +13,8 @@ async function main() {
     $queryRaw:async(query:Prisma.Sql)=>{assert.ok(query.values.includes("audit")&&query.values.includes("owner"));return[{id:"audit"}];},
     activityLog:{findUnique:async()=>({metadata}),update:async(args:{data:{metadata:Record<string,unknown>}})=>{metadata=args.data.metadata;}},
     terraqoExperienceEvidence:{aggregate:async()=>({_sum:{size:evidenceSize}})},
+    terraqoEducationEvidence:{aggregate:async()=>({_sum:{size:0}})},
+    terraqoEducationEvidenceAttempt:{aggregate:async()=>({_sum:{reservedUnits:0}})},
     terraqoProfessionalDocument:{aggregate:async()=>({_sum:{size:1_200_000}})},
     terraqoWorklogMedia:{aggregate:async()=>({_sum:{size:0}})},terraqoMessageAttachment:{aggregate:async()=>({_sum:{size:0}})},
     terraqoUsageBucket:{updateMany:async(args:{where:{used:{gte:number}};data:unknown})=>{assert.equal(args.where.used.gte,evidenceSize ? 5 : 3);assert.deepEqual(args.data,{used:{decrement:1}});refunds++;return{count:1};}},

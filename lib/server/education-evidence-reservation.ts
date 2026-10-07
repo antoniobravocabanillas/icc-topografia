@@ -2,7 +2,7 @@ import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { BILLING_PLANS, getBillingPlan } from "@/lib/terraqo/billing/catalog";
-import { personalRetainedStorageBytes } from "@/lib/terraqo/billing/personal-storage-usage";
+import { personalRetainedStorageUnits } from "@/lib/terraqo/billing/personal-storage-usage";
 import { getDefaultModulesForTier } from "@/lib/workspace";
 import type { WorkspacePortalToken } from "./workspace-portal-session";
 
@@ -57,21 +57,10 @@ export async function lockEducationEvidenceAccess(tx: Prisma.TransactionClient, 
     capacityExpirations };
 }
 
-// This extended floor is intentionally not wired into existing upload services:
-// the education tables have not been applied to the runtime database yet.
+// Education prerequisites are applied. Delegate to the shared floor so generic
+// document/experience cleanup and education compensation protect the same units.
 export async function educationPersonalStorageFloor(tx: Prisma.TransactionClient, userId: string) {
-  const [bytes, files, pending] = await Promise.all([
-    personalRetainedStorageBytes(tx, userId),
-    tx.terraqoEducationEvidence.aggregate({ where: { education: { professionalProfile: { userId } } }, _sum: { size: true } }),
-    tx.terraqoEducationEvidenceAttempt.aggregate({ where: { education: { professionalProfile: { userId } },
-      state: { in: ["RESERVED", "CLEANUP_PENDING", "QUARANTINED"] } }, _sum: { reservedUnits: true } }),
-  ]);
-  const extra = files._sum.size ?? 0, reserved = pending._sum.reservedUnits ?? 0;
-  if (![extra, reserved, bytes + extra].every(value => Number.isSafeInteger(value) && value >= 0))
-    fail("La cuota personal requiere revisión.", 409);
-  const floor = units(bytes + extra) + reserved;
-  if (!Number.isSafeInteger(floor)) fail("La cuota personal requiere revisión.", 409);
-  return floor;
+  return personalRetainedStorageUnits(tx, userId);
 }
 
 /** Requires a transaction whose caller propagates failures without committing.

@@ -7,6 +7,7 @@ async function main(){
   const reset=()=>({source:"native-portal",storageCleanupState:"PENDING",storageCleanupKey:"experience-evidence/experience/random-fixture.pdf",storageCleanupBytes:100,storageCleanupExperienceId:"experience"});
   let metadata:Record<string,unknown>=reset(), actor:string|null="owner",owned=true,retained=false,fail=false,profileLive=true,deletes=0,refunds=0;
   const locks:string[]=[];
+  let educationBytes=0, educationReserve=0;
   prisma.activityLog.findFirst=(async()=>({id:"audit",actorId:actor,metadata})) as unknown as typeof original.audit;
   prisma.terraqoProfessionalExperience.findFirst=(async(args:unknown)=>{assert.deepEqual(args,{where:{id:"experience",professionalProfile:{userId:"owner"}},select:{professionalProfileId:true}});return owned?{professionalProfileId:"profile"}:null;}) as unknown as typeof original.experience;
   prisma.activityLog.updateMany=(async(args:{where:{metadata:{equals:unknown}};data:{metadata:Record<string,unknown>}})=>{assert.deepEqual(args.where.metadata.equals,metadata);metadata=args.data.metadata;return{count:1};}) as unknown as typeof original.update;
@@ -15,7 +16,9 @@ async function main(){
     activityLog:{findUnique:async()=>({metadata}),update:async(args:{data:{metadata:Record<string,unknown>}})=>{metadata=args.data.metadata;}},
     terraqoExperienceEvidence:{count:async(args:unknown)=>{assert.deepEqual(args,{where:{storageKey:"experience-evidence/experience/random-fixture.pdf"}});return retained?1:0;},aggregate:async()=>({_sum:{size:2_000_000}})},
     terraqoProfessionalDocument:{aggregate:async()=>({_sum:{size:0}})},terraqoWorklogMedia:{aggregate:async()=>({_sum:{size:0}})},terraqoMessageAttachment:{aggregate:async()=>({_sum:{size:0}})},
-    terraqoUsageBucket:{updateMany:async(args:{where:{used:{gte:number}};data:unknown})=>{assert.equal(args.where.used.gte,3);assert.deepEqual(args.data,{used:{decrement:1}});refunds++;return{count:1};}},
+    terraqoEducationEvidence:{aggregate:async()=>({_sum:{size:educationBytes}})},
+    terraqoEducationEvidenceAttempt:{aggregate:async()=>({_sum:{reservedUnits:educationReserve}})},
+    terraqoUsageBucket:{updateMany:async(args:{where:{used:{gte:number}};data:unknown})=>{assert.equal(args.where.used.gte,Math.ceil((2_000_000+educationBytes)/1_000_000)+educationReserve+1);assert.deepEqual(args.data,{used:{decrement:1}});refunds++;return{count:1};}},
   } as unknown as Prisma.TransactionClient;
   let queue:Promise<unknown>=Promise.resolve();prisma.$transaction=(async(callback:(tx:Prisma.TransactionClient)=>Promise<unknown>)=>{const result=queue.then(()=>callback(tx));queue=result.catch(()=>undefined);return result;}) as unknown as typeof original.tx;
   const store={delete:async()=>{assert.deepEqual(locks.slice(-3),["profile","experience","audit"]);deletes++;if(fail)throw new Error("Synthetic failure");}};
@@ -29,6 +32,7 @@ async function main(){
     fail=true;assert.equal(await recoverExperienceEvidenceCleanup("audit",store),"retry");assert.equal(refunds,0);assert.equal(metadata.storageCleanupState,"PENDING");assert.equal(metadata.storageCleanupAttempts,1);fail=false;
     assert.equal(await recoverExperienceEvidenceCleanup("audit",store),"completed");assert.equal(refunds,1);assert.equal(metadata.storageCleanupKey,undefined);assert.equal(await recoverExperienceEvidenceCleanup("audit",store),"skipped");
     metadata=reset();const results=await Promise.all([recoverExperienceEvidenceCleanup("audit",store),recoverExperienceEvidenceCleanup("audit",store)]);assert.deepEqual(results.sort(),["completed","skipped"]);assert.equal(refunds,2);
+    educationBytes=1_000_000;educationReserve=2;metadata=reset();assert.equal(await recoverExperienceEvidenceCleanup("audit",store),"completed");assert.equal(refunds,3);
     metadata=reset();const before=deletes;prisma.activityLog.create=(async()=>{throw new Error("Synthetic persistence failure");}) as unknown as typeof original.create;
     await assert.rejects(compensateExperienceEvidenceUpload("owner","workspace","experience",{storageKey:String(metadata.storageCleanupKey),size:100},store));assert.equal(deletes,before);
     console.log("PASS experience cleanup: owner/prefix/size guards, profile-experience-audit lock order, live-reference protection, retry retention, floor including live evidence, one refund under concurrency and no deletion before durable persistence.");
