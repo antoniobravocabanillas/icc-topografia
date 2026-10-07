@@ -56,7 +56,7 @@ export function CvPublicationView({ state, consent, onConsent, onPrepare, onCanc
           <p>{error}</p>{phase !== "invalid" ? <Button type="button" variant="outline" className="mt-3" onClick={onReload}>Consultar estado</Button> : null}
         </div> : null}
 
-        {uncertain ? <div role="alert" className="space-y-4 rounded-lg border border-amber-300 bg-amber-50 p-5 text-sm leading-6 text-amber-950">
+        {uncertain ? <div role="alert" tabIndex={-1} data-cv-focus className="space-y-4 rounded-lg border border-amber-300 bg-amber-50 p-5 text-sm leading-6 text-amber-950 focus:outline focus:outline-2 focus:outline-primary">
           <p className="font-semibold">La solicitud puede haberse recibido.</p>
           <p>El estado anterior no confirma la situación actual. Consultar no vuelve a enviar tu solicitud; si aún no hay recibo, el resultado sigue pendiente.</p>
           <div className="flex flex-wrap gap-3">
@@ -67,7 +67,7 @@ export function CvPublicationView({ state, consent, onConsent, onPrepare, onCanc
         </div> : null}
 
         {review ? <div aria-labelledby="cv-review-title" className="space-y-4 rounded-lg border border-primary/30 bg-primary/5 p-5">
-          <h3 id="cv-review-title" className="text-lg font-semibold">{review.action === "PUBLISH" ? "Revisa antes de publicar" : "Confirma el retiro del CV"}</h3>
+          <h3 id="cv-review-title" tabIndex={-1} data-cv-focus className="text-lg font-semibold focus:outline focus:outline-2 focus:outline-primary">{review.action === "PUBLISH" ? "Revisa antes de publicar" : "Confirma el retiro del CV"}</h3>
           <p className="text-sm leading-6 text-muted-foreground">{review.action === "PUBLISH" ? "Cualquier persona con el enlace podrá consultar el CV y descargar su PDF. Solo las entradas que hayas marcado como públicas se mostrarán." : "El enlace público dejará de mostrar tu CV. Se conservarán tus entradas y sus ajustes de visibilidad; las copias descargadas previamente no se pueden retirar."}</p>
           <div className="flex flex-wrap gap-3">
             <Button type="button" onClick={onConfirm}>{review.action === "PUBLISH" ? "Confirmar publicación" : "Confirmar retiro"}</Button>
