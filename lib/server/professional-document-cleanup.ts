@@ -72,5 +72,20 @@ export async function recoverProfessionalDocumentCleanups(now = new Date()) {
     if (result === "blocked") await parkBlockedCleanup(row.id);
     counts[result as keyof typeof counts]++;
   }
+  return {...counts, backlog:await professionalDocumentCleanupBacklog(now)};
+}
+
+// Aggregate operational health only: identifiers and storage keys never leave SQL.
+export async function professionalDocumentCleanupBacklog(now = new Date()) {
+  const rows=await prisma.$queryRaw<{pending:bigint;blocked:bigint;overdue:bigint;orphaned:bigint}[]>(Prisma.sql`
+    SELECT COUNT(*) FILTER (WHERE metadata->>'storageCleanupState'='PENDING') AS pending,
+      COUNT(*) FILTER (WHERE metadata->>'storageCleanupState'='BLOCKED') AS blocked,
+      COUNT(*) FILTER (WHERE metadata->>'storageCleanupState'='PENDING' AND "createdAt" <= ${new Date(now.getTime()-60*60_000)}) AS overdue,
+      COUNT(*) FILTER (WHERE metadata->>'storageCleanupState'='PENDING' AND "actorId" IS NULL) AS orphaned
+    FROM icc."ActivityLog" WHERE "entityType"='ProfessionalDocument' AND action='DELETED'
+      AND metadata->>'source'='native-portal' AND metadata->>'storageCleanupState' IN ('PENDING','BLOCKED')`);
+  const row=rows[0];if(!row)throw new Error("Cleanup health unavailable.");
+  const counts={pending:Number(row.pending),blocked:Number(row.blocked),overdue:Number(row.overdue),orphaned:Number(row.orphaned)};
+  if(Object.values(counts).some(value=>!Number.isSafeInteger(value)||value<0))throw new Error("Cleanup health unavailable.");
   return counts;
 }

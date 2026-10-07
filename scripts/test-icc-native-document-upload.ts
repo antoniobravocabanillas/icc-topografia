@@ -87,7 +87,8 @@ async function main() {
       phase = `${serial}: document`; await tapLabel(serial, "Actualizar"); await pause(1000); await tapLabel(serial, name);
       capture(serial, `cv-upload-document-${label === "celular" ? "phone" : "tablet"}.png`);
       phase = `${serial}: native open`; await tapLabel(serial, "Abrir documento"); await pause(1500);
-      const foreground = shell(serial, "dumpsys window windows").split("\n").find(line => line.includes("mCurrentFocus")) || "";
+      const foreground = shell(serial, "dumpsys window").split("\n").find(line => line.includes("mCurrentFocus")) || "";
+      assert.ok(foreground,"Android foreground activity is required to verify opening.");
       if (!foreground.includes("com.terraqo.terraqo_mobile")) {
         shell(serial, "input keyevent 4"); await pause(600);
         console.log(`PASS native external image handler ${serial}.`);

@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
-import { recoverProfessionalDocumentCleanup, recoverProfessionalDocumentCleanups, cleanupRetrySchedule } from "../lib/server/professional-document-cleanup";
+import { recoverProfessionalDocumentCleanup, recoverProfessionalDocumentCleanups, cleanupRetrySchedule, professionalDocumentCleanupBacklog } from "../lib/server/professional-document-cleanup";
 async function main() {
   const original={audit:prisma.activityLog.findFirst,profile:prisma.terraqoProfessionalProfile.findUnique,count:prisma.terraqoProfessionalDocument.count,tx:prisma.$transaction, update:prisma.activityLog.updateMany, query:prisma.$queryRaw};
   let metadata: Record<string,unknown>={source:"native-portal",type:"OTHER",storageCleanupState:"PENDING",storageCleanupKey:"professional-documents/profile/other/private.png",storageCleanupBytes:100};
   let retained=false, actor: string|null="owner", refunds=0, deletions=0, fail=false;
   prisma.activityLog.updateMany=(async(args:{data:{metadata:Record<string,unknown>}})=>{metadata=args.data.metadata;return{count:1};}) as unknown as typeof original.update;
-  prisma.$queryRaw=(async(query:Prisma.Sql)=>{assert.ok(query.strings.join('').includes("LIMIT 5"));assert.ok(query.values.some(value=>typeof value==="string"&&value.includes("2026")));return[{id:"audit"}];}) as unknown as typeof original.query;
+  prisma.$queryRaw=(async(query:Prisma.Sql)=>{if(query.strings.join('').includes("COUNT(*)")){assert.ok(query.strings.join('').includes("IS NULL"));assert.ok(query.strings.join('').includes("'BLOCKED'"));return[{pending:2n,blocked:1n,overdue:1n,orphaned:1n}];}assert.ok(query.strings.join('').includes("LIMIT 5"));assert.ok(query.values.some(value=>typeof value==="string"&&value.includes("2026")));return[{id:"audit"}];}) as unknown as typeof original.query;
   const tx={
     $queryRaw:async(query:Prisma.Sql)=>{assert.ok(query.values.includes("audit")&&query.values.includes("owner"));return[{id:"audit"}];},
     activityLog:{findUnique:async()=>({metadata}),update:async(args:{data:{metadata:Record<string,unknown>}})=>{metadata=args.data.metadata;}},
@@ -26,6 +26,7 @@ async function main() {
     retained=true;assert.equal(await recoverProfessionalDocumentCleanup("audit",store),"blocked");assert.equal(deletions,0);retained=false;
     metadata.storageCleanupKey="professional-documents/other/other/private.png";assert.equal(await recoverProfessionalDocumentCleanup("audit",store),"blocked");reset();
     actor=null;assert.equal(await recoverProfessionalDocumentCleanup("audit",store),"skipped");actor="owner";
+    assert.deepEqual(await professionalDocumentCleanupBacklog(),{pending:2,blocked:1,overdue:1,orphaned:1});
     const now=new Date("2026-10-07T00:00:00Z");
     assert.equal(cleanupRetrySchedule(undefined,now).storageCleanupNextAttemptAt,"2026-10-07T00:05:00.000Z");
     assert.equal(cleanupRetrySchedule(7,now).storageCleanupNextAttemptAt,"2026-10-07T06:00:00.000Z");

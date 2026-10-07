@@ -67,7 +67,7 @@ async function main() {
       const categoryBounds=category.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);assert.ok(categoryBounds);
       shell(serial,`input tap ${Math.round((+categoryBounds[1]+ +categoryBounds[3])/2)} ${Math.round((+categoryBounds[2]+ +categoryBounds[4])/2)}`);await pause(500);
       await tapLabel(serial,"Currículum (PDF)");
-      capture(serial, `native-cv-empty-${label === "celular" ? "phone" : "tablet"}.png`);
+      capture(serial, `cv-pdf-empty-${label === "celular" ? "phone" : "tablet"}.png`);
       phase = `${serial}: picker cancel`; await tapLabel(serial, "Seleccionar archivo"); await pause(500);
       shell(serial, "input keyevent 4"); await pause(700);
       assert.equal(await prisma.terraqoProfessionalDocument.count({where: {professionalProfileId: profileId}}),3);
@@ -81,11 +81,11 @@ async function main() {
       }
       await tapPicker(serial, name);
       assert.ok((await snapshot(serial)).includes(name));
-      capture(serial, `native-cv-review-${label === "celular" ? "phone" : "tablet"}.png`);
+      capture(serial, `cv-pdf-review-${label === "celular" ? "phone" : "tablet"}.png`);
       phase = `${serial}: upload confirm`; await tapLabel(serial,"Enviar a revisión");
       for (let attempt=0;attempt<15;attempt++) { if ((await snapshot(serial)).includes("Documento recibido")) break; await pause(700); }
       assert.ok((await snapshot(serial)).includes("Documento recibido"));
-      capture(serial, `native-cv-success-${label === "celular" ? "phone" : "tablet"}.png`);
+      capture(serial, `cv-pdf-success-${label === "celular" ? "phone" : "tablet"}.png`);
       const rows = await prisma.terraqoProfessionalDocument.findMany({where: {professionalProfileId: profileId,fileName:name},select:{id:true,workspaceId:true,type:true,size:true,reviewStatus:true}});
       assert.equal(rows.length,1); assert.equal(rows[0].workspaceId,workspace.id); assert.equal(rows[0].type,"CV");
       assert.equal(rows[0].size,pdf.length); assert.equal(rows[0].reviewStatus,"SUBMITTED");
@@ -115,9 +115,10 @@ async function main() {
       assert.deepEqual(Buffer.from(await download.arrayBuffer()), pdf);
       assert.equal((await fetch(`${base}documents/${id}`, {redirect: "error"})).status, 401);
       phase = `${serial}: document`; await tapLabel(serial, "Actualizar"); await pause(1000); await tapLabel(serial, name);
-      capture(serial, `native-cv-document-${label === "celular" ? "phone" : "tablet"}.png`);
+      capture(serial, `cv-pdf-document-${label === "celular" ? "phone" : "tablet"}.png`);
       phase = `${serial}: native open`; await tapLabel(serial, "Abrir documento"); await pause(1500);
-      const foreground = shell(serial, "dumpsys window windows").split("\n").find(line => line.includes("mCurrentFocus")) || "";
+      const foreground = shell(serial, "dumpsys window").split("\n").find(line => line.includes("mCurrentFocus")) || "";
+      assert.ok(foreground,"Android foreground activity is required to verify opening.");
       if (!foreground.includes("com.terraqo.terraqo_mobile")) {
         shell(serial, "input keyevent 4"); await pause(600);
         console.log(`PASS native external PDF handler ${serial}.`);
@@ -128,7 +129,7 @@ async function main() {
       phase = `${serial}: confirmed removal`; await tapLabel(serial, "Eliminar archivo");
       await tapLabel(serial, "Conservar"); assert.equal(await prisma.terraqoProfessionalDocument.count({where: {id}}), 1);
       await tapLabel(serial, "Eliminar archivo");
-      capture(serial, `native-cv-document-confirm-${label === "celular" ? "phone" : "tablet"}.png`);
+      capture(serial, `cv-pdf-document-confirm-${label === "celular" ? "phone" : "tablet"}.png`);
       await tapLabel(serial, "Eliminar");
       for (let attempt = 0; attempt < 12; attempt++) {
         if (!await prisma.terraqoProfessionalDocument.count({where: {id}})) break; await pause(700);

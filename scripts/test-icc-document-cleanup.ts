@@ -5,7 +5,7 @@ import { join } from "node:path";
 import bcrypt from "bcryptjs";
 import { getStore } from "@netlify/blobs";
 import { prisma } from "../lib/prisma";
-import { dueProfessionalDocumentCleanupIds } from "../lib/server/professional-document-cleanup";
+import { dueProfessionalDocumentCleanupIds, professionalDocumentCleanupBacklog } from "../lib/server/professional-document-cleanup";
 import { PROFESSIONAL_DOCUMENT_STORE } from "../lib/server/media";
 async function main() {
   assert.equal(process.env.TERRAQO_MUTATING_TESTS,"icc-topografia:20616116313");
@@ -34,6 +34,8 @@ async function main() {
     const audit=await prisma.activityLog.create({data:{actorId:user.id,terraqoWorkspaceId:workspace.id,action:"DELETED",entityType:"ProfessionalDocument",entityId:id,title:"Fixture limpieza privada",metadata:{source:"native-portal",type:"OTHER",storageCleanupState:"PENDING",storageCleanupKey:key,storageCleanupBytes:document.size}},select:{id:true}});
     assert.equal((await (await internal({auditId:audit.id})).json()).result,"blocked");
     assert.ok(await store.getWithMetadata(key,{type:"arrayBuffer"}));
+    const health=await professionalDocumentCleanupBacklog();assert.ok(health.pending>=1);
+    assert.ok(Object.values(health).every(value=>Number.isSafeInteger(value)&&value>=0));
     // Simulate only our interrupted compensation after its logical removal.
     await prisma.terraqoProfessionalDocument.delete({where:{id}});
     const before=await prisma.terraqoUsageBucket.findFirstOrThrow({where:{ownerKey:`user:${user.id}`,metric:"storage-mb",period:"retained"}});assert.equal(before.used,1);
