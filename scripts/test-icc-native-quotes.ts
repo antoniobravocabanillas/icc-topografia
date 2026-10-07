@@ -11,8 +11,9 @@ async function main(){
   const user=await prisma.user.create({data:{email,name:'Prueba propuestas Android',role:'CUSTOMER',emailVerified:new Date(),passwordHash:await bcrypt.hash(password,12),terraqoMemberships:{create:{workspaceId:workspace.id,role:'ADMIN',active:true}}},select:{id:true}});
   try{
     await prisma.company.create({data:{id:companyId,terraqoWorkspaceId:workspace.id,legalName:companyName}});
-    for(const [index,serial] of ['emulator-5554','emulator-5556'].entries()){
-      const device=index===0?'phone':'tablet';stage=`${device}: login`;
+    const devices=process.env.TEST_QUOTE_DEVICE==='tablet'?['emulator-5556']:['emulator-5554','emulator-5556'];
+    for(const serial of devices){
+      const device=serial==='emulator-5554'?'phone':'tablet';stage=`${device}: login`;
       await login(serial,email,password);await tapLabel(serial,'Abrir herramientas');await tapLabel(serial,'Cotizaciones');
       stage=`${device}: create`;await tapLabel(serial,'Crear propuesta');
       await fillLabel(serial,'Nombre del destinatario',`Cliente-${device}`);
