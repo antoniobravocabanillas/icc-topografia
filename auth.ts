@@ -6,6 +6,7 @@ import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import {currentWebSessionRole} from "@/lib/server/web-session-role";
 import { prisma } from "@/lib/prisma";
 
 const credentialsSchema = z.object({ email: z.string().trim().toLowerCase().email(), password: z.string().optional(), passkeyToken: z.string().optional() });
@@ -86,8 +87,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
   },
   callbacks: {
-    jwt({ token, user }) {
-      if (user) token.role = (user as { role?: string }).role;
+    async jwt({ token }) {
+      const role = await currentWebSessionRole(token.sub);
+      if (!role) return null;
+      token.role = role;
       return token;
     },
     session({ session, token }) {

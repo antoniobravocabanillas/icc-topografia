@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import {expect} from "@playwright/test";
 import bcrypt from "bcryptjs";
 import {randomBytes,randomUUID} from "node:crypto";
 import {encode} from "next-auth/jwt";
@@ -65,6 +66,24 @@ async function main() {
     assert.equal((updated.tools as {privatePreserved:string}).privatePreserved,"fixture");assert.equal(updated.fixedCommission.toFixed(2),"7.23");
     response=await post("/admin/equipo",teamForm);assert.equal(response,"conflict");
     assert.equal(await prisma.activityLog.count({where:{entityType:"StaffProfile",entityId:id}}),2);
+    if(process.env.TEST_STAFF_CURRENT_ROLE === "1") {
+      phase="web-current-role";
+      const stale=await encode({secret:process.env.AUTH_SECRET!,salt:cookieName,maxAge:600,token:{sub:user.id,role:"SUPER_ADMIN",email}});
+      const staleHeaders={...headers,Cookie:`${cookieName}=${stale}; terraqo_admin_workspace=${workspace.id}`};
+      const roleResponse=await fetch(origin+"/api/auth/session",{headers:staleHeaders,cache:"no-store"});assert.equal(roleResponse.status,200);
+      assert.equal((await roleResponse.json()).user.role,"ADMIN");
+      const attempted=ownForm(await get("/admin/ventas"),id);attempted.set("fixedCommission","99.23");
+      const current=await prisma.staffProfile.findUniqueOrThrow({where:{id}}), auditCount=await prisma.activityLog.count({where:{entityType:"StaffProfile",entityId:id}});
+      assert.equal((await prisma.user.updateMany({where:{id:user.id,email},data:{role:"CUSTOMER"}})).count,1);
+      const demoted=await fetch(origin+"/api/auth/session",{headers:staleHeaders,cache:"no-store"});assert.equal(demoted.status,200);
+      assert.equal((await demoted.json()).user.role,"CUSTOMER");
+      const denied=await fetch(origin+"/admin/ventas",{method:"POST",body:attempted,headers:staleHeaders,redirect:"manual"});
+      assert.ok([403,500].includes(denied.status));
+      assert.equal((await prisma.staffProfile.findUniqueOrThrow({where:{id}})).updatedAt.toISOString(),current.updatedAt.toISOString());
+      assert.equal(await prisma.activityLog.count({where:{entityType:"StaffProfile",entityId:id}}),auditCount);
+      assert.equal((await prisma.user.updateMany({where:{id:user.id,email},data:{role:"ADMIN"}})).count,1);
+      console.log("PASS deployed current role: stale super-admin claim resolves to the actual role; own account demotion immediately denies policy mutation with no audit or financial changes.");
+    }
     if(process.env.TEST_STAFF_BROWSER === "1") {
       phase="browser-policy-feedback";
       const {chromium}=await import("playwright");
@@ -98,15 +117,18 @@ async function main() {
         for(const width of [390,1280]) {
           await page.setViewportSize({width,height:900});
           phase=`browser-render-${width}`;
-          await page.goto(origin+"/admin/ventas",{waitUntil:"networkidle"});
+          await page.goto(origin+"/admin/ventas",{waitUntil:"load"});
+          phase=`browser-form-${width}`;
           const form=page.locator(`[data-policy-profile="${id}"]`);await form.waitFor();
+          phase=`browser-input-${width}`;
           await form.getByLabel("Comisión fija",{exact:true}).fill("8.23");
-          assert.equal(await form.getByRole("status").textContent(),"Cambios sin guardar.");
+          await expect(form.getByRole("status")).toHaveText("Cambios sin guardar.");
           await form.screenshot({path:`output/staff-policy/form-${width}.png`});
           if(process.env.TEST_STAFF_ALERT_LAYOUT === "1") {
             const aside=page.getByRole("complementary",{name:"Avisos y preferencias de sonido"});
             const asideBox=await aside.boundingBox(),formBox=await form.boundingBox();
             assert.ok(asideBox && formBox && asideBox.y+asideBox.height<=formBox.y);
+            phase=`browser-sound-${width}`;
             await aside.getByText("Sonidos",{exact:true}).click();
             const panel=page.locator('section[aria-labelledby="sound-preferences-heading"]');await panel.waitFor({state:"visible"});
             const box=await panel.boundingBox();assert.ok(box && box.x>=0 && box.x+box.width<=width);
@@ -117,12 +139,15 @@ async function main() {
         phase="browser-save";
         const form=page.locator(`[data-policy-profile="${id}"]`);
         await page.route(origin+"/admin/ventas",async route=>{
-          if(route.request().method()==="POST") await new Promise(resolve=>setTimeout(resolve,300));
+          if(route.request().method()==="POST") await new Promise(resolve=>setTimeout(resolve,1000));
           await route.continue();
         });
         await form.getByRole("button",{name:"Guardar reglas comerciales"}).click();
-        assert.ok(await form.getByLabel("Comisión fija",{exact:true}).isDisabled());
-        assert.ok(await form.getByRole("button",{name:"Guardar reglas comerciales"}).isDisabled());
+        phase="browser-pending";
+        await page.waitForFunction(profileId=>document.querySelector(`[data-policy-profile="${profileId}"] input[name="fixedCommission"]`)?.matches(":disabled"),id);
+        await expect(form.getByLabel("Comisión fija",{exact:true})).toBeDisabled();
+        await expect(form.getByRole("button",{name:"Guardar reglas comerciales"})).toBeDisabled();
+        phase="browser-result";
         await form.getByRole("status").filter({hasText:"Política guardada correctamente."}).waitFor({state:"visible"});
         phase="browser-persisted-amount";
         assert.equal((await prisma.staffProfile.findUniqueOrThrow({where:{id}})).fixedCommission.toFixed(2),"8.23");
