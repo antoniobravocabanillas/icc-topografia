@@ -44,12 +44,13 @@ async function main() {
       assert.ok(!JSON.stringify(record).includes("storageKey"));
       assert.equal((await remove(id, "2025-01-01T00:00:00Z")).status, 409);
       const download = await request(`documents/${id}`); assert.equal(download.status, 200);
-      assert.equal(download.headers.get("cache-control"), "private, no-store, max-age=0");
+      assert.equal(download.headers.get("cache-control")?.replace(/\s/g, ""), "private,no-store,max-age=0");
       assert.deepEqual(Buffer.from(await download.arrayBuffer()), png);
       assert.equal((await fetch(`${base}documents/${id}`, {redirect: "error"})).status, 401);
       phase = `${serial}: native login`; await login(serial, email, password);
-      await tapLabel(serial, "Abrir herramientas"); await tapLabel(serial, "Documentos profesionales");
-      await tapLabel(serial, `Documento-${label}.png`);
+      phase = `${serial}: tools`; await tapLabel(serial, "Abrir herramientas");
+      phase = `${serial}: module`; await tapLabel(serial, "Documentos profesionales");
+      phase = `${serial}: document`; await tapLabel(serial, `Documento-${label}.png`);
       capture(serial, `cv-documents-${label === "celular" ? "phone" : "tablet"}.png`);
       phase = `${serial}: native open`; await tapLabel(serial, "Abrir documento"); await pause(1500);
       const foreground = shell(serial, "dumpsys window windows").split("\n").find(line => line.includes("mCurrentFocus")) || "";
