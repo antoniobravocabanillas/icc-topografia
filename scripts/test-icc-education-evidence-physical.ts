@@ -2,13 +2,12 @@ import assert from "node:assert/strict";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { getStore } from "@netlify/blobs";
 import { WORKLOG_EVIDENCE_STORE } from "../lib/server/media";
 import { EducationEvidenceReservationError, reserveEducationEvidenceAttempt } from "../lib/server/education-evidence-reservation";
 import { commitEducationEvidenceAttempt } from "../lib/server/education-evidence-commit";
-import { recoverEducationEvidenceAttempt } from "../lib/server/education-evidence-cleanup";
-import { setTimeout as delay } from "node:timers/promises";
+import { dispatchEducationEvidenceCleanup, recoverEducationEvidenceAttempt } from "../lib/server/education-evidence-cleanup";
 import { uploadEducationEvidence } from "../lib/server/education-evidence-upload";
 
 // Separate direct clients exercise committed boundaries, not savepoints. Never
@@ -119,7 +118,7 @@ async function main() {
     assert.equal(await recoverEducationEvidenceAttempt(second, revoked.id, store), "completed");
     assert.equal(await read(revoked.storageKey), null); assert.equal(await used(), 1);
     await first.verificationToken.create({ data: grant });
-    phase = "cleanup fence survives actual transaction timeout during physical delete";
+    phase = "delete deadline persists retry before releasing physical delete";
     const slow = await prepare(first); await write(slow.storageKey);
     let started!: () => void, release!: () => void, removed!: () => void;
     const deleting = new Promise<void>(resolve => { started = resolve; });
@@ -134,10 +133,10 @@ async function main() {
     // the external deletion is still waiting inside the second transaction.
     try {
       assert.equal((await second.terraqoEducationEvidenceAttempt.findUniqueOrThrow({ where: { id: slow.id } })).state, "CLEANUP_PENDING");
-      // Prisma's SQL timeout releases locks; its JavaScript callback promise
-      // still waits for the external store. Never await that promise before
-      // releasing the provider gate. A second connection tests the lost lease.
-      await delay(16_500);
+      assert.equal(await pending, "retry");
+      const afterDeadline = await second.terraqoEducationEvidenceAttempt.findUniqueOrThrow({ where: { id: slow.id } });
+      assert.equal(afterDeadline.state, "CLEANUP_PENDING"); assert.equal(afterDeadline.attempts, 1);
+      assert.ok(afterDeadline.nextAttemptAt); assert.equal(afterDeadline.reservedUnits, 1);
       await denied(409, () => commitEducationEvidenceAttempt(second, token, education.id, slow.id, file));
     } finally { release(); }
     assert.equal(await pending, "retry");
@@ -145,6 +144,8 @@ async function main() {
     assert.equal(await read(slow.storageKey), null);
     assert.equal(await used(), 2);
     await denied(409, () => commitEducationEvidenceAttempt(second, token, education.id, slow.id, file));
+    assert.equal(await recoverEducationEvidenceAttempt(second, slow.id, store), "skipped");
+    await second.terraqoEducationEvidenceAttempt.update({ where: { id: slow.id }, data: { nextAttemptAt: new Date(0) } });
     assert.equal(await recoverEducationEvidenceAttempt(second, slow.id, store), "completed"); assert.equal(await used(), 1);
     phase = "late physical write without rearm callback; durable tombstone watch";
     // An actual provider write after CLEANED, without invoking lateWrite. This
@@ -210,7 +211,45 @@ async function main() {
     assert.equal((await uploadEducationEvidence(request(uncertainKey, freshVersion), token, education.id, second, noStore)).receipt.id, confirmed.id);
     assert.equal(await first.activityLog.count({ where: { actorId: user.id, entityType: "EducationEvidence" } }), 3);
     console.log("PASS internal education orchestrator Request/SQL/private blobs: concurrent loser compensated, historical replay never touches store, actual stored-file acknowledgement fault refunded once, controlled post-commit SQL acknowledgement fault retains live blob and reconciles receipt. Not deployed HTTP.");
-    console.log("PASS education physical store and independent committed transactions: concurrent winner/loser, targeted concurrent cleanup/refund once, live reference retained, controlled lost reply replay, interleaved revocation, actual 15s SQL timeout fence and late physical write watched with zero second refund. No public endpoint or process-kill claim.");
+    phase = "dispatcher admission budget against only own fixture IDs";
+    const batch = await first.terraqoEducationEvidenceAttempt.createManyAndReturn({ data: Array.from({ length: 5 }, () => {
+      const storageKey = `education-evidence/${education.id}/${randomUUID()}`; keys.add(storageKey);
+      return { educationId: education.id, actorId: user.id, operationKey: randomBytes(16).toString("hex"),
+        fingerprint: file.fingerprint, originalVersion: retained.updatedAt, storageKey, size: file.size,
+        state: "CLEANUP_PENDING", reservedUnits: 0 };
+    }), select: { id: true } });
+    const batchIds = batch.map(value => value.id);
+    // Scope every selector inside dispatcher transactions to these five own
+    // IDs. Never execute a global runner against production recovery rows.
+    const scoped = new Proxy(first, { get(target, property) {
+      if (property !== "$transaction") return Reflect.get(target, property, target);
+      return new Proxy(target.$transaction, { apply(transaction, _receiver, args) {
+        const callback = args[0] as (tx: Prisma.TransactionClient) => Promise<unknown>;
+        return Reflect.apply(transaction, target, [(tx: Prisma.TransactionClient) => callback(new Proxy(tx, {
+          get(txTarget, key) {
+            if (key !== "terraqoEducationEvidenceAttempt") return Reflect.get(txTarget, key, txTarget);
+            const delegate = txTarget.terraqoEducationEvidenceAttempt;
+            return new Proxy(delegate, { get(model, method) {
+              if (method !== "findMany") return Reflect.get(model, method, model);
+              return new Proxy(model.findMany, { apply(query, _modelReceiver, queryArgs) {
+                const input = queryArgs[0];
+                return Reflect.apply(query, model, [{ ...input, where: { AND: [input.where ?? {},
+                  { educationId: education.id, id: { in: batchIds } }] } }]);
+              } });
+            } });
+          },
+        })), args[1]]);
+      } });
+    } });
+    const dispatched = await dispatchEducationEvidenceCleanup(scoped, { delete: async key => {
+      const row = await second.terraqoEducationEvidenceAttempt.findUniqueOrThrow({ where: { storageKey: key } });
+      assert.ok(batchIds.includes(row.id)); return new Promise<void>(() => undefined);
+    } });
+    assert.equal(dispatched.selected, 5); assert.ok(dispatched.processed > 0 && dispatched.processed < 5);
+    assert.equal(dispatched.deferred, 5 - dispatched.processed);
+    assert.equal(dispatched.counts.retry, dispatched.processed); assert.equal(await used(), 3);
+    console.log("PASS scoped dispatcher: slow external deletes persist retry without refund, admission budget defers remainder; only five own fixture IDs selected, no global runner.");
+    console.log("PASS education physical store and independent transactions: winner/loser, concurrent refund once, references, controlled lost reply, revocation, 5s delete deadline durable retry and late physical write watch. Historical 15s SQL-timeout proof remains in prior commit; no HTTP/process-kill claim.");
   } finally {
     // Explicitly scoped disposable fixture cleanup. No global dispatcher or
     // tombstone purge in production; only this newly created user's rows/keys.

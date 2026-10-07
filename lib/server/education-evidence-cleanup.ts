@@ -2,6 +2,7 @@ import "server-only";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { educationPersonalStorageFloor } from "./education-evidence-reservation";
 import { cleanupRetrySchedule } from "./private-upload-retry";
+import { performance } from "node:perf_hooks";
 
 type Store = { delete(key: string): Promise<unknown> };
 type Result = "completed" | "retained" | "retry" | "quarantined" | "skipped" | "pending";
@@ -9,6 +10,20 @@ type Database = Pick<PrismaClient, "$transaction" | "terraqoEducationEvidenceAtt
 // Revisit interval, NOT a settlement deadline. Tombstones are never purged:
 // the storage adapter cannot prove that an interrupted write has stopped.
 const WATCH_INTERVAL_MS = 6 * 60 * 60_000;
+const DELETE_DEADLINE_MS = 5000;
+const DISPATCH_BUDGET_MS = 50000;
+// Two transactions, each with maxWait5s + timeout15s. Admission budget,
+// not a claim that a transport timeout cancels an external operation.
+const ATTEMPT_ALLOWANCE_MS = 40000;
+
+async function boundedDelete(store: Store, key: string) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([store.delete(key), new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(Error("EDUCATION_DELETE_DEADLINE")), DELETE_DEADLINE_MS);
+    })]);
+  } finally { clearTimeout(timer); }
+}
 
 async function lockAttempt(tx: Prisma.TransactionClient, id: string) {
   if (!/^[A-Za-z0-9_-]{1,100}$/.test(id)) return null;
@@ -102,7 +117,9 @@ export async function recoverEducationEvidenceInTransaction(tx: Prisma.Transacti
       return "quarantined";
     }
   }
-  try { await store.delete(row.storageKey); } catch {
+  // Deadline leaves the durable pending fence intact. Physical deletion may
+  // still finish later; no refund is permitted until a later confirmed retry.
+  try { await boundedDelete(store, row.storageKey); } catch {
     const retry = cleanupRetrySchedule(row.attempts, now);
     const quarantined = retry.storageCleanupAttempts >= 8;
     await tx.terraqoEducationEvidenceAttempt.update({ where: { id }, data: {
@@ -143,8 +160,8 @@ export async function recoverEducationEvidenceAttempt(database: Database, id: st
   }
 }
 
-// Prepared dispatcher query only: not connected to an HTTP route or cron while
-// tables/recovery integration remain unapplied. Never auto-retry quarantine.
+// Prepared dispatcher query only: schema is applied, but no HTTP route/cron
+// is enabled until operational delivery is validated. Never retry quarantine.
 export async function dueEducationEvidenceAttempts(database: Pick<Prisma.TransactionClient, "terraqoEducationEvidenceAttempt">, now = new Date()) {
   const active = await database.terraqoEducationEvidenceAttempt.findMany({ where: { OR: [
     { state: { in: ["PREPARED", "RESERVED"] }, updatedAt: { lte: new Date(now.getTime() - 5 * 60_000) } },
@@ -161,8 +178,13 @@ export async function dueEducationEvidenceAttempts(database: Pick<Prisma.Transac
  * Competing dispatches are safe because recovery re-reads under owner locks.
  * Counts expose no identifiers, keys, names or private file metadata. */
 export async function dispatchEducationEvidenceCleanup(database: Database, store: Store) {
-  const selected = await dueEducationEvidenceAttempts(database);
+  const started = performance.now();
+  const selected = await database.$transaction(tx => dueEducationEvidenceAttempts(tx), { maxWait: 5000, timeout: 5000 });
   const counts: Record<Result, number> = { completed: 0, retained: 0, retry: 0, quarantined: 0, skipped: 0, pending: 0 };
-  for (const row of selected) counts[await recoverEducationEvidenceAttempt(database, row.id, store)]++;
-  return { selected: selected.length, counts };
+  let processed = 0;
+  for (const row of selected) {
+    if (DISPATCH_BUDGET_MS - (performance.now() - started) < ATTEMPT_ALLOWANCE_MS) break;
+    counts[await recoverEducationEvidenceAttempt(database, row.id, store)]++; processed++;
+  }
+  return { selected: selected.length, processed, deferred: selected.length - processed, counts };
 }
