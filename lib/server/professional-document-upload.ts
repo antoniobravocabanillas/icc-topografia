@@ -1,3 +1,4 @@
+import { validatePrivateProfessionalFile } from "./professional-file-validation";
 import { prisma } from "@/lib/prisma";
 import { reserveStorage } from "@/lib/terraqo/billing/storage-quota";
 import { fail, handleApiError, ok } from "@/lib/server/api";
@@ -54,8 +55,12 @@ function validateFile(file: File, type: DocumentType) {
 
 export async function uploadProfessionalDocuments(request: Request, userId: string, requestedWorkspaceId?: string) {
   try {
+    const native = request.headers.get("x-terraqo-native-upload") === "1";
+    const contentLength = Number(request.headers.get("content-length") || 0);
+    if (native && contentLength > 4 * 1024 * 1024 + 65536) return fail("El archivo supera el límite móvil de 4 MB.", 413);
     const formData = await request.formData();
     const purpose = String(formData.get("purpose") || "");
+    if (native && purpose !== "document") return fail("Esta carga móvil requiere una categoría documental.", 422);
     if (!["cv", "identity", "document"].includes(purpose)) return fail("Tipo de carga no valido.", 400);
 
     const profile = await prisma.terraqoProfessionalProfile.findUnique({ where: { userId } });
@@ -93,6 +98,11 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
     for (const item of requestedFiles) {
       const validationError = validateFile(item.file, item.type);
       if (validationError) return fail(validationError, 400);
+      if (native && item.file.size > 4 * 1024 * 1024) return fail("El archivo supera el límite móvil de 4 MB.", 413);
+      if (purpose === "document" || purpose === "identity") {
+        const contentError = await validatePrivateProfessionalFile(item.file);
+        if (contentError) return fail(contentError, 422);
+      }
     }
 
     const store = getProfessionalDocumentStore();
@@ -102,6 +112,7 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
     try {
       for (const item of requestedFiles) {
         const storageKey = createProfessionalDocumentKey(profile.id, item.type, item.file.name);
+        stored.push({ ...item, storageKey });
         await store.set(storageKey, await item.file.arrayBuffer(), {
           metadata: {
             contentType: item.file.type,
@@ -114,7 +125,6 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
             uploadedAt: new Date().toISOString(),
           },
         });
-        stored.push({ ...item, storageKey });
       }
 
       const documents = await prisma.$transaction(async (tx) => {
@@ -161,6 +171,12 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
               : {},
         });
 
+        if (native && workspaceId) {
+          for (const document of createdDocuments) await tx.activityLog.create({ data: {
+            actorId: userId, terraqoWorkspaceId: workspaceId, action: "CREATED", entityType: "ProfessionalDocument",
+            entityId: document.id, title: "Documento privado recibido", metadata: { source: "native-portal", type: document.type },
+          } });
+        }
         return createdDocuments;
       });
 
@@ -174,8 +190,25 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
             : "Documento agregado a tu expediente privado.",
       });
     } catch (error) {
-      await reservation.release();
-      await Promise.all(stored.map((item) => store.delete(item.storageKey).catch(() => undefined)));
+      // Do not refund capacity for a blob that could not be removed. Preserve
+      // a private durable marker so operational recovery can retry its removal.
+      if (!native || !workspaceId) {
+        await Promise.all(stored.map(item => store.delete(item.storageKey)));
+        await reservation.release();
+        throw error;
+      }
+      let cleaned = true;
+      for (const item of stored) {
+        try { await store.delete(item.storageKey); }
+        catch {
+          cleaned = false;
+          await prisma.activityLog.create({ data: { actorId: userId, terraqoWorkspaceId: workspaceId,
+            action: "DELETED", entityType: "ProfessionalDocument", entityId: item.storageKey,
+            title: "Limpieza de carga pendiente", metadata: { source: "native-portal", type: item.type,
+              storageCleanupState: "PENDING", storageCleanupKey: item.storageKey, storageCleanupBytes: item.file.size } } });
+        }
+      }
+      if (cleaned) await reservation.release();
       throw error;
     }
   } catch (error) {

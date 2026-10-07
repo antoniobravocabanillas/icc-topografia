@@ -1,3 +1,4 @@
+import { authorizeResource, PortalResourceError } from "@/lib/server/portal-resources";
 import { fail } from "@/lib/server/api";
 import { uploadProfessionalDocuments } from "@/lib/server/professional-document-upload";
 import { getWorkspacePortalToken } from "@/lib/server/workspace-portal-session";
@@ -10,5 +11,11 @@ export async function POST(request: Request, { params }: RouteContext) {
   if (!token) return fail("La sesion no es valida o ha vencido.", 401);
   if (token.role !== "PROFESSIONAL") return fail("Esta carga requiere un perfil profesional.", 403);
 
-  return uploadProfessionalDocuments(request, token.sub, token.workspaceId);
+  try {
+    await authorizeResource(token, "professionalDocuments");
+    return await uploadProfessionalDocuments(request, token.sub, token.workspaceId);
+  } catch (error) {
+    if (error instanceof PortalResourceError) return fail(error.message, error.status);
+    throw error;
+  }
 }
