@@ -13,8 +13,10 @@ async function main() {
   assert.equal(process.env.TEST_PORTAL_URL, "https://api.terraqoglobal.com");
   const workspace = await prisma.terraqoWorkspace.findFirstOrThrow({ where: { slug: "icc-topografia", active: true,
     companies: { some: { document: "20616116313", deletedAt: null } } }, select: { id: true } });
-  for (const table of tables) assert.equal((await prisma.$queryRaw<{ present: string | null }[]>`
-    SELECT to_regclass(${`icc."${table}"`})::text AS present`)[0].present, null);
+  const initialPresence = new Map<string, string | null>();
+  for (const table of tables) initialPresence.set(table, (await prisma.$queryRaw<{ present: string | null }[]>`
+    SELECT to_regclass(${`icc."${table}"`})::text AS present`)[0].present);
+  assert.ok([...initialPresence.values()].every(value => value === null) || [...initialPresence.values()].every(value => value !== null));
   const sql = await readFile(new URL("../prisma/migrations/20261007195600_education_evidence_prerequisites/migration.sql", import.meta.url), "utf8");
   const email = `education-cleanup-${randomUUID()}@example.test`;
   let verified = false;
@@ -140,13 +142,29 @@ async function main() {
       assert.equal(await recoverEducationEvidenceInTransaction(tx, inconsistent.id, store, now), "quarantined");
       assert.equal(deletions, before); assert.equal(await used(), 3);
       assert.ok(blobs.has(winner.storageKey));
+      phase = "bounded cleanup priority over older watch backlog";
+      // Give watch tombstones an earlier timestamp than active cleanup. They
+      // must not consume the five slots needed to release outstanding reserves.
+      await tx.terraqoEducationEvidenceAttempt.createMany({ data: Array.from({ length: 6 }, () => ({
+        id: randomUUID(), educationId: education.id, actorId: user.id, operationKey: randomBytes(16).toString("hex"),
+        fingerprint: randomBytes(32).toString("hex"), originalVersion: education.updatedAt, storageKey: key(), size: 32,
+        reservedUnits: 0, state: "CLEANED", nextAttemptAt: old, updatedAt: old,
+      })) });
+      const priority = await tx.terraqoEducationEvidenceAttempt.createManyAndReturn({ data: Array.from({ length: 5 }, () => ({
+        id: randomUUID(), educationId: education.id, actorId: user.id, operationKey: randomBytes(16).toString("hex"),
+        fingerprint: randomBytes(32).toString("hex"), originalVersion: education.updatedAt, storageKey: key(), size: 32,
+        reservedUnits: 0, state: "CLEANUP_PENDING", nextAttemptAt: now,
+      })), select: { id: true } });
+      const selected = await dueEducationEvidenceAttempts(tx, now);
+      assert.equal(selected.length, 5);
+      assert.deepEqual(selected.map(row => row.id).sort(), priority.map(row => row.id).sort());
       verified = true; throw rollback;
     }, { maxWait: 5000, timeout: 90000 });
   } catch (error) { if (error !== rollback || !verified) throw error; }
   assert.equal(await prisma.user.count({ where: { email } }), 0);
   for (const table of tables) assert.equal((await prisma.$queryRaw<{ present: string | null }[]>`
-    SELECT to_regclass(${`icc."${table}"`})::text AS present`)[0].present, null);
-  console.log("PASS own SQL rollback + controlled blob double: live reference, one refund, late write without callback recovered by durable tombstone watch, no expiry after a year, retry/due/quarantine, SQL rollback after deletion and invalid owner/key/bucket fenced. No live storage, HTTP or cross-connection concurrency claimed; fixture/DDL/quota rolled back.");
+    SELECT to_regclass(${`icc."${table}"`})::text AS present`)[0].present, initialPresence.get(table));
+  console.log("PASS own SQL rollback + controlled blob double: live reference, one refund, late write without callback recovered by durable tombstone watch, no expiry after a year, retry/due/quarantine, SQL rollback after deletion, invalid owner/key/bucket fenced and bounded cleanup priority. No live storage, HTTP or cross-connection concurrency claimed; fixture/quota rolled back and initial catalog preserved.");
 }
 main().catch((error: unknown) => { const value = error as { code?: string; name?: string; meta?: { code?: string } };
   console.error({ phase, code: value.code, databaseCode: value.meta?.code, name: value.name });

@@ -145,10 +145,24 @@ export async function recoverEducationEvidenceAttempt(database: Database, id: st
 
 // Prepared dispatcher query only: not connected to an HTTP route or cron while
 // tables/recovery integration remain unapplied. Never auto-retry quarantine.
-export function dueEducationEvidenceAttempts(database: Pick<Prisma.TransactionClient, "terraqoEducationEvidenceAttempt">, now = new Date()) {
-  return database.terraqoEducationEvidenceAttempt.findMany({ where: { OR: [
+export async function dueEducationEvidenceAttempts(database: Pick<Prisma.TransactionClient, "terraqoEducationEvidenceAttempt">, now = new Date()) {
+  const active = await database.terraqoEducationEvidenceAttempt.findMany({ where: { OR: [
     { state: { in: ["PREPARED", "RESERVED"] }, updatedAt: { lte: new Date(now.getTime() - 5 * 60_000) } },
     { state: "CLEANUP_PENDING", OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }] },
-    { state: "CLEANED", OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }] },
   ] }, select: { id: true }, orderBy: [{ nextAttemptAt: { sort: "asc", nulls: "first" } }, { updatedAt: "asc" }, { id: "asc" }], take: 5 });
+  if (active.length === 5) return active;
+  const watches = await database.terraqoEducationEvidenceAttempt.findMany({ where: {
+    state: "CLEANED", OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }],
+  }, select: { id: true }, orderBy: [{ nextAttemptAt: { sort: "asc", nulls: "first" } }, { updatedAt: "asc" }, { id: "asc" }], take: 5 - active.length });
+  return [...active, ...watches];
+}
+
+/** Internal bounded runner only. No HTTP entry, retry loop or quarantine retry.
+ * Competing dispatches are safe because recovery re-reads under owner locks.
+ * Counts expose no identifiers, keys, names or private file metadata. */
+export async function dispatchEducationEvidenceCleanup(database: Database, store: Store) {
+  const selected = await dueEducationEvidenceAttempts(database);
+  const counts: Record<Result, number> = { completed: 0, retained: 0, retry: 0, quarantined: 0, skipped: 0, pending: 0 };
+  for (const row of selected) counts[await recoverEducationEvidenceAttempt(database, row.id, store)]++;
+  return { selected: selected.length, counts };
 }

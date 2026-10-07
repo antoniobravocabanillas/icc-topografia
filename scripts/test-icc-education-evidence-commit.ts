@@ -14,8 +14,10 @@ async function main() {
   assert.equal(process.env.TEST_PORTAL_URL, "https://api.terraqoglobal.com");
   const workspace = await prisma.terraqoWorkspace.findFirstOrThrow({ where: { slug: "icc-topografia", active: true,
     companies: { some: { document: "20616116313", deletedAt: null } } }, select: { id: true } });
-  for (const table of tables) assert.equal((await prisma.$queryRaw<{ present: string | null }[]>`
-    SELECT to_regclass(${`icc."${table}"`})::text AS present`)[0].present, null);
+  const initialPresence = new Map<string, string | null>();
+  for (const table of tables) initialPresence.set(table, (await prisma.$queryRaw<{ present: string | null }[]>`
+    SELECT to_regclass(${`icc."${table}"`})::text AS present`)[0].present);
+  assert.ok([...initialPresence.values()].every(value => value === null) || [...initialPresence.values()].every(value => value !== null));
   const sql = await readFile(new URL("../prisma/migrations/20261007195600_education_evidence_prerequisites/migration.sql", import.meta.url), "utf8");
   const email = `education-commit-${randomUUID()}@example.test`;
   let verified = false;
@@ -122,8 +124,8 @@ async function main() {
   } catch (error) { if (error !== rollback || !verified) throw error; }
   assert.equal(await prisma.user.count({ where: { email } }), 0);
   for (const table of tables) assert.equal((await prisma.$queryRaw<{ present: string | null }[]>`
-    SELECT to_regclass(${`icc."${table}"`})::text AS present`)[0].present, null);
-  console.log("PASS own SQL rollback: revoked/expired grant/demotion, actual audit FK rollback, one winner/receipt/audit, sequential loser replay, lost RESERVED/stale/protected/six-file/quota fences, historical receipt without recreation and private/text/CV unchanged. No physical store, HTTP or concurrent connections claimed; fixture and DDL rolled back.");
+    SELECT to_regclass(${`icc."${table}"`})::text AS present`)[0].present, initialPresence.get(table));
+  console.log("PASS own SQL rollback: revoked/expired grant/demotion, actual audit FK rollback, one winner/receipt/audit, sequential loser replay, lost RESERVED/stale/protected/six-file/quota fences, historical receipt without recreation and private/text/CV unchanged. No physical store, HTTP or concurrent connections claimed; fixture rolled back and initial catalog preserved.");
 }
 main().catch((error: unknown) => { const value = error as { code?: string; name?: string; meta?: { code?: string } };
   console.error({ phase, code: value.code, databaseCode: value.meta?.code, name: value.name });
