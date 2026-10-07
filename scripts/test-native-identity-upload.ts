@@ -32,6 +32,10 @@ async function main() {
   const upload=(body=form(),workspace:string|undefined="workspace")=>uploadProfessionalDocuments(new Request("https://example.test/documents",{method:"POST",headers:{"x-terraqo-native-upload":"1"},body}),"owner",workspace,dependencies);
   try {
     assert.equal((await upload(form(),"")).status,422);
+    const oversizedBody=new Request("https://example.test/documents",{method:"POST",headers:{"x-terraqo-native-upload":"1","content-type":"multipart/form-data; boundary=fixture","content-length":"1"},body:new Uint8Array(4*1024*1024+65536+1)});
+    assert.equal((await uploadProfessionalDocuments(oversizedBody,"owner","workspace",dependencies)).status,413);
+    assert.equal(reserves,0);assert.equal(writes,0);
+
     const missing=form();missing.delete("dniBack");assert.equal((await upload(missing)).status,422);
     const repeated=form();repeated.append("dniFront",repeated.get("dniFront")!);assert.equal((await upload(repeated)).status,422);
     const extra=form();extra.set("cvFile",new File(["other"],"other.pdf"));assert.equal((await upload(extra)).status,422);
