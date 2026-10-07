@@ -25,6 +25,9 @@ async function main() {
   let data: unknown = initial;
   const fetcher: typeof fetch = async (url, init) => { calls.push({ url: String(url), init }); return Response.json({ data }); };
   const api = new WebCvPublicationApi("icc-topografia", "fixture-owner", fetcher);
+  await new WebCvPublicationApi("icc-topografia", "fixture-owner", async function(this: unknown) {
+    assert.equal(this, undefined); return Response.json({ data: initial });
+  }).load();
   await api.load(); await api.reconcile(operationKey);
   assert.ok(calls.every(call => call.init?.method === "GET" && !call.init.body));
   assert.ok(calls.every(call => new Headers(call.init?.headers).get("x-terraqo-cv-owner") === "fixture-owner"));

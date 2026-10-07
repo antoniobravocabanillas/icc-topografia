@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button";
 import { CvPublicationView } from "./cv-publication-view";
 import { WebCvPublicationApi } from "@/lib/terraqo/cv-publication-client";
 import { WebCvPublicationController, type WebCvPublicationPort, type WebCvSnapshot } from "@/lib/terraqo/cv-publication-controller";
-import { guardCvUnload, isCvDocumentEntry, readCvSessionOwner, WebCvSessionBoundary } from "@/lib/terraqo/cv-publication-lifecycle";
+import { checkCvSessionAndLoad, guardCvUnload, isCvDocumentEntry, readCvSessionOwner, WebCvSessionBoundary } from "@/lib/terraqo/cv-publication-lifecycle";
 
 const empty: WebCvSnapshot = Object.freeze({ phase: "loading", page: null, review: null, pending: null, failure: null });
-type Resource = { ownerId: string; workspaceSlug: string; controller: WebCvPublicationController; boundary: WebCvSessionBoundary };
+type Resource = { ownerId: string; workspaceSlug: string; controller: WebCvPublicationController; boundary: WebCvSessionBoundary; check(): Promise<void> };
 
 export function CvPublicationScreen({ ownerId, workspaceSlug }: { ownerId: string; workspaceSlug: string }) {
   const createPort = useCallback(() => new WebCvPublicationApi(workspaceSlug, ownerId), [workspaceSlug, ownerId]);
@@ -44,10 +44,11 @@ export function CvPublicationSurface({ ownerId, workspaceSlug, createPort, readO
     setDocumentHref(null);
     const controller = new WebCvPublicationController(createPort());
     const boundary = new WebCvSessionBoundary(ownerId, controller, sessionReader, () => refresh(value => value + 1));
+    const check = () => checkCvSessionAndLoad(boundary, controller);
     setConsent(false); setState(controller.getSnapshot());
-    setResource({ ownerId, workspaceSlug, controller, boundary });
+    setResource({ ownerId, workspaceSlug, controller, boundary, check });
     const unsubscribe = controller.subscribe(() => setState(controller.getSnapshot()));
-    void boundary.check().then(() => { if (boundary.ready) void controller.load(); });
+    void check();
     const beforeUnload = (event: BeforeUnloadEvent) => guardCvUnload(controller, event);
     const pageHide = () => {
       // Hide synchronously before a possible BFCache snapshot. Returning to
@@ -56,10 +57,10 @@ export function CvPublicationSurface({ ownerId, workspaceSlug, createPort, readO
       boundary.dispose(); setConsent(false);
     };
     const pageShow = (event: PageTransitionEvent) => { if (event.persisted) window.location.reload(); };
-    const visibility = () => { if (document.visibilityState === "hidden") boundary.pause(); else void boundary.check(); };
+    const visibility = () => { if (document.visibilityState === "hidden") boundary.pause(); else void check(); };
     const channel = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel("next-auth");
-    if (channel) channel.onmessage = () => { boundary.pause(); void boundary.check(); };
-    const poll = window.setInterval(() => { if (document.visibilityState === "visible") void boundary.check(); }, 30000);
+    if (channel) channel.onmessage = () => { boundary.pause(); void check(); };
+    const poll = window.setInterval(() => { if (document.visibilityState === "visible") void check(); }, 30000);
     window.addEventListener("beforeunload", beforeUnload);
     window.addEventListener("pagehide", pageHide);
     window.addEventListener("pageshow", pageShow);
@@ -104,7 +105,7 @@ export function CvPublicationSurface({ ownerId, workspaceSlug, createPort, readO
     </nav>
     {!ready ? <div role="status" aria-live="polite" className="rounded-xl border bg-card p-6 text-sm leading-6">
       {currentResource?.boundary.invalid ? "Tu sesión cambió. Vuelve a iniciar sesión antes de continuar. Una solicitud ya enviada puede haberse recibido; comprueba el estado al volver a ingresar." : closing ? "Cerrando sesión…" : "Comprobando tu sesión…"}
-      {!closing && currentResource && !currentResource.boundary.invalid ? <Button type="button" variant="outline" className="ml-3" onClick={() => void currentResource.boundary.check()}>Comprobar sesión</Button> : null}
+      {!closing && currentResource && !currentResource.boundary.invalid ? <Button type="button" variant="outline" className="ml-3" onClick={() => void currentResource.check()}>Comprobar sesión</Button> : null}
     </div> : <CvPublicationView state={state} consent={consent} onConsent={setConsent}
       onPrepare={action => act(controller => { if (controller.prepare(action, consent)) setConsent(false); })}
       onCancel={() => act(controller => controller.cancelReview())}

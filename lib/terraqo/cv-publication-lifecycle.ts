@@ -36,6 +36,15 @@ export class WebCvSessionBoundary {
   }
 }
 
+/** Resume only the never-loaded initial GET after session recovery. A pending
+ * operation or failed CV read still requires the existing explicit controls. */
+export async function checkCvSessionAndLoad(boundary: WebCvSessionBoundary, controller: WebCvPublicationController) {
+  await boundary.check();
+  const state = controller.getSnapshot();
+  if (boundary.ready && state.phase === "idle" && !state.page && !state.pending && !state.failure)
+    await controller.load();
+}
+
 /** Read only the current session owner, with no client JWT/storage or issuance.
  * A definitive empty session differs from an uncertain network response. */
 export async function readCvSessionOwner(fetcher: typeof fetch = fetch): Promise<string | null> {

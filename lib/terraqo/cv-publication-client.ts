@@ -72,7 +72,10 @@ export class WebCvPublicationApi {
     let response: Response | undefined;
     try {
       const work = async () => {
-        response = await this.fetcher(this.endpoint + (!command && operationKey ? `&operationKey=${operationKey}` : ""), {
+        // Host fetch must not receive this API instance as its receiver.
+        // Native Chromium fetch rejects that call with Illegal invocation.
+        const fetcher = this.fetcher;
+        response = await fetcher(this.endpoint + (!command && operationKey ? `&operationKey=${operationKey}` : ""), {
           method: command ? "POST" : "GET", credentials: "same-origin", cache: "no-store", redirect: "error", signal: abort.signal,
           headers: { "x-terraqo-cv-owner": this.ownerId,
             ...(command ? { "content-type": "application/json", "x-terraqo-cv-command": "1" } : {}) },

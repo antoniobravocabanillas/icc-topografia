@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { WebCvPublicationController } from "../lib/terraqo/cv-publication-controller";
-import { guardCvUnload, isCvDocumentEntry, readCvSessionOwner, WebCvSessionBoundary } from "../lib/terraqo/cv-publication-lifecycle";
+import { checkCvSessionAndLoad, guardCvUnload, isCvDocumentEntry, readCvSessionOwner, WebCvSessionBoundary } from "../lib/terraqo/cv-publication-lifecycle";
 import { readWebCvPage, WebCvRequestError } from "../lib/terraqo/cv-publication-client";
 const deferred = () => { let resolve!: (value: string | null) => void;
   const promise = new Promise<string | null>(done => { resolve = done; }); return { promise, resolve }; };
@@ -9,6 +9,15 @@ async function main() {
     version: "2026-10-07T00:00:00.000Z", username: "synthetic-owner", published: false, url: null }, receipt: null }, "icc-topografia");
   const controller = new WebCvPublicationController({ load: async () => page, reconcile: async () => page,
     submit: async () => { throw new WebCvRequestError("uncertain"); } }, () => "a".repeat(32));
+  let initialReads = 0, initialOffline = true;
+  const initialController = new WebCvPublicationController({ load: async () => { initialReads++; return page; }, reconcile: async () => page,
+    submit: async () => { throw new WebCvRequestError("uncertain"); } }, () => "c".repeat(32));
+  const initialBoundary = new WebCvSessionBoundary("owner", initialController, async () => { if (initialOffline) throw Error(); return "owner"; }, () => undefined);
+  await checkCvSessionAndLoad(initialBoundary, initialController); assert.equal(initialReads, 0);
+  initialOffline = false; await checkCvSessionAndLoad(initialBoundary, initialController); assert.equal(initialReads, 1);
+  initialController.prepare("PUBLISH", true); await initialController.confirm(); const exactPending = initialController.getSnapshot().pending;
+  await checkCvSessionAndLoad(initialBoundary, initialController); assert.equal(initialReads, 1);
+  assert.equal(initialController.getSnapshot().pending, exactPending); initialBoundary.dispose();
   let owner: string | null = "owner", fails = false, signals = 0;
   const scope = new WebCvSessionBoundary("owner", controller, async () => { if (fails) throw Error(); return owner; }, () => signals++);
   assert.equal(scope.ready, false); await scope.check(); assert.equal(scope.ready, true);
