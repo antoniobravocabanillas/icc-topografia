@@ -39,6 +39,8 @@ CREATE TABLE IF NOT EXISTS "icc"."TerraqoEducationEvidenceAttempt" (
   "educationId" TEXT NOT NULL REFERENCES "icc"."TerraqoProfessionalEducation"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
   "actorId" TEXT NOT NULL,
   "operationKey" TEXT NOT NULL CHECK ("operationKey" ~ '^[a-f0-9]{32}$'),
+  "fingerprint" TEXT NOT NULL CHECK ("fingerprint" ~ '^[a-f0-9]{64}$'),
+  "originalVersion" TIMESTAMP(3) NOT NULL,
   "storageKey" TEXT NOT NULL,
   "size" INTEGER NOT NULL CHECK ("size" BETWEEN 1 AND 4194304),
   "reservedUnits" INTEGER NOT NULL DEFAULT 0,

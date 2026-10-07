@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { PrismaClient } from "@prisma/client";
 
 // Expected constraint failures can contain entire private rows in Prisma logs.
 // This verifier uses its own direct client with diagnostics disabled.
 const prisma = new PrismaClient({ log: [] });
+import { EducationEvidenceReservationError, educationPersonalStorageFloor, reserveEducationEvidenceInTransaction } from "../lib/server/education-evidence-reservation";
 
 const tables = ["TerraqoEducationEvidence", "TerraqoEducationEvidenceOperation", "TerraqoEducationEvidenceAttempt"];
 let phase = "scope";
@@ -34,7 +35,7 @@ async function main() {
         terraqoProfessionalProfile: { create: { liveCvEnabled: false, education: { create: {
           institution: "Institución sintética propia", degree: "Formación propia", visibility: "PRIVATE", evidence: ["Texto legado propio"],
         } } } },
-      }, select: { id: true, terraqoProfessionalProfile: { select: { education: { select: { id: true, updatedAt: true } } } } } });
+      }, select: { id: true, terraqoProfessionalProfile: { select: { id: true, education: { select: { id: true, updatedAt: true } } } } } });
       const education = user.terraqoProfessionalProfile!.education[0];
       const storageKey = `education-evidence/${education.id}/${randomUUID()}`;
       const file = await tx.terraqoEducationEvidence.create({ data: { educationId: education.id, uploadedById: user.id,
@@ -45,7 +46,8 @@ async function main() {
         fileName: file.fileName, contentType: file.contentType, size: file.size, originalVersion: education.updatedAt,
         resultVersion: new Date(education.updatedAt.getTime() + 1) } });
       const attempt = await tx.terraqoEducationEvidenceAttempt.create({ data: { educationId: education.id, actorId: user.id,
-        operationKey, storageKey: `education-evidence/${education.id}/${randomUUID()}`, size: 4194304 } });
+        operationKey, fingerprint: receipt.fingerprint, originalVersion: education.updatedAt,
+        storageKey: `education-evidence/${education.id}/${randomUUID()}`, size: 4194304 } });
       let index = 0;
       const rejects = async (label: string, code: string, action: () => Promise<unknown>) => {
         phase = label; const savepoint = `owned_case_${index++}`;
@@ -74,8 +76,75 @@ async function main() {
       await rejects("receipt and physical attempt retain parent without file", "23503", () => tx.$executeRaw`DELETE FROM icc."TerraqoProfessionalEducation" WHERE id=${education.id}`);
       const unchanged = await tx.terraqoProfessionalEducation.findUniqueOrThrow({ where: { id: education.id } });
       assert.deepEqual(unchanged.evidence, ["Texto legado propio"]); assert.equal(unchanged.visibility, "PRIVATE");
+      phase = "durable reservation permissions and rollback";
+      const jti = randomUUID(), now = Math.floor(Date.now() / 1000);
+      const token = { sub: user.id, workspaceId: workspace.id, workspaceSlug: "icc-topografia", role: "PROFESSIONAL" as const,
+        jti, iat: now, exp: now + 3600 };
+      const grant = { identifier: `portal-session:${workspace.id}:${user.id}`, token: createHash("sha256").update(jti).digest("hex"),
+        expires: new Date(Date.now() + 3600_000) };
+      await tx.verificationToken.create({ data: grant });
+      const payload = { size: 32, version: education.updatedAt.toISOString(), operationKey: randomBytes(16).toString("hex"),
+        fingerprint: randomBytes(32).toString("hex") };
+      const denied = async (status: number, action: () => Promise<unknown>) => {
+        const savepoint = `owned_access_${index++}`;
+        await tx.$executeRawUnsafe(`SAVEPOINT ${savepoint}`);
+        await assert.rejects(action, error => error instanceof EducationEvidenceReservationError && error.status === status);
+        // Same rollback boundary enforced by the service's transaction wrapper.
+        await tx.$executeRawUnsafe(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+        await tx.$executeRawUnsafe(`RELEASE SAVEPOINT ${savepoint}`);
+      };
+      await denied(401, () => reserveEducationEvidenceInTransaction(tx, { ...token, jti: undefined }, education.id, payload));
+      await denied(401, () => reserveEducationEvidenceInTransaction(tx, { ...token, jti: randomUUID() }, education.id, payload));
+      await tx.terraqoWorkspaceMember.updateMany({ where: { userId: user.id, workspaceId: workspace.id }, data: { role: "CLIENT" } });
+      await denied(403, () => reserveEducationEvidenceInTransaction(tx, token, education.id, payload));
+      await tx.terraqoWorkspaceMember.updateMany({ where: { userId: user.id, workspaceId: workspace.id }, data: { role: "PROFESSIONAL" } });
+      await denied(409, () => reserveEducationEvidenceInTransaction(tx, token, education.id, { ...payload, version: new Date(0).toISOString() }));
+      await tx.terraqoProfessionalEducation.update({ where: { id: education.id }, data: { verificationStatus: "APPROVED", updatedAt: education.updatedAt } });
+      await denied(403, () => reserveEducationEvidenceInTransaction(tx, token, education.id, payload));
+      const replay = await reserveEducationEvidenceInTransaction(tx, token, education.id, { ...payload, operationKey: receipt.operationKey,
+        fingerprint: receipt.fingerprint });
+      assert.equal(replay.kind, "receipt"); if (replay.kind === "receipt") assert.equal(replay.receipt.evidenceId, null);
+      await denied(409, () => reserveEducationEvidenceInTransaction(tx, token, education.id, { ...payload, operationKey: receipt.operationKey }));
+      await tx.terraqoProfessionalEducation.update({ where: { id: education.id }, data: { verificationStatus: "NOT_REQUESTED", updatedAt: education.updatedAt } });
+      await tx.terraqoProfessionalDocument.create({ data: { professionalProfileId: user.terraqoProfessionalProfile!.id, type: "OTHER",
+        storageKey: `professional-documents/${user.terraqoProfessionalProfile!.id}/other/${randomUUID()}.pdf`,
+        fileName: "propio.pdf", contentType: "application/pdf", size: 1_000_000 } });
+      const unrelatedUploader = randomUUID();
+      await tx.terraqoEducationEvidence.create({ data: { educationId: education.id, uploadedById: unrelatedUploader,
+        storageKey: `education-evidence/${education.id}/${randomUUID()}`, fileName: "propio.pdf", contentType: "application/pdf", size: 1_000_000 } });
+      const initialFloor = await educationPersonalStorageFloor(tx, user.id); assert.equal(initialFloor, 7);
+      assert.equal(await educationPersonalStorageFloor(tx, unrelatedUploader), 0);
+      const reserved = await reserveEducationEvidenceInTransaction(tx, token, education.id, payload);
+      assert.equal(reserved.kind, "reserved");
+      if (reserved.kind !== "reserved") throw Error("Own reservation missing");
+      assert.equal(reserved.attempt.state, "RESERVED"); assert.equal(reserved.attempt.reservedUnits, 1);
+      assert.equal(reserved.attempt.fingerprint, payload.fingerprint); assert.equal(reserved.attempt.originalVersion.toISOString(), payload.version);
+      const bucketWhere = { ownerKey_period_metric: { ownerKey: `user:${user.id}`, period: "retained", metric: "storage-mb" } };
+      assert.equal((await tx.terraqoUsageBucket.findUniqueOrThrow({ where: bucketWhere })).used, 8);
+      const previousCount = await tx.terraqoEducationEvidenceAttempt.count({ where: { educationId: education.id } });
+      await tx.terraqoUsageBucket.update({ where: bucketWhere, data: { used: 249 } });
+      await tx.terraqoBillingAccount.create({ data: { ownerKey: `user:${user.id}`, userId: user.id, mode: "test",
+        planCode: "personal-premium", paidThrough: new Date(Date.now() + 3600_000) } });
+      const expiredPlan = await tx.terraqoBillingAccount.create({ data: { ownerKey: `user:${user.id}`, userId: user.id, mode: "live",
+        planCode: "personal-premium", paidThrough: new Date(Date.now() - 60_000) } });
+      await denied(429, () => reserveEducationEvidenceInTransaction(tx, token, education.id, { ...payload, size: 4194304 }));
+      assert.equal((await tx.terraqoUsageBucket.findUniqueOrThrow({ where: bucketWhere })).used, 249);
+      assert.equal(await tx.terraqoEducationEvidenceAttempt.count({ where: { educationId: education.id } }), previousCount);
+      await tx.terraqoBillingAccount.update({ where: { id: expiredPlan.id }, data: { paidThrough: new Date(Date.now() + 3600_000) } });
+      await tx.$executeRaw`SAVEPOINT owned_live_capacity`;
+      const higherCapacity = await reserveEducationEvidenceInTransaction(tx, token, education.id, { ...payload, size: 4194304 });
+      assert.equal(higherCapacity.kind, "reserved");
+      assert.equal((await tx.terraqoUsageBucket.findUniqueOrThrow({ where: bucketWhere })).used, 254);
+      await tx.$executeRaw`ROLLBACK TO SAVEPOINT owned_live_capacity`;
+      await tx.$executeRaw`RELEASE SAVEPOINT owned_live_capacity`;
+      assert.equal(await tx.terraqoEducationEvidenceAttempt.count({ where: { educationId: education.id } }), previousCount);
+      await tx.terraqoUsageBucket.update({ where: bucketWhere, data: { used: 8 } });
+      await tx.verificationToken.delete({ where: { identifier_token: { identifier: grant.identifier, token: grant.token } } });
+      await denied(401, () => reserveEducationEvidenceInTransaction(tx, token, education.id, payload));
+      assert.equal((await tx.terraqoUsageBucket.findUniqueOrThrow({ where: bucketWhere })).used, 8);
+      assert.equal(await tx.terraqoEducationEvidenceAttempt.count({ where: { educationId: education.id } }), previousCount);
       verified = true; throw rollback;
-    }, { maxWait: 5000, timeout: 30000 });
+    }, { maxWait: 5000, timeout: 60000 });
   } catch (error) { if (error !== rollback || !verified) throw error; }
   phase = "rollback verification";
   assert.equal(await prisma.user.count({ where: { email } }), 0);
@@ -83,7 +152,7 @@ async function main() {
     const rows = await prisma.$queryRaw<{ present: string | null }[]>`SELECT to_regclass(${`icc."${table}"`})::text AS present`;
     assert.equal(rows[0].present, null);
   }
-  console.log("PASS own SQL rollback-only schema: restrictive parents, durable receipt, unique key, bounds/versions/namespace/reservation states; legacy text/private visibility unchanged. Fixtures and DDL rolled back; no blobs, quota, routes or migration ledger touched.");
+  console.log("PASS own SQL rollback-only schema/reservation: restrictive parents, receipt replay after file removal, versions/states/revoked and missing grant, quota/attempt atomic boundary and shared pending floor. Legacy text/private visibility unchanged; fixtures, DDL and temporary own quota/grants rolled back. No blobs, routes or migration ledger touched.");
 }
 main().catch((error: unknown) => { const value = error as { code?: string; name?: string; meta?: { code?: string } };
   console.error({ phase, code: value.code, databaseCode: value.meta?.code, name: value.name });

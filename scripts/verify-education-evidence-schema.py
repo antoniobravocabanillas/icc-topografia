@@ -30,7 +30,7 @@ def main():
     print("PASS direct/runtime schema and workspace fingerprints match; credentials remain in child environment only.", flush=True)
     environment = dict(os.environ, DATABASE_URL=direct, NODE_ENV="production", TEST_PORTAL_URL="https://api.terraqoglobal.com",
                        TERRAQO_MUTATING_TESTS="icc-topografia:20616116313")
-    result = subprocess.run([shutil.which("node"), "--import", "tsx", "scripts/test-icc-education-evidence-schema.ts"],
+    result = subprocess.run([shutil.which("node"), "--conditions=react-server", "--import", "tsx", "scripts/test-icc-education-evidence-schema.ts"],
                             cwd=ROOT, env=environment, timeout=120)
     if result.returncode:
         return result.returncode

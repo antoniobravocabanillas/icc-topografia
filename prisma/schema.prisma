@@ -3057,6 +3057,8 @@ model TerraqoEducationEvidenceAttempt {
   education     TerraqoProfessionalEducation @relation(fields: [educationId], references: [id], onDelete: Restrict)
   actorId       String
   operationKey  String
+  fingerprint   String
+  originalVersion DateTime
   storageKey    String                       @unique
   size          Int
   reservedUnits Int                          @default(0)
