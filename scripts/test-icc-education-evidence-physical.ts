@@ -9,6 +9,7 @@ import { EducationEvidenceReservationError, reserveEducationEvidenceAttempt } fr
 import { commitEducationEvidenceAttempt } from "../lib/server/education-evidence-commit";
 import { recoverEducationEvidenceAttempt } from "../lib/server/education-evidence-cleanup";
 import { setTimeout as delay } from "node:timers/promises";
+import { uploadEducationEvidence } from "../lib/server/education-evidence-upload";
 
 // Separate direct clients exercise committed boundaries, not savepoints. Never
 // print credentials, SQL rows, blob keys or failed provider request objects.
@@ -159,6 +160,56 @@ async function main() {
     assert.equal((await first.terraqoProfessionalProfile.findUniqueOrThrow({ where: { id: user.terraqoProfessionalProfile!.id } })).liveCvEnabled, false);
     assert.equal(await first.terraqoEducationEvidence.count({ where: { educationId: education.id } }), 1);
     assert.equal(await first.activityLog.count({ where: { actorId: user.id, entityType: "EducationEvidence" } }), 1);
+    phase = "orchestrator concurrent upload and no-store historical replay";
+    const uploadKey = randomBytes(16).toString("hex");
+    const uploadVersion = retained.updatedAt.toISOString();
+    const request = (key = uploadKey, current = uploadVersion) => {
+      const form = new FormData(); form.set("file", new File([bytes], "propio.png", { type: "image/png" }));
+      form.set("operationKey", key); form.set("version", current);
+      return new Request("https://api.terraqoglobal.com/own-internal-fixture", { method: "POST", body: form });
+    };
+    const physicalStore = { delete: store.delete.bind(store), set: async (key: string, data: ArrayBuffer) => {
+      assert.ok(key.startsWith(`education-evidence/${education.id}/`)); keys.add(key); await store.set(key, data);
+    } };
+    let arrivals = 0, releaseUploads!: () => void;
+    const bothReserved = new Promise<void>(resolve => { releaseUploads = resolve; });
+    const concurrentStore = { ...physicalStore, set: async (key: string, data: ArrayBuffer) => {
+      if (++arrivals === 2) releaseUploads(); await bothReserved; await physicalStore.set(key, data);
+    } };
+    const uploads = await Promise.all([uploadEducationEvidence(request(), token, education.id, first, concurrentStore),
+      uploadEducationEvidence(request(), token, education.id, second, concurrentStore)]);
+    assert.deepEqual(uploads.map(value => value.kind).sort(), ["committed", "receipt"]);
+    assert.equal(uploads[0].receipt.id, uploads[1].receipt.id); assert.equal(await used(), 2);
+    assert.equal(await first.terraqoEducationEvidence.count({ where: { educationId: education.id } }), 2);
+    const noStore = { set: async () => { throw Error("REPLAY_MUST_NOT_WRITE"); }, delete: async () => { throw Error("REPLAY_MUST_NOT_DELETE"); } };
+    assert.equal((await uploadEducationEvidence(request(), token, education.id, first, noStore)).kind, "receipt");
+    phase = "orchestrator store reply failure compensates its exact attempt";
+    const freshVersion = (await first.terraqoProfessionalEducation.findUniqueOrThrow({ where: { id: education.id } })).updatedAt.toISOString();
+    await assert.rejects(uploadEducationEvidence(request(randomBytes(16).toString("hex"), freshVersion), token, education.id, first, {
+      ...physicalStore, set: async (key, data) => { await physicalStore.set(key, data); throw Error("CONTROLLED_STORE_REPLY_LOST"); },
+    }), /CONTROLLED_STORE_REPLY_LOST/);
+    assert.equal(await used(), 2); assert.equal(await first.terraqoEducationEvidence.count({ where: { educationId: education.id } }), 2);
+    phase = "orchestrator SQL acknowledgement loss retains committed reference";
+    const uncertainKey = randomBytes(16).toString("hex");
+    const uncertainDatabase = new Proxy(first, { get(target, property) {
+      if (property !== "$transaction") return Reflect.get(target, property, target);
+      return new Proxy(target.$transaction, { apply(transaction, _receiver, argumentsList) {
+        return Reflect.apply(transaction, target, argumentsList).then((value: unknown) => {
+          if ((value as { kind?: string })?.kind === "committed") throw Error("CONTROLLED_SQL_REPLY_LOST");
+          return value;
+        });
+      } });
+    } });
+    await assert.rejects(uploadEducationEvidence(request(uncertainKey, freshVersion), token, education.id, uncertainDatabase, physicalStore),
+      /CONTROLLED_SQL_REPLY_LOST/);
+    assert.equal(await used(), 3);
+    const confirmed = await first.terraqoEducationEvidenceOperation.findUniqueOrThrow({ where: {
+      educationId_operationKey: { educationId: education.id, operationKey: uncertainKey } } });
+    const confirmedFile = await first.terraqoEducationEvidence.findUniqueOrThrow({ where: { id: confirmed.evidenceId! } });
+    assert.deepEqual(Buffer.from((await read(confirmedFile.storageKey))!), bytes);
+    assert.equal((await uploadEducationEvidence(request(uncertainKey, freshVersion), token, education.id, second, noStore)).receipt.id, confirmed.id);
+    assert.equal(await first.activityLog.count({ where: { actorId: user.id, entityType: "EducationEvidence" } }), 3);
+    console.log("PASS internal education orchestrator Request/SQL/private blobs: concurrent loser compensated, historical replay never touches store, actual stored-file acknowledgement fault refunded once, controlled post-commit SQL acknowledgement fault retains live blob and reconciles receipt. Not deployed HTTP.");
     console.log("PASS education physical store and independent committed transactions: concurrent winner/loser, targeted concurrent cleanup/refund once, live reference retained, controlled lost reply replay, interleaved revocation, actual 15s SQL timeout fence and late physical write watched with zero second refund. No public endpoint or process-kill claim.");
   } finally {
     // Explicitly scoped disposable fixture cleanup. No global dispatcher or
