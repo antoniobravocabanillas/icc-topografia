@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
-import { recoverProfessionalDocumentCleanups, recoverProfessionalDocumentCleanup } from "@/lib/server/professional-document-cleanup";
+import { recoverProfessionalDocumentCleanups, recoverPrivateUploadCleanup } from "@/lib/server/professional-document-cleanup";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 export async function POST(request: Request) {
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
         return NextResponse.json({error:"INVALID_REQUEST"},{status:422});
       auditId = value.auditId;
     } catch { return NextResponse.json({error:"INVALID_REQUEST"},{status:422}); }
-    return NextResponse.json({result:await recoverProfessionalDocumentCleanup(auditId)},{headers:{"Cache-Control":"no-store"}});
+    return NextResponse.json({result:await recoverPrivateUploadCleanup(auditId)},{headers:{"Cache-Control":"no-store"}});
   }
   return NextResponse.json(await recoverProfessionalDocumentCleanups(),{headers:{"Cache-Control":"no-store"}});
 }

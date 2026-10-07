@@ -8,7 +8,7 @@ async function main() {
   let evidenceSize=0;
   let retained=false, actor: string|null="owner", refunds=0, deletions=0, fail=false;
   prisma.activityLog.updateMany=(async(args:{data:{metadata:Record<string,unknown>}})=>{metadata=args.data.metadata;return{count:1};}) as unknown as typeof original.update;
-  prisma.$queryRaw=(async(query:Prisma.Sql)=>{if(query.strings.join('').includes("COUNT(*)")){assert.ok(query.strings.join('').includes("IS NULL"));assert.ok(query.strings.join('').includes("'BLOCKED'"));return[{pending:2n,blocked:1n,overdue:1n,orphaned:1n}];}assert.ok(query.strings.join('').includes("LIMIT 5"));assert.ok(query.values.some(value=>typeof value==="string"&&value.includes("2026")));return[{id:"audit"}];}) as unknown as typeof original.query;
+  prisma.$queryRaw=(async(query:Prisma.Sql)=>{assert.ok(query.strings.join("").includes("'ExperienceEvidence'"));if(query.strings.join('').includes("COUNT(*)")){assert.ok(query.strings.join('').includes("IS NULL"));assert.ok(query.strings.join('').includes("'BLOCKED'"));return[{pending:2n,blocked:1n,overdue:1n,orphaned:1n}];}assert.ok(query.strings.join('').includes("LIMIT 5"));assert.ok(query.values.some(value=>typeof value==="string"&&value.includes("2026")));return[{id:"audit"}];}) as unknown as typeof original.query;
   const tx={
     $queryRaw:async(query:Prisma.Sql)=>{assert.ok(query.values.includes("audit")&&query.values.includes("owner"));return[{id:"audit"}];},
     activityLog:{findUnique:async()=>({metadata}),update:async(args:{data:{metadata:Record<string,unknown>}})=>{metadata=args.data.metadata;}},
@@ -17,7 +17,7 @@ async function main() {
     terraqoWorklogMedia:{aggregate:async()=>({_sum:{size:0}})},terraqoMessageAttachment:{aggregate:async()=>({_sum:{size:0}})},
     terraqoUsageBucket:{updateMany:async(args:{where:{used:{gte:number}};data:unknown})=>{assert.equal(args.where.used.gte,evidenceSize ? 5 : 3);assert.deepEqual(args.data,{used:{decrement:1}});refunds++;return{count:1};}},
   } as unknown as Prisma.TransactionClient;
-  prisma.activityLog.findFirst=(async()=>({id:"audit",actorId:actor,metadata})) as unknown as typeof original.audit;
+  prisma.activityLog.findFirst=(async()=>({id:"audit",entityType:"ProfessionalDocument",actorId:actor,metadata})) as unknown as typeof original.audit;
   prisma.terraqoProfessionalProfile.findUnique=(async()=>({id:"profile"})) as unknown as typeof original.profile;
   prisma.terraqoProfessionalDocument.count=(async()=>retained?1:0) as typeof original.count;
   let queue:Promise<unknown>=Promise.resolve();

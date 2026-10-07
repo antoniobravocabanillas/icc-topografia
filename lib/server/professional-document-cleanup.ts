@@ -1,3 +1,6 @@
+import { recoverExperienceEvidenceCleanup } from "./experience-evidence-cleanup";
+import { cleanupRetrySchedule } from "./private-upload-retry";
+export { cleanupRetrySchedule } from "./private-upload-retry";
 import { personalRetainedStorageUnits } from "@/lib/terraqo/billing/personal-storage-usage";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -5,12 +8,8 @@ import { getProfessionalDocumentStore, PROFESSIONAL_DOCUMENT_PREFIX } from "./me
 
 type Marker = {source?: unknown; type?: unknown; storageCleanupState?: unknown; storageCleanupKey?: unknown; storageCleanupBytes?: unknown; storageCleanupAttempts?: unknown};
 const marker = (value: unknown): Marker => value && typeof value === "object" && !Array.isArray(value) ? value as Marker : {};
-export function cleanupRetrySchedule(attempts: unknown, now: Date) {
-  const count = Number.isSafeInteger(attempts) && (attempts as number) >= 0 ? Math.min(attempts as number, 7) + 1 : 1;
-  return {storageCleanupAttempts: count, storageCleanupNextAttemptAt: new Date(now.getTime() + Math.min(360, 5 * 2 ** (count - 1)) * 60_000).toISOString()};
-}
 async function parkBlockedCleanup(id: string) {
-  const row = await prisma.activityLog.findFirst({where:{id,entityType:"ProfessionalDocument",action:"DELETED"},select:{metadata:true}});
+  const row = await prisma.activityLog.findFirst({where:{id,entityType:{in:["ProfessionalDocument","ExperienceEvidence"]},action:"DELETED"},select:{metadata:true}});
   const current=marker(row?.metadata);
   if (current.source !== "native-portal" || current.storageCleanupState !== "PENDING" || !row?.metadata) return;
   await prisma.activityLog.updateMany({where:{id,metadata:{equals:row.metadata as Prisma.InputJsonValue}},data:{metadata:{...(row.metadata as Prisma.JsonObject),storageCleanupState:"BLOCKED"}}});
@@ -53,18 +52,25 @@ export async function recoverProfessionalDocumentCleanup(id: string, store?: Pic
 export async function dueProfessionalDocumentCleanupIds(now = new Date()) {
   const rows = await prisma.$queryRaw<{id:string}[]>(Prisma.sql`
     SELECT id FROM icc."ActivityLog"
-    WHERE "entityType"='ProfessionalDocument' AND action='DELETED' AND "actorId" IS NOT NULL
+    WHERE "entityType" IN ('ProfessionalDocument','ExperienceEvidence') AND action='DELETED' AND "actorId" IS NOT NULL
       AND "createdAt" <= ${new Date(now.getTime()-5*60_000)}
       AND metadata->>'source'='native-portal' AND metadata->>'storageCleanupState'='PENDING'
       AND (metadata->>'storageCleanupNextAttemptAt' IS NULL OR metadata->>'storageCleanupNextAttemptAt' <= ${now.toISOString()})
     ORDER BY "createdAt", id LIMIT 5`);
   return rows;
 }
+export async function recoverPrivateUploadCleanup(id:string) {
+  const audit=await prisma.activityLog.findFirst({where:{id,entityType:{in:["ProfessionalDocument","ExperienceEvidence"]},action:"DELETED"},select:{entityType:true}});
+  if(!audit)return "skipped";
+  return audit.entityType==="ExperienceEvidence" ? recoverExperienceEvidenceCleanup(id) : recoverProfessionalDocumentCleanup(id);
+}
 export async function recoverProfessionalDocumentCleanups(now = new Date()) {
   const rows = await dueProfessionalDocumentCleanupIds(now);
   const counts = {completed:0,retry:0,blocked:0,skipped:0};
+  const deadline=Date.now()+30_000;
   for (const row of rows) {
-    const result = await recoverProfessionalDocumentCleanup(row.id);
+    if(Date.now()>deadline)break;
+    const result = await recoverPrivateUploadCleanup(row.id);
     if (result === "blocked") await parkBlockedCleanup(row.id);
     counts[result as keyof typeof counts]++;
   }
@@ -78,7 +84,7 @@ export async function professionalDocumentCleanupBacklog(now = new Date()) {
       COUNT(*) FILTER (WHERE metadata->>'storageCleanupState'='BLOCKED') AS blocked,
       COUNT(*) FILTER (WHERE metadata->>'storageCleanupState'='PENDING' AND "createdAt" <= ${new Date(now.getTime()-60*60_000)}) AS overdue,
       COUNT(*) FILTER (WHERE metadata->>'storageCleanupState'='PENDING' AND "actorId" IS NULL) AS orphaned
-    FROM icc."ActivityLog" WHERE "entityType"='ProfessionalDocument' AND action='DELETED'
+    FROM icc."ActivityLog" WHERE "entityType" IN ('ProfessionalDocument','ExperienceEvidence') AND action='DELETED'
       AND metadata->>'source'='native-portal' AND metadata->>'storageCleanupState' IN ('PENDING','BLOCKED')`);
   const row=rows[0];if(!row)throw new Error("Cleanup health unavailable.");
   const counts={pending:Number(row.pending),blocked:Number(row.blocked),overdue:Number(row.overdue),orphaned:Number(row.orphaned)};

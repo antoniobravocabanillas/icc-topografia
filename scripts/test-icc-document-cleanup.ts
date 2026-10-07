@@ -1,3 +1,4 @@
+import { compensateExperienceEvidenceUpload } from "../lib/server/experience-evidence-cleanup";
 import { reservePrivateUploadFiles, compensatePrivateUploadFiles } from "../lib/server/native-professional-upload-compensation";
 import { reserveStorage } from "../lib/terraqo/billing/storage-quota";
 import assert from "node:assert/strict";
@@ -17,7 +18,7 @@ async function main() {
   const [token]=await helpers.getToken(); assert.ok(token);
   const store=getStore({name:PROFESSIONAL_DOCUMENT_STORE,siteID:"2d38524a-44f9-4473-8a1f-9270e03bc2bf",token,consistency:"strong"});
   const evidenceStore=getStore({name:WORKLOG_EVIDENCE_STORE,siteID:"2d38524a-44f9-4473-8a1f-9270e03bc2bf",token,consistency:"strong"});
-  let evidenceKey:string|undefined;
+  let evidenceKey:string|undefined;const extraEvidenceKeys:string[]=[];
   const workspace=await prisma.terraqoWorkspace.findFirstOrThrow({where:{slug:"icc-topografia",active:true,deletedAt:null,companies:{some:{document:"20616116313",deletedAt:null}}},select:{id:true}});
   const password=randomBytes(24).toString("hex"), email=`cleanup-${randomUUID()}@example.test`;
   const user=await prisma.user.create({data:{email,name:"Prueba recuperación privada",role:"CUSTOMER",emailVerified:new Date(),passwordHash:await bcrypt.hash(password,12),
@@ -56,6 +57,16 @@ async function main() {
     assert.equal(results.filter(result=>result.result==="completed").length,1);assert.equal(results.filter(result=>result.result==="skipped").length,2);
     assert.equal(await store.getWithMetadata(key,{type:"arrayBuffer"}),null);
     const after=await prisma.terraqoUsageBucket.findFirstOrThrow({where:{id:before.id}});assert.equal(after.used,2);
+    const retainedEvidenceMarker=await prisma.activityLog.create({data:{actorId:user.id,terraqoWorkspaceId:workspace.id,action:"DELETED",entityType:"ExperienceEvidence",entityId:evidenceKey,title:"Fixture recuperación evidencia",metadata:{source:"native-portal",storageCleanupState:"PENDING",storageCleanupExperienceId:experience.id,storageCleanupKey:evidenceKey,storageCleanupBytes:evidenceBytes.length}},select:{id:true}});
+    assert.equal((await (await internal({auditId:retainedEvidenceMarker.id})).json()).result,"blocked");assert.ok(await evidenceStore.getWithMetadata(evidenceKey,{type:"arrayBuffer"}));
+    const orphanKey=createExperienceEvidenceKey(experience.id,"synthetic-compensation.png");extraEvidenceKeys.push(orphanKey);await reserveStorage(user.id,png.length);await evidenceStore.set(orphanKey,await new File([png],"fixture.png").arrayBuffer());
+    assert.equal(await compensateExperienceEvidenceUpload(user.id,workspace.id,experience.id,{storageKey:orphanKey,size:png.length},{delete:async()=>{throw new Error("Synthetic evidence deletion failure.");}}),"retry");
+    assert.equal((await prisma.terraqoUsageBucket.findUniqueOrThrow({where:{id:before.id}})).used,3);assert.ok(await evidenceStore.getWithMetadata(orphanKey,{type:"arrayBuffer"}));
+    const evidenceRetry=await prisma.activityLog.findFirstOrThrow({where:{actorId:user.id,entityType:"ExperienceEvidence",entityId:orphanKey},select:{id:true}});
+    const evidenceResponses=await Promise.all([internal({auditId:evidenceRetry.id}),internal({auditId:evidenceRetry.id})]);for(const response of evidenceResponses)assert.equal(response.status,200);
+    assert.deepEqual((await Promise.all(evidenceResponses.map(response=>response.json()))).map(value=>value.result).sort(),["completed","skipped"]);
+    assert.equal(await evidenceStore.getWithMetadata(orphanKey,{type:"arrayBuffer"}),null);assert.equal((await prisma.terraqoUsageBucket.findUniqueOrThrow({where:{id:before.id}})).used,2);
+    console.log("PASS deployed evidence recovery: live evidence blocked, failed orphan deletion retained quota/marker, concurrent targeted retries delete actual blob and refund once under owner locks.");
     const marker=await prisma.activityLog.findUniqueOrThrow({where:{id:audit.id},select:{metadata:true}});
     assert.deepEqual(marker.metadata,{source:"native-portal",type:"OTHER",storageCleanupState:"COMPLETE"});
     assert.equal((await (await internal({auditId:audit.id})).json()).result,"skipped");
@@ -96,13 +107,13 @@ async function main() {
     console.log("PASS pair compensation: two rounded reservations, first blob removed/refunded, second failure retains one unit and durable marker, concurrent recovery refunds once.");
     console.log("PASS deployed cleanup: unauthenticated rejection, retained-document guard, actual blob removal, three concurrent retries, one quota refund and replay guard.");
   } finally {
-    if(evidenceKey)await evidenceStore.delete(evidenceKey);
+    if(evidenceKey)await evidenceStore.delete(evidenceKey);for(const extraKey of extraEvidenceKeys)await evidenceStore.delete(extraKey);
     if(key)await store.delete(key);for(const extraKey of extraKeys)await store.delete(extraKey);
     // Also remove only this fixture's blobs if an unexpected successful response
     // created identity records while testing a denied operation.
     const remaining=await prisma.terraqoProfessionalDocument.findMany({where:{professionalProfileId:user.terraqoProfessionalProfile!.id},select:{storageKey:true}});
     for(const row of remaining)await store.delete(row.storageKey);
-    await prisma.activityLog.deleteMany({where:{actorId:user.id,terraqoWorkspaceId:workspace.id,entityType:"ProfessionalDocument"}});
+    await prisma.activityLog.deleteMany({where:{actorId:user.id,terraqoWorkspaceId:workspace.id,entityType:{in:["ProfessionalDocument","ExperienceEvidence"]}}});
     await prisma.terraqoUsageBucket.deleteMany({where:{ownerKey:`user:${user.id}`}});
     await prisma.verificationToken.deleteMany({where:{identifier:{in:[`portal-session:${workspace.id}:${user.id}`,`portal-login-attempt:${workspace.id}:${user.id}`]}}});
     await prisma.user.delete({where:{id:user.id}});

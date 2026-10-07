@@ -14,6 +14,8 @@ async function main() {
     assert.equal((await POST(request(auth,"x".repeat(1025)))).status,413); assert.equal(reads,0);
     const response=await POST(request(auth,'{"auditId":"fixture"}'));assert.equal(response.status,200);
     assert.equal(response.headers.get("cache-control"),"no-store"); assert.deepEqual(await response.json(),{result:"skipped"}); assert.equal(reads,1);
+    prisma.activityLog.findFirst=(async(args:{select?:{entityType?:boolean};where:{entityType:unknown}})=>{reads++;if(args.select?.entityType){assert.deepEqual(args.where.entityType,{in:["ProfessionalDocument","ExperienceEvidence"]});return{entityType:"ExperienceEvidence"};}assert.equal(args.where.entityType,"ExperienceEvidence");return{id:"fixture",actorId:null,metadata:null};}) as unknown as typeof find;
+    assert.deepEqual(await (await POST(request(auth,'{"auditId":"fixture"}'))).json(),{result:"skipped"});assert.equal(reads,3);
     console.log("PASS internal cleanup: dedicated credential, byte-safe comparison, bounded strict body, authorization before database and private response.");
   } finally {prisma.activityLog.findFirst=find; if(original===undefined)delete process.env.PROFESSIONAL_DOCUMENT_CLEANUP_SECRET;else process.env.PROFESSIONAL_DOCUMENT_CLEANUP_SECRET=original;}
 }
