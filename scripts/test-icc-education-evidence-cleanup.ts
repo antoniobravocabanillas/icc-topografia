@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { PrismaClient } from "@prisma/client";
-import { dueEducationEvidenceAttempts, markEducationEvidenceCleanupInTransaction, recoverEducationEvidenceInTransaction } from "../lib/server/education-evidence-cleanup";
+import { dueEducationEvidenceAttempts, markEducationEvidenceCleanupInTransaction, recoverEducationEvidenceInTransaction, rearmDueEducationEvidenceWatchInTransaction } from "../lib/server/education-evidence-cleanup";
 
 const prisma = new PrismaClient({ log: [] });
 const tables = ["TerraqoEducationEvidence", "TerraqoEducationEvidenceOperation", "TerraqoEducationEvidenceAttempt"];
@@ -67,6 +67,33 @@ async function main() {
       assert.equal(await recoverEducationEvidenceInTransaction(tx, orphan.id, store, now), "completed");
       assert.equal(await used(), 2); assert.ok(!blobs.has(orphan.storageKey));
       assert.equal((await tx.terraqoEducationEvidenceAttempt.updateMany({ where: { id: orphan.id, state: "RESERVED" }, data: { state: "COMMITTED" } })).count, 0);
+      phase = "late write followed by process death without callback";
+      const tombstone = await tx.terraqoEducationEvidenceAttempt.findUniqueOrThrow({ where: { id: orphan.id } });
+      assert.ok(tombstone.nextAttemptAt && tombstone.nextAttemptAt > now);
+      // A physical write occurs, then its worker dies: NO lateWrite marker.
+      blobs.add(orphan.storageKey);
+      assert.equal(await rearmDueEducationEvidenceWatchInTransaction(tx, orphan.id, now), "skipped");
+      assert.ok(!(await dueEducationEvidenceAttempts(tx, now)).some(row => row.id === orphan.id));
+      const sweepAt = tombstone.nextAttemptAt!;
+      assert.ok((await dueEducationEvidenceAttempts(tx, sweepAt)).some(row => row.id === orphan.id));
+      assert.equal(await rearmDueEducationEvidenceWatchInTransaction(tx, orphan.id, sweepAt), "pending");
+      assert.equal(await recoverEducationEvidenceInTransaction(tx, orphan.id, store, sweepAt), "completed");
+      assert.ok(!blobs.has(orphan.storageKey)); assert.equal(await used(), 2);
+      const nextSweep = await tx.terraqoEducationEvidenceAttempt.findUniqueOrThrow({ where: { id: orphan.id } });
+      assert.ok(nextSweep.nextAttemptAt && nextSweep.nextAttemptAt > sweepAt);
+      assert.equal(nextSweep.reservedUnits, 0); assert.equal(nextSweep.attempts, 0);
+      // Even after a year there is no assumed settlement/purge deadline.
+      const muchLater = new Date(sweepAt.getTime() + 366 * 86400_000);
+      blobs.add(orphan.storageKey);
+      assert.equal(await rearmDueEducationEvidenceWatchInTransaction(tx, orphan.id, muchLater), "pending");
+      assert.equal(await recoverEducationEvidenceInTransaction(tx, orphan.id, store, muchLater), "completed");
+      assert.equal(await used(), 2); assert.ok(!blobs.has(orphan.storageKey));
+      assert.equal(await rearmDueEducationEvidenceWatchInTransaction(tx, winner.id, muchLater), "skipped");
+      await tx.terraqoEducationEvidenceAttempt.update({ where: { id: winner.id }, data: { state: "CLEANED", reservedUnits: 0, nextAttemptAt: null } });
+      assert.equal(await rearmDueEducationEvidenceWatchInTransaction(tx, winner.id, muchLater), "retained");
+      assert.ok(blobs.has(winner.storageKey)); assert.equal(await used(), 2);
+      assert.ok((await tx.terraqoEducationEvidenceAttempt.findUniqueOrThrow({ where: { id: winner.id } })).nextAttemptAt! > muchLater);
+      await tx.terraqoEducationEvidenceAttempt.update({ where: { id: winner.id }, data: { state: "COMMITTED", reservedUnits: 1 } });
       phase = "retry preserves reserve and respects due time";
       const retry = await attempt(); await charge(); blobs.add(retry.storageKey);
       assert.equal(await markEducationEvidenceCleanupInTransaction(tx, retry.id, user.id), "pending");
@@ -114,12 +141,12 @@ async function main() {
       assert.equal(deletions, before); assert.equal(await used(), 3);
       assert.ok(blobs.has(winner.storageKey));
       verified = true; throw rollback;
-    }, { maxWait: 5000, timeout: 60000 });
+    }, { maxWait: 5000, timeout: 90000 });
   } catch (error) { if (error !== rollback || !verified) throw error; }
   assert.equal(await prisma.user.count({ where: { email } }), 0);
   for (const table of tables) assert.equal((await prisma.$queryRaw<{ present: string | null }[]>`
     SELECT to_regclass(${`icc."${table}"`})::text AS present`)[0].present, null);
-  console.log("PASS own SQL rollback + controlled blob double: live reference retained, one refund, late write zero-unit rearm, retry/due/quarantine, SQL rollback after deletion and invalid owner/key/bucket fenced. No live storage, HTTP or cross-connection concurrency claimed; fixture/DDL/quota rolled back.");
+  console.log("PASS own SQL rollback + controlled blob double: live reference, one refund, late write without callback recovered by durable tombstone watch, no expiry after a year, retry/due/quarantine, SQL rollback after deletion and invalid owner/key/bucket fenced. No live storage, HTTP or cross-connection concurrency claimed; fixture/DDL/quota rolled back.");
 }
 main().catch((error: unknown) => { const value = error as { code?: string; name?: string; meta?: { code?: string } };
   console.error({ phase, code: value.code, databaseCode: value.meta?.code, name: value.name });

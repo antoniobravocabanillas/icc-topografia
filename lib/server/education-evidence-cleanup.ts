@@ -6,6 +6,9 @@ import { cleanupRetrySchedule } from "./private-upload-retry";
 type Store = { delete(key: string): Promise<unknown> };
 type Result = "completed" | "retained" | "retry" | "quarantined" | "skipped" | "pending";
 type Database = Pick<PrismaClient, "$transaction" | "terraqoEducationEvidenceAttempt">;
+// Revisit interval, NOT a settlement deadline. Tombstones are never purged:
+// the storage adapter cannot prove that an interrupted write has stopped.
+const WATCH_INTERVAL_MS = 6 * 60 * 60_000;
 
 async function lockAttempt(tx: Prisma.TransactionClient, id: string) {
   if (!/^[A-Za-z0-9_-]{1,100}$/.test(id)) return null;
@@ -42,6 +45,27 @@ export async function markEducationEvidenceCleanupInTransaction(tx: Prisma.Trans
   await tx.terraqoEducationEvidenceAttempt.update({ where: { id }, data: {
     state: "CLEANUP_PENDING", reservedUnits: row.state === "CLEANED" ? 0 : row.reservedUnits, nextAttemptAt: null,
   } });
+  return "pending" as const;
+}
+
+/** Internal durable sweep. Caller commits this fence BEFORE invoking delete.
+ * Re-read under the owner locks, even if a dispatch selected a stale row. */
+export async function rearmDueEducationEvidenceWatchInTransaction(tx: Prisma.TransactionClient, id: string, now = new Date()) {
+  const row = await lockAttempt(tx, id);
+  if (!row || row.state !== "CLEANED") return "skipped" as const;
+  if (row.nextAttemptAt && row.nextAttemptAt > now) return "skipped" as const;
+  if (row.reservedUnits !== 0 || row.actorId !== row.education.professionalProfile.userId) {
+    await tx.terraqoEducationEvidenceAttempt.update({ where: { id }, data: { state: "QUARANTINED", nextAttemptAt: null } });
+    return "quarantined" as const;
+  }
+  if (await tx.terraqoEducationEvidence.count({ where: { storageKey: row.storageKey } })) {
+    // Keep the anomalous tombstone under watch without monopolizing each batch.
+    await tx.terraqoEducationEvidenceAttempt.update({ where: { id }, data: {
+      nextAttemptAt: new Date(now.getTime() + WATCH_INTERVAL_MS),
+    } });
+    return "retained" as const;
+  }
+  await tx.terraqoEducationEvidenceAttempt.update({ where: { id }, data: { state: "CLEANUP_PENDING", nextAttemptAt: null } });
   return "pending" as const;
 }
 
@@ -93,7 +117,9 @@ export async function recoverEducationEvidenceInTransaction(tx: Prisma.Transacti
     if (refunded.count !== 1) throw Error("EDUCATION_QUOTA_FENCE_CHANGED");
   }
   // If the SQL reply is lost, replay reads CLEANED and never refunds again.
-  await tx.terraqoEducationEvidenceAttempt.update({ where: { id }, data: { state: "CLEANED", reservedUnits: 0, nextAttemptAt: null } });
+  await tx.terraqoEducationEvidenceAttempt.update({ where: { id }, data: {
+    state: "CLEANED", reservedUnits: 0, attempts: 0, nextAttemptAt: new Date(now.getTime() + WATCH_INTERVAL_MS),
+  } });
   return "completed";
 }
 
@@ -103,6 +129,7 @@ export async function recoverEducationEvidenceAttempt(database: Database, id: st
       if (!/^[A-Za-z0-9_-]{1,100}$/.test(id)) return "skipped" as const;
       const row = await tx.terraqoEducationEvidenceAttempt.findUnique({ where: { id }, select: { actorId: true, state: true } });
       if (!row) return "skipped" as const;
+      if (row.state === "CLEANED") return rearmDueEducationEvidenceWatchInTransaction(tx, id);
       // Existing retry timestamps are preserved by skipping redundant rearm.
       if (row.state === "CLEANUP_PENDING") return "pending" as const;
       return markEducationEvidenceCleanupInTransaction(tx, id, row.actorId);
@@ -122,5 +149,6 @@ export function dueEducationEvidenceAttempts(database: Pick<Prisma.TransactionCl
   return database.terraqoEducationEvidenceAttempt.findMany({ where: { OR: [
     { state: { in: ["PREPARED", "RESERVED"] }, updatedAt: { lte: new Date(now.getTime() - 5 * 60_000) } },
     { state: "CLEANUP_PENDING", OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }] },
-  ] }, select: { id: true }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: 5 });
+    { state: "CLEANED", OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }] },
+  ] }, select: { id: true }, orderBy: [{ nextAttemptAt: { sort: "asc", nulls: "first" } }, { updatedAt: "asc" }, { id: "asc" }], take: 5 });
 }
