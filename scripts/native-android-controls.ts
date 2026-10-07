@@ -28,14 +28,17 @@ function center(node: string) {
   const bounds = node.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);
   assert.ok(bounds); return `${Math.round((+bounds[1] + +bounds[3]) / 2)} ${Math.round((+bounds[2] + +bounds[4]) / 2)}`;
 }
-export async function scroll(serial: string, down = false) {
-  // Returning from a picker can restore the focused field and reopen the keyboard.
-  // Hide it only when shown; an unconditional Back would leave the current route.
+async function hideShownKeyboard(serial: string) {
+  // Back also dismisses the current route when Android has no visible IME.
+  // Check its window immediately before sending Back, including after input.
   const imeWindow=shell(serial,"dumpsys window windows").split(/(?=  Window #\d+ Window\{)/)
     .find(block=>/^  Window #\d+ Window\{[^\n]+ InputMethod\}:/.test(block));
   if (imeWindow?.includes("isVisible=true") && imeWindow.includes("mHasSurface=true")) {
     shell(serial,"input keyevent 4");await pause(400);
   }
+}
+export async function scroll(serial: string, down = false) {
+  await hideShownKeyboard(serial);
   const dimensions = [...shell(serial, "wm size").matchAll(/(\d+)x(\d+)/g)].at(-1); assert.ok(dimensions);
   const x = Math.round(+dimensions[1] / 2), top = Math.round(+dimensions[2] * .25), bottom = Math.round(+dimensions[2] * .8);
   shell(serial, `input swipe ${x} ${down ? top : bottom} ${x} ${down ? bottom : top} 350`); await pause(300);
@@ -55,7 +58,7 @@ async function fillNode(serial: string, node: string, value: string) {
   // Tap placement can put the caret inside existing text. Append explicitly.
   shell(serial, "input keyevent 123");
   // Credentials enter via stdin, never a process argument, screenshot or log.
-  shell(serial, `input text ${value}`); shell(serial, "input keyevent 4"); await pause(300);
+  shell(serial, `input text ${value}`); await hideShownKeyboard(serial); await pause(300);
 }
 export async function fillLabel(serial: string, label: string, value: string) {
   for (let attempt = 0; attempt < 9; attempt++) {
