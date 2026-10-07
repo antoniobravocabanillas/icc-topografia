@@ -67,7 +67,8 @@ export async function updateProfessionalUsernameAction(formData: FormData) {
 
   await prisma.terraqoProfessionalProfile.update({
     where: { id: profile.id },
-    data: { username, liveCvEnabled: true }
+    // Saving an alias never grants publication consent or reverses withdrawal.
+    data: { username }
   });
 
   revalidatePath("/portal");
@@ -714,7 +715,7 @@ export async function updateProfessionalSettingsAction(formData: FormData) {
       specialties: listFromText(formData, "specialties").slice(0, 16),
       equipment: listFromText(formData, "equipment").slice(0, 16),
       software: listFromText(formData, "software").slice(0, 16),
-      liveCvEnabled: Boolean(username),
+      // Publication belongs to a separate explicit operation, not this form.
       messagePrivacy,
       friendDiscoveryEnabled: formData.get("friendDiscoveryEnabled") === "on",
       bankAccountHolder: cleanText(formData, "bankAccountHolder", 120),

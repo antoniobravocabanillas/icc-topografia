@@ -243,11 +243,8 @@ async function linkProfessionalProjectAction(formData: FormData) {
           visibility: "WORKSPACE"
         }
       })
-    ),
-    prisma.terraqoProfessionalProfile.update({
-      where: { id: profile.id },
-      data: { liveCvEnabled: true }
-    })
+    )
+    // Linking a workspace experience cannot publish its owner's CV.
   ]);
 
   revalidatePath("/admin/terraqo/red");

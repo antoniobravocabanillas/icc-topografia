@@ -73,7 +73,8 @@ export default async function PortalSettingsPage({ searchParams }: SettingsPageP
 
   if (!profile) redirect("/portal?status=profile-required");
 
-  const publicCvHref = profile.username ? `${terraqoDomains.public}/cv/${profile.username}` : null;
+  const publicCvHref = profile.username && profile.liveCvEnabled
+    ? `${terraqoDomains.public}/cv/${profile.username}` : null;
 
   return (
     <div className="min-w-0 py-8 lg:py-10">
@@ -117,7 +118,7 @@ export default async function PortalSettingsPage({ searchParams }: SettingsPageP
               <div>
                 <div className="flex items-center gap-2 text-primary"><UserRound className="h-5 w-5" /><span className="font-mono text-xs font-bold uppercase tracking-[0.16em]">Perfil público</span></div>
                 <CardTitle className="mt-3">Usuario y CV vivo</CardTitle>
-                <CardDescription>Define un enlace corto para compartir tu perfil profesional validado.</CardDescription>
+                <CardDescription>Define tu nombre de usuario. Guardar la configuración conserva el estado de publicación del CV.</CardDescription>
               </div>
               {publicCvHref ? (
                 <Button asChild variant="outline">
@@ -134,7 +135,7 @@ export default async function PortalSettingsPage({ searchParams }: SettingsPageP
                 {publicCvHref ? (
                   <span><b className="text-foreground">Enlace activo:</b> {publicCvHref.replace(/^https?:\/\//, "")}</span>
                 ) : (
-                  <span>Crea un usuario para activar tu enlace público. Tu CV vivo solo muestra información profesional permitida.</span>
+                  <span><b className="text-foreground">CV sin publicar.</b> {profile.username ? `Usuario guardado: @${profile.username}. ` : "Elige un nombre de usuario. "}Guardar este formulario no publica ni reactiva tu CV.</span>
                 )}
               </div>
             </CardContent>
