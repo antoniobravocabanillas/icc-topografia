@@ -62,6 +62,13 @@ async function main() {
     assert.equal((retry.metadata as {storageCleanupState:string}).storageCleanupState,"PENDING");
     const retries=await Promise.all([internal({auditId:retry.id}),internal({auditId:retry.id})]);for(const response of retries)assert.equal(response.status,200);
     assert.equal(await store.getWithMetadata(pair[1].storageKey,{type:"arrayBuffer"}),null);assert.equal((await prisma.terraqoUsageBucket.findUniqueOrThrow({where:{id:before.id}})).used,0);
+    for(const protectedStatus of ["VERIFIED","UNDER_REVIEW"] as const){
+      await prisma.terraqoProfessionalProfile.update({where:{id:user.terraqoProfessionalProfile!.id},data:{identityVerificationStatus:protectedStatus}});
+      const identity=new FormData();identity.set("purpose","identity");identity.set("dniFront",new File([png],"synthetic-front.png",{type:"image/png"}));identity.set("dniBack",new File([png],"synthetic-back.png",{type:"image/png"}));
+      const denied=await fetch(base+"documents",{method:"POST",headers:{authorization:`Bearer ${bearer}`},body:identity,redirect:"error",signal:AbortSignal.timeout(55000)});assert.equal(denied.status,409);
+      assert.equal(await prisma.terraqoProfessionalDocument.count({where:{professionalProfileId:user.terraqoProfessionalProfile!.id}}),0);assert.equal((await prisma.terraqoUsageBucket.findUniqueOrThrow({where:{id:before.id}})).used,0);
+    }
+    console.log("PASS published identity guard: own verified/under-review fixture rejects resubmission without a native header, no document or quota mutation.");
     console.log("PASS pair compensation: two rounded reservations, first blob removed/refunded, second failure retains one unit and durable marker, concurrent recovery refunds once.");
     console.log("PASS deployed cleanup: unauthenticated rejection, retained-document guard, actual blob removal, three concurrent retries, one quota refund and replay guard.");
   } finally {

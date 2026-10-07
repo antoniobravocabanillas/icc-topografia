@@ -57,6 +57,9 @@ function validateFile(file: File, type: DocumentType) {
   return null;
 }
 
+class IdentityUploadConflict extends Error {}
+const identityUploadAllowed=(status:string)=>["PENDING_DOCUMENTS","REJECTED"].includes(status);
+
 type UploadDependencies = {store: ReturnType<typeof getProfessionalDocumentStore>; reserve: typeof reserveStorage; recover:typeof recoverProfessionalDocumentCleanup};
 export async function uploadProfessionalDocuments(request: Request, userId: string, requestedWorkspaceId?: string, dependencies?: Partial<UploadDependencies>) {
   const native = request.headers.get("x-terraqo-native-upload") === "1";
@@ -83,6 +86,9 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
       if (!membership) return fail("El perfil no tiene acceso profesional a este workspace.", 403);
     }
 
+    if(purpose === "identity" && (!identityUploadAllowed(profile.identityVerificationStatus) || await prisma.terraqoProfessionalDocument.count({where:{professionalProfileId:profile.id,type:{in:["DNI_FRONT","DNI_BACK"]},reviewStatus:"VERIFIED"}}))) {
+      return fail("Tu identidad está verificada o en revisión. Conserva los documentos actuales.",409);
+    }
     const requestedFiles: Array<{ type: DocumentType; file: File }> = [];
     if (purpose === "cv") {
       const cvFile = getFile(formData, "cvFile");
@@ -144,7 +150,10 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
       const documents = await prisma.$transaction(async (tx) => {
         // Serialize replacements on the profile before rejecting pending copies
         // and moving its active CV pointer. Verified documents remain untouched.
-        await tx.$queryRaw(Prisma.sql`SELECT id FROM icc."TerraqoProfessionalProfile" WHERE id=${profile.id} AND "userId"=${userId} FOR UPDATE`);
+        const currentProfile=await tx.$queryRaw<{id:string;identityVerificationStatus:string}[]>(Prisma.sql`SELECT id,"identityVerificationStatus" FROM icc."TerraqoProfessionalProfile" WHERE id=${profile.id} AND "userId"=${userId} FOR UPDATE`);
+        if(purpose === "identity" && (!currentProfile[0] || !identityUploadAllowed(currentProfile[0].identityVerificationStatus) || await tx.terraqoProfessionalDocument.count({where:{professionalProfileId:profile.id,type:{in:["DNI_FRONT","DNI_BACK"]},reviewStatus:"VERIFIED"}}))) {
+          throw new IdentityUploadConflict("Tu identidad cambió durante la carga. Actualiza el expediente y conserva los documentos actuales.");
+        }
         if (workspaceId) {
           const current = await tx.$queryRaw<{id:string}[]>(Prisma.sql`SELECT id FROM icc."TerraqoWorkspaceMember"
             WHERE "workspaceId"=${workspaceId} AND "userId"=${userId} AND active=true AND role='PROFESSIONAL' FOR SHARE`);
@@ -223,6 +232,7 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
       throw error;
     }
   } catch (error) {
+    if(error instanceof IdentityUploadConflict)return fail(error.message,409);
     if (native && !(error instanceof BillingError)) {
       // Never log filenames, storage keys, file contents or personal profile data.
       console.warn("Private professional upload could not be confirmed.");
