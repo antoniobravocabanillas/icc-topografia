@@ -1,3 +1,5 @@
+import { BillingError } from "@/lib/terraqo/billing/provider";
+import { Prisma } from "@prisma/client";
 import { validatePrivateProfessionalFile } from "./professional-file-validation";
 import { prisma } from "@/lib/prisma";
 import { reserveStorage } from "@/lib/terraqo/billing/storage-quota";
@@ -53,14 +55,16 @@ function validateFile(file: File, type: DocumentType) {
   return null;
 }
 
-export async function uploadProfessionalDocuments(request: Request, userId: string, requestedWorkspaceId?: string) {
+type UploadDependencies = {store: ReturnType<typeof getProfessionalDocumentStore>; reserve: typeof reserveStorage};
+export async function uploadProfessionalDocuments(request: Request, userId: string, requestedWorkspaceId?: string, dependencies?: Partial<UploadDependencies>) {
+  const native = request.headers.get("x-terraqo-native-upload") === "1";
   try {
-    const native = request.headers.get("x-terraqo-native-upload") === "1";
+    if (native && !requestedWorkspaceId) return fail("Selecciona una empresa antes de cargar desde Android.", 422);
     const contentLength = Number(request.headers.get("content-length") || 0);
     if (native && contentLength > 4 * 1024 * 1024 + 65536) return fail("El archivo supera el límite móvil de 4 MB.", 413);
     const formData = await request.formData();
     const purpose = String(formData.get("purpose") || "");
-    if (native && purpose !== "document") return fail("Esta carga móvil requiere una categoría documental.", 422);
+    if (native && !["document", "cv"].includes(purpose)) return fail("Esta carga móvil requiere una categoría documental.", 422);
     if (!["cv", "identity", "document"].includes(purpose)) return fail("Tipo de carga no valido.", 400);
 
     const profile = await prisma.terraqoProfessionalProfile.findUnique({ where: { userId } });
@@ -96,18 +100,19 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
     }
 
     for (const item of requestedFiles) {
+      if (native && purpose === "cv" && item.file.type !== "application/pdf") return fail("El currículum móvil debe estar en PDF.", 422);
       const validationError = validateFile(item.file, item.type);
       if (validationError) return fail(validationError, 400);
       if (native && item.file.size > 4 * 1024 * 1024) return fail("El archivo supera el límite móvil de 4 MB.", 413);
-      if (purpose === "document" || purpose === "identity") {
+      if (purpose === "document" || purpose === "identity" || (native && purpose === "cv")) {
         const contentError = await validatePrivateProfessionalFile(item.file);
         if (contentError) return fail(contentError, 422);
       }
     }
 
-    const store = getProfessionalDocumentStore();
+    const store = dependencies?.store || getProfessionalDocumentStore();
     const stored: Array<{ type: DocumentType; file: File; storageKey: string }> = [];
-    const reservation=await reserveStorage(userId,requestedFiles.reduce((sum,item)=>sum+item.file.size,0));
+    const reservation=await (dependencies?.reserve || reserveStorage)(userId,requestedFiles.reduce((sum,item)=>sum+item.file.size,0));
 
     try {
       for (const item of requestedFiles) {
@@ -128,6 +133,14 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
       }
 
       const documents = await prisma.$transaction(async (tx) => {
+        // Serialize replacements on the profile before rejecting pending copies
+        // and moving its active CV pointer. Verified documents remain untouched.
+        await tx.$queryRaw(Prisma.sql`SELECT id FROM icc."TerraqoProfessionalProfile" WHERE id=${profile.id} AND "userId"=${userId} FOR UPDATE`);
+        if (workspaceId) {
+          const current = await tx.$queryRaw<{id:string}[]>(Prisma.sql`SELECT id FROM icc."TerraqoWorkspaceMember"
+            WHERE "workspaceId"=${workspaceId} AND "userId"=${userId} AND active=true AND role='PROFESSIONAL' FOR SHARE`);
+          if (!current.length) throw new Error("Professional membership changed during upload.");
+        }
         if (purpose !== "document") {
           await tx.terraqoProfessionalDocument.updateMany({
             where: {
@@ -136,7 +149,7 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
               type: { in: requestedFiles.map((item) => item.type) },
               reviewStatus: "SUBMITTED",
             },
-            data: { reviewStatus: "REJECTED", reviewNote: "Documento reemplazado por una carga posterior." },
+            data: { reviewStatus: "REJECTED", reviewedAt: new Date(), reviewNote: "Documento reemplazado por una carga posterior." },
           });
         }
 
@@ -178,7 +191,7 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
           } });
         }
         return createdDocuments;
-      });
+      }, {maxWait:15000, timeout:15000});
 
       return ok({
         documents,
@@ -212,6 +225,11 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
       throw error;
     }
   } catch (error) {
+    if (native && !(error instanceof BillingError)) {
+      // Never log filenames, storage keys, file contents or personal profile data.
+      console.warn("Private professional upload could not be confirmed.");
+      return fail("Actualiza el expediente para comprobar la carga antes de volver a enviarla.", 503);
+    }
     return handleApiError(error);
   }
 }

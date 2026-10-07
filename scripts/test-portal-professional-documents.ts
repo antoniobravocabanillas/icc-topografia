@@ -44,7 +44,7 @@ async function main() {
     assert.deepEqual(args.where, { professionalProfile: { userId: "owner" }, OR: [{ workspaceId: "workspace" }, { workspaceId: null }] });
     assert.equal(args.take, 31); assert.ok(!JSON.stringify(args.select).includes("storageKey"));
     return Array.from({length: 31}, (_, i) => ({id: `doc-${i}`, type: i === 2 ? "DNI_FRONT" : "CV", fileName: "private.pdf", contentType: "application/pdf", size: 100,
-      reviewStatus: i === 1 ? "VERIFIED" : "REJECTED", uploadedAt: date, reviewedAt: null, _count: {cvImports: i === 3 ? 1 : 0}}));
+      reviewStatus: i === 1 ? "VERIFIED" : "REJECTED", reviewNote: i === 4 ? "Documento reemplazado por una carga posterior." : "Private reviewer note", uploadedAt: date, reviewedAt: null, _count: {cvImports: i === 3 ? 1 : 0}}));
   }) as unknown as typeof original.docs;
   const fails = (status: number) => (error: unknown) => error instanceof PortalResourceError && error.status === status;
   const store = {delete: async (key: string) => { assert.equal(key, "private-key"); }};
@@ -52,6 +52,9 @@ async function main() {
     const page = await listPortalResource(token, "professionalDocuments");
     assert.equal(page.records.length, 30); assert.equal(page.nextCursor, "doc-29"); assert.equal(page.canCreate, false);
     assert.equal(page.records[0].canDelete, true);
+    assert.equal(page.records[4].fields.superseded, "true");
+    assert.ok(!JSON.stringify(page).includes("Private reviewer note"));
+    assert.ok(!JSON.stringify(page).includes("reviewNote"));
     for (const index of [1, 2, 3]) assert.equal(page.records[index].canDelete, false);
     await assert.rejects(authorizeResource({...token, role: "ADMIN"}, "professionalDocuments"), fails(403));
     enabled = false; await assert.rejects(authorizeResource(token, "professionalDocuments"), fails(403)); enabled = true;

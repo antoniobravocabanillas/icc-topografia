@@ -14,7 +14,7 @@ export async function listProfessionalDocuments(token: WorkspacePortalToken, cur
     where: professionalDocumentScope(token), orderBy: { id: "asc" }, take: 31,
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     select: { id: true, type: true, fileName: true, contentType: true, size: true,
-      reviewStatus: true, uploadedAt: true, reviewedAt: true, _count: { select: { cvImports: true } } },
+      reviewStatus: true, uploadedAt: true, reviewedAt: true, reviewNote: true, _count: { select: { cvImports: true } } },
   });
   return { schemaVersion: 1, workspaceSlug: token.workspaceSlug, resource: "professionalDocuments",
     canCreate: false, nextCursor: rows.length > 30 ? rows[29].id : null,
@@ -23,7 +23,7 @@ export async function listProfessionalDocuments(token: WorkspacePortalToken, cur
       updatedAt: (row.reviewedAt || row.uploadedAt).toISOString(), editable: false,
       canDelete: row.reviewStatus === "REJECTED" && !["DNI_FRONT", "DNI_BACK"].includes(row.type) && row._count.cvImports === 0,
       fields: { kind: "professionalDocument", fileName: row.fileName, contentType: row.contentType,
-        size: String(row.size), type: row.type, uploadedAt: row.uploadedAt.toISOString(),
+        size: String(row.size), type: row.type, superseded: String(row.type === "CV" && row.reviewStatus === "REJECTED" && row.reviewNote === "Documento reemplazado por una carga posterior."), uploadedAt: row.uploadedAt.toISOString(),
         reviewedAt: row.reviewedAt?.toISOString() || "" } as Record<string, string>,
     })),
   };
