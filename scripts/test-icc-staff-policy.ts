@@ -146,7 +146,7 @@ async function main() {
         phase="browser-pending";
         await page.waitForFunction(profileId=>document.querySelector(`[data-policy-profile="${profileId}"] input[name="fixedCommission"]`)?.matches(":disabled"),id);
         await expect(form.getByLabel("Comisión fija",{exact:true})).toBeDisabled();
-        await expect(form.getByRole("button",{name:"Guardar reglas comerciales"})).toBeDisabled();
+        await expect(form.locator('button[type="submit"]')).toBeDisabled();
         phase="browser-result";
         await form.getByRole("status").filter({hasText:"Política guardada correctamente."}).waitFor({state:"visible"});
         phase="browser-persisted-amount";
