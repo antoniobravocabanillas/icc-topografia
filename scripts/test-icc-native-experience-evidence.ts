@@ -39,7 +39,10 @@ async function main() {
   const store = getStore({ name: WORKLOG_EVIDENCE_STORE, siteID: "2d38524a-44f9-4473-8a1f-9270e03bc2bf", token, consistency: "strong" });
   const base = "https://api.terraqoglobal.com/api/public/workspaces/icc-topografia/portal/";
   const bytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aGMsAAAAASUVORK5CYII=", "base64");
+  const target = process.env.TERRAQO_NATIVE_PROOF_TARGET ?? "all";
+  assert.ok(["all", "phone", "tablet"].includes(target));
   for (const [serial, label] of [["emulator-5554", "phone"], ["emulator-5556", "tablet"]] as const) {
+    if (target !== "all" && target !== label) continue;
     assert.ok(/versionCode=24(?:\s|$)/.test(shell(serial, "dumpsys package com.terraqo.terraqo_mobile")), "Native proof requires the final version 0.24 APK.");
     const password = randomBytes(24).toString("hex"), email = `native-evidence-${randomUUID()}@example.test`;
     const user = await prisma.user.create({ data: { email, name: "Prueba evidencia Android", role: "CUSTOMER", emailVerified: new Date(),
@@ -102,7 +105,22 @@ async function main() {
       readerAttempted = true;
       await tapLabel(serial, "Abrir archivo"); await pause(1500);
       cacheFile = `cache/terraqo_private_files/terraqo-evidence-${row.id}.png`;
+      let cached = false;
+      const cacheDeadline = Date.now() + 95000;
+      while (Date.now() < cacheDeadline) {
+        cached = shell(serial, `run-as com.terraqo.terraqo_mobile sh -c 'test -f ${cacheFile} && echo ready || echo pending'`).trim() === "ready";
+        if (cached) break;
+        await pause(700);
+      }
+      if (!cached) {
+        const xml = await snapshot(serial);
+        const messages = ["Vuelve a iniciar sesión", "La experiencia no está disponible", "La experiencia cambió", "No pudimos confirmar", "La respuesta no corresponde", "La respuesta supera", "El archivo no coincide", "El contenido no coincide", "La conexión se interrumpió", "Instala una aplicación compatible", "Tu sesión cambió", "No pudimos abrir la evidencia"].filter(message => xml.includes(message));
+        console.log(`Native opening state: ${JSON.stringify(messages)}`);
+        if (xml.includes("Evidencias")) capture(serial, `cv-experience-evidence-open-failure-${label}.png`);
+      }
+      assert.ok(cached, "The explicit download must create its own private cache file within the verification deadline.");
       assert.equal(shell(serial, `run-as com.terraqo.terraqo_mobile cat ${cacheFile} | base64`).replace(/\s/g, ""), bytes.toString("base64"));
+      await pause(700);
       const foreground = shell(serial, "dumpsys window").split("\n").find(line => line.includes("mCurrentFocus")); assert.ok(foreground);
       if (!foreground.includes("com.terraqo.terraqo_mobile")) {
         assert.ok(foreground.includes("com.android") || foreground.includes("com.google"), "Expected native reader or chooser.");
