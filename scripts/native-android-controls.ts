@@ -79,7 +79,9 @@ export async function fillLastLabel(serial: string, label: string, value: string
   throw new Error(`Native input unavailable: ${label}`);
 }
 export async function login(serial: string, email: string, password: string) {
-  shell(serial, "am force-stop com.terraqo.terraqo_mobile"); shell(serial, "am start -n com.terraqo.terraqo_mobile/.MainActivity");
+  shell(serial, "am force-stop com.terraqo.terraqo_mobile"); // Match flutter run --no-enable-impeller for the dedicated debug emulators.
+  // The distributed app keeps its default rendering engine.
+  shell(serial, "am start -n com.terraqo.terraqo_mobile/.MainActivity --ez enable-impeller false");
   let ready = false;
   for (let attempt = 0; attempt < 10; attempt++) { await pause(700); if ((await snapshot(serial)).includes("Ingresar a mi empresa")) { ready = true; break; } }
   assert.ok(ready, "Test requires an empty login screen.");
