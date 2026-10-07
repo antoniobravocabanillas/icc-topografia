@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { randomUUID } from "node:crypto";
 import { BadgeCheck, Building2, ExternalLink, Link2, MapPin, ShieldCheck, Wrench } from "lucide-react";
 import { PortalPageHeading } from "@/components/terraqo/portal-page-heading";
 import { UserAvatar } from "@/components/terraqo/user-avatar";
@@ -9,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { requestProfessionalAffiliationAction } from "@/lib/server/professional-affiliation-actions";
 import { requireProfessionalPortal } from "@/lib/terraqo/professional-portal";
 import { terraqoDomains } from "@/lib/terraqo-domains";
+import { cvPublicationEntryHref } from "@/lib/terraqo/cv-publication-entry";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -31,7 +33,9 @@ const affiliationMessages: Record<string, string> = {
 
 export default async function ProfilePage({ searchParams }: PageProps) {
   const params = await searchParams;
-  const { profile } = await requireProfessionalPortal();
+  const { session, profile, memberships } = await requireProfessionalPortal();
+  const publicationHref = profile.user.id === session.user.id
+    ? cvPublicationEntryHref(process.env.TERRAQO_WEB_CV_PUBLICATION_ENABLED, memberships, randomUUID()) : null;
   const companies = await prisma.terraqoWorkspace.findMany({
     where: { active: true, deletedAt: null, companyId: { not: null } },
     select: { id: true, name: true, brandName: true, industry: true },
@@ -88,6 +92,13 @@ export default async function ProfilePage({ searchParams }: PageProps) {
             <InfoRow label="CV vivo" value={profile.liveCvEnabled ? "Publicado" : "Sin publicar"} />
             <InfoRow label="Usuario público" value={profile.username ? `@${profile.username}` : "Por configurar"} />
             <InfoRow label="Estado laboral" value={profile.status.replaceAll("_", " ").toLowerCase()} />
+            {publicationHref ? <div className="border-t pt-4">
+              <Button asChild variant="outline" className="h-auto min-h-11 max-w-full whitespace-normal py-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+                {/* Native document navigation protects pending CV operations on back/forward navigation. */}
+                <a href={publicationHref}>Gestionar publicación del CV</a>
+              </Button>
+              <p className="mt-3 text-sm leading-6 text-muted-foreground">Publicar o retirar el CV requiere tu confirmación.</p>
+            </div> : null}
           </CardContent>
         </Card>
       </section>

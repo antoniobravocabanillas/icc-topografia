@@ -7,10 +7,12 @@ import { chromium, type Browser, type BrowserContext, type Page } from "playwrig
 import { prisma } from "../lib/prisma";
 
 // Standalone browser verifier, not a production route or a test-account bypass.
-// Credentials remain in memory. The browser's portal requests go exclusively
-// to this owned Next process; no production page is modified or intercepted.
+// Credentials remain in memory. Local mode delivers portal requests only to
+// its owned Next process. --deployed uses real HTTPS without rewriting hosts;
+// connection-loss simulation intercepts exclusively this fixture's CV POST.
 const origin = "https://portal.terraqoglobal.com", local = "http://127.0.0.1:3876";
 const path = "/cuenta/publicacion-cv?workspaceSlug=icc-topografia";
+const deployed = process.argv.includes("--deployed");
 let phase = "setup";
 async function main() {
   assert.equal(process.env.TERRAQO_MUTATING_TESTS, "icc-topografia:20616116313");
@@ -29,7 +31,13 @@ async function main() {
     }
     console.log(`CLEANUP ${abandoned.length} exclusively owned aborted browser fixtures, with grants revoked first.`); return;
   }
-  const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "--hostname", "127.0.0.1", "--port", "3876"], {
+  if (deployed) {
+    const response = await fetch(origin + path, { redirect: "manual", signal: AbortSignal.timeout(30000) });
+    const location = response.headers.get("location"); await response.body?.cancel();
+    assert.ok([302, 303, 307, 308].includes(response.status) && location && new URL(location, origin).pathname === "/cuenta",
+      "Deployed entry must be enabled and require login before creating fixtures.");
+  }
+  const server = deployed ? undefined : spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "--hostname", "127.0.0.1", "--port", "3876"], {
     env: { ...process.env, NODE_ENV: "production", AUTH_TRUST_HOST: "true", AUTH_URL: origin,
       NEXTAUTH_URL: origin, TERRAQO_WEB_CV_PUBLICATION_ENABLED: "true" }, stdio: "ignore", windowsHide: true,
   });
@@ -37,7 +45,7 @@ async function main() {
   const ownUsers: string[] = [];
   try {
     browser = await chromium.launch({ headless: true });
-    for (let attempt = 0; attempt < 60; attempt++) {
+    for (let attempt = 0; !deployed && attempt < 60; attempt++) {
       try { if ((await fetch(local + "/api/health")).ok) break; } catch { /* owned process warming */ }
       if (attempt === 59) throw Error("owned server unavailable");
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -58,7 +66,7 @@ async function main() {
       const current = () => prisma.terraqoProfessionalProfile.findUniqueOrThrow({ where: { id: profileId }, select: {
         liveCvEnabled: true, experiences: { select: { visibility: true } },
       } });
-      const context = await browser.newContext({ viewport });
+      const context: BrowserContext = await browser.newContext({ viewport });
       let failPost = false; const bodies: string[] = []; let gets = 0;
       await context.route(origin + "/**", async route => {
         try {
@@ -70,9 +78,13 @@ async function main() {
           } else gets++;
         }
         const started = Date.now();
-        const response = await route.fetch({ url: local + url.pathname + url.search,
-          headers: { ...request.headers(), host: new URL(origin).host }, maxRedirects: 0 });
-        if (url.pathname === "/api/auth/session" || url.pathname === "/api/terraqo/cv-publication" || url.pathname === "/cuenta/publicacion-cv")
+        // Keep the internal HTTP Host consistent with its URL and communicate
+        // the portal through the same forwarded-host boundary as a proxy.
+        // This lets real middleware rewrite internally instead of self-proxying.
+        const response = await route.fetch(deployed ? { maxRedirects: 0 } : { url: local + url.pathname + url.search,
+          headers: { ...request.headers(), host: new URL(local).host, "x-forwarded-host": new URL(origin).host,
+            "x-forwarded-proto": "http" }, maxRedirects: 0 });
+        if (url.pathname === "/perfil" || url.pathname === "/api/auth/session" || url.pathname === "/api/terraqo/cv-publication" || url.pathname === "/cuenta/publicacion-cv")
           console.log(JSON.stringify({ phase, route: url.pathname, method: request.method(), status: response.status() }));
         if (url.pathname === "/api/auth/session") {
           const value = await response.json();
@@ -93,14 +105,38 @@ async function main() {
       try {
         await login(context, email, password);
         assert.equal(await prisma.verificationToken.count({ where: { identifier: `web-cv-session:${user.id}` } }), 1);
-        const page = await context.newPage();
+        const page: Page = await context.newPage();
         page.on("pageerror", error => console.log(JSON.stringify({ phase, browserErrorType: error.name,
           illegalInvocation: error.message.includes("Illegal invocation") })));
         page.on("requestfailed", request => console.log(JSON.stringify({ phase, failedRoute: new URL(request.url()).pathname,
           failure: request.failure()?.errorText?.replace(/[^A-Z_a-z0-9:]/g, "").slice(0, 80) })));
         phase = `consent-cancel-${viewport.width}`;
-        await page.goto(origin + "/api/health");
-        await page.goto(origin + path + `&document=${randomUUID()}`);
+        await page.goto(origin + "/perfil");
+        const entry = page.getByRole("link", { name: "Gestionar publicación del CV", exact: true });
+        await entry.waitFor();
+        const deniedTarget = await entry.getAttribute("href"); assert.ok(deniedTarget);
+        phase = `demoted-entry-${viewport.width}`;
+        assert.equal((await prisma.terraqoWorkspaceMember.updateMany({ where: { userId: user.id, workspaceId: workspace.id },
+          data: { role: "CLIENT" } })).count, 1);
+        await page.reload(); await page.getByRole("heading", { name: "Estado del perfil", exact: true }).waitFor();
+        assert.equal(await entry.count(), 0);
+        const denied = await page.goto(new URL(deniedTarget, origin).href); assert.equal(denied?.status(), 404);
+        assert.equal(await count(), 0);
+        assert.equal((await prisma.terraqoWorkspaceMember.updateMany({ where: { userId: user.id, workspaceId: workspace.id },
+          data: { role: "PROFESSIONAL" } })).count, 1);
+        await page.goto(origin + "/perfil"); await entry.waitFor();
+        phase = `native-entry-${viewport.width}`;
+        const href = await entry.getAttribute("href"); assert.ok(href);
+        const target = new URL(href, origin);
+        assert.equal(target.pathname, "/cuenta/publicacion-cv");
+        assert.equal(target.searchParams.get("workspaceSlug"), "icc-topografia");
+        assert.deepEqual([...target.searchParams.keys()].sort(), ["document", "workspaceSlug"]);
+        const entrySize = await entry.boundingBox(); assert.ok(entrySize && entrySize.height >= 44);
+        await page.getByRole("heading", { name: "Estado del perfil", exact: true }).locator("..").locator("..").screenshot({
+          path: `output/playwright/web-cv-authenticated/profile-entry-${viewport.width}.png` });
+        assert.equal(await count(), 0);
+        await Promise.all([page.waitForURL(target.href), entry.click()]);
+        assert.equal(await page.evaluate(() => performance.getEntriesByType("navigation")[0]?.name === window.location.href), true);
         if (await page.getByRole("button", { name: "Comprobar sesión", exact: true }).isVisible())
           await page.getByRole("button", { name: "Comprobar sesión", exact: true }).click();
         await page.getByText("CV sin publicar", { exact: true }).waitFor();
@@ -160,7 +196,7 @@ async function main() {
         assert.equal(bodies.length, 4); assert.equal(await count(), 2);
         page.once("dialog", dialog => { assert.equal(dialog.type(), "beforeunload"); void dialog.accept(); });
         await page.goBack({ waitUntil: "commit" });
-        await page.waitForURL(origin + "/api/health");
+        await page.waitForURL(origin + "/perfil");
         failPost = false;
         await page.goForward({ waitUntil: "domcontentloaded" });
         await page.getByText("CV sin publicar", { exact: true }).waitFor();
@@ -199,15 +235,15 @@ async function main() {
         throw error;
       } finally { await context.unrouteAll({ behavior: "ignoreErrors" }); await context.close(); }
     }
-    console.log("PASS local production Next/Auth.js/browser + real SQL in both sizes: consent/cancel, uncertain GET-null, identical resend/single operation, withdrawal/history/PRIVATE, native back/forward, changed cookie owner despite spoofed broadcast, exact logout and no replay after return. Captures require visual review.");
+    console.log(`PASS ${deployed ? "deployed HTTPS Netlify" : "local production Next"}/Auth.js/browser + real SQL in both sizes: consent/cancel, uncertain GET-null, identical resend/single operation, withdrawal/history/PRIVATE, native back/forward, changed cookie owner despite spoofed broadcast, exact logout and no replay after return. Captures require visual review.`);
   } finally {
-    await browser?.close().catch(() => undefined); server.kill();
+    await browser?.close().catch(() => undefined); server?.kill();
     for (const id of ownUsers) {
       await prisma.activityLog.deleteMany({ where: { actorId: id, terraqoWorkspaceId: workspace.id, entityType: "CvPublication" } });
       await prisma.verificationToken.deleteMany({ where: { identifier: `web-cv-session:${id}` } });
       await prisma.user.delete({ where: { id } });
     }
-    console.log("CLEANUP own browser/users/profiles/memberships/operations/audits/grants and local Next process.");
+    console.log(`CLEANUP own browser/users/profiles/memberships/operations/audits/grants${deployed ? "." : " and local Next process."}`);
   }
 }
 async function waitEnabled(page: Page, name: string) {
@@ -221,7 +257,7 @@ async function waitEnabled(page: Page, name: string) {
 async function login(context: BrowserContext, email: string, password: string) {
   const jar = new Map<string, string>();
   const send = async (path: string, init: RequestInit = {}) => {
-    const response = await fetch(local + path, { ...init, redirect: "manual", headers: {
+    const response = await fetch((deployed ? origin : local) + path, { ...init, redirect: "manual", headers: {
       host: new URL(origin).host, origin, cookie: [...jar].map(([key, value]) => `${key}=${value}`).join("; "), ...init.headers,
     } });
     for (const item of response.headers.getSetCookie()) {
@@ -230,7 +266,9 @@ async function login(context: BrowserContext, email: string, password: string) {
     }
     return response;
   };
+  phase = "login-csrf";
   const csrf = await (await send("/api/auth/csrf")).json();
+  phase = "login-callback";
   const response = await send("/api/auth/callback/credentials", { method: "POST", headers: {
     "content-type": "application/x-www-form-urlencoded", "x-auth-return-redirect": "1",
   }, body: new URLSearchParams({ csrfToken: csrf.csrfToken, email, password, callbackUrl: origin + path }) });

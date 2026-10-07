@@ -14,3 +14,16 @@ export function parseCvEntryQuery(query: CvEntryQuery): { workspaceSlug: string 
 export function webCvEntryEnabled(value: string | undefined): boolean {
   return value === "true";
 }
+
+export function cvPublicationEntryHref(flag: string | undefined, memberships: ReadonlyArray<{
+  role: string; workspace: { slug: string; modules: ReadonlyArray<{ code: string }> };
+}>, document: string): string | null {
+  if (!webCvEntryEnabled(flag)) return null;
+  // Callers supply only their own active memberships from the server context.
+  // The destination repeats live authorization under locks; this is navigation.
+  const membership = memberships.find(member => member.role === "PROFESSIONAL" &&
+    member.workspace.modules.some(module => module.code === "PROFESSIONAL_NETWORK") &&
+    parseCvEntryQuery({ workspaceSlug: member.workspace.slug, document }));
+  if (!membership) return null;
+  return `/cuenta/publicacion-cv?${new URLSearchParams({ workspaceSlug: membership.workspace.slug, document })}`;
+}
