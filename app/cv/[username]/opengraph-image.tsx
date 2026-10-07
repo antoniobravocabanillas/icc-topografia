@@ -1,4 +1,5 @@
 /* eslint-disable @next/next/no-img-element */
+import { prisma } from "@/lib/prisma";
 import { ImageResponse } from "next/og";
 import { notFound } from "next/navigation";
 import { getPublicCvSeoProfile, publicCvSeoFacts } from "@/lib/terraqo/public-cv-seo";
@@ -9,7 +10,8 @@ export const runtime = "nodejs";
 export const alt = "Terraqo CV Vivo: trayectoria profesional verificable";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
-export const revalidate = 300;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 type OpenGraphImageProps = {
   params: Promise<{ username: string }>;
@@ -63,7 +65,7 @@ export default async function OpenGraphImage({ params }: OpenGraphImageProps) {
     { value: `${facts.trustScore}%`, label: "nivel de confianza" }
   ];
 
-  return new ImageResponse(
+  const image = new ImageResponse(
     (
       <div
         style={{
@@ -143,6 +145,18 @@ export default async function OpenGraphImage({ params }: OpenGraphImageProps) {
         </div>
       </div>
     ),
-    size
+    { ...size, headers: { "Cache-Control": "private, no-store, max-age=0", "X-Content-Type-Options": "nosniff" } }
   );
+  const bytes = await image.arrayBuffer();
+  // Rendering fetches external assets: withdrawal during rendering must close access.
+  const current = await prisma.terraqoProfessionalProfile.findFirst({
+    where: { username, liveCvEnabled: true, updatedAt: profile.updatedAt },
+    select: { id: true }
+  });
+  if (!current) notFound();
+  return new Response(bytes, { headers: {
+    "Content-Type": contentType,
+    "Cache-Control": "private, no-store, max-age=0",
+    "X-Content-Type-Options": "nosniff"
+  } });
 }
