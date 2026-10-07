@@ -73,6 +73,10 @@ async function main() {
     console.log("PASS deployed cleanup: unauthenticated rejection, retained-document guard, actual blob removal, three concurrent retries, one quota refund and replay guard.");
   } finally {
     if(key)await store.delete(key);for(const extraKey of extraKeys)await store.delete(extraKey);
+    // Also remove only this fixture's blobs if an unexpected successful response
+    // created identity records while testing a denied operation.
+    const remaining=await prisma.terraqoProfessionalDocument.findMany({where:{professionalProfileId:user.terraqoProfessionalProfile!.id},select:{storageKey:true}});
+    for(const row of remaining)await store.delete(row.storageKey);
     await prisma.activityLog.deleteMany({where:{actorId:user.id,terraqoWorkspaceId:workspace.id,entityType:"ProfessionalDocument"}});
     await prisma.terraqoUsageBucket.deleteMany({where:{ownerKey:`user:${user.id}`}});
     await prisma.verificationToken.deleteMany({where:{identifier:{in:[`portal-session:${workspace.id}:${user.id}`,`portal-login-attempt:${workspace.id}:${user.id}`]}}});
