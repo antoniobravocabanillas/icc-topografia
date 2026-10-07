@@ -14,7 +14,7 @@ async function handle(request:Request,context:Context,write:boolean){
     if(operationKey && !/^[a-f0-9]{32}$/.test(operationKey))return fail("Operación no válida.",422);
     const result=write?await uploadPortalExperienceEvidence(request,token,experienceId):await listPortalExperienceEvidence(token,experienceId,operationKey);
     return ok(result,{headers:{"Cache-Control":"private, no-store"}});
-  }catch(error){if(error instanceof PortalExperienceEvidenceError || error instanceof ExperiencePayloadError || error instanceof BillingError)return fail(error.message,error.status);return handleApiError(error);}
+  }catch(error){if(error instanceof PortalExperienceEvidenceError || error instanceof ExperiencePayloadError )return fail(error.message,error.status);if(error instanceof BillingError)return handleApiError(error);return fail("No pudimos confirmar el resultado. Consulta la experiencia antes de repetir la operación.",500);}
 }
 export function GET(request:Request,context:Context){return handle(request,context,false);}
 export function POST(request:Request,context:Context){return handle(request,context,true);}
