@@ -1,5 +1,7 @@
+import { authorizeResource, PortalResourceError } from "@/lib/server/portal-resources";
+import { professionalDocumentScope, removeProfessionalDocument } from "@/lib/server/portal-professional-documents";
 import { prisma } from "@/lib/prisma";
-import { fail, handleApiError } from "@/lib/server/api";
+import { fail, handleApiError, ok } from "@/lib/server/api";
 import { getProfessionalDocumentStore } from "@/lib/server/media";
 import { getWorkspacePortalToken } from "@/lib/server/workspace-portal-session";
 
@@ -14,8 +16,9 @@ export async function GET(request: Request, { params }: RouteContext) {
     const token = await getWorkspacePortalToken(request, workspaceSlug);
     if (!token) return fail("La sesion no es valida o ha vencido.", 401);
 
+    if (token.role === "PROFESSIONAL") await authorizeResource(token, "professionalDocuments");
     const document = await prisma.terraqoProfessionalDocument.findFirst({
-      where: { id, workspaceId: token.workspaceId },
+      where: token.role === "PROFESSIONAL" ? { id, ...professionalDocumentScope(token) } : { id, workspaceId: token.workspaceId },
       include: { professionalProfile: { select: { userId: true } } },
     });
     if (!document) return fail("Documento no encontrado.", 404);
@@ -50,6 +53,22 @@ export async function GET(request: Request, { params }: RouteContext) {
       },
     });
   } catch (error) {
+    if (error instanceof PortalResourceError) return fail(error.message, error.status);
+    return handleApiError(error);
+  }
+}
+
+export async function DELETE(request: Request, { params }: RouteContext) {
+  try {
+    const { workspaceSlug, id } = await params;
+    const token = await getWorkspacePortalToken(request, workspaceSlug);
+    if (!token) return fail("La sesión no es válida o ha vencido.", 401);
+    await authorizeResource(token, "professionalDocuments");
+    return ok(await removeProfessionalDocument(token, id, new URL(request.url).searchParams.get("version")), {
+      headers: { "Cache-Control": "private, no-store, max-age=0" },
+    });
+  } catch (error) {
+    if (error instanceof PortalResourceError) return fail(error.message, error.status);
     return handleApiError(error);
   }
 }
