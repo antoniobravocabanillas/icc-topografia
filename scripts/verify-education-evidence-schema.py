@@ -31,13 +31,14 @@ def main():
     print("PASS direct/runtime schema and workspace fingerprints match; credentials remain in child environment only.", flush=True)
     environment = dict(os.environ, DATABASE_URL=direct, NODE_ENV="production", TEST_PORTAL_URL="https://api.terraqoglobal.com",
                        TERRAQO_MUTATING_TESTS="icc-topografia:20616116313")
-    if sys.argv[1:] not in ([], ["--cleanup"], ["--commit"], ["--physical"], ["--physical-cleanup"], ["--operations"], ["--worker"]):
+    if sys.argv[1:] not in ([], ["--cleanup"], ["--commit"], ["--physical"], ["--physical-cleanup"], ["--operations"], ["--worker"], ["--owner"]):
         raise RuntimeError("Unsupported verification mode")
     script = {"--cleanup": "scripts/test-icc-education-evidence-cleanup.ts", "--commit": "scripts/test-icc-education-evidence-commit.ts",
               "--physical": "scripts/test-icc-education-evidence-physical.ts",
               "--physical-cleanup": "scripts/test-icc-education-evidence-physical.ts",
               "--operations": "scripts/test-icc-education-evidence-operations.ts",
-              "--worker": "scripts/test-icc-education-evidence-operations.ts"}.get(
+              "--worker": "scripts/test-icc-education-evidence-operations.ts",
+              "--owner": "scripts/test-icc-education-evidence-owner.ts"}.get(
         sys.argv[1] if sys.argv[1:] else "", "scripts/test-icc-education-evidence-schema.ts")
     arguments = ["--cleanup-interrupted"] if sys.argv[1:] == ["--physical-cleanup"] else []
     if sys.argv[1:] in (["--operations"], ["--worker"]):
@@ -49,8 +50,20 @@ def main():
         environment["PROFESSIONAL_DOCUMENT_CLEANUP_SECRET"] = json.loads(configured.stdout)["PROFESSIONAL_DOCUMENT_CLEANUP_SECRET"]
     if sys.argv[1:] == ["--worker"]:
         environment["TERRAQO_EDUCATION_WORKER_TEST"] = "1"
+    if sys.argv[1:] == ["--owner"]:
+        for name in ("AUTH_SECRET", "NEXTAUTH_SECRET"):
+            configured = subprocess.run([shutil.which("node"), str(cli), "env:get", name,
+                                        "--context", "production", "--scope", "functions", "--json"],
+                                       cwd=ROOT, capture_output=True, text=True, encoding="utf-8", timeout=120)
+            if configured.returncode == 0:
+                value = json.loads(configured.stdout).get(name)
+                if value:
+                    environment["AUTH_SECRET"] = value
+                    break
+        else:
+            raise RuntimeError("Owner configuration unavailable")
     result = subprocess.run([shutil.which("node"), "--conditions=react-server", "--import", "tsx", script, *arguments],
-                            cwd=ROOT, env=environment, timeout=300 if sys.argv[1:] in (["--physical"], ["--operations"], ["--worker"]) else 120)
+                            cwd=ROOT, env=environment, timeout=300 if sys.argv[1:] in (["--physical"], ["--operations"], ["--worker"], ["--owner"]) else 120)
     if result.returncode:
         return result.returncode
     after = inventory.run_inventory(direct, "direct-after-rollback")
