@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { build } from "esbuild";
 import { randomBytes } from "node:crypto";
 import { queueEducationCleanup, runEducationCleanupWorker } from "../lib/terraqo/education-cleanup-job";
 
@@ -43,6 +44,30 @@ async function main() {
     authorization: `Bearer ${secret}` }, body: new ReadableStream({ pull: () => new Promise(() => undefined),
       cancel: () => { cancelled = true; return new Promise(() => undefined); } }), duplex: "half" } as RequestInit);
   await runEducationCleanupWorker(stalled, ports); assert.ok(cancelled);
+  // Exercise the ESM bundle used by the provider; direct Node .mts imports
+  // otherwise mix this repository's CommonJS .ts runtime with ESM handlers.
+  const bundled = await build({ entryPoints: ["netlify/functions/education-evidence-cleanup.mts"], bundle: true,
+    platform: "node", format: "esm", write: false });
+  const scheduled = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
+  assert.equal(scheduled.config.schedule, "*/5 * * * *");
+  const originalFetch = globalThis.fetch, originalSecret = process.env.PROFESSIONAL_DOCUMENT_CLEANUP_SECRET;
+  try {
+    process.env.PROFESSIONAL_DOCUMENT_CLEANUP_SECRET = secret;
+    globalThis.fetch = async (url, init) => {
+      assert.equal(String(url), "https://terraqoglobal.com/.netlify/functions/education-evidence-cleanup-background");
+      assert.equal(init?.body, JSON.stringify({ action: "DISPATCH" }));
+      assert.equal(new Headers(init?.headers).get("authorization"), `Bearer ${secret}`);
+      assert.equal(init?.redirect, "error");
+      return new Response(null, { status: 202 });
+    };
+    assert.equal((await scheduled.default()).status, 200);
+    globalThis.fetch = async () => new Response(null, { status: 401 });
+    assert.equal((await scheduled.default()).status, 503);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalSecret === undefined) delete process.env.PROFESSIONAL_DOCUMENT_CLEANUP_SECRET;
+    else process.env.PROFESSIONAL_DOCUMENT_CLEANUP_SECRET = originalSecret;
+  }
   console.log("PASS controlled job ports: 10s short trigger/202 queue only, worker secret before I/O, strict bounded body, targeted and batch counters/backlog sanitized, invalid response rejected, no redirects/retries/global SQL.");
 }
 main().catch(() => { console.error("Education job test failed; private diagnostics suppressed."); process.exitCode = 1; });

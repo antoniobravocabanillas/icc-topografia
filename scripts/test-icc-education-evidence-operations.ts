@@ -64,12 +64,16 @@ async function main() {
       phase = "background target queue and durable completion";
       // Queue receipts do not prove authorization or completion. Observe only
       // this fixture's persisted state, quota and physical key afterwards.
-      const queue = () => fetch("https://api.terraqoglobal.com/.netlify/functions/education-evidence-cleanup-background", {
+      const queue = () => fetch("https://terraqoglobal.com/.netlify/functions/education-evidence-cleanup-background", {
         method: "POST", redirect: "error", signal: AbortSignal.timeout(10000),
         headers: { authorization: `Bearer ${secret}`, "content-type": "application/json" }, body: JSON.stringify(command) });
       for (const response of await Promise.all(Array.from({ length: 3 }, queue))) {
-        assert.equal(response.status, 202); assert.equal(await response.text(), "");
+        phase = `background queue HTTP ${response.status}`;
+        assert.equal(response.status, 202);
+        const acknowledgement = await response.text(); phase = `background acknowledgement length ${acknowledgement.length}`;
+        assert.equal(acknowledgement, "");
       }
+      phase = "background queue accepted; waiting own SQL CLEANED";
       const deadline = performance.now() + 90000;
       let completed = false;
       while (performance.now() < deadline) {
@@ -77,7 +81,12 @@ async function main() {
         if (attempt.state === "CLEANED") { assert.equal(attempt.reservedUnits, 0); completed = true; break; }
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
+      if (!completed) {
+        const state = await database.terraqoEducationEvidenceAttempt.findUniqueOrThrow({ where: { id: reserved.attempt.id }, select: { state: true } });
+        phase = `background deadline, own state ${state.state}`;
+      }
       assert.ok(completed, "BACKGROUND_COMPLETION_REQUIRED");
+      phase = "background completed; own quota/blob checks";
       assert.equal((await database.terraqoUsageBucket.findUniqueOrThrow({ where: { ownerKey_period_metric: bucket } })).used, 0);
       assert.equal(await store.get(reserved.attempt.storageKey, { type: "arrayBuffer" }), null);
       assert.equal(await database.terraqoEducationEvidenceOperation.count({ where: { educationId: education.id } }), 0);

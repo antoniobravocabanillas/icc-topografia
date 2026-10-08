@@ -1,7 +1,9 @@
 import { timingSafeEqual } from "node:crypto";
 
 const api = "https://api.terraqoglobal.com/api/internal/education-evidence-cleanup";
-const worker = "https://api.terraqoglobal.com/.netlify/functions/education-evidence-cleanup-background";
+// The provider exposes native functions on the published site's primary host;
+// the API subdomain routes application endpoints and returns 404 for this path.
+const worker = "https://terraqoglobal.com/.netlify/functions/education-evidence-cleanup-background";
 type Command = { action: "DISPATCH" } | { action: "RECOVER"; attemptId: string };
 type Ports = { fetch: typeof fetch; secret: string | undefined; report(value: Record<string, unknown>): void };
 const results = ["completed", "retained", "retry", "quarantined", "skipped", "pending"] as const;
