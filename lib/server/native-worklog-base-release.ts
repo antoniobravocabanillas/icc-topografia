@@ -55,14 +55,6 @@ export async function releaseNativeWorklogBaseInTransaction(tx: Prisma.Transacti
       row.redemptionId !== null || row.type !== "CREDIT" || row.pointsDelta !== d.tqPoints ||
       row.pointsDelta === 0 || row.scoreDelta !== row.pointsDelta || row.idempotencyKey !== key)) fail();
   const credited = credits[0]?.pointsDelta ?? 0;
-  if (c.releasedAt) {
-    if (credited !== d.tqPoints) fail();
-    return "historical" as const;
-  }
-  // A committed credit without its atomic releasedAt is ambiguous; do not credit again.
-  if (credits.length) fail();
-  const now = new Date();
-  if (d.availableAt > now || (account.rewardsFrozenUntil && account.rewardsFrozenUntil > now)) return "deferred" as const;
   const retained = await tx.terraqoBuilderContribution.findMany({ where: { userId: receipt.actorId,
     releasedAt: null, availableAt: { not: null }, status: { not: "REJECTED" } }, take: 201, orderBy: { id: "asc" },
     include: { ledgerEntries: { take: 201, orderBy: { id: "asc" } } } });
@@ -76,7 +68,16 @@ export async function releaseNativeWorklogBaseInTransaction(tx: Prisma.Transacti
     if (!integer(amount) || amount > item.approvedPoints) fail();
     floor += item.approvedPoints - amount;
   }
-  if (!integer(floor) || account.pendingPoints < floor || account.pendingPoints < d.tqPoints ||
+  if (!integer(floor) || account.pendingPoints < floor) fail();
+  if (c.releasedAt) {
+    if (credited !== d.tqPoints) fail();
+    return "historical" as const;
+  }
+  // A committed credit without its atomic releasedAt is ambiguous; do not credit again.
+  if (credits.length) fail();
+  const now = new Date();
+  if (d.availableAt > now || (account.rewardsFrozenUntil && account.rewardsFrozenUntil > now)) return "deferred" as const;
+  if (account.pendingPoints < d.tqPoints ||
       ![account.availablePoints + d.tqPoints, account.lifetimeEarned + d.tqPoints,
         account.contributionScore + d.tqPoints].every(integer)) fail();
   if (d.tqPoints) {

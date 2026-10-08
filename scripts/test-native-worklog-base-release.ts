@@ -62,6 +62,8 @@ async function main() {
   assert.equal(f.account.availablePoints, 26); assert.equal(f.account.lifetimeEarned, 26);
   assert.equal(f.account.contributionScore, 26); assert.equal(f.account.trustScore, 4);
   assert.equal(f.writes(), 3); assert.equal(f.credits[0].idempotencyKey, `native-worklog-base:${"a".repeat(64)}:1`);
+  f.account.pendingPoints = 1; await reject(f); assert.equal(f.writes(), 3);
+  f.account.pendingPoints = 2;
   const zero = fixture(0); assert.equal(await zero.run(), "released"); assert.equal(await zero.run(), "historical");
   assert.equal(zero.credits.length, 0); assert.equal(zero.writes(), 1); assert.equal(zero.account.pendingPoints, 2);
   for (const prepare of [
