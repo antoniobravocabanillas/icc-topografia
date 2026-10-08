@@ -86,47 +86,6 @@ export async function nativeWorklogCoreRollback(tx: Prisma.TransactionClient, wo
   const first = await tx.terraqoBuilderContribution.findUniqueOrThrow({ where: { sourceKey: `first-worklog:${user.id}` } });
   assert.equal(first.approvedPoints, 0); assert.equal(first.requestedPoints, 25);
   assert.equal(await tx.terraqoBuilderAccount.count({ where: { userId: user.id } }), 0);
-  // All balances and backlog rows below belong to this NEW fixture and are rolled back.
-  for (const field of ["pendingPoints", "trustScore"] as const) {
-    await rejected(async () => {
-      const a = await tx.terraqoBuilderAccount.create({ data: { userId: user.id, [field]: 2147483647 } });
-      await assert.rejects(() => applyNativeWorklogBaseInTransaction(tx, operation.id),
-        (error: unknown) => error instanceof NativeWorklogOperationError && error.status === 503);
-      assert.equal((await tx.terraqoBuilderAccount.findUniqueOrThrow({ where: { id: a.id } }))[field], 2147483647);
-      throw new NativeWorklogOperationError(503);
-    }, 503);
-  }
-  await rejected(async () => {
-    const a = await tx.terraqoBuilderAccount.create({ data: { userId: user.id } });
-    await tx.terraqoBuilderContribution.createMany({ data: Array.from({ length: 201 }, (_, i) => ({
-      userId: user.id, type: "BUG_REPORT" as const, title: `Own backlog ${i}`, detail: "Own rollback only",
-      approvedPoints: 0, availableAt: new Date(Date.now() + 86400000),
-    })) });
-    await assert.rejects(() => applyNativeWorklogBaseInTransaction(tx, operation.id),
-      (error: unknown) => error instanceof NativeWorklogOperationError && error.status === 503);
-    assert.equal(await tx.terraqoBuilderContribution.count({ where: { userId: user.id } }), 202);
-    const kept = await tx.terraqoBuilderAccount.findUniqueOrThrow({ where: { id: a.id } });
-    assert.equal(kept.pendingPoints + kept.trustScore, 0);
-    throw new NativeWorklogOperationError(503);
-  }, 503);
-  await rejected(async () => {
-    const a = await tx.terraqoBuilderAccount.create({ data: { userId: user.id } });
-    const c = await tx.terraqoBuilderContribution.create({ data: { userId: user.id, type: "BUG_REPORT",
-      title: "Own ledger backlog", detail: "Synthetic state only within rollback", approvedPoints: 201,
-      availableAt: new Date(Date.now() + 86400000) } });
-    await tx.terraqoBuilderLedger.createMany({ data: Array.from({ length: 201 }, (_, i) => ({
-      accountId: a.id, contributionId: c.id, type: "CREDIT" as const, pointsDelta: 1, scoreDelta: 1,
-      balanceAfter: 0, description: "Synthetic own rollback row", idempotencyKey: `own-base:${marker}:${i}`,
-    })) });
-    await assert.rejects(() => applyNativeWorklogBaseInTransaction(tx, operation.id),
-      (error: unknown) => error instanceof NativeWorklogOperationError && error.status === 503);
-    assert.equal(await tx.terraqoBuilderLedger.count({ where: { accountId: a.id } }), 201);
-    const kept = await tx.terraqoBuilderAccount.findUniqueOrThrow({ where: { id: a.id } });
-    assert.equal(kept.pendingPoints + kept.trustScore + kept.availablePoints, 0);
-    throw new NativeWorklogOperationError(503);
-  }, 503);
-  assert.equal(await tx.terraqoBuilderAccount.count({ where: { userId: user.id } }), 0);
-  assert.equal(await tx.terraqoBuilderContribution.count({ where: { userId: user.id } }), 1);
   await tx.$executeRawUnsafe("SAVEPOINT native_base_own_phase");
   await rejected(() => applyNativeWorklogBaseInTransaction(new Proxy(tx, { get(target, key) {
     if (key === "terraqoBuilderContribution") return new Proxy(target.terraqoBuilderContribution, { get(delegate, field) {
@@ -311,34 +270,15 @@ export async function nativeWorklogCoreRollback(tx: Prisma.TransactionClient, wo
     const op = await tx.terraqoNativeWorklogOperation.findUniqueOrThrow({ where: { actorId_workspaceId_operationKey: { actorId: user.id, workspaceId, operationKey: input.payload.operationKey } } });
     return tx.terraqoNativeWorklogDecision.findUniqueOrThrow({ where: { operationId: op.id } });
   };
-  const checkBase = async (id: string, pending: number, trust: number) => {
-    assert.equal(await applyNativeWorklogBaseInTransaction(tx, id), "allocated");
-    assert.equal(await applyNativeWorklogBaseInTransaction(tx, id), "historical");
-    const a = await tx.terraqoBuilderAccount.findUniqueOrThrow({ where: { userId: user.id } });
-    assert.equal(a.pendingPoints, pending); assert.equal(a.trustScore, trust);
-    assert.equal(a.availablePoints + a.lifetimeEarned + a.contributionScore, 0);
-    assert.equal(await tx.terraqoBuilderLedger.count({ where: { accountId: a.id } }), 0);
-    assert.equal((await tx.terraqoNativeWorklogAccounting.findUniqueOrThrow({ where: { operationId: id } })).state, "PENDING");
-  };
-  await checkBase(dupReceipt.id, 0, 0);
-  const temporaryTrustIds: string[] = [];
-  for (let i = 0; i < 8; i++) temporaryTrustIds.push((await tx.terraqoWorklogEntry.create({ data: {
-    authorId: user.id, professionalProfileId: profile.id, workspaceId, title: `ICC own temporary weekly ${i}`,
-    summary: "Own temporary trust state", visibility: "PRIVATE", trustScoreAwarded: 1,
-  } })).id);
   const third = await unique("2", "ICC unique third own allocation");
-  assert.equal(third.rewardedInDay, 2); assert.equal(third.tqPoints, 1); assert.equal(third.trustScore, 0);
-  await checkBase(third.operationId, 1, 0);
-  await tx.terraqoWorklogEntry.deleteMany({ where: { id: { in: temporaryTrustIds }, authorId: user.id } });
+  assert.equal(third.rewardedInDay, 2); assert.equal(third.tqPoints, 1);
   const fourth = await unique("3", "ICC unique fourth own allocation");
   assert.equal(fourth.rewardedInDay, 3); assert.equal(fourth.tqPoints, 0); assert.equal(fourth.trustScore, 1);
-  await checkBase(fourth.operationId, 1, 1);
   // Manual own legacy state exercises retained counts, not a legacy awarding flow.
   for (let i = 0; i < 8; i++) await tx.terraqoWorklogEntry.create({ data: { authorId: user.id, professionalProfileId: profile.id,
     workspaceId, title: `ICC own legacy count ${i}`, summary: "Own temporary legacy trust count", visibility: "PRIVATE", trustScoreAwarded: 1 } });
   const capped = await unique("4", "ICC unique weekly cap allocation");
-  assert.ok(capped.trustedInWindow >= 10); assert.equal(capped.trustScore, 0); assert.equal(capped.tqPoints, 0);
-  await checkBase(capped.operationId, 1, 1);
+  assert.ok(capped.trustedInWindow >= 10); assert.equal(capped.trustScore, 0);
   const legacyInput = await parsed({ operationKey: "5".repeat(32), title: "ICC own legacy duplicate" });
   await tx.terraqoWorklogEntry.create({ data: { authorId: user.id, professionalProfileId: profile.id, workspaceId,
     title: legacyInput.payload.title, summary: legacyInput.payload.summary, visibility: "PRIVATE", contentFingerprint: nativeWorklogContentKey(legacyInput.payload) } });

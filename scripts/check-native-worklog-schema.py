@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def main():
-    if sys.argv[1:] not in ([], ["--core"], ["--reconciliation"], ["--owner-fence"], ["--decision"], ["--combined"], ["--release"]):
+    if sys.argv[1:] not in ([], ["--core"], ["--reconciliation"], ["--owner-fence"], ["--decision"], ["--combined"], ["--release"], ["--base-edges"]):
         raise RuntimeError("Unsupported mode")
     spec = importlib.util.spec_from_file_location("worklog_inventory", ROOT / "scripts/inventory-database-migration.py")
     inventory = importlib.util.module_from_spec(spec)
@@ -33,7 +33,7 @@ def main():
     environment = dict(os.environ, DATABASE_URL=direct, NODE_ENV="production", TEST_PORTAL_URL="https://api.terraqoglobal.com",
                        TERRAQO_MUTATING_TESTS="icc-topografia:20616116313")
     args = [shutil.which("node"), "--conditions=react-server", "--import", "tsx", "scripts/check-native-worklog-schema.ts", *sys.argv[1:]]
-    checked = subprocess.run(args, cwd=ROOT, env=environment, capture_output=True, text=True, encoding="utf-8", timeout=210 if sys.argv[1:] == ["--core"] else 120)
+    checked = subprocess.run(args, cwd=ROOT, env=environment, capture_output=True, text=True, encoding="utf-8", timeout=210 if sys.argv[1:] in (["--core"], ["--base-edges"]) else 120)
     if checked.returncode:
         # Forward only our bounded diagnostic category/source line, never raw errors.
         for line in checked.stderr.splitlines():
@@ -60,7 +60,7 @@ def main():
         decision = report["decisionSchema"]
         if decision != {"fingerprint": "85af9336c4049dc61070ab63ed1a731e35dc4f61daf723c581cdfd8dc6c22499", "constraints": 22, "indexes": 11, "applied": False}:
             raise RuntimeError("Decision catalog or rollback mode mismatch")
-    if sys.argv[1:] in (["--core"], ["--release"]):
+    if sys.argv[1:] in (["--core"], ["--release"], ["--base-edges"]):
         decision = report["decisionSchema"]
         if decision != {"fingerprint": "85af9336c4049dc61070ab63ed1a731e35dc4f61daf723c581cdfd8dc6c22499", "constraints": 22, "indexes": 11, "applied": False,
                         "coreSchema": {"fingerprint": "74bf7259e20f0f84330a03567b1fd181d8c645203f71f8606ffb3b2436a624ad", "constraints": 23, "indexes": 12}}:
