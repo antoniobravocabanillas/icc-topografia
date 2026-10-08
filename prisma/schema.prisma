@@ -3611,7 +3611,10 @@ model TerraqoNativeWorklogOperation {
   resultVersion          DateTime                        @db.Timestamp(3)
   createdAt              DateTime                        @default(now()) @db.Timestamp(3)
   accounting             TerraqoNativeWorklogAccounting?
+  // Composite relation is a Prisma collection; Decision.operationId PK permits at most one row.
+  decisions              TerraqoNativeWorklogDecision[]
 
+  @@unique([id, createdAt, fingerprint], map: "NativeWorklogOperation_decision_binding_key")
   @@unique([actorId, workspaceId, operationKey], map: "NativeWorklogOperation_actor_workspace_operation_key")
   @@index([professionalProfileId, createdAt], map: "NativeWorklogOperation_profile_created_idx")
   @@index([workspaceId, createdAt], map: "NativeWorklogOperation_workspace_created_idx")
@@ -3628,5 +3631,29 @@ model TerraqoNativeWorklogAccounting {
   createdAt     DateTime                      @default(now()) @db.Timestamp(3)
 
   @@index([state, nextAttemptAt], map: "NativeWorklogAccounting_state_due_idx")
+  @@schema("icc")
+}
+
+model TerraqoNativeWorklogDecision {
+  operationId         String                       @id
+  policyVersion       String
+  fingerprint         String
+  createdAt           DateTime                     @db.Timestamp(3)
+  operation           TerraqoNativeWorklogOperation @relation(fields: [operationId, createdAt, fingerprint], references: [id, createdAt, fingerprint], onDelete: Restrict, onUpdate: Restrict, map: "NativeWorklogDecision_receipt_fk")
+  dayStart            DateTime                     @db.Timestamp(3)
+  dayEndExclusive     DateTime                     @db.Timestamp(3)
+  trustStartInclusive DateTime                     @db.Timestamp(3)
+  trustEndInclusive   DateTime                     @db.Timestamp(3)
+  availableAt         DateTime                     @db.Timestamp(3)
+  priorDuplicates     Int
+  rewardedInDay       Int
+  trustedInWindow     Int
+  tqPoints            Int
+  trustScore          Int
+  qualityScore        Int
+  moderationStatus    String
+  riskScore           Int
+
+  @@index([createdAt], map: "NativeWorklogDecision_created_idx")
   @@schema("icc")
 }

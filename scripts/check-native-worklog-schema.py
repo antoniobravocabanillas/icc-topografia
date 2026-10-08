@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def main():
-    if sys.argv[1:] not in ([], ["--core"], ["--reconciliation"], ["--owner-fence"]):
+    if sys.argv[1:] not in ([], ["--core"], ["--reconciliation"], ["--owner-fence"], ["--decision"]):
         raise RuntimeError("Unsupported mode")
     spec = importlib.util.spec_from_file_location("worklog_inventory", ROOT / "scripts/inventory-database-migration.py")
     inventory = importlib.util.module_from_spec(spec)
@@ -39,6 +39,10 @@ def main():
     report = json.loads(checked.stdout.strip())
     if report["fingerprint"] != "d2e17d02f546dc4bf5e2540274633dd1b05a157edd7f02b8ed4a8f623278b3bd" or report["applied"]:
         raise RuntimeError("Pinned fingerprint or mode mismatch")
+    if sys.argv[1:] == ["--decision"]:
+        decision = report["decisionSchema"]
+        if decision != {"fingerprint": "85af9336c4049dc61070ab63ed1a731e35dc4f61daf723c581cdfd8dc6c22499", "constraints": 22, "indexes": 11, "applied": False}:
+            raise RuntimeError("Decision catalog or rollback mode mismatch")
     after = inventory.run_inventory(direct, "after-check")
     if not all(before[key] == after[key] for key in keys):
         raise RuntimeError("Rollback changed catalog or identity")
