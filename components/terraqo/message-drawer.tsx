@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { MessageSquare, Search, Send, X } from "lucide-react";
+import { Search, Send, X } from "lucide-react";
 import { UserAvatar } from "@/components/terraqo/user-avatar";
 import { AutoGrowTextarea } from "@/components/ui/auto-grow-textarea";
 import {
@@ -63,6 +63,40 @@ export function MessageDrawer({ currentUserId }: { currentUserId: string }) {
   const [body, setBody] = useState("");
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const sendingRef = useRef(false);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    closeRef.current?.focus();
+    const keydown = (event: KeyboardEvent) => {
+      // Nested portal dialogs (for example the writing assistant) own their
+      // keyboard handling while focused; do not close or trap their parent.
+      const activeDialog = document.activeElement?.closest('[role="dialog"]');
+      if (activeDialog && activeDialog !== drawerRef.current) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const controls = [...(drawerRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), a[href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex="0"]',
+      ) ?? [])].filter(control => control.getClientRects().length > 0);
+      const first = controls[0], last = controls.at(-1);
+      if (!first || !last) { event.preventDefault(); return; }
+      if (event.shiftKey && (document.activeElement === first || !drawerRef.current?.contains(document.activeElement))) {
+        event.preventDefault(); last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !drawerRef.current?.contains(document.activeElement))) {
+        event.preventDefault(); first.focus();
+      }
+    };
+    document.addEventListener("keydown", keydown);
+    return () => {
+      document.removeEventListener("keydown", keydown);
+      if (opener?.isConnected) opener.focus();
+    };
+  }, [open]);
   const load = useCallback(async (
     id?: string,
     options?: { peek?: boolean; preserveSelection?: boolean },
@@ -173,14 +207,6 @@ export function MessageDrawer({ currentUserId }: { currentUserId: string }) {
   }
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="fixed right-4 top-1/2 z-40 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full bg-[#4374ba] text-white shadow-[0_16px_36px_rgba(67,116,186,0.35)] md:right-5"
-        aria-label="Abrir mensajes"
-      >
-        <MessageSquare className="h-5 w-5" />
-      </button>
       {open ? (
         <button
           type="button"
@@ -190,15 +216,21 @@ export function MessageDrawer({ currentUserId }: { currentUserId: string }) {
         />
       ) : null}
       <div
+        ref={drawerRef}
+        role="dialog"
+        aria-modal={open ? true : undefined}
+        aria-labelledby="terraqo-message-drawer-title"
         className={`fixed inset-y-0 right-0 z-[70] w-full max-w-[390px] border-l bg-white shadow-[-24px_0_70px_rgba(14,26,38,0.18)] transition-transform duration-200 motion-reduce:transition-none ${open ? "translate-x-0" : "translate-x-full"}`}
         aria-hidden={!open}
         inert={!open}
       >
         <header className="flex h-16 items-center justify-between border-b px-4">
-          <h2 className="font-display text-xl font-bold">Mensajes</h2>
+          <h2 id="terraqo-message-drawer-title" className="font-display text-xl font-bold">Mensajes</h2>
           <button
+            ref={closeRef}
+            type="button"
             onClick={() => setOpen(false)}
-            className="grid h-9 w-9 place-items-center rounded-lg border"
+            className="grid h-11 w-11 place-items-center rounded-lg border"
             aria-label="Cerrar mensajes"
           >
             <X className="h-4 w-4" />
