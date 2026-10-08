@@ -13,6 +13,7 @@ async function main() {
   assert.equal(process.env.TERRAQO_MUTATING_TESTS, "icc-topografia:20616116313");
   assert.equal(process.env.TEST_PORTAL_URL, "https://api.terraqoglobal.com");
   const secret = process.env.PROFESSIONAL_DOCUMENT_CLEANUP_SECRET!; assert.ok(secret?.length >= 32);
+  const workerMode = process.env.TERRAQO_EDUCATION_WORKER_TEST === "1";
   const url = "https://api.terraqoglobal.com/api/internal/education-evidence-cleanup";
   const call = (body?: unknown, authorized = true) => fetch(url, { method: body === undefined ? "GET" : "POST",
     redirect: "error", signal: AbortSignal.timeout(55000), headers: {
@@ -59,6 +60,34 @@ async function main() {
     assert.equal(reserved.kind, "reserved"); if (reserved.kind !== "reserved") throw Error("RESERVE_REQUIRED");
     keys.add(reserved.attempt.storageKey); await store.set(reserved.attempt.storageKey, bytes.buffer);
     const command = { action: "RECOVER", attemptId: reserved.attempt.id };
+    if (workerMode) {
+      phase = "background target queue and durable completion";
+      // Queue receipts do not prove authorization or completion. Observe only
+      // this fixture's persisted state, quota and physical key afterwards.
+      const queue = () => fetch("https://api.terraqoglobal.com/.netlify/functions/education-evidence-cleanup-background", {
+        method: "POST", redirect: "error", signal: AbortSignal.timeout(10000),
+        headers: { authorization: `Bearer ${secret}`, "content-type": "application/json" }, body: JSON.stringify(command) });
+      for (const response of await Promise.all(Array.from({ length: 3 }, queue))) {
+        assert.equal(response.status, 202); assert.equal(await response.text(), "");
+      }
+      const deadline = performance.now() + 90000;
+      let completed = false;
+      while (performance.now() < deadline) {
+        const attempt = await database.terraqoEducationEvidenceAttempt.findUniqueOrThrow({ where: { id: reserved.attempt.id } });
+        if (attempt.state === "CLEANED") { assert.equal(attempt.reservedUnits, 0); completed = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+      assert.ok(completed, "BACKGROUND_COMPLETION_REQUIRED");
+      assert.equal((await database.terraqoUsageBucket.findUniqueOrThrow({ where: { ownerKey_period_metric: bucket } })).used, 0);
+      assert.equal(await store.get(reserved.attempt.storageKey, { type: "arrayBuffer" }), null);
+      assert.equal(await database.terraqoEducationEvidenceOperation.count({ where: { educationId: education.id } }), 0);
+      assert.equal(await database.activityLog.count({ where: { actorId: user.id, entityType: "EducationEvidence" } }), 0);
+      const current = await database.terraqoProfessionalEducation.findUniqueOrThrow({ where: { id: education.id } });
+      assert.equal(current.visibility, "PRIVATE"); assert.deepEqual(current.evidence, ["Texto propio"]);
+      assert.equal((await database.terraqoProfessionalProfile.findUniqueOrThrow({ where: { id: user.terraqoProfessionalProfile!.id } })).liveCvEnabled, false);
+      console.log("PASS deployed background worker: three targeted 202 invocation receipts followed by own SQL CLEANED/units0/quota0 and physical blob absence, no receipt/audit or visibility changes. No global dispatch or cron invoked.");
+      return;
+    }
     assert.equal((await call(command, false)).status, 401);
     assert.equal((await call({ ...command, force: true })).status, 422);
     assert.equal((await call({ noise: "x".repeat(1100) })).status, 413);
