@@ -6,7 +6,7 @@ import { parseNativeWorklogPayload } from "../lib/server/native-worklog-payload"
 import { decideNativeDeclaredWorklog } from "../lib/server/native-worklog-base-decision";
 
 export const NATIVE_DECISION_CATALOG = "85af9336c4049dc61070ab63ed1a731e35dc4f61daf723c581cdfd8dc6c22499";
-export async function nativeDecisionSchemaRollback(tx: Prisma.TransactionClient, workspaceId: string, core = false, release = false, edges = false, firstAccount = false, phases = false, phaseEdges = false, inventory = false, retry = false, authority = false) {
+export async function nativeDecisionSchemaRollback(tx: Prisma.TransactionClient, workspaceId: string, core = false, release = false, edges = false, firstAccount = false, phases = false, phaseEdges = false, inventory = false, retry = false, authority = false, authoritySchemaOnly = false) {
   const [present] = await tx.$queryRaw<{ table: string | null; index: string | null }[]>`SELECT
     to_regclass('icc."TerraqoNativeWorklogDecision"')::text AS table,
     to_regclass('icc."NativeWorklogOperation_decision_binding_key"')::text AS index`;
@@ -93,6 +93,7 @@ export async function nativeDecisionSchemaRollback(tx: Prisma.TransactionClient,
     await tx.$executeRaw`DELETE FROM icc."TerraqoNativeWorklogOperation" WHERE id=${operationId}`;
     await tx.user.delete({ where: { id: user.id } });
     assert.equal(await tx.user.count({ where: { id: user.id } }), 0);
+    let authoritySchema: unknown;
     let coreSchema: { fingerprint: string; constraints: number; indexes: number } | undefined;
     if (core) {
       const extra = await readFile(new URL("../prisma/migrations/20261008162500_native_worklog_content_key/migration.sql", import.meta.url), "utf8");
@@ -109,7 +110,10 @@ export async function nativeDecisionSchemaRollback(tx: Prisma.TransactionClient,
       coreSchema = { fingerprint: createHash("sha256").update(JSON.stringify({ columns, constraints, indexes })).digest("hex"), constraints: 23, indexes: 12 };
       assert.equal(coreSchema.fingerprint, "74bf7259e20f0f84330a03567b1fd181d8c645203f71f8606ffb3b2436a624ad");
       const { nativeWorklogCoreRollback } = await import("./test-native-worklog-core-rollback");
-      if (authority) {
+      if (authoritySchemaOnly) {
+        const { nativeAuthoritySchemaRollback } = await import("./test-native-worklog-authority-schema");
+        authoritySchema = await nativeAuthoritySchemaRollback(tx, workspaceId);
+      } else if (authority) {
         const { nativeAuthorizedAccountingRollback } = await import("./test-native-worklog-authorized-accounting-rollback");
         await nativeAuthorizedAccountingRollback(tx, workspaceId);
       } else if (retry) {
@@ -135,7 +139,7 @@ export async function nativeDecisionSchemaRollback(tx: Prisma.TransactionClient,
         await nativeBaseReleaseRollback(tx, workspaceId);
       } else await nativeWorklogCoreRollback(tx, workspaceId);
     }
-    return { fingerprint, constraints: constraints.length, indexes: indexes.length, applied: false, ...(coreSchema ? { coreSchema } : {}) };
+    return { fingerprint, constraints: constraints.length, indexes: indexes.length, applied: false, ...(coreSchema ? { coreSchema } : {}), ...(authoritySchema ? { authoritySchema } : {}) };
   } catch (error: unknown) {
     const category = error instanceof assert.AssertionError ? "assertion" :
       error instanceof Prisma.PrismaClientKnownRequestError && /^[A-Z][0-9]{4}$/.test(error.code) ? error.code : "unknown";
