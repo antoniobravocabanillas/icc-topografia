@@ -1,6 +1,7 @@
 import "server-only";
 import type { WorkspacePortalToken } from "./workspace-portal-session";
 import { parseNativeWorklogPayload, NativeWorklogPayloadError } from "./native-worklog-payload";
+import { NativeWorklogBudget } from "./native-worklog-budget";
 
 export class NativeWorklogOperationError extends Error {
   constructor(readonly status: 401 | 403 | 404 | 409 | 429 | 503) { super("Operación de bitácora no confirmada."); }
@@ -13,8 +14,8 @@ type Parsed = Awaited<ReturnType<typeof parseNativeWorklogPayload>>;
 type Ports = {
   authenticate(request: Request, slug: string): Promise<WorkspacePortalToken | null>;
   // Future SQL core must revalidate grant/role/member/modules/project and expiry under locks.
-  create(input: Parsed, token: WorkspacePortalToken): Promise<NativeWorklogOperationResult>;
-  read(token: WorkspacePortalToken, operationKey: string): Promise<NativeWorklogOperationResult>;
+  create(input: Parsed, token: WorkspacePortalToken, budget: NativeWorklogBudget): Promise<NativeWorklogOperationResult>;
+  read(token: WorkspacePortalToken, operationKey: string, budget: NativeWorklogBudget): Promise<NativeWorklogOperationResult>;
 };
 const privateHeaders = { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" };
 const fail = (status: number) => Response.json({error:{message:status === 401 ? "Vuelve a iniciar tu sesión profesional." :
@@ -30,6 +31,7 @@ function projectResult(result: NativeWorklogOperationResult) {
  * Server supplies ports; clients cannot supply an actor, workspace, digest or dependency.
  * Receipt confirms historical creation, not current publication or points settlement. */
 export async function handleNativeWorklogOperation(request: Request, workspaceSlug: string, ports: Ports) {
+  const budget = new NativeWorklogBudget();
   if (!["GET","POST"].includes(request.method)) { const response=fail(405); response.headers.set("Allow","GET, POST"); return response; }
   if (workspaceSlug.length>100 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(workspaceSlug)) return fail(404);
   const url=new URL(request.url); let key="";
@@ -42,13 +44,18 @@ export async function handleNativeWorklogOperation(request: Request, workspaceSl
     if (!token || token.workspaceSlug!==workspaceSlug || token.role!=="PROFESSIONAL" || !token.jti ||
       !Number.isFinite(token.exp) || token.exp<=Math.floor(Date.now()/1000)) return fail(401);
     if (request.method === "GET") {
-      const result=await ports.read(token,key);
+      budget.require(8000);
+      const result=await ports.read(token,key,budget);
+      budget.require();
       if (result.receipt && result.receipt.operationKey!==key) return fail(503);
       return Response.json({data:projectResult(result)},{headers:privateHeaders});
     }
     // No Request.body access, parse, or create port call before live shared authentication.
+    budget.require(13000);
     const parsed=await parseNativeWorklogPayload(request);
-    const result=await ports.create(parsed,token);
+    budget.require(8000);
+    const result=await ports.create(parsed,token,budget);
+    budget.require();
     if (!result.receipt || result.receipt.operationKey!==parsed.payload.operationKey) return fail(503);
     return Response.json({data:projectResult(result)},{headers:privateHeaders});
   } catch (error) {

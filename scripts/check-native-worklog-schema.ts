@@ -83,7 +83,8 @@ async function fixtureConstraints(tx: Prisma.TransactionClient, workspaceId: str
 }
 
 async function main() {
-  assert.equal(process.argv.length, 2);
+  const core = process.argv[2] === "--core";
+  assert.ok(process.argv.length === 2 || (core && process.argv.length === 3));
   assert.equal(process.env.TERRAQO_MUTATING_TESTS, "icc-topografia:20616116313");
   assert.equal(process.env.TEST_PORTAL_URL, "https://api.terraqoglobal.com");
   const workspace=await prisma.terraqoWorkspace.findFirstOrThrow({ where: { slug: "icc-topografia", active: true,
@@ -116,13 +117,17 @@ async function main() {
       assert.equal(Number(invalid[0].count), 0);
       fingerprint = createHash("sha256").update(JSON.stringify({ columns, constraints, indexes })).digest("hex");
       assert.equal(fingerprint, EXPECTED_CATALOG);
-      await fixtureConstraints(tx,workspace.id);
+      if (core) {
+        const { nativeWorklogCoreRollback } = await import("./test-native-worklog-core-rollback");
+        await nativeWorklogCoreRollback(tx, workspace.id);
+      } else await fixtureConstraints(tx,workspace.id);
       assert.equal(hash(await catalog(tx, false)), previous);
       assert.equal(await ledgerFingerprint(tx), ledger);
       throw rollback;
-    }, { maxWait: 5000, timeout: 30000 });
+    }, { maxWait: 5000, timeout: core ? 90000 : 30000 });
   } catch (error) { if (error !== rollback || !fingerprint) throw error; }
-  console.log(JSON.stringify({ mode: "checked-in-rollback", fingerprint, ledgerFingerprint: ledger, constraints: 14, indexes: 8, ownFixtureConstraints: true, applied: false }));
+  console.log(JSON.stringify({ mode: "checked-in-rollback", fingerprint, ledgerFingerprint: ledger, constraints: 14, indexes: 8,
+    ownFixtureConstraints: !core, ownCoreRollback: core, applied: false }));
 }
 main().catch(() => { console.error("Native worklog schema check failed; private diagnostics suppressed."); process.exitCode = 1;
 }).finally(() => prisma.$disconnect());

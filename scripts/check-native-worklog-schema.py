@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def main():
-    if sys.argv[1:]:
+    if sys.argv[1:] not in ([], ["--core"]):
         raise RuntimeError("Unsupported mode")
     spec = importlib.util.spec_from_file_location("worklog_inventory", ROOT / "scripts/inventory-database-migration.py")
     inventory = importlib.util.module_from_spec(spec)
@@ -32,7 +32,7 @@ def main():
         raise RuntimeError("Source identity mismatch")
     environment = dict(os.environ, DATABASE_URL=direct, NODE_ENV="production", TEST_PORTAL_URL="https://api.terraqoglobal.com",
                        TERRAQO_MUTATING_TESTS="icc-topografia:20616116313")
-    args = [shutil.which("node"), "--import", "tsx", "scripts/check-native-worklog-schema.ts", *sys.argv[1:]]
+    args = [shutil.which("node"), "--conditions=react-server", "--import", "tsx", "scripts/check-native-worklog-schema.ts", *sys.argv[1:]]
     checked = subprocess.run(args, cwd=ROOT, env=environment, capture_output=True, text=True, encoding="utf-8", timeout=120)
     if checked.returncode:
         raise RuntimeError("Catalog check failed; private diagnostics suppressed")

@@ -1,0 +1,142 @@
+import assert from "node:assert/strict";
+import { createHash, randomUUID } from "node:crypto";
+import { Prisma } from "@prisma/client";
+import type { WorkspacePortalToken } from "../lib/server/workspace-portal-session";
+import { parseNativeWorklogPayload } from "../lib/server/native-worklog-payload";
+import { NativeWorklogBudget } from "../lib/server/native-worklog-budget";
+import { NativeWorklogOperationError } from "../lib/server/native-worklog-http";
+import { createNativeWorklogInTransaction, readNativeWorklogInTransaction } from "../lib/server/native-worklog-operation";
+
+/** Invoked only within the pinned DDL checker's outer rollback, never standalone. */
+export async function nativeWorklogCoreRollback(tx: Prisma.TransactionClient, workspaceId: string) {
+  const marker = randomUUID();
+  const user = await tx.user.create({ data: { name: `ICC native-core rollback ${marker}`,
+    email: `native-core-${marker}@example.invalid`, role: "CUSTOMER" } });
+  const profile = await tx.terraqoProfessionalProfile.create({ data: { userId: user.id, visibility: "PRIVATE", liveCvEnabled: false } });
+  const member = await tx.terraqoWorkspaceMember.create({ data: { userId: user.id, workspaceId, role: "PROFESSIONAL", active: true } });
+  const token: WorkspacePortalToken = { sub: user.id, workspaceId, workspaceSlug: "icc-topografia", role: "PROFESSIONAL",
+    iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 3600, jti: randomUUID() };
+  const identifier = `portal-session:${workspaceId}:${user.id}`, grantHash = createHash("sha256").update(token.jti!).digest("hex");
+  await tx.verificationToken.create({ data: { identifier, token: grantHash, expires: new Date(Date.now() + 3600000) } });
+  const payload = { operationKey: "a".repeat(32), title: "ICC bitácora privada propia",
+    summary: "Resumen temporal exclusivo de verificación del core SQL.", outcome: "Resultado propio", type: "FIELD_UPDATE",
+    projectId: "", projectVersion: "" };
+  const parsed = (changes = {}) => parseNativeWorklogPayload(new Request("https://api.terraqoglobal.com/own-test", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...payload, ...changes }),
+  }));
+  const initial = await parsed();
+  const budget = () => new NativeWorklogBudget();
+  const counts = async () => ({ entry: await tx.terraqoWorklogEntry.count({ where: { authorId: user.id } }),
+    receipt: await tx.terraqoNativeWorklogOperation.count({ where: { actorId: user.id } }),
+    accounting: await tx.terraqoNativeWorklogAccounting.count({ where: { operation: { actorId: user.id } } }),
+    audit: await tx.activityLog.count({ where: { actorId: user.id } }) });
+  async function rejected(run: () => Promise<unknown>, expected?: number) {
+    const before = await counts();
+    await tx.$executeRawUnsafe("SAVEPOINT native_core_own_case");
+    let caught: unknown;
+    try { await run(); } catch (error) { caught = error; }
+    await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT native_core_own_case");
+    await tx.$executeRawUnsafe("RELEASE SAVEPOINT native_core_own_case");
+    assert.ok(caught);
+    if (expected) { assert.ok(caught instanceof NativeWorklogOperationError); assert.equal(caught.status, expected); }
+    assert.deepEqual(await counts(), before);
+  }
+  assert.deepEqual(await readNativeWorklogInTransaction(tx, token, payload.operationKey, budget()), { receipt: null, current: null });
+  assert.deepEqual(await counts(), { entry: 0, receipt: 0, accounting: 0, audit: 0 });
+  await rejected(() => createNativeWorklogInTransaction(tx, { ...token, jti: undefined }, initial, budget()), 401);
+  await rejected(() => createNativeWorklogInTransaction(tx, { ...token, exp: Number.NaN }, initial, budget()), 401);
+  await rejected(async () => {
+    await tx.terraqoWorkspaceMember.update({ where: { id: member.id }, data: { role: "CLIENT" } });
+    return createNativeWorklogInTransaction(tx, token, initial, budget());
+  }, 403);
+  await rejected(async () => {
+    await tx.verificationToken.delete({ where: { identifier_token: { identifier, token: grantHash } } });
+    return createNativeWorklogInTransaction(tx, token, initial, budget());
+  }, 401);
+  await rejected(async () => {
+    await tx.verificationToken.delete({ where: { identifier_token: { identifier, token: grantHash } } });
+    return readNativeWorklogInTransaction(tx, token, payload.operationKey, budget());
+  }, 401);
+  // A structurally identical object cannot forge the parser's internal snapshot provenance.
+  await rejected(() => createNativeWorklogInTransaction(tx, token, Object.freeze({ ...initial }), budget()), 503);
+  const created = await createNativeWorklogInTransaction(tx, token, initial, budget());
+  assert.ok(created.receipt && created.current);
+  assert.equal(created.receipt.worklogId, created.current.worklogId);
+  assert.deepEqual(await counts(), { entry: 1, receipt: 1, accounting: 1, audit: 1 });
+  const operation = await tx.terraqoNativeWorklogOperation.findFirstOrThrow({ where: { actorId: user.id } });
+  const accounting = await tx.terraqoNativeWorklogAccounting.findUniqueOrThrow({ where: { operationId: operation.id } });
+  assert.equal(accounting.state, "PENDING"); assert.equal(accounting.completedAt, null); assert.equal(accounting.attempts, 0);
+  const entry = await tx.terraqoWorklogEntry.findUniqueOrThrow({ where: { id: created.receipt.worklogId } });
+  assert.equal(entry.visibility, "PRIVATE"); assert.equal(entry.tqPointsAwarded, 0); assert.equal(entry.trustScoreAwarded, 0);
+  assert.deepEqual(entry.evidenceUrls, []); assert.deepEqual(entry.skills, []);
+  assert.equal(operation.createdAt.toISOString(), entry.updatedAt.toISOString());
+  assert.deepEqual(await createNativeWorklogInTransaction(tx, token, await parsed(), budget()), created);
+  assert.deepEqual(await readNativeWorklogInTransaction(tx, token, payload.operationKey, budget()), created);
+  await rejected(async () => {
+    await tx.terraqoNativeWorklogAccounting.delete({ where: { operationId: operation.id } });
+    return readNativeWorklogInTransaction(tx, token, payload.operationKey, budget());
+  }, 503);
+  await rejected(async () => createNativeWorklogInTransaction(tx, token, await parsed({ outcome: "Otro resultado" }), budget()), 409);
+  const newAction = await parsed({ operationKey: "b".repeat(32) });
+  function faultPort(delegate: "terraqoNativeWorklogAccounting" | "activityLog", after?: () => void) {
+    return new Proxy(tx, { get(target, property) {
+      if (property === delegate) return new Proxy(target[delegate], { get(port, key) {
+        if (key === "create") return async (args: never) => {
+          if (!after) throw new Error("CONTROLLED_OWN_ROLLBACK_FAULT");
+          const saved = await (port.create as (input: never) => Promise<unknown>)(args); after(); return saved;
+        };
+        return Reflect.get(port, key);
+      } });
+      return Reflect.get(target, property);
+    } });
+  }
+  await rejected(() => createNativeWorklogInTransaction(faultPort("terraqoNativeWorklogAccounting"), token, newAction, budget()));
+  await rejected(() => createNativeWorklogInTransaction(faultPort("activityLog"), token, newAction, budget()));
+  const expiring = { ...token };
+  await rejected(() => createNativeWorklogInTransaction(faultPort("activityLog", () => { expiring.exp = 0; }), expiring, newAction, budget()), 401);
+  let clock = 0;
+  const exhausted = new NativeWorklogBudget(() => clock);
+  await rejected(() => createNativeWorklogInTransaction(faultPort("activityLog", () => { clock = 50000; }), token, newAction, exhausted), 503);
+  const project = await tx.project.create({ data: { title: `ICC own native ${marker}`, slug: `native-${marker}`,
+    terraqoWorkspaceId: workspaceId, servicesApplied: [], summary: "Fixture propio", description: "Fixture propio", isPublic: false } });
+  const projectInput = await parsed({ operationKey: "c".repeat(32), projectId: project.id, projectVersion: project.updatedAt.toISOString() });
+  await rejected(() => createNativeWorklogInTransaction(tx, token, projectInput, budget()), 403);
+  const experience = await tx.terraqoProfessionalExperience.create({ data: { professionalProfileId: profile.id,
+    projectId: project.id, workspaceId, title: "ICC vínculo propio", visibility: "PRIVATE" } });
+  await rejected(async () => createNativeWorklogInTransaction(tx, token,
+    await parsed({ operationKey: "c".repeat(32), projectId: project.id, projectVersion: "2020-01-01T00:00:00.000Z" }), budget()), 409);
+  const bound = await createNativeWorklogInTransaction(tx, token, projectInput, budget());
+  assert.equal(bound.receipt?.originalProjectVersion, project.updatedAt.toISOString());
+  await tx.terraqoProfessionalExperience.delete({ where: { id: experience.id } });
+  const job = await tx.terraqoJobPost.create({ data: { workspaceId, projectId: project.id,
+    title: "ICC post propio", slug: `native-${marker}`, summary: "ICC propio", description: "ICC propio", visibility: "PRIVATE" } });
+  const application = await tx.terraqoProjectApplication.create({ data: { workspaceId, jobPostId: job.id,
+    professionalProfileId: profile.id, userId: user.id, status: "ACCEPTED" } });
+  const accepted = await parsed({ operationKey: "d".repeat(32), projectId: project.id, projectVersion: project.updatedAt.toISOString() });
+  await createNativeWorklogInTransaction(tx, token, accepted, budget());
+  await rejected(async () => {
+    await tx.terraqoProjectApplication.update({ where: { id: application.id }, data: { status: "SUBMITTED" } });
+    return createNativeWorklogInTransaction(tx, token,
+      await parsed({ operationKey: "e".repeat(32), projectId: project.id, projectVersion: project.updatedAt.toISOString() }), budget());
+  }, 403);
+  await tx.terraqoJobPost.delete({ where: { id: job.id } });
+  await tx.project.delete({ where: { id: project.id } });
+  // Historical replay does not revalidate or recreate a former project binding.
+  assert.deepEqual(await createNativeWorklogInTransaction(tx, token, projectInput, budget()), bound);
+  await tx.terraqoWorklogEntry.delete({ where: { id: entry.id } });
+  const historical = await readNativeWorklogInTransaction(tx, token, payload.operationKey, budget());
+  assert.deepEqual(historical.receipt, created.receipt); assert.equal(historical.current, null);
+  assert.deepEqual(await createNativeWorklogInTransaction(tx, token, initial, budget()), historical);
+  assert.deepEqual(await counts(), { entry: 2, receipt: 3, accounting: 3, audit: 3 });
+  assert.equal(await tx.terraqoBuilderAccount.count({ where: { userId: user.id } }), 0);
+  assert.equal(await tx.terraqoBuilderContribution.count({ where: { userId: user.id } }), 0);
+  assert.equal((await tx.terraqoProfessionalProfile.findUniqueOrThrow({ where: { id: profile.id } })).liveCvEnabled, false);
+  await tx.terraqoNativeWorklogAccounting.deleteMany({ where: { operation: { actorId: user.id } } });
+  await tx.terraqoNativeWorklogOperation.deleteMany({ where: { actorId: user.id } });
+  await tx.activityLog.deleteMany({ where: { actorId: user.id } });
+  await tx.verificationToken.deleteMany({ where: { identifier } });
+  await tx.user.delete({ where: { id: user.id } });
+  assert.equal(await tx.user.count({ where: { id: user.id } }), 0);
+  assert.equal(await tx.terraqoWorklogEntry.count({ where: { authorId: user.id } }), 0);
+  assert.equal(await tx.activityLog.count({ where: { actorId: user.id } }), 0);
+}

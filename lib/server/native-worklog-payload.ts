@@ -4,6 +4,8 @@ export const NATIVE_WORKLOG_BODY_LIMIT = 16 * 1024;
 const deadlineMs = 5000;
 const fields = ["operationKey", "title", "summary", "outcome", "type", "projectId", "projectVersion"] as const;
 const types = ["FIELD_UPDATE", "DELIVERABLE", "PROBLEM_SOLVED", "LEARNING", "MILESTONE"] as const;
+const parsedSnapshots = new WeakSet<object>();
+export function isParsedNativeWorklogSnapshot(value: object) { return parsedSnapshots.has(value); }
 export class NativeWorklogPayloadError extends Error {
   constructor(readonly status = 422) { super("Solicitud de bitácora no válida."); }
 }
@@ -97,5 +99,7 @@ export async function parseNativeWorklogPayload(request: Request) {
     operationKey: values.operationKey, title: values.title, summary: values.summary, outcome: values.outcome,
     type: values.type as typeof types[number], projectId: values.projectId, projectVersion: values.projectVersion,
   });
-  return Object.freeze({ payload, fingerprint: nativeWorklogFingerprint(payload) });
+  const parsed = Object.freeze({ payload, fingerprint: nativeWorklogFingerprint(payload) });
+  parsedSnapshots.add(parsed);
+  return parsed;
 }
