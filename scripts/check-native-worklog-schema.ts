@@ -170,5 +170,7 @@ main().catch((error: unknown) => {
   const category = error instanceof assert.AssertionError ? "assertion" :
     error instanceof Prisma.PrismaClientKnownRequestError && /^[A-Z][0-9]{4}$/.test(error.code) ? error.code : "unknown";
   const location = error instanceof Error ? error.stack?.match(/(?:test-native-worklog-combined-catalog|test-native-worklog-core-rollback|test-native-worklog-decision-schema|test-native-worklog-legacy-release-rollback|test-native-worklog-owner-fence|check-native-worklog-schema)\.ts:[0-9]+:[0-9]+/)?.[0] : undefined;
-  console.error(JSON.stringify({ outcome: "failed", category, location })); process.exitCode = 1;
+  const code = error instanceof Prisma.PrismaClientKnownRequestError ? error.meta?.code : undefined;
+  const sqlState = typeof code === "string" && /^[0-9A-Z]{5}$/.test(code) ? code : undefined;
+  console.error(JSON.stringify({ outcome: "failed", category, location, sqlState })); process.exitCode = 1;
 }).finally(() => prisma.$disconnect());

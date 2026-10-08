@@ -45,7 +45,10 @@ def main():
                 import re
                 location = diagnostic.get("location", "")
                 if re.fullmatch(r"(?:test-native-worklog-[a-z-]+|check-native-worklog-schema)\.ts:[0-9]+:[0-9]+", location):
-                    print(json.dumps({"category": diagnostic["category"], "location": location}))
+                    safe = {"category": diagnostic["category"], "location": location}
+                    if re.fullmatch(r"[0-9A-Z]{5}", str(diagnostic.get("sqlState", ""))):
+                        safe["sqlState"] = diagnostic["sqlState"]
+                    print(json.dumps(safe))
         raise RuntimeError("Catalog check failed; private diagnostics suppressed")
     report = json.loads(checked.stdout.strip())
     if sys.argv[1:] == ["--combined"]:
