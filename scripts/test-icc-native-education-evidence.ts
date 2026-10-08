@@ -66,13 +66,52 @@ async function main() {
       shell(serial, `printf '${bytes.toString("base64")}' | base64 -d > /sdcard/Download/${name}`);
       shell(serial, `am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Download/${name}`);
       await login(serial, email, password); await tapLabel(serial, "Abrir herramientas"); await tapLabel(serial, "Formación académica"); await tapLabel(serial, "Respaldos de formación");
-      await waitFor(serial, "No hay archivos en esta lista"); capture(serial, `cv-education-empty-${label}.png`);
+      await waitFor(serial, "No hay archivos en esta lista"); if (process.env.TERRAQO_NATIVE_PROOF_REVOCATION !== "1") capture(serial, `cv-education-empty-${label}.png`);
       phase = `${label}: own picker cancellation`;
       await tapLabel(serial, "Seleccionar archivo"); await pause(700); shell(serial, "input keyevent 4"); await pause(700);
       assert.equal(await prisma.terraqoEducationEvidenceAttempt.count({ where: { educationId, actorId: user.id } }), 0);
       await tapLabel(serial, "Seleccionar archivo"); await pause(700); await picker(serial, name);
-      await tapLabel(serial, "Revisar envío"); capture(serial, `cv-education-confirm-${label}.png`); await tapLabel(serial, "Cancelar");
+      await tapLabel(serial, "Revisar envío"); if (process.env.TERRAQO_NATIVE_PROOF_REVOCATION !== "1") capture(serial, `cv-education-confirm-${label}.png`); await tapLabel(serial, "Cancelar");
       assert.equal(await prisma.terraqoEducationEvidenceOperation.count({ where: { educationId, actorId: user.id } }), 0);
+      if (process.env.TERRAQO_NATIVE_PROOF_REVOCATION === "1") {
+        phase = `${label}: own pending grant revocation`;
+        shell(serial, "svc wifi disable"); shell(serial, "svc data disable");
+        await tapLabel(serial, "Revisar envío"); await tapLabel(serial, "Confirmar envío");
+        await waitFor(serial, "Resultado por comprobar");
+        assert.equal(await prisma.terraqoEducationEvidenceAttempt.count({ where: { educationId, actorId: user.id } }), 0);
+        // Only this invocation's new owner grants are revoked. No workspace
+        // membership/module/customer state is changed and no POST is retried.
+        const revoked = await prisma.verificationToken.deleteMany({ where: { identifier: `portal-session:${workspace.id}:${user.id}` } });
+        assert.ok(revoked.count >= 1);
+        shell(serial, "svc wifi enable"); shell(serial, "svc data enable"); await pause(1500);
+        assert.equal((await request(`education/${educationId}/evidence`)).status, 401);
+        await tapLabel(serial, "Consultar recibo"); await waitFor(serial, "Acceso no disponible");
+        const invalid = await snapshot(serial);
+        for (const privateText of [name, education.degree, education.institution, "Reenviar original", "Resultado por comprobar"])
+          assert.ok(!invalid.includes(privateText), "Revocation must hide own private/pending state.");
+        capture(serial, `cv-education-revoked-${label}.png`);
+        assert.equal(await prisma.terraqoEducationEvidenceAttempt.count({ where: { educationId } }), 0);
+        assert.equal(await prisma.terraqoEducationEvidenceOperation.count({ where: { educationId } }), 0);
+        assert.equal(await prisma.terraqoEducationEvidenceWithdrawal.count({ where: { educationId } }), 0);
+        assert.equal(await prisma.activityLog.count({ where: { actorId: user.id, entityType: { in: ["EducationEvidence", "EducationEvidenceWithdrawal"] } } }), 0);
+        assert.equal((await store.list({ prefix: `education-evidence/${educationId}/` })).blobs.length, 0);
+        phase = `${label}: fresh login without previous pending`;
+        // Restart must require a fresh login because 401 erased local credentials.
+        // login() asserts that condition before entering credentials via stdin.
+        await login(serial, email, password);
+        await tapLabel(serial, "Abrir herramientas"); await tapLabel(serial, "Formación académica"); await tapLabel(serial, "Respaldos de formación");
+        await waitFor(serial, "No hay archivos en esta lista");
+        const fresh = await snapshot(serial);
+        assert.ok(!fresh.includes(name)); assert.ok(!fresh.includes("Resultado por comprobar")); assert.ok(!fresh.includes("Reenviar original"));
+        assert.equal(await prisma.terraqoEducationEvidenceAttempt.count({ where: { educationId } }), 0);
+        assert.equal(await prisma.terraqoEducationEvidenceOperation.count({ where: { educationId } }), 0);
+        capture(serial, `cv-education-relogin-${label}.png`);
+        shell(serial, "input keyevent 4"); await pause(500); shell(serial, "input keyevent 4"); await pause(500); shell(serial, "input keyevent 4"); await pause(500);
+        await tapLabel(serial, "Cuenta"); await tapLabel(serial, "Cerrar sesión"); await waitFor(serial, "Ingresar a mi empresa");
+        assert.equal(await prisma.verificationToken.count({ where: { identifier: `portal-session:${workspace.id}:${user.id}` } }), 0);
+        console.log(`PASS own native education ${label}: pending grant revocation, real 401, hidden private state, fresh login without restored request or POST, zero attempts/files/receipts/audits/blobs.`);
+        continue;
+      }
       phase = `${label}: own native upload`;
       if (process.env.TERRAQO_NATIVE_PROOF_OFFLINE === "1") {
         phase = `${label}: own offline uncertainty and explicit replay`;
