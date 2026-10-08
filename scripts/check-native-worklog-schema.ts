@@ -83,6 +83,26 @@ async function fixtureConstraints(tx: Prisma.TransactionClient, workspaceId: str
 }
 
 async function main() {
+  if (process.argv[2] === "--combined") {
+    assert.equal(process.argv.length, 3);
+    assert.equal(process.env.TERRAQO_MUTATING_TESTS, "icc-topografia:20616116313");
+    assert.equal(process.env.TEST_PORTAL_URL, "https://api.terraqoglobal.com");
+    await prisma.terraqoWorkspace.findFirstOrThrow({ where: { slug: "icc-topografia", active: true,
+      companies: { some: { document: "20616116313", deletedAt: null } } }, select: { id: true } });
+    let combined: unknown;
+    const ledger = await ledgerFingerprint(prisma);
+    const { nativeCombinedCatalogRollback } = await import("./test-native-worklog-combined-catalog");
+    try {
+      await prisma.$transaction(async tx => {
+        await tx.$executeRaw`SET LOCAL lock_timeout = '5s'`;
+        combined = await nativeCombinedCatalogRollback(tx);
+        throw rollback;
+      }, { maxWait: 5000, timeout: 60000 });
+    } catch (error) { if (error !== rollback) throw error; }
+    assert.equal(await ledgerFingerprint(prisma), ledger);
+    console.log(JSON.stringify({ mode: "combined-rollback", combined, ledgerFingerprint: ledger, applied: false }));
+    return;
+  }
   const core = process.argv[2] === "--core";
   const reconciliation = process.argv[2] === "--reconciliation";
   const ownerFence = process.argv[2] === "--owner-fence";
@@ -149,6 +169,6 @@ main().catch((error: unknown) => {
   // Only bounded categories and source line numbers; never error messages, SQL or connection data.
   const category = error instanceof assert.AssertionError ? "assertion" :
     error instanceof Prisma.PrismaClientKnownRequestError && /^[A-Z][0-9]{4}$/.test(error.code) ? error.code : "unknown";
-  const location = error instanceof Error ? error.stack?.match(/(?:test-native-worklog-core-rollback|test-native-worklog-decision-schema|test-native-worklog-legacy-release-rollback|test-native-worklog-owner-fence|check-native-worklog-schema)\.ts:[0-9]+:[0-9]+/)?.[0] : undefined;
+  const location = error instanceof Error ? error.stack?.match(/(?:test-native-worklog-combined-catalog|test-native-worklog-core-rollback|test-native-worklog-decision-schema|test-native-worklog-legacy-release-rollback|test-native-worklog-owner-fence|check-native-worklog-schema)\.ts:[0-9]+:[0-9]+/)?.[0] : undefined;
   console.error(JSON.stringify({ outcome: "failed", category, location })); process.exitCode = 1;
 }).finally(() => prisma.$disconnect());

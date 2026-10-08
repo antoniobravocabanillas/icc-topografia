@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def main():
-    if sys.argv[1:] not in ([], ["--core"], ["--reconciliation"], ["--owner-fence"], ["--decision"]):
+    if sys.argv[1:] not in ([], ["--core"], ["--reconciliation"], ["--owner-fence"], ["--decision"], ["--combined"]):
         raise RuntimeError("Unsupported mode")
     spec = importlib.util.spec_from_file_location("worklog_inventory", ROOT / "scripts/inventory-database-migration.py")
     inventory = importlib.util.module_from_spec(spec)
@@ -48,7 +48,10 @@ def main():
                     print(json.dumps({"category": diagnostic["category"], "location": location}))
         raise RuntimeError("Catalog check failed; private diagnostics suppressed")
     report = json.loads(checked.stdout.strip())
-    if report["fingerprint"] != "d2e17d02f546dc4bf5e2540274633dd1b05a157edd7f02b8ed4a8f623278b3bd" or report["applied"]:
+    if sys.argv[1:] == ["--combined"]:
+        if report != {"mode": "combined-rollback", "combined": {"state": "exact", "fingerprint": "74bf7259e20f0f84330a03567b1fd181d8c645203f71f8606ffb3b2436a624ad", "constraints": 23, "indexes": 12}, "ledgerFingerprint": "63b2a899b04e053157f7212cd53bc2409118fb25a21cda713995450a9be40798", "applied": False}:
+            raise RuntimeError("Combined catalog or rollback mode mismatch")
+    elif report["fingerprint"] != "d2e17d02f546dc4bf5e2540274633dd1b05a157edd7f02b8ed4a8f623278b3bd" or report["applied"]:
         raise RuntimeError("Pinned fingerprint or mode mismatch")
     if sys.argv[1:] == ["--decision"]:
         decision = report["decisionSchema"]
