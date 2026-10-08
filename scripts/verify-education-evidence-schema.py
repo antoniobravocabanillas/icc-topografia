@@ -31,14 +31,16 @@ def main():
     print("PASS direct/runtime schema and workspace fingerprints match; credentials remain in child environment only.", flush=True)
     environment = dict(os.environ, DATABASE_URL=direct, NODE_ENV="production", TEST_PORTAL_URL="https://api.terraqoglobal.com",
                        TERRAQO_MUTATING_TESTS="icc-topografia:20616116313")
-    if sys.argv[1:] not in ([], ["--cleanup"], ["--commit"], ["--physical"], ["--physical-cleanup"], ["--operations"], ["--worker"], ["--owner"]):
+    if sys.argv[1:] not in ([], ["--cleanup"], ["--commit"], ["--physical"], ["--physical-cleanup"], ["--operations"], ["--worker"], ["--owner"], ["--withdrawal-schema"], ["--withdrawal"]):
         raise RuntimeError("Unsupported verification mode")
     script = {"--cleanup": "scripts/test-icc-education-evidence-cleanup.ts", "--commit": "scripts/test-icc-education-evidence-commit.ts",
               "--physical": "scripts/test-icc-education-evidence-physical.ts",
               "--physical-cleanup": "scripts/test-icc-education-evidence-physical.ts",
               "--operations": "scripts/test-icc-education-evidence-operations.ts",
               "--worker": "scripts/test-icc-education-evidence-operations.ts",
-              "--owner": "scripts/test-icc-education-evidence-owner.ts"}.get(
+              "--owner": "scripts/test-icc-education-evidence-owner.ts",
+              "--withdrawal-schema": "scripts/check-education-withdrawal-schema.ts",
+              "--withdrawal": "scripts/test-icc-education-evidence-withdrawal.ts"}.get(
         sys.argv[1] if sys.argv[1:] else "", "scripts/test-icc-education-evidence-schema.ts")
     arguments = ["--cleanup-interrupted"] if sys.argv[1:] == ["--physical-cleanup"] else []
     if sys.argv[1:] in (["--operations"], ["--worker"]):

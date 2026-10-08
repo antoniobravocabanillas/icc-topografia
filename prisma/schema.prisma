@@ -2999,6 +2999,7 @@ model TerraqoProfessionalEducation {
   evidenceFiles           TerraqoEducationEvidence[]
   evidenceOperations      TerraqoEducationEvidenceOperation[]
   evidenceAttempts        TerraqoEducationEvidenceAttempt[]
+  evidenceWithdrawals     TerraqoEducationEvidenceWithdrawal[]
   createdAt               DateTime                              @default(now())
   updatedAt               DateTime                              @updatedAt
 
@@ -3043,6 +3044,7 @@ model TerraqoEducationEvidenceOperation {
   originalVersion DateTime
   resultVersion   DateTime
   createdAt       DateTime                     @default(now())
+  withdrawals     TerraqoEducationEvidenceWithdrawal[]
 
   @@unique([educationId, operationKey])
   @@index([educationId, createdAt])
@@ -3067,9 +3069,34 @@ model TerraqoEducationEvidenceAttempt {
   nextAttemptAt DateTime?
   createdAt     DateTime                     @default(now())
   updatedAt     DateTime                     @updatedAt
+  withdrawal    TerraqoEducationEvidenceWithdrawal?
 
   @@index([educationId, createdAt])
   @@index([state, nextAttemptAt])
+  @@schema("icc")
+}
+
+// Independent withdrawal history. The deleted file ID is immutable data,
+// while RESTRICT links preserve the upload receipt and physical tombstone.
+model TerraqoEducationEvidenceWithdrawal {
+  id                String                       @id
+  educationId       String
+  education         TerraqoProfessionalEducation @relation(fields: [educationId], references: [id], onDelete: Restrict)
+  actorId           String
+  operationKey      String
+  fingerprint       String
+  targetEvidenceId  String
+  uploadOperationId String
+  uploadOperation   TerraqoEducationEvidenceOperation @relation(fields: [uploadOperationId], references: [id], onDelete: Restrict)
+  attemptId         String                       @unique(map: "EducationWithdrawal_attempt_key")
+  attempt           TerraqoEducationEvidenceAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  originalVersion   DateTime
+  resultVersion     DateTime
+  createdAt         DateTime                     @default(now())
+
+  @@unique([educationId, operationKey], map: "EducationWithdrawal_education_operation_key")
+  @@index([educationId, createdAt], map: "EducationWithdrawal_education_created_idx")
+  @@index([uploadOperationId], map: "EducationWithdrawal_upload_idx")
   @@schema("icc")
 }
 
