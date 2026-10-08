@@ -1,6 +1,8 @@
 import { getStore } from "@netlify/blobs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { createReadStream } from "node:fs";
+import { Readable } from "node:stream";
 
 type MediaMetadata = Record<string, unknown>;
 
@@ -85,6 +87,36 @@ class LocalMediaStore implements MediaStore {
       rm(`${filePath}.metadata.json`, { force: true }),
     ]);
   }
+
+  async getStream(key: string) {
+    const filePath = this.resolveKey(key);
+    // Opening the file before returning the stream reports ENOENT without
+    // materializing the entire private file in memory.
+    const stream = createReadStream(filePath);
+    try {
+      await new Promise<void>((resolve, reject) => {
+        stream.once("open", () => resolve());
+        stream.once("error", reject);
+      });
+      return { data: Readable.toWeb(stream) as ReadableStream<Uint8Array> };
+    } catch (error) {
+      stream.destroy();
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+      throw error;
+    }
+  }
+}
+
+export type PrivateEvidenceStreamStore = {
+  getStream(key: string): Promise<{ data: ReadableStream<Uint8Array> } | null>;
+};
+
+/** Separate streaming port preserves existing arrayBuffer callers. */
+export function getPrivateEvidenceStreamStore(): PrivateEvidenceStreamStore {
+  if (process.env.NODE_ENV === "development" && process.env.NETLIFY !== "true")
+    return new LocalMediaStore(WORKLOG_EVIDENCE_STORE);
+  const store = getStore(WORKLOG_EVIDENCE_STORE);
+  return { getStream: key => store.getWithMetadata(key, { type: "stream" }) };
 }
 
 function getMediaStore(storeName: string): MediaStore {

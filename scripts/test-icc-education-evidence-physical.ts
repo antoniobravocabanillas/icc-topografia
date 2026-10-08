@@ -9,6 +9,7 @@ import { EducationEvidenceReservationError, reserveEducationEvidenceAttempt } fr
 import { commitEducationEvidenceAttempt } from "../lib/server/education-evidence-commit";
 import { dispatchEducationEvidenceCleanup, recoverEducationEvidenceAttempt } from "../lib/server/education-evidence-cleanup";
 import { uploadEducationEvidence } from "../lib/server/education-evidence-upload";
+import { downloadEducationEvidence, readEducationEvidence } from "../lib/server/education-evidence-read";
 
 // Separate direct clients exercise committed boundaries, not savepoints. Never
 // print credentials, SQL rows, blob keys or failed provider request objects.
@@ -211,6 +212,62 @@ async function main() {
     assert.equal((await uploadEducationEvidence(request(uncertainKey, freshVersion), token, education.id, second, noStore)).receipt.id, confirmed.id);
     assert.equal(await first.activityLog.count({ where: { actorId: user.id, entityType: "EducationEvidence" } }), 3);
     console.log("PASS internal education orchestrator Request/SQL/private blobs: concurrent loser compensated, historical replay never touches store, actual stored-file acknowledgement fault refunded once, controlled post-commit SQL acknowledgement fault retains live blob and reconciles receipt. Not deployed HTTP.");
+    phase = "private readers and bounded physical download under live authority";
+    const streamStore = { getStream: (key: string) => {
+      assert.ok(keys.has(key)); return store.getWithMetadata(key, { type: "stream" });
+    } };
+    const listed = await readEducationEvidence(first, token, education.id, uploadKey);
+    assert.equal(listed.files.length, 3); assert.equal(listed.receipt!.operationKey, uploadKey);
+    assert.notEqual(listed.current.version, listed.receipt!.originalVersion);
+    assert.ok(!/storageKey|fingerprint|actorId|uploadedById|bank|identity|notes/.test(JSON.stringify(listed)));
+    assert.equal((await readEducationEvidence(first, token, education.id, randomBytes(16).toString("hex"))).receipt, null);
+    assert.equal(await first.activityLog.count({ where: { actorId: user.id, entityType: "EducationEvidence" } }), 3);
+    const canonicalId = uploads[0].receipt.evidenceId!;
+    const canonicalFile = await first.terraqoEducationEvidence.findUniqueOrThrow({ where: { id: canonicalId } });
+    await first.terraqoProfessionalEducation.update({ where: { id: education.id }, data: { verificationStatus: "APPROVED" } });
+    assert.equal((await readEducationEvidence(first, token, education.id)).current.verificationStatus, "APPROVED");
+    const downloaded = await downloadEducationEvidence(first, token, education.id, canonicalId, streamStore);
+    assert.deepEqual(Buffer.from(await downloaded.arrayBuffer()), bytes);
+    assert.equal(downloaded.headers.get("cache-control"), "private, no-store");
+    assert.equal(downloaded.headers.get("x-content-type-options"), "nosniff");
+    assert.equal(downloaded.headers.get("content-type"), "image/png");
+    assert.ok(downloaded.headers.get("content-disposition")!.startsWith("attachment;"));
+    await denied(404, () => downloadEducationEvidence(first, token, education.id, randomUUID(), {
+      getStream: async () => { throw Error("UNAUTHORIZED_STORE_READ"); },
+    }));
+    const corrupted = Buffer.from(bytes); corrupted[corrupted.length - 1] ^= 1;
+    try {
+      await store.set(canonicalFile.storageKey, Uint8Array.from(corrupted).buffer);
+      await denied(409, () => downloadEducationEvidence(first, token, education.id, canonicalId, streamStore));
+    } finally { await store.set(canonicalFile.storageKey, Uint8Array.from(bytes).buffer); }
+    try {
+      await denied(401, () => downloadEducationEvidence(first, token, education.id, canonicalId, {
+        getStream: async key => { await second.verificationToken.deleteMany({ where: grant }); return streamStore.getStream(key); },
+      }));
+    } finally { await first.verificationToken.createMany({ data: [grant], skipDuplicates: true }); }
+    try {
+      await denied(403, () => downloadEducationEvidence(first, token, education.id, canonicalId, {
+        getStream: async key => { await second.terraqoWorkspaceMember.updateMany({ where: { workspaceId: workspace.id, userId: user.id },
+          data: { role: "CLIENT" } }); return streamStore.getStream(key); },
+      }));
+    } finally { await first.terraqoWorkspaceMember.updateMany({ where: { workspaceId: workspace.id, userId: user.id },
+      data: { role: "PROFESSIONAL" } }); }
+    await denied(404, () => downloadEducationEvidence(first, token, education.id, confirmedFile.id, {
+      getStream: async key => {
+        // Own fixture only: logical withdrawal and the COMMITTED fence change
+        // share a real transaction. Never delete the physical blob here.
+        await second.$transaction(async tx => {
+          await tx.terraqoEducationEvidence.delete({ where: { id: confirmedFile.id } });
+          await tx.terraqoEducationEvidenceAttempt.update({ where: { storageKey: confirmedFile.storageKey },
+            data: { state: "CLEANUP_PENDING", nextAttemptAt: new Date() } });
+        });
+        return streamStore.getStream(key);
+      },
+    }));
+    const history = await readEducationEvidence(first, token, education.id, uncertainKey);
+    assert.equal(history.receipt!.evidenceId, null); assert.equal(history.files.length, 2);
+    assert.ok(await read(confirmedFile.storageKey)); assert.equal(await used(), 3);
+    console.log("PASS private education readers with SQL and streaming Netlify blobs: protected read, current/history separated, null lookup without writes, bounded exact download/no-store, canonical original-version integrity, corruption rejected, live revocation/demotion/withdrawal after read rejected. No deployed HTTP.");
     phase = "dispatcher admission budget against only own fixture IDs";
     const batch = await first.terraqoEducationEvidenceAttempt.createManyAndReturn({ data: Array.from({ length: 5 }, () => {
       const storageKey = `education-evidence/${education.id}/${randomUUID()}`; keys.add(storageKey);
