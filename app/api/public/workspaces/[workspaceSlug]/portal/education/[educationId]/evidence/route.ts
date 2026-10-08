@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { getWorkspacePortalToken } from "@/lib/server/workspace-portal-session";
 import { handleEducationEvidenceRead } from "@/lib/server/education-evidence-http";
 import { readEducationEvidence, downloadEducationEvidence } from "@/lib/server/education-evidence-read";
+import { handleEducationUpload } from "@/lib/server/education-upload-http";
+import { uploadEducationEvidence } from "@/lib/server/education-evidence-upload";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -13,9 +15,12 @@ export async function GET(request: Request, context: Context) {
     download: (token, id, file) => downloadEducationEvidence(prisma, token, id, file),
   });
 }
-// Explicitly reject writes with the same private response headers. No body is
-// read and no upload service is reachable from these handlers.
-export const POST = GET;
-export const PUT = GET;
-export const PATCH = GET;
-export const DELETE = GET;
+export async function POST(request: Request, context: Context) {
+  return handleEducationUpload(request, await context.params, {
+    authenticate: getWorkspacePortalToken,
+    upload: (input, token, id, budget) => uploadEducationEvidence(input, token, id, prisma, undefined, budget),
+  });
+}
+export const PUT = POST;
+export const PATCH = POST;
+export const DELETE = POST;

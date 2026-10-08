@@ -62,7 +62,9 @@ async function main() {
     const legacy = await call(path, sign(payload(ownIds[0]))); assert.equal(legacy.status, 401); privateHeaders(legacy);
     assert.match((await legacy.json()).error.message, /iniciar tu sesión/);
     assert.equal((await call(path, other)).status, 404);
-    const write = await call(path, bearer, "POST"); assert.equal(write.status, 405); privateHeaders(write);
+    // Upload is now supported; a body without multipart must still fail before
+    // any reservation. The previous read-only 405 proof remains historical.
+    const write = await call(path, bearer, "POST"); assert.equal(write.status, 415); privateHeaders(write);
     const bytes = Uint8Array.from(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aGMsAAAAASUVORK5CYII=", "base64"));
     const operationKey = randomBytes(16).toString("hex"), form = new FormData();
     form.set("file", new File([bytes], "propio.png", { type: "image/png" }));
