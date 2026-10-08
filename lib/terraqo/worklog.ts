@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { createHash } from "node:crypto";
 import type { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -282,33 +282,37 @@ export async function createProfessionalWorklog(input: {
   const contentFingerprint = createHash("sha256")
     .update(fingerprintSource)
     .digest("hex");
-  const worklog = await prisma.terraqoWorklogEntry.create({
-    data: {
-      professionalProfileId: profile.id,
-      authorId: input.userId,
-      workspaceId,
-      projectId: input.payload.projectId,
-      previousWorklogId: input.payload.previousWorklogId,
-      title: input.payload.title,
-      summary: input.payload.summary,
-      outcome: input.payload.outcome,
-      type: input.payload.type,
-      visibility: input.payload.visibility,
-      skills: input.payload.skills,
-      evidenceUrls: input.payload.evidenceUrls,
-      locationLabel: input.payload.locationLabel,
-      latitude: input.payload.latitude,
-      longitude: input.payload.longitude,
-      locationAccuracyMeters: input.payload.locationAccuracyMeters,
-      locationCapturedAt: input.payload.locationCapturedAt,
-      contentFingerprint,
-      occurredAt: new Date(),
-      evidenceStatus: input.payload.projectId ? "LINKED" : "DECLARED",
-    },
-    include: worklogInclude,
-  });
-  const priorWorklogs = await prisma.terraqoWorklogEntry.count({
-    where: { authorId: input.userId, deletedAt: null },
+  const { worklog, priorWorklogs } = await prisma.$transaction(async tx => {
+    await tx.$queryRaw(Prisma.sql`SELECT id FROM icc."TerraqoProfessionalProfile" WHERE "userId"=${input.userId} FOR UPDATE`);
+    const worklog = await tx.terraqoWorklogEntry.create({
+      data: {
+        professionalProfileId: profile.id,
+        authorId: input.userId,
+        workspaceId,
+        projectId: input.payload.projectId,
+        previousWorklogId: input.payload.previousWorklogId,
+        title: input.payload.title,
+        summary: input.payload.summary,
+        outcome: input.payload.outcome,
+        type: input.payload.type,
+        visibility: input.payload.visibility,
+        skills: input.payload.skills,
+        evidenceUrls: input.payload.evidenceUrls,
+        locationLabel: input.payload.locationLabel,
+        latitude: input.payload.latitude,
+        longitude: input.payload.longitude,
+        locationAccuracyMeters: input.payload.locationAccuracyMeters,
+        locationCapturedAt: input.payload.locationCapturedAt,
+        contentFingerprint,
+        occurredAt: new Date(),
+        evidenceStatus: input.payload.projectId ? "LINKED" : "DECLARED",
+      },
+      include: worklogInclude,
+    });
+    const priorWorklogs = await tx.terraqoWorklogEntry.count({
+      where: { authorId: input.userId, deletedAt: null },
+    });
+    return { worklog, priorWorklogs };
   });
   if (priorWorklogs === 1) {
     try {

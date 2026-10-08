@@ -9,6 +9,8 @@ import { createNativeWorklogInTransaction, readNativeWorklogInTransaction } from
 import { assertLegacyWorklogs, assertLegacyFirstWorklog, assertLegacyReputationOwner, assertLegacyValidation, assertLegacyBuilderSource,
   NativeWorklogLegacyGuardError } from "../lib/server/native-worklog-legacy-guard";
 
+import { applyNativeFirstWorklogInTransaction, reserveNativeFirstWorklog } from "../lib/server/native-worklog-first-award";
+
 /** Invoked only within the pinned DDL checker's outer rollback, never standalone. */
 export async function nativeWorklogCoreRollback(tx: Prisma.TransactionClient, workspaceId: string) {
   const marker = randomUUID();
@@ -61,13 +63,60 @@ export async function nativeWorklogCoreRollback(tx: Prisma.TransactionClient, wo
   }, 401);
   // A structurally identical object cannot forge the parser's internal snapshot provenance.
   await rejected(() => createNativeWorklogInTransaction(tx, token, Object.freeze({ ...initial }), budget()), 503);
+  // Fault before the very first receipt must also roll back the reserved bonus decision.
+  await rejected(() => createNativeWorklogInTransaction(new Proxy(tx, { get(target, property) {
+    if (property === "activityLog") return { create: async () => { throw new Error("CONTROLLED_FIRST_RESERVATION_FAULT"); } };
+    return Reflect.get(target, property);
+  } }), token, initial, budget()));
+  assert.equal(await tx.terraqoBuilderContribution.count({ where: { userId: user.id } }), 0);
   const created = await createNativeWorklogInTransaction(tx, token, initial, budget());
   assert.ok(created.receipt && created.current);
+  assert.ok((await tx.terraqoProfessionalProfile.findUniqueOrThrow({ where: { id: profile.id } })).updatedAt > profile.updatedAt);
   assert.equal(created.receipt.worklogId, created.current.worklogId);
   assert.deepEqual(await counts(), { entry: 1, receipt: 1, accounting: 1, audit: 1 });
   const operation = await tx.terraqoNativeWorklogOperation.findFirstOrThrow({ where: { actorId: user.id } });
   const accounting = await tx.terraqoNativeWorklogAccounting.findUniqueOrThrow({ where: { operationId: operation.id } });
   assert.equal(accounting.state, "PENDING"); assert.equal(accounting.completedAt, null); assert.equal(accounting.attempts, 0);
+  const first = await tx.terraqoBuilderContribution.findUniqueOrThrow({ where: { sourceKey: `first-worklog:${user.id}` } });
+  assert.equal(first.approvedPoints, 0); assert.equal(first.requestedPoints, 25);
+  assert.equal(await tx.terraqoBuilderAccount.count({ where: { userId: user.id } }), 0);
+  await tx.$executeRawUnsafe("SAVEPOINT native_first_own_award");
+  // Fail after the account increment, before ledger creation: outer transaction must roll back.
+  await rejected(() => applyNativeFirstWorklogInTransaction(new Proxy(tx, { get(target, property) {
+    if (property === "terraqoBuilderLedger") return { create: async () => { throw new Error("CONTROLLED_FIRST_LEDGER_FAULT"); } };
+    return Reflect.get(target, property);
+  } }), operation.id));
+  assert.equal(await tx.terraqoBuilderAccount.count({ where: { userId: user.id } }), 0);
+  assert.equal(await applyNativeFirstWorklogInTransaction(tx, operation.id), "credited");
+  assert.equal(await applyNativeFirstWorklogInTransaction(tx, operation.id), "historical");
+  const ownAccount = await tx.terraqoBuilderAccount.findUniqueOrThrow({ where: { userId: user.id } });
+  assert.equal(ownAccount.availablePoints, 25); assert.equal(ownAccount.lifetimeEarned, 25);
+  assert.equal(ownAccount.contributionScore, 25); assert.equal(ownAccount.pendingPoints, 0);
+  assert.equal(await tx.terraqoBuilderLedger.count({ where: { accountId: ownAccount.id } }), 1);
+  assert.equal((await tx.terraqoNativeWorklogAccounting.findUniqueOrThrow({ where: { operationId: operation.id } })).state, "PENDING");
+  await rejected(async () => {
+    await tx.terraqoBuilderContribution.update({ where: { id: first.id }, data: { approvedPoints: 0 } });
+    return applyNativeFirstWorklogInTransaction(tx, operation.id);
+  }, 503);
+  await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT native_first_own_award");
+  await tx.$executeRawUnsafe("RELEASE SAVEPOINT native_first_own_award");
+  // Existing legacy reservation is recovered on the same source/contribution, never another25.
+  await tx.$executeRawUnsafe("SAVEPOINT native_first_existing_own");
+  await tx.terraqoBuilderContribution.update({ where: { id: first.id }, data: { detail: "Own legacy contribution", status: "IN_REVIEW" } });
+  assert.equal(await applyNativeFirstWorklogInTransaction(tx, operation.id), "deferred");
+  await tx.terraqoBuilderContribution.update({ where: { id: first.id }, data: { status: "VALIDATED" } });
+  assert.equal(await applyNativeFirstWorklogInTransaction(tx, operation.id), "credited");
+  assert.equal(await applyNativeFirstWorklogInTransaction(tx, operation.id), "historical");
+  assert.equal(await tx.terraqoBuilderContribution.count({ where: { userId: user.id } }), 1);
+  await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT native_first_existing_own");
+  await tx.$executeRawUnsafe("RELEASE SAVEPOINT native_first_existing_own");
+  await tx.$executeRawUnsafe("SAVEPOINT native_first_ineligible_own");
+  await tx.terraqoBuilderContribution.delete({ where: { id: first.id } });
+  await reserveNativeFirstWorklog(tx, { actorId: user.id, operationId: operation.id, createdAt: new Date() });
+  assert.equal(await applyNativeFirstWorklogInTransaction(tx, operation.id), "ineligible");
+  assert.equal(await tx.terraqoBuilderContribution.count({ where: { userId: user.id } }), 0);
+  await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT native_first_ineligible_own");
+  await tx.$executeRawUnsafe("RELEASE SAVEPOINT native_first_ineligible_own");
   const entry = await tx.terraqoWorklogEntry.findUniqueOrThrow({ where: { id: created.receipt.worklogId } });
   const guardRejected = (run: () => Promise<unknown>) => assert.rejects(run, (error: unknown) =>
     error instanceof NativeWorklogLegacyGuardError && error.status === 409);
@@ -157,12 +206,13 @@ export async function nativeWorklogCoreRollback(tx: Prisma.TransactionClient, wo
   assert.deepEqual(await createNativeWorklogInTransaction(tx, token, initial, budget()), historical);
   assert.deepEqual(await counts(), { entry: 2, receipt: 3, accounting: 3, audit: 3 });
   assert.equal(await tx.terraqoBuilderAccount.count({ where: { userId: user.id } }), 0);
-  assert.equal(await tx.terraqoBuilderContribution.count({ where: { userId: user.id } }), 0);
+  assert.equal(await tx.terraqoBuilderContribution.count({ where: { userId: user.id } }), 1);
   assert.equal((await tx.terraqoProfessionalProfile.findUniqueOrThrow({ where: { id: profile.id } })).liveCvEnabled, false);
   await tx.terraqoNativeWorklogAccounting.deleteMany({ where: { operation: { actorId: user.id } } });
   await tx.terraqoNativeWorklogOperation.deleteMany({ where: { actorId: user.id } });
   await tx.activityLog.deleteMany({ where: { actorId: user.id } });
   await tx.verificationToken.deleteMany({ where: { identifier } });
+  await tx.terraqoBuilderContribution.deleteMany({ where: { userId: user.id } });
   await tx.user.delete({ where: { id: user.id } });
   assert.equal(await tx.user.count({ where: { id: user.id } }), 0);
   assert.equal(await tx.terraqoWorklogEntry.count({ where: { authorId: user.id } }), 0);

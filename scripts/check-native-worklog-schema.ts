@@ -129,5 +129,10 @@ async function main() {
   console.log(JSON.stringify({ mode: "checked-in-rollback", fingerprint, ledgerFingerprint: ledger, constraints: 14, indexes: 8,
     ownFixtureConstraints: !core, ownCoreRollback: core, applied: false }));
 }
-main().catch(() => { console.error("Native worklog schema check failed; private diagnostics suppressed."); process.exitCode = 1;
+main().catch((error: unknown) => {
+  // Only bounded categories and source line numbers; never error messages, SQL or connection data.
+  const category = error instanceof assert.AssertionError ? "assertion" :
+    error instanceof Prisma.PrismaClientKnownRequestError && /^[A-Z][0-9]{4}$/.test(error.code) ? error.code : "unknown";
+  const location = error instanceof Error ? error.stack?.match(/(?:test-native-worklog-core-rollback|check-native-worklog-schema)\.ts:[0-9]+:[0-9]+/)?.[0] : undefined;
+  console.error(JSON.stringify({ outcome: "failed", category, location })); process.exitCode = 1;
 }).finally(() => prisma.$disconnect());

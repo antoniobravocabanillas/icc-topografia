@@ -167,19 +167,23 @@ export async function submitBuilderContribution(input: { userId: string; workspa
 }
 
 export async function awardAutomatedBuilderContribution(input: { userId: string; type: TerraqoBuilderContributionType; sourceKey: string; title: string; detail: string; points?: number }) {
-  // Early exclusion before contribution creation; awarding repeats it in its transaction.
-  await prisma.$transaction(tx => assertLegacyBuilderSource(tx, input));
-  const existing = await prisma.terraqoBuilderContribution.findUnique({ where: { sourceKey: input.sourceKey }, select: { id: true } });
-  if (existing) return existing;
-  const contribution = await prisma.terraqoBuilderContribution.create({ data: {
-    userId: input.userId,
-    type: input.type,
-    title: input.title,
-    detail: input.detail,
-    sourceKey: input.sourceKey,
-    requestedPoints: input.points ?? CONTRIBUTION_POINTS[input.type],
-    status: "VALIDATED"
-  } });
+  const reserved = await prisma.$transaction(async tx => {
+    await assertLegacyBuilderSource(tx, input);
+    const existing = await tx.terraqoBuilderContribution.findUnique({ where: { sourceKey: input.sourceKey }, select: { id: true } });
+    if (existing) return { contribution: existing, created: false };
+    const contribution = await tx.terraqoBuilderContribution.create({ data: {
+      userId: input.userId,
+      type: input.type,
+      title: input.title,
+      detail: input.detail,
+      sourceKey: input.sourceKey,
+      requestedPoints: input.points ?? CONTRIBUTION_POINTS[input.type],
+      status: "VALIDATED"
+    } });
+    return { contribution, created: true };
+  });
+  if (!reserved.created) return reserved.contribution;
+  const contribution = reserved.contribution;
   await reviewBuilderContribution({ contributionId: contribution.id, reviewerId: "system", status: "VALIDATED", points: input.points ?? CONTRIBUTION_POINTS[input.type], note: "Aporte verificado automáticamente por Terraqo." });
   return contribution;
 }

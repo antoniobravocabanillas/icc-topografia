@@ -8,6 +8,8 @@ import { NativeWorklogOperationError, type NativeWorklogOperationResult } from "
 import { isParsedNativeWorklogSnapshot, nativeWorklogFingerprint, type parseNativeWorklogPayload } from "./native-worklog-payload";
 import { NativeWorklogBudget } from "./native-worklog-budget";
 
+import { reserveNativeFirstWorklog } from "./native-worklog-first-award";
+
 const fail = (status: 401 | 403 | 404 | 409 | 503): never => { throw new NativeWorklogOperationError(status); };
 type Parsed = Awaited<ReturnType<typeof parseNativeWorklogPayload>>;
 
@@ -96,13 +98,19 @@ export async function createNativeWorklogInTransaction(tx: Prisma.TransactionCli
     }
   }
   const createdAt = new Date();
+  const id = createHash("sha256").update(JSON.stringify(["native-worklog-operation-v1", token.sub, token.workspaceId, payload.operationKey])).digest("hex");
+  // A row lock alone does not refresh a legacy Serializable snapshot established before waiting.
+  // Advance the owner version so a waiting stale snapshot aborts instead of missing the new receipt.
+  await tx.$executeRaw(Prisma.sql`UPDATE icc."TerraqoProfessionalProfile"
+    SET "updatedAt"=GREATEST("updatedAt" + interval '1 millisecond', ${createdAt})
+    WHERE id=${access.profileId} AND "userId"=${token.sub}`);
+  await reserveNativeFirstWorklog(tx, { actorId: token.sub, operationId: id, createdAt });
   const entry = await tx.terraqoWorklogEntry.create({ data: {
     authorId: token.sub, professionalProfileId: access.profileId, workspaceId: token.workspaceId,
     projectId: payload.projectId || null, title: payload.title, summary: payload.summary, outcome: payload.outcome || null,
     type: payload.type, visibility: "PRIVATE", evidenceUrls: [], skills: [], contentFingerprint: parsed.fingerprint,
     createdAt, updatedAt: createdAt, occurredAt: createdAt,
   } });
-  const id = createHash("sha256").update(JSON.stringify(["native-worklog-operation-v1", token.sub, token.workspaceId, payload.operationKey])).digest("hex");
   const receipt = await tx.terraqoNativeWorklogOperation.create({ data: {
     id, actorId: token.sub, workspaceId: token.workspaceId, professionalProfileId: access.profileId,
     operationKey: payload.operationKey, fingerprint: parsed.fingerprint, targetWorklogId: entry.id, worklogId: entry.id,
