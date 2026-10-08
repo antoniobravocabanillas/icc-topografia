@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { createHash } from "node:crypto";
 import type { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { assertLegacyWorklogs } from "@/lib/server/native-worklog-legacy-guard";
 import { requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 import { terraqoWorklogCreateSchema } from "@/lib/validations/terraqo";
 import {
@@ -252,6 +253,7 @@ export async function createProfessionalWorklog(input: {
   }
 
   if (input.payload.previousWorklogId) {
+    await assertLegacyWorklogs(prisma, [input.payload.previousWorklogId]);
     const previous = await prisma.terraqoWorklogEntry.findFirst({
       where: {
         id: input.payload.previousWorklogId,
@@ -340,16 +342,20 @@ export async function setWorklogContinuity(input: {
   worklogId: string;
   previousWorklogId: string | null;
 }) {
+  await assertLegacyWorklogs(prisma, [input.worklogId, ...(input.previousWorklogId ? [input.previousWorklogId] : [])]);
   if (!input.previousWorklogId) {
     const current = await prisma.terraqoWorklogEntry.findFirst({
       where: { id: input.worklogId, authorId: input.userId, deletedAt: null },
       select: { id: true },
     });
     if (!current) throw new TerraqoWorklogError("Bitacora no encontrada.", 404);
-    return prisma.terraqoWorklogEntry.update({
+    return prisma.$transaction(async tx => {
+      await assertLegacyWorklogs(tx, [current.id]);
+      return tx.terraqoWorklogEntry.update({
       where: { id: current.id },
       data: { previousWorklogId: null },
       include: worklogInclude,
+      });
     });
   }
   if (input.previousWorklogId === input.worklogId) {
@@ -436,6 +442,7 @@ export async function setWorklogContinuity(input: {
 
     // Clear first to avoid transient unique-key collisions while rebuilding
     // the linked list in chronological order.
+    await assertLegacyWorklogs(tx, ordered.map(entry => entry.id));
     await tx.terraqoWorklogEntry.updateMany({
       where: { id: { in: ordered.map((entry) => entry.id) } },
       data: { previousWorklogId: null },

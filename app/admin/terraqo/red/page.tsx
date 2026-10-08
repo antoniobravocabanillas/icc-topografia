@@ -10,6 +10,7 @@ import { ProfessionalDocumentPreview } from "@/components/terraqo/professional-d
 import { LinkProfessionalProjectForm } from "@/components/admin/terraqo/link-professional-project-form";
 import { UserAvatar } from "@/components/terraqo/user-avatar";
 import { prisma } from "@/lib/prisma";
+import { assertLegacyWorklogs } from "@/lib/server/native-worklog-legacy-guard";
 import { slugify } from "@/lib/server/api";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
 import { getSessionTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
@@ -261,9 +262,12 @@ async function reviewWorklogAction(formData: FormData) {
   if (!workspaceId || !worklogId || !["LINKED", "CONFIRMED", "VERIFIED"].includes(evidenceStatus || "")) return;
   if (evidenceStatus === "VERIFIED" && session.user.role !== "SUPER_ADMIN") return;
 
-  await prisma.terraqoWorklogEntry.updateMany({
+  await prisma.$transaction(async tx => {
+    await assertLegacyWorklogs(tx, [worklogId]);
+    await tx.terraqoWorklogEntry.updateMany({
     where: { id: worklogId, workspaceId, deletedAt: null },
     data: { evidenceStatus: evidenceStatus as "LINKED" | "CONFIRMED" | "VERIFIED" }
+    });
   });
 
   revalidatePath("/admin/terraqo/red");

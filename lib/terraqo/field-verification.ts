@@ -8,6 +8,7 @@ import {
 } from "@simplewebauthn/server";
 import type { Prisma, TerraqoAttendanceContext, TerraqoAttendanceType, TerraqoMemberRole, TerraqoWebAuthnPurpose } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { assertLegacyWorklogs } from "@/lib/server/native-worklog-legacy-guard";
 import type { AttendanceRequestFingerprint } from "@/lib/terraqo/request-fingerprint";
 import { awardAutomatedBuilderContribution, consumeBuilderValidationCredit, syncWorklogReputation } from "@/lib/terraqo/builders";
 import { activeCompensation, calculateJornada } from "@/lib/terraqo/jornada";
@@ -690,6 +691,7 @@ export async function requestWorklogValidation(input: {
   validatorUserId: string;
   note?: string;
 }) {
+  await assertLegacyWorklogs(prisma, [input.worklogId]);
   await requireMembership(input.userId, input.workspaceId);
   const worklog = await prisma.terraqoWorklogEntry.findFirst({
     where: { id: input.worklogId, authorId: input.userId, workspaceId: input.workspaceId, deletedAt: null },
@@ -707,7 +709,9 @@ export async function requestWorklogValidation(input: {
     select: { id: true }
   });
   if (pending) throw new FieldVerificationError("Esta bitacora ya tiene una validacion pendiente.", 409);
-  const validation = await prisma.terraqoWorklogValidation.create({
+  const validation = await prisma.$transaction(async tx => {
+    await assertLegacyWorklogs(tx, [worklog.id]);
+    return tx.terraqoWorklogValidation.create({
     data: {
       worklogId: worklog.id,
       workspaceId: input.workspaceId,
@@ -717,6 +721,7 @@ export async function requestWorklogValidation(input: {
       requestNote: input.note
     },
     include: { validator: { select: { id: true, name: true, image: true } } }
+    });
   });
   try {
     await consumeBuilderValidationCredit(input.userId, validation.id);
@@ -736,9 +741,10 @@ export async function createWorklogValidationOptions(input: {
   if (!SUPERVISOR_ROLES.includes(membership.role)) throw new FieldVerificationError("Tu rol no permite validar bitacoras.", 403);
   const validation = await prisma.terraqoWorklogValidation.findFirst({
     where: { id: input.validationId, workspaceId: input.workspaceId, validatorUserId: input.userId, status: "REQUESTED" },
-    select: { id: true }
+    select: { id: true, worklogId: true }
   });
   if (!validation) throw new FieldVerificationError("La solicitud de validacion no esta disponible.", 404);
+  await assertLegacyWorklogs(prisma, [validation.worklogId]);
   return createAuthenticationChallenge({
     userId: input.userId,
     workspaceId: input.workspaceId,
@@ -757,18 +763,20 @@ export async function verifyWorklogValidation(input: { userId: string; workspace
     select: { id: true, worklogId: true, worklog: { select: { authorId: true } } }
   });
   if (!validation) throw new FieldVerificationError("La solicitud ya fue resuelta o no te pertenece.", 409);
+  await assertLegacyWorklogs(prisma, [validation.worklogId]);
   const resolvedAt = new Date();
-  await prisma.$transaction([
-    prisma.terraqoWorklogValidation.update({
+  await prisma.$transaction(async tx => {
+    await assertLegacyWorklogs(tx, [validation.worklogId]);
+    await tx.terraqoWorklogValidation.update({
       where: { id: validation.id },
       data: { status: "APPROVED", resolvedAt, credentialId: credential.credentialId }
-    }),
-    prisma.terraqoWorklogEntry.update({
+    });
+    await tx.terraqoWorklogEntry.update({
       where: { id: validation.worklogId },
       data: { evidenceStatus: "CONFIRMED" }
-    }),
-    prisma.terraqoWebAuthnChallenge.update({ where: { id: challenge.id }, data: { consumedAt: resolvedAt } })
-  ]);
+    });
+    await tx.terraqoWebAuthnChallenge.update({ where: { id: challenge.id }, data: { consumedAt: resolvedAt } });
+  });
   try {
     await syncWorklogReputation(validation.worklogId);
     const recentPairValidations = await prisma.terraqoWorklogValidation.count({ where: { validatorUserId: input.userId, worklog: { authorId: validation.worklog.authorId }, status: "APPROVED", resolvedAt: { gte: new Date(Date.now() - 30 * 86_400_000) } } });

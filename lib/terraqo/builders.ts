@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import type { Prisma, TerraqoBuilderContributionStatus, TerraqoBuilderContributionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { assertLegacyWorklogs, assertLegacyValidation, assertLegacyBuilderSource } from "@/lib/server/native-worklog-legacy-guard";
 
 export const BUILDER_REWARDS = [
   { slug: "premium-30", title: "Terraqo Premium", description: "Activa 30 días de beneficios Premium en tu perfil personal.", category: "PREMIUM" as const, pointsCost: 500, benefitCode: "PREMIUM_DAYS", durationDays: 30, quantity: 1 },
@@ -41,12 +42,13 @@ export function terraqoTrustLevel(score: number) {
 export async function releasePendingBuilderPoints(userId: string) {
   const ready = await prisma.terraqoBuilderContribution.findMany({
     where: { userId, releasedAt: null, availableAt: { lte: new Date() }, approvedPoints: { gt: 0 }, status: { not: "REJECTED" } },
-    select: { id: true, approvedPoints: true, title: true, ledgerEntries: { where: { type: "CREDIT" }, select: { pointsDelta: true } } }
+    select: { id: true, userId: true, type: true, sourceKey: true, approvedPoints: true, title: true, ledgerEntries: { where: { type: "CREDIT" }, select: { pointsDelta: true } } }
   });
   for (const item of ready) {
     const previouslyReleased = item.ledgerEntries.reduce((sum, entry) => sum + Math.max(0, entry.pointsDelta), 0);
     const releaseAmount = Math.max(0, item.approvedPoints - previouslyReleased);
     await prisma.$transaction(async (tx) => {
+      await assertLegacyBuilderSource(tx, item);
       const claimed = await tx.terraqoBuilderContribution.updateMany({ where: { id: item.id, releasedAt: null }, data: { releasedAt: new Date() } });
       if (!claimed.count) return;
       if (!releaseAmount) return;
@@ -70,6 +72,7 @@ export async function ensureBuilders(userId: string) {
 }
 
 export async function syncWorklogReputation(worklogId: string) {
+  await assertLegacyWorklogs(prisma, [worklogId]);
   const worklog = await prisma.terraqoWorklogEntry.findUnique({
     where: { id: worklogId },
     include: { media: { select: { id: true } }, validations: { where: { status: "APPROVED" }, select: { id: true } } }
@@ -97,6 +100,7 @@ export async function syncWorklogReputation(worklogId: string) {
   const trustDelta = targetTrust - worklog.trustScoreAwarded;
   const availableAt = new Date(Date.now() + 7 * 86_400_000);
   return prisma.$transaction(async (tx) => {
+    await assertLegacyWorklogs(tx, [worklogId]);
     const account = await tx.terraqoBuilderAccount.upsert({ where: { userId: worklog.authorId }, update: tqDelta || trustDelta ? { pendingPoints: { increment: tqDelta }, trustScore: { increment: trustDelta } } : {}, create: { userId: worklog.authorId, pendingPoints: tqDelta, trustScore: trustDelta } });
     await tx.terraqoBuilderContribution.upsert({
       where: { sourceKey: `worklog:${worklog.id}` },
@@ -109,11 +113,16 @@ export async function syncWorklogReputation(worklogId: string) {
 }
 
 export async function moderateWorklogReputation(input: { worklogId: string; status: "OBSERVED" | "REJECTED" | "DECLARED"; note?: string }) {
+  await assertLegacyWorklogs(prisma, [input.worklogId]);
   if (input.status === "DECLARED") {
-    await prisma.terraqoWorklogEntry.update({ where: { id: input.worklogId }, data: { moderationStatus: "DECLARED", moderationNote: input.note?.trim().slice(0, 1000) || null } });
+    await prisma.$transaction(async tx => {
+      await assertLegacyWorklogs(tx, [input.worklogId]);
+      await tx.terraqoWorklogEntry.update({ where: { id: input.worklogId }, data: { moderationStatus: "DECLARED", moderationNote: input.note?.trim().slice(0, 1000) || null } });
+    });
     return syncWorklogReputation(input.worklogId);
   }
   return prisma.$transaction(async (tx) => {
+    await assertLegacyWorklogs(tx, [input.worklogId]);
     const worklog = await tx.terraqoWorklogEntry.findUniqueOrThrow({ where: { id: input.worklogId } });
     const contribution = await tx.terraqoBuilderContribution.findUnique({ where: { sourceKey: `worklog:${worklog.id}` }, include: { ledgerEntries: { where: { type: "CREDIT" }, select: { pointsDelta: true } } } });
     const released = contribution?.ledgerEntries.reduce((sum, entry) => sum + Math.max(0, entry.pointsDelta), 0) || 0;
@@ -146,6 +155,8 @@ export async function submitBuilderContribution(input: { userId: string; workspa
 }
 
 export async function awardAutomatedBuilderContribution(input: { userId: string; type: TerraqoBuilderContributionType; sourceKey: string; title: string; detail: string; points?: number }) {
+  // Early exclusion before contribution creation; awarding repeats it in its transaction.
+  await prisma.$transaction(tx => assertLegacyBuilderSource(tx, input));
   const existing = await prisma.terraqoBuilderContribution.findUnique({ where: { sourceKey: input.sourceKey }, select: { id: true } });
   if (existing) return existing;
   const contribution = await prisma.terraqoBuilderContribution.create({ data: {
@@ -167,6 +178,7 @@ export async function reviewBuilderContribution(input: { contributionId: string;
   return prisma.$transaction(async (tx) => {
     const contribution = await tx.terraqoBuilderContribution.findUnique({ where: { id: input.contributionId } });
     if (!contribution) throw new Error("Aporte no encontrado.");
+    await assertLegacyBuilderSource(tx, contribution);
     const targetTotal = ["VALIDATED", "IMPLEMENTED"].includes(input.status) ? safePoints : contribution.approvedPoints;
     const delta = Math.max(0, targetTotal - contribution.approvedPoints);
     let account = await tx.terraqoBuilderAccount.upsert({ where: { userId: contribution.userId }, update: {}, create: { userId: contribution.userId } });
@@ -232,6 +244,7 @@ export async function redeemBuilderReward(input: { userId: string; rewardId: str
 
 export async function consumeBuilderValidationCredit(userId: string, validationId: string) {
   return prisma.$transaction(async (tx) => {
+    await assertLegacyValidation(tx, validationId);
     const account = await tx.terraqoBuilderAccount.findUnique({ where: { userId } });
     if (!account?.validationCredits) return false;
     const consumed = await tx.terraqoBuilderAccount.updateMany({ where: { id: account.id, validationCredits: { gt: 0 } }, data: { validationCredits: { decrement: 1 } } });

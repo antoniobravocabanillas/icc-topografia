@@ -11,6 +11,7 @@ import {
 import { canViewWorklog } from "@/lib/terraqo/worklog";
 import { syncWorklogReputation } from "@/lib/terraqo/builders";
 import { BillingError } from "@/lib/terraqo/billing/provider";
+import { assertLegacyWorklogs, NativeWorklogLegacyGuardError } from "./native-worklog-legacy-guard";
 
 export const MAX_WORKLOG_EVIDENCE_FILES = 6;
 
@@ -36,6 +37,7 @@ export async function uploadWorklogEvidence(
   requiredWorkspaceId?: string,
 ) {
   try {
+    await assertLegacyWorklogs(prisma, [worklogId]);
     const worklog = await prisma.terraqoWorklogEntry.findFirst({
       where: {
         id: worklogId,
@@ -157,6 +159,7 @@ export async function uploadWorklogEvidence(
 
       const media = await prisma.$transaction(
         async (tx) => {
+          await assertLegacyWorklogs(tx, [worklogId]);
           // Serialize finalization by author; network/blob I/O stays outside the lock.
           await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`worklog-evidence:${userId}`}))`;
           const current = await tx.terraqoWorklogEntry.findFirst({
@@ -246,6 +249,7 @@ export async function uploadWorklogEvidence(
     }
   } catch (error) {
     if (error instanceof BillingError) return handleApiError(error);
+    if (error instanceof NativeWorklogLegacyGuardError) return fail(error.message, error.status);
     console.error("worklog-evidence: upload failed", { worklogId, error });
     return fail(
       "No pudimos guardar la foto en el almacenamiento. Reintenta; tu bitácora permanece guardada.",

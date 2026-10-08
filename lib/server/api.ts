@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { BillingError } from "@/lib/terraqo/billing/provider";
+import { NativeWorklogLegacyGuardError } from "./native-worklog-legacy-guard";
 
 export type ApiListMeta = {
   page: number;
@@ -27,6 +28,7 @@ export function fail(message: string, status = 400, details?: unknown) {
 }
 
 export function handleApiError(error: unknown) {
+  if (error instanceof NativeWorklogLegacyGuardError) return fail(error.message, error.status);
   if(error instanceof BillingError)return fail(error.code==="STORAGE_QUOTA_REACHED"?"Alcanzaste la capacidad de tu plan. Revisa tu membresía para ampliar el espacio.":"No se pudo autorizar esta operación de membresía.",error.status);
   if (error instanceof ZodError) {
     return fail("Datos invalidos", 422, error.flatten());

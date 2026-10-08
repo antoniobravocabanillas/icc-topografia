@@ -6,6 +6,8 @@ import { parseNativeWorklogPayload } from "../lib/server/native-worklog-payload"
 import { NativeWorklogBudget } from "../lib/server/native-worklog-budget";
 import { NativeWorklogOperationError } from "../lib/server/native-worklog-http";
 import { createNativeWorklogInTransaction, readNativeWorklogInTransaction } from "../lib/server/native-worklog-operation";
+import { assertLegacyWorklogs, assertLegacyFirstWorklog, assertLegacyValidation, assertLegacyBuilderSource,
+  NativeWorklogLegacyGuardError } from "../lib/server/native-worklog-legacy-guard";
 
 /** Invoked only within the pinned DDL checker's outer rollback, never standalone. */
 export async function nativeWorklogCoreRollback(tx: Prisma.TransactionClient, workspaceId: string) {
@@ -67,6 +69,27 @@ export async function nativeWorklogCoreRollback(tx: Prisma.TransactionClient, wo
   const accounting = await tx.terraqoNativeWorklogAccounting.findUniqueOrThrow({ where: { operationId: operation.id } });
   assert.equal(accounting.state, "PENDING"); assert.equal(accounting.completedAt, null); assert.equal(accounting.attempts, 0);
   const entry = await tx.terraqoWorklogEntry.findUniqueOrThrow({ where: { id: created.receipt.worklogId } });
+  const guardRejected = (run: () => Promise<unknown>) => assert.rejects(run, (error: unknown) =>
+    error instanceof NativeWorklogLegacyGuardError && error.status === 409);
+  await guardRejected(() => assertLegacyWorklogs(tx, [entry.id]));
+  await guardRejected(() => assertLegacyFirstWorklog(tx, user.id));
+  await guardRejected(() => assertLegacyBuilderSource(tx, { userId: user.id, type: "FIRST_WORKLOG", sourceKey: `first-worklog:${user.id}` }));
+  const validation = await tx.terraqoWorklogValidation.create({ data: { worklogId: entry.id, workspaceId,
+    requestedByUserId: user.id, validatorUserId: user.id } });
+  await guardRejected(() => assertLegacyValidation(tx, validation.id));
+  await guardRejected(() => assertLegacyBuilderSource(tx, { userId: user.id, type: "EXPERIENCE_VALIDATION", sourceKey: `worklog-validation:${validation.id}` }));
+  await guardRejected(() => assertLegacyBuilderSource(tx, { userId: user.id, type: "BETA_PARTICIPATION", sourceKey: `worklog:${entry.id}` }));
+  await tx.$executeRawUnsafe("SAVEPOINT native_guard_own_state");
+  await tx.terraqoNativeWorklogAccounting.update({ where: { operationId: operation.id }, data: { state: "APPLIED", completedAt: new Date() } });
+  await tx.terraqoWorklogEntry.update({ where: { id: entry.id }, data: { moderationStatus: "STRONG_VERIFIED" } });
+  await guardRejected(() => assertLegacyWorklogs(tx, [entry.id]));
+  await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT native_guard_own_state");
+  await tx.$executeRawUnsafe("RELEASE SAVEPOINT native_guard_own_state");
+  await tx.terraqoWorklogValidation.delete({ where: { id: validation.id } });
+  const legacy = await tx.terraqoWorklogEntry.create({ data: { authorId: user.id, professionalProfileId: profile.id,
+    workspaceId, title: "ICC legacy propia", summary: "Entrada legacy propia temporal no adjudicada.", visibility: "PRIVATE" } });
+  await assertLegacyWorklogs(tx, [legacy.id]);
+  await tx.terraqoWorklogEntry.delete({ where: { id: legacy.id } });
   assert.equal(entry.visibility, "PRIVATE"); assert.equal(entry.tqPointsAwarded, 0); assert.equal(entry.trustScoreAwarded, 0);
   assert.deepEqual(entry.evidenceUrls, []); assert.deepEqual(entry.skills, []);
   assert.equal(operation.createdAt.toISOString(), entry.updatedAt.toISOString());
@@ -126,6 +149,7 @@ export async function nativeWorklogCoreRollback(tx: Prisma.TransactionClient, wo
   await tx.terraqoWorklogEntry.delete({ where: { id: entry.id } });
   const historical = await readNativeWorklogInTransaction(tx, token, payload.operationKey, budget());
   assert.deepEqual(historical.receipt, created.receipt); assert.equal(historical.current, null);
+  await guardRejected(() => assertLegacyWorklogs(tx, [entry.id]));
   assert.deepEqual(await createNativeWorklogInTransaction(tx, token, initial, budget()), historical);
   assert.deepEqual(await counts(), { entry: 2, receipt: 3, accounting: 3, audit: 3 });
   assert.equal(await tx.terraqoBuilderAccount.count({ where: { userId: user.id } }), 0);
