@@ -170,5 +170,5 @@ export default async function ProfilePage({ searchParams }: PageProps) {
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {
-  return <div className="flex min-w-0 flex-col items-start gap-1 rounded-md border bg-muted/30 px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4"><span className="text-muted-foreground">{label}</span><b className="min-w-0 max-w-full text-left capitalize [overflow-wrap:anywhere] sm:text-right">{value}</b></div>;
+  return <div className="flex min-w-0 flex-col items-start gap-1 rounded-md border bg-muted/30 px-3 py-2"><span className="text-muted-foreground">{label}</span><b className="min-w-0 max-w-full text-left capitalize [overflow-wrap:anywhere]">{value}</b></div>;
 }

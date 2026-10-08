@@ -77,6 +77,9 @@ async function main() {
         assert.ok(await opener.evaluate(el=>el===document.activeElement));
         await page.evaluate(()=>{document.documentElement.style.fontSize="32px";});
         await alias.scrollIntoViewIfNeeded();await unobscured();
+        const labelBox=await card.getByText("Usuario público",{exact:true}).boundingBox();
+        const aliasBox=await alias.boundingBox();
+        assert.ok(labelBox&&aliasBox&&aliasBox.y>=labelBox.y+labelBox.height-1,"Enlarged profile text needs full-width value rows.");
         await card.screenshot({path:`output/playwright/profile-messages/profile-text200-${viewport.width}.png`});
         phase=`no-write-check-${viewport.width}`;
         // Existing presence/field-verification background requests are blocked
