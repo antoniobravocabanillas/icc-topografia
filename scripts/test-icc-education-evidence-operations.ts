@@ -20,8 +20,11 @@ async function main() {
     ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   // Read-only preflight before creating anything. Never send global DISPATCH
   // to production from this verifier; every POST carries one own attempt ID.
-  const preflight = await call(); assert.equal(preflight.status, 200);
-  assert.equal(preflight.headers.get("cache-control"), "private, no-store");
+  const preflight = await call(); phase = `preflight HTTP ${preflight.status}`;
+  console.log("Operational preflight HTTP", preflight.status, "cache-control", preflight.headers.get("cache-control"));
+  assert.equal(preflight.status, 200);
+  const cache = preflight.headers.get("cache-control")?.split(",").map(value => value.trim()) ?? [];
+  assert.ok(cache.includes("private") && cache.includes("no-store"));
   const health = await preflight.json();
   for (const field of ["pending", "overdue", "quarantined", "watchesDue", "orphaned"])
     assert.ok(Number.isSafeInteger(health.backlog[field]) && health.backlog[field] >= 0);
