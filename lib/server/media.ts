@@ -115,7 +115,9 @@ export type PrivateEvidenceStreamStore = {
 export function getPrivateEvidenceStreamStore(): PrivateEvidenceStreamStore {
   if (process.env.NODE_ENV === "development" && process.env.NETLIFY !== "true")
     return new LocalMediaStore(WORKLOG_EVIDENCE_STORE);
-  const store = getStore(WORKLOG_EVIDENCE_STORE);
+  // The SDK defaults to eventual consistency. Private receipt-bound reads must
+  // observe the current physical object, including a just-written upload.
+  const store = getStore({ name: WORKLOG_EVIDENCE_STORE, consistency: "strong" });
   return { getStream: key => store.getWithMetadata(key, { type: "stream" }) };
 }
 
