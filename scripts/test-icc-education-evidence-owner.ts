@@ -72,17 +72,28 @@ async function main() {
     const file = await database.terraqoEducationEvidence.findUniqueOrThrow({ where: { id: uploaded.receipt.evidenceId! } });
     phase = "HTTP protected read and exact download";
     await database.terraqoProfessionalEducation.update({ where: { id: education.id }, data: { verificationStatus: "APPROVED" } });
-    const listed = await call(path + "?operationKey=" + operationKey, bearer); assert.equal(listed.status, 200); privateHeaders(listed);
+    const listed = await call(path + "?operationKey=" + operationKey, bearer);
+    phase = `protected listing HTTP ${listed.status}`; assert.equal(listed.status, 200); privateHeaders(listed);
     const dto = (await listed.json()).data;
+    phase = "protected listing DTO projection";
     assert.equal(dto.current.verificationStatus, "APPROVED"); assert.equal(dto.files.length, 1);
     assert.equal(dto.receipt.evidenceId, file.id); assert.equal(dto.receipt.originalVersion, education.updatedAt.toISOString());
     for (const forbidden of ["storageKey", "fingerprint", "actorId", "uploadedById", "userId", "notes", "bank", "identity"])
       assert.ok(!JSON.stringify(dto).includes(`"${forbidden}"`));
-    const downloaded = await call(`${path}/${file.id}`, bearer); assert.equal(downloaded.status, 200); privateHeaders(downloaded);
+    const downloaded = await call(`${path}/${file.id}`, bearer);
+    phase = `protected download HTTP ${downloaded.status}`; assert.equal(downloaded.status, 200); privateHeaders(downloaded);
+    phase = "protected download attachment";
     assert.ok(downloaded.headers.get("content-disposition")?.startsWith("attachment;"));
+    phase = `protected download type ${downloaded.headers.get("content-type")}`;
     assert.equal(downloaded.headers.get("content-type"), "image/png");
-    assert.equal(downloaded.headers.get("content-length"), String(bytes.length));
+    // A streaming gateway may remove Content-Length. Integrity is measured
+    // from actual bytes; any declared length still must match exactly.
+    const declared = downloaded.headers.get("content-length");
+    phase = `protected download declared length ${declared}`;
+    if (declared !== null) assert.equal(declared, String(bytes.length));
+    phase = "protected download exact physical bytes";
     assert.deepEqual(Buffer.from(await downloaded.arrayBuffer()), Buffer.from(bytes));
+    phase = "protected download other own owner denied";
     assert.equal((await call(`${path}/${file.id}`, other)).status, 404);
     phase = "HTTP own corruption/role/grant revocation";
     await store.set(file.storageKey, Uint8Array.from(bytes, value => value ^ 1).buffer);
