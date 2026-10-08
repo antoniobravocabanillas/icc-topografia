@@ -30,6 +30,7 @@ import {
 } from "@/lib/terraqo/builders";
 import { requireProfessionalPortal } from "@/lib/terraqo/professional-portal";
 import { UserAvatar } from "@/components/terraqo/user-avatar";
+import { builderContributionSummarySelect } from "@/lib/server/builder-contribution-presentation";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -130,6 +131,7 @@ export default async function BuildersPage({
   });
   const contributions = await prisma.terraqoBuilderContribution.findMany({
     where: { userId: session.user.id },
+    select: builderContributionSummarySelect,
     orderBy: { createdAt: "desc" },
     take: 40,
   });

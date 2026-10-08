@@ -15,6 +15,7 @@ import {
 } from "@/lib/terraqo/builders";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
 import { UserAvatar } from "@/components/terraqo/user-avatar";
+import { builderContributionAdminSelect, presentBuilderContribution } from "@/lib/server/builder-contribution-presentation";
 
 export const dynamic = "force-dynamic";
 
@@ -74,10 +75,10 @@ export default async function BuildersAdminPage() {
     riskyWorklogs,
   ] = await Promise.all([
     prisma.terraqoBuilderContribution.findMany({
-      include: { user: { select: { name: true, email: true, image: true } } },
+      select: builderContributionAdminSelect,
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
       take: 100,
-    }),
+    }).then(rows => rows.map(presentBuilderContribution)),
     prisma.terraqoBuilderAccount.count(),
     prisma.terraqoBuilderReward.count({ where: { active: true } }),
     prisma.terraqoBuilderRedemption.aggregate({
