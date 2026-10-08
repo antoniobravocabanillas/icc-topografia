@@ -29,6 +29,9 @@ export async function assertLegacyFirstWorklog(db: Database, userId: string) {
     SELECT id FROM icc."TerraqoNativeWorklogOperation" WHERE "actorId"=${userId} LIMIT 1`);
   if (found.length) throw new NativeWorklogLegacyGuardError();
 }
+// Durable owner exclusion applies only to worklog reputation, never unrelated rewards.
+export const assertLegacyReputationOwner = assertLegacyFirstWorklog;
+
 export async function assertLegacyValidation(db: Database, validationId: string) {
   const [validation] = await db.$queryRaw<{ worklogId: string }[]>(Prisma.sql`
     SELECT "worklogId" FROM icc."TerraqoWorklogValidation" WHERE id=${validationId}`);
@@ -37,6 +40,9 @@ export async function assertLegacyValidation(db: Database, validationId: string)
 }
 export async function assertLegacyBuilderSource(db: Database, input: { userId: string; type: string; sourceKey: string | null }) {
   if (input.type === "FIRST_WORKLOG") await assertLegacyFirstWorklog(db, input.userId);
-  if (input.sourceKey?.startsWith("worklog:")) await assertLegacyWorklogs(db, [input.sourceKey.slice(8)]);
+  if (input.sourceKey?.startsWith("worklog:")) {
+    await assertLegacyReputationOwner(db, input.userId);
+    await assertLegacyWorklogs(db, [input.sourceKey.slice(8)]);
+  }
   if (input.sourceKey?.startsWith("worklog-validation:")) await assertLegacyValidation(db, input.sourceKey.slice(19));
 }

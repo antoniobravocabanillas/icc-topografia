@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import type { Prisma, TerraqoBuilderContributionStatus, TerraqoBuilderContributionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { assertLegacyWorklogs, assertLegacyValidation, assertLegacyBuilderSource } from "@/lib/server/native-worklog-legacy-guard";
+import { assertLegacyWorklogs, assertLegacyValidation, assertLegacyBuilderSource, assertLegacyReputationOwner, NativeWorklogLegacyGuardError } from "@/lib/server/native-worklog-legacy-guard";
 
 export const BUILDER_REWARDS = [
   { slug: "premium-30", title: "Terraqo Premium", description: "Activa 30 días de beneficios Premium en tu perfil personal.", category: "PREMIUM" as const, pointsCost: 500, benefitCode: "PREMIUM_DAYS", durationDays: 30, quantity: 1 },
@@ -48,7 +48,12 @@ export async function releasePendingBuilderPoints(userId: string) {
     const previouslyReleased = item.ledgerEntries.reduce((sum, entry) => sum + Math.max(0, entry.pointsDelta), 0);
     const releaseAmount = Math.max(0, item.approvedPoints - previouslyReleased);
     await prisma.$transaction(async (tx) => {
-      await assertLegacyBuilderSource(tx, item);
+      try { await assertLegacyBuilderSource(tx, item); }
+      catch (error) {
+        // Preserve the pending contribution for native reconciliation; do not block unrelated releases.
+        if (error instanceof NativeWorklogLegacyGuardError && error.status === 409) return;
+        throw error;
+      }
       const claimed = await tx.terraqoBuilderContribution.updateMany({ where: { id: item.id, releasedAt: null }, data: { releasedAt: new Date() } });
       if (!claimed.count) return;
       if (!releaseAmount) return;
@@ -73,34 +78,37 @@ export async function ensureBuilders(userId: string) {
 
 export async function syncWorklogReputation(worklogId: string) {
   await assertLegacyWorklogs(prisma, [worklogId]);
-  const worklog = await prisma.terraqoWorklogEntry.findUnique({
-    where: { id: worklogId },
-    include: { media: { select: { id: true } }, validations: { where: { status: "APPROVED" }, select: { id: true } } }
-  });
-  if (!worklog || worklog.deletedAt) return null;
-  const hasEvidence = worklog.media.length > 0 || worklog.evidenceUrls.length > 0;
-  const confirmed = worklog.evidenceStatus === "CONFIRMED" || worklog.evidenceStatus === "VERIFIED" || worklog.validations.length > 0;
-  const strong = confirmed && hasEvidence && Boolean(worklog.projectId && worklog.outcome && worklog.summary.length >= 80);
-  const duplicateCount = worklog.contentFingerprint ? await prisma.terraqoWorklogEntry.count({ where: { authorId: worklog.authorId, contentFingerprint: worklog.contentFingerprint, id: { not: worklog.id }, createdAt: { lt: worklog.createdAt }, deletedAt: null } }) : 0;
-  const dayStart = new Date(worklog.createdAt); dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
-  const rewardedToday = await prisma.terraqoWorklogEntry.count({ where: { authorId: worklog.authorId, createdAt: { gte: dayStart, lt: dayEnd }, tqPointsAwarded: { gt: 0 }, id: { not: worklog.id } } });
-  const weekStart = new Date(worklog.createdAt); weekStart.setDate(weekStart.getDate() - 7);
-  const trustedThisWeek = await prisma.terraqoWorklogEntry.count({ where: { authorId: worklog.authorId, createdAt: { gte: weekStart, lte: worklog.createdAt }, trustScoreAwarded: { gt: 0 }, id: { not: worklog.id } } });
-  let targetTq = strong ? 10 : confirmed ? (hasEvidence ? 7 : 4) : hasEvidence ? 2 : 1;
-  let targetTrust = strong ? 15 : confirmed ? (hasEvidence ? 10 : 6) : hasEvidence ? 2 : 1;
-  let moderationStatus = strong ? "STRONG_VERIFIED" : confirmed ? (worklog.visibility === "PRIVATE" ? "PRIVATE_VALIDATED" : "VALIDATED") : hasEvidence ? "COMPLETE" : "DECLARED";
-  let moderationNote: string | null = null;
-  let riskScore = 0;
-  if (duplicateCount) { targetTq = 0; targetTrust = 0; moderationStatus = "DUPLICATE"; moderationNote = "Posible contenido duplicado. Requiere revisión."; riskScore = 90; }
-  else if (!confirmed && rewardedToday >= 3) { targetTq = 0; moderationNote = "Límite diario alcanzado. La bitácora conserva evidencia, pero no genera TQ."; riskScore = 20; }
-  if (trustedThisWeek >= 10) { targetTrust = 0; moderationNote = moderationNote || "Límite semanal de impacto en ranking alcanzado."; riskScore = Math.max(riskScore, 15); }
-  const qualityScore = Math.min(100, (worklog.title.length >= 8 ? 15 : 5) + (worklog.summary.length >= 80 ? 25 : 10) + (worklog.outcome ? 15 : 0) + (worklog.projectId ? 15 : 0) + (hasEvidence ? 20 : 0) + (confirmed ? 10 : 0));
-  const tqDelta = targetTq - worklog.tqPointsAwarded;
-  const trustDelta = targetTrust - worklog.trustScoreAwarded;
-  const availableAt = new Date(Date.now() + 7 * 86_400_000);
   return prisma.$transaction(async (tx) => {
+    const identity = await tx.terraqoWorklogEntry.findUnique({ where: { id: worklogId }, select: { authorId: true } });
+    if (!identity) return null;
+    await assertLegacyReputationOwner(tx, identity.authorId);
     await assertLegacyWorklogs(tx, [worklogId]);
+    const worklog = await tx.terraqoWorklogEntry.findUnique({
+      where: { id: worklogId },
+      include: { media: { select: { id: true } }, validations: { where: { status: "APPROVED" }, select: { id: true } } }
+    });
+    if (!worklog || worklog.deletedAt) return null;
+    const hasEvidence = worklog.media.length > 0 || worklog.evidenceUrls.length > 0;
+    const confirmed = worklog.evidenceStatus === "CONFIRMED" || worklog.evidenceStatus === "VERIFIED" || worklog.validations.length > 0;
+    const strong = confirmed && hasEvidence && Boolean(worklog.projectId && worklog.outcome && worklog.summary.length >= 80);
+    const duplicateCount = worklog.contentFingerprint ? await tx.terraqoWorklogEntry.count({ where: { authorId: worklog.authorId, contentFingerprint: worklog.contentFingerprint, id: { not: worklog.id }, createdAt: { lt: worklog.createdAt }, deletedAt: null } }) : 0;
+    const dayStart = new Date(worklog.createdAt); dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
+    const rewardedToday = await tx.terraqoWorklogEntry.count({ where: { authorId: worklog.authorId, createdAt: { gte: dayStart, lt: dayEnd }, tqPointsAwarded: { gt: 0 }, id: { not: worklog.id } } });
+    const weekStart = new Date(worklog.createdAt); weekStart.setDate(weekStart.getDate() - 7);
+    const trustedThisWeek = await tx.terraqoWorklogEntry.count({ where: { authorId: worklog.authorId, createdAt: { gte: weekStart, lte: worklog.createdAt }, trustScoreAwarded: { gt: 0 }, id: { not: worklog.id } } });
+    let targetTq = strong ? 10 : confirmed ? (hasEvidence ? 7 : 4) : hasEvidence ? 2 : 1;
+    let targetTrust = strong ? 15 : confirmed ? (hasEvidence ? 10 : 6) : hasEvidence ? 2 : 1;
+    let moderationStatus = strong ? "STRONG_VERIFIED" : confirmed ? (worklog.visibility === "PRIVATE" ? "PRIVATE_VALIDATED" : "VALIDATED") : hasEvidence ? "COMPLETE" : "DECLARED";
+    let moderationNote: string | null = null;
+    let riskScore = 0;
+    if (duplicateCount) { targetTq = 0; targetTrust = 0; moderationStatus = "DUPLICATE"; moderationNote = "Posible contenido duplicado. Requiere revisión."; riskScore = 90; }
+    else if (!confirmed && rewardedToday >= 3) { targetTq = 0; moderationNote = "Límite diario alcanzado. La bitácora conserva evidencia, pero no genera TQ."; riskScore = 20; }
+    if (trustedThisWeek >= 10) { targetTrust = 0; moderationNote = moderationNote || "Límite semanal de impacto en ranking alcanzado."; riskScore = Math.max(riskScore, 15); }
+    const qualityScore = Math.min(100, (worklog.title.length >= 8 ? 15 : 5) + (worklog.summary.length >= 80 ? 25 : 10) + (worklog.outcome ? 15 : 0) + (worklog.projectId ? 15 : 0) + (hasEvidence ? 20 : 0) + (confirmed ? 10 : 0));
+    const tqDelta = targetTq - worklog.tqPointsAwarded;
+    const trustDelta = targetTrust - worklog.trustScoreAwarded;
+    const availableAt = new Date(Date.now() + 7 * 86_400_000);
     const account = await tx.terraqoBuilderAccount.upsert({ where: { userId: worklog.authorId }, update: tqDelta || trustDelta ? { pendingPoints: { increment: tqDelta }, trustScore: { increment: trustDelta } } : {}, create: { userId: worklog.authorId, pendingPoints: tqDelta, trustScore: trustDelta } });
     await tx.terraqoBuilderContribution.upsert({
       where: { sourceKey: `worklog:${worklog.id}` },
@@ -117,12 +125,16 @@ export async function moderateWorklogReputation(input: { worklogId: string; stat
   if (input.status === "DECLARED") {
     await prisma.$transaction(async tx => {
       await assertLegacyWorklogs(tx, [input.worklogId]);
+      const identity = await tx.terraqoWorklogEntry.findUniqueOrThrow({ where: { id: input.worklogId }, select: { authorId: true } });
+      await assertLegacyReputationOwner(tx, identity.authorId);
       await tx.terraqoWorklogEntry.update({ where: { id: input.worklogId }, data: { moderationStatus: "DECLARED", moderationNote: input.note?.trim().slice(0, 1000) || null } });
     });
     return syncWorklogReputation(input.worklogId);
   }
   return prisma.$transaction(async (tx) => {
     await assertLegacyWorklogs(tx, [input.worklogId]);
+    const identity = await tx.terraqoWorklogEntry.findUniqueOrThrow({ where: { id: input.worklogId }, select: { authorId: true } });
+    await assertLegacyReputationOwner(tx, identity.authorId);
     const worklog = await tx.terraqoWorklogEntry.findUniqueOrThrow({ where: { id: input.worklogId } });
     const contribution = await tx.terraqoBuilderContribution.findUnique({ where: { sourceKey: `worklog:${worklog.id}` }, include: { ledgerEntries: { where: { type: "CREDIT" }, select: { pointsDelta: true } } } });
     const released = contribution?.ledgerEntries.reduce((sum, entry) => sum + Math.max(0, entry.pointsDelta), 0) || 0;

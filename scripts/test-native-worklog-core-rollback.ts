@@ -6,7 +6,7 @@ import { parseNativeWorklogPayload } from "../lib/server/native-worklog-payload"
 import { NativeWorklogBudget } from "../lib/server/native-worklog-budget";
 import { NativeWorklogOperationError } from "../lib/server/native-worklog-http";
 import { createNativeWorklogInTransaction, readNativeWorklogInTransaction } from "../lib/server/native-worklog-operation";
-import { assertLegacyWorklogs, assertLegacyFirstWorklog, assertLegacyValidation, assertLegacyBuilderSource,
+import { assertLegacyWorklogs, assertLegacyFirstWorklog, assertLegacyReputationOwner, assertLegacyValidation, assertLegacyBuilderSource,
   NativeWorklogLegacyGuardError } from "../lib/server/native-worklog-legacy-guard";
 
 /** Invoked only within the pinned DDL checker's outer rollback, never standalone. */
@@ -89,6 +89,10 @@ export async function nativeWorklogCoreRollback(tx: Prisma.TransactionClient, wo
   const legacy = await tx.terraqoWorklogEntry.create({ data: { authorId: user.id, professionalProfileId: profile.id,
     workspaceId, title: "ICC legacy propia", summary: "Entrada legacy propia temporal no adjudicada.", visibility: "PRIVATE" } });
   await assertLegacyWorklogs(tx, [legacy.id]);
+  await guardRejected(() => assertLegacyReputationOwner(tx, user.id));
+  await guardRejected(() => assertLegacyBuilderSource(tx, { userId: user.id, type: "BETA_PARTICIPATION", sourceKey: `worklog:${legacy.id}` }));
+  // Actor-level exclusion does not prohibit unrelated reward sources.
+  await assertLegacyBuilderSource(tx, { userId: user.id, type: "BUG_REPORT", sourceKey: `own-bug:${user.id}` });
   await tx.terraqoWorklogEntry.delete({ where: { id: legacy.id } });
   assert.equal(entry.visibility, "PRIVATE"); assert.equal(entry.tqPointsAwarded, 0); assert.equal(entry.trustScoreAwarded, 0);
   assert.deepEqual(entry.evidenceUrls, []); assert.deepEqual(entry.skills, []);
