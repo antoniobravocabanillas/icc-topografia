@@ -181,16 +181,45 @@ async function main() {
     const uploads = await Promise.all([uploadEducationEvidence(request(), token, education.id, first, concurrentStore),
       uploadEducationEvidence(request(), token, education.id, second, concurrentStore)]);
     assert.deepEqual(uploads.map(value => value.kind).sort(), ["committed", "receipt"]);
-    assert.equal(uploads[0].receipt.id, uploads[1].receipt.id); assert.equal(await used(), 2);
+    assert.equal(uploads[0].receipt.id, uploads[1].receipt.id); assert.equal(await used(), 3);
+    const deferredLoser = uploads.find(value => "cleanupAttemptId" in value && value.cleanupAttemptId)! as { cleanupAttemptId: string };
+    assert.equal((await second.terraqoEducationEvidenceAttempt.findUniqueOrThrow({ where: { id: deferredLoser.cleanupAttemptId } })).state, "CLEANUP_PENDING");
+    await recoverEducationEvidenceAttempt(first, deferredLoser.cleanupAttemptId, store); assert.equal(await used(), 2);
     assert.equal(await first.terraqoEducationEvidence.count({ where: { educationId: education.id } }), 2);
     const noStore = { set: async () => { throw Error("REPLAY_MUST_NOT_WRITE"); }, delete: async () => { throw Error("REPLAY_MUST_NOT_DELETE"); } };
     assert.equal((await uploadEducationEvidence(request(), token, education.id, first, noStore)).kind, "receipt");
     phase = "orchestrator store reply failure compensates its exact attempt";
     const freshVersion = (await first.terraqoProfessionalEducation.findUniqueOrThrow({ where: { id: education.id } })).updatedAt.toISOString();
-    await assert.rejects(uploadEducationEvidence(request(randomBytes(16).toString("hex"), freshVersion), token, education.id, first, {
+    const storeFaultKey = randomBytes(16).toString("hex");
+    await assert.rejects(uploadEducationEvidence(request(storeFaultKey, freshVersion), token, education.id, first, {
       ...physicalStore, set: async (key, data) => { await physicalStore.set(key, data); throw Error("CONTROLLED_STORE_REPLY_LOST"); },
     }), /CONTROLLED_STORE_REPLY_LOST/);
+    assert.equal(await used(), 3);
+    const storeFault = await second.terraqoEducationEvidenceAttempt.findFirstOrThrow({ where: { educationId: education.id, operationKey: storeFaultKey } });
+    assert.equal(storeFault.state, "CLEANUP_PENDING"); assert.equal(storeFault.reservedUnits, 1);
+    await recoverEducationEvidenceAttempt(first, storeFault.id, store);
     assert.equal(await used(), 2); assert.equal(await first.terraqoEducationEvidence.count({ where: { educationId: education.id } }), 2);
+    phase = "bounded upload timeout fences before late physical write with no commit continuation";
+    const lateKey = randomBytes(16).toString("hex");
+    let releaseWrite!: () => void, written!: () => void;
+    const delayed = new Promise<void>(resolve => { releaseWrite = resolve; });
+    const physicallyWritten = new Promise<void>(resolve => { written = resolve; });
+    await assert.rejects(uploadEducationEvidence(request(lateKey, freshVersion), token, education.id, first, {
+      ...physicalStore, set: async (key, data) => { keys.add(key); await delayed; await physicalStore.set(key, data); written(); },
+    }), /almacenamiento/);
+    const lateAttempt = await second.terraqoEducationEvidenceAttempt.findFirstOrThrow({ where: { educationId: education.id, operationKey: lateKey } });
+    assert.equal(lateAttempt.state, "CLEANUP_PENDING"); assert.equal(lateAttempt.reservedUnits, 1);
+    assert.equal(await used(), 3);
+    assert.equal(await recoverEducationEvidenceAttempt(first, lateAttempt.id, store), "completed");
+    assert.equal(await used(), 2);
+    releaseWrite(); await physicallyWritten;
+    assert.deepEqual(Buffer.from((await read(lateAttempt.storageKey))!), bytes);
+    assert.equal(await second.terraqoEducationEvidenceOperation.count({ where: { educationId: education.id, operationKey: lateKey } }), 0);
+    assert.equal(await second.terraqoEducationEvidence.count({ where: { storageKey: lateAttempt.storageKey } }), 0);
+    assert.equal(await recoverEducationEvidenceAttempt(first, lateAttempt.id, store), "skipped");
+    await second.terraqoEducationEvidenceAttempt.update({ where: { id: lateAttempt.id }, data: { nextAttemptAt: new Date(0) } });
+    assert.equal(await recoverEducationEvidenceAttempt(first, lateAttempt.id, store), "completed");
+    assert.equal(await read(lateAttempt.storageKey), null); assert.equal(await used(), 2);
     phase = "orchestrator SQL acknowledgement loss retains committed reference";
     const uncertainKey = randomBytes(16).toString("hex");
     const uncertainDatabase = new Proxy(first, { get(target, property) {
@@ -211,7 +240,7 @@ async function main() {
     assert.deepEqual(Buffer.from((await read(confirmedFile.storageKey))!), bytes);
     assert.equal((await uploadEducationEvidence(request(uncertainKey, freshVersion), token, education.id, second, noStore)).receipt.id, confirmed.id);
     assert.equal(await first.activityLog.count({ where: { actorId: user.id, entityType: "EducationEvidence" } }), 3);
-    console.log("PASS internal education orchestrator Request/SQL/private blobs: concurrent loser compensated, historical replay never touches store, actual stored-file acknowledgement fault refunded once, controlled post-commit SQL acknowledgement fault retains live blob and reconciles receipt. Not deployed HTTP.");
+    console.log("PASS bounded internal upload SQL/private blobs: loser/store fault fenced with retained charge before directed recovery; store timeout then late physical write cannot commit, zero-unit due watch removes it without another refund; replay and controlled SQL acknowledgement loss retain exact live reference. Not deployed HTTP or process death.");
     phase = "private readers and bounded physical download under live authority";
     const streamStore = { getStream: (key: string) => {
       assert.ok(keys.has(key)); return store.getWithMetadata(key, { type: "stream" });
