@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 
-export const NATIVE_WORKLOG_COMBINED_PIN = "74bf7259e20f0f84330a03567b1fd181d8c645203f71f8606ffb3b2436a624ad";
-const tables = ["TerraqoNativeWorklogOperation", "TerraqoNativeWorklogAccounting", "TerraqoNativeWorklogDecision"];
+export const NATIVE_WORKLOG_COMBINED_PIN = "55bb6318b6ff7379a6dc12bf801e42e25fb49c26a6ae8760a2eccadf30ac6279";
+const tables = ["TerraqoNativeWorklogOperation", "TerraqoNativeWorklogAccounting", "TerraqoNativeWorklogDecision", "TerraqoNativeWorklogAuthority"];
 export class NativeWorklogCatalogError extends Error {
   constructor() { super("Native worklog catalog mismatch"); }
 }
@@ -12,8 +12,8 @@ export async function readNativeWorklogCombinedCatalog(tx: Prisma.TransactionCli
     SELECT c.relname,c.relkind FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
     WHERE n.nspname='icc' AND (c.relname IN (${Prisma.join(tables)})
       OR c.relname LIKE 'NativeWorklogOperation%'
-      OR c.relname LIKE 'NativeWorklogAccounting%' OR c.relname LIKE 'NativeWorklogDecision%'
-      OR c.relname IN ('TerraqoNativeWorklogOperation_pkey','TerraqoNativeWorklogAccounting_pkey','TerraqoNativeWorklogDecision_pkey'))`);
+      OR c.relname LIKE 'NativeWorklogAuthority%' OR c.relname LIKE 'NativeWorklogAccounting%' OR c.relname LIKE 'NativeWorklogDecision%'
+      OR c.relname IN ('TerraqoNativeWorklogOperation_pkey','TerraqoNativeWorklogAccounting_pkey','TerraqoNativeWorklogDecision_pkey','TerraqoNativeWorklogAuthority_pkey'))`);
   if (!objects.length) return { state: "absent" as const };
   if (tables.some(table => !objects.some(row => row.relname === table && row.relkind === "r"))) throw new NativeWorklogCatalogError();
   const columns = await tx.$queryRaw<Record<string, unknown>[]>(Prisma.sql`
@@ -29,7 +29,7 @@ export async function readNativeWorklogCombinedCatalog(tx: Prisma.TransactionCli
     SELECT count(*) FROM pg_index i JOIN pg_class c ON c.oid=i.indrelid JOIN pg_namespace n ON n.oid=c.relnamespace
     WHERE n.nspname='icc' AND c.relname IN (${Prisma.join(tables)}) AND (NOT i.indisvalid OR NOT i.indisready)`);
   const fingerprint = createHash("sha256").update(JSON.stringify({ columns, constraints, indexes })).digest("hex");
-  if (fingerprint !== NATIVE_WORKLOG_COMBINED_PIN || constraints.length !== 23 || indexes.length !== 12 || Number(invalid.count) !== 0 ||
+  if (fingerprint !== NATIVE_WORKLOG_COMBINED_PIN || constraints.length !== 30 || indexes.length !== 14 || Number(invalid.count) !== 0 ||
       objects.some(row => !tables.includes(row.relname) && !indexes.some(index => index.indexname === row.relname))) throw new NativeWorklogCatalogError();
-  return { state: "exact" as const, fingerprint, constraints: 23, indexes: 12 };
+  return { state: "exact" as const, fingerprint, constraints: 30, indexes: 14 };
 }

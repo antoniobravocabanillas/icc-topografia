@@ -52,7 +52,7 @@ def main():
         raise RuntimeError("Catalog check failed; private diagnostics suppressed")
     report = json.loads(checked.stdout.strip())
     if sys.argv[1:] == ["--combined"]:
-        if report != {"mode": "combined-rollback", "combined": {"state": "exact", "fingerprint": "74bf7259e20f0f84330a03567b1fd181d8c645203f71f8606ffb3b2436a624ad", "constraints": 23, "indexes": 12}, "ledgerFingerprint": "63b2a899b04e053157f7212cd53bc2409118fb25a21cda713995450a9be40798", "applied": False}:
+        if report != {"mode": "combined-rollback", "combined": {"state": "exact", "fingerprint": "55bb6318b6ff7379a6dc12bf801e42e25fb49c26a6ae8760a2eccadf30ac6279", "constraints": 30, "indexes": 14}, "ledgerFingerprint": "63b2a899b04e053157f7212cd53bc2409118fb25a21cda713995450a9be40798", "applied": False}:
             raise RuntimeError("Combined catalog or rollback mode mismatch")
     elif report["fingerprint"] != "d2e17d02f546dc4bf5e2540274633dd1b05a157edd7f02b8ed4a8f623278b3bd" or report["applied"]:
         raise RuntimeError("Pinned fingerprint or mode mismatch")
