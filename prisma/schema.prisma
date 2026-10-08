@@ -775,6 +775,7 @@ enum TerraqoFileCategory {
 }
 
 model User {
+  nativeWorklogOperations     TerraqoNativeWorklogOperation[] @relation("NativeWorklogOperationActor")
   billingAccounts             TerraqoBillingAccount[]
   id                          String                            @id @default(cuid())
   name                        String?
@@ -2246,6 +2247,7 @@ model ActivityLog {
 }
 
 model TerraqoWorkspace {
+  nativeWorklogOperations   TerraqoNativeWorklogOperation[]
   billingAccounts          TerraqoBillingAccount[]
   id                       String                            @id @default(cuid())
   name                     String
@@ -2663,6 +2665,7 @@ model TerraqoWorkspaceMember {
 }
 
 model TerraqoProfessionalProfile {
+  nativeWorklogOperations     TerraqoNativeWorklogOperation[]
   id                         String                            @id @default(cuid())
   userId                     String                            @unique
   user                       User                              @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -3101,6 +3104,7 @@ model TerraqoEducationEvidenceWithdrawal {
 }
 
 model TerraqoWorklogEntry {
+  nativeCreationOperation TerraqoNativeWorklogOperation?
   id                     String                     @id @default(cuid())
   professionalProfileId  String
   professionalProfile    TerraqoProfessionalProfile @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
@@ -3586,5 +3590,43 @@ model TerraqoForumReply {
 
   @@index([postId, createdAt])
   @@index([authorId])
+  @@schema("icc")
+}
+
+model TerraqoNativeWorklogOperation {
+  id                     String                          @id
+  actorId                String
+  actor                  User                            @relation("NativeWorklogOperationActor", fields: [actorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  workspaceId            String
+  workspace              TerraqoWorkspace                @relation(fields: [workspaceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  professionalProfileId  String
+  professionalProfile    TerraqoProfessionalProfile      @relation(fields: [professionalProfileId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  operationKey           String
+  fingerprint            String
+  targetWorklogId        String                          @unique(map: "NativeWorklogOperation_target_key")
+  worklogId              String?                         @unique(map: "NativeWorklogOperation_worklog_key")
+  worklog                TerraqoWorklogEntry?            @relation(fields: [worklogId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  originalProjectId      String?
+  originalProjectVersion DateTime?                       @db.Timestamp(3)
+  resultVersion          DateTime                        @db.Timestamp(3)
+  createdAt              DateTime                        @default(now()) @db.Timestamp(3)
+  accounting             TerraqoNativeWorklogAccounting?
+
+  @@unique([actorId, workspaceId, operationKey], map: "NativeWorklogOperation_actor_workspace_operation_key")
+  @@index([professionalProfileId, createdAt], map: "NativeWorklogOperation_profile_created_idx")
+  @@index([workspaceId, createdAt], map: "NativeWorklogOperation_workspace_created_idx")
+  @@schema("icc")
+}
+
+model TerraqoNativeWorklogAccounting {
+  operationId   String                        @id
+  operation     TerraqoNativeWorklogOperation @relation(fields: [operationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  state         String                        @default("PENDING")
+  attempts      Int                           @default(0)
+  nextAttemptAt DateTime                      @default(now()) @db.Timestamp(3)
+  completedAt   DateTime?                     @db.Timestamp(3)
+  createdAt     DateTime                      @default(now()) @db.Timestamp(3)
+
+  @@index([state, nextAttemptAt], map: "NativeWorklogAccounting_state_due_idx")
   @@schema("icc")
 }
