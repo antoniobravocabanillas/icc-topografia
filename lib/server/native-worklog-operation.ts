@@ -15,7 +15,7 @@ import { planNativeWorklogDecision, saveNativeWorklogDecision, requireNativeWork
 const fail = (status: 401 | 403 | 404 | 409 | 503): never => { throw new NativeWorklogOperationError(status); };
 type Parsed = Awaited<ReturnType<typeof parseNativeWorklogPayload>>;
 
-async function lockAccess(tx: Prisma.TransactionClient, token: WorkspacePortalToken) {
+export async function lockNativeWorklogAccess(tx: Prisma.TransactionClient, token: WorkspacePortalToken) {
   if (token.role !== "PROFESSIONAL" || !token.jti || !Number.isFinite(token.exp) || token.exp <= Date.now() / 1000) fail(401);
   const [profile] = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`
     SELECT id FROM icc."TerraqoProfessionalProfile" WHERE "userId"=${token.sub} FOR UPDATE`);
@@ -46,7 +46,7 @@ async function lockAccess(tx: Prisma.TransactionClient, token: WorkspacePortalTo
   if (!grant) fail(401);
   return { profileId: profile.id, grantExpires: grant.expires, paidThrough };
 }
-function finalAuthority(access: Awaited<ReturnType<typeof lockAccess>>, token: WorkspacePortalToken, budget: NativeWorklogBudget) {
+export function requireFinalNativeWorklogAuthority(access: Awaited<ReturnType<typeof lockNativeWorklogAccess>>, token: WorkspacePortalToken, budget: NativeWorklogBudget) {
   if (token.exp <= Date.now() / 1000 || access.grantExpires <= new Date()) fail(401);
   if (access.paidThrough && access.paidThrough <= new Date()) fail(409);
   budget.require();
@@ -73,14 +73,14 @@ export async function createNativeWorklogInTransaction(tx: Prisma.TransactionCli
   const { payload } = parsed;
   if (!isParsedNativeWorklogSnapshot(parsed) || !Object.isFrozen(payload) || !/^[a-f0-9]{32}$/.test(payload.operationKey) ||
     nativeWorklogFingerprint(payload) !== parsed.fingerprint) fail(503);
-  const access = await lockAccess(tx, token);
+  const access = await lockNativeWorklogAccess(tx, token);
   const prior = await tx.terraqoNativeWorklogOperation.findUnique({ where: {
     actorId_workspaceId_operationKey: { actorId: token.sub, workspaceId: token.workspaceId, operationKey: payload.operationKey },
   } });
   if (prior) {
     if (prior.fingerprint !== parsed.fingerprint) fail(409);
     const historical = await result(tx, token, access.profileId, prior);
-    finalAuthority(access, token, budget); return historical;
+    requireFinalNativeWorklogAuthority(access, token, budget); return historical;
   }
   if (payload.projectId) {
     const [project] = await tx.$queryRaw<{ updatedAt: Date }[]>(Prisma.sql`
@@ -124,18 +124,18 @@ export async function createNativeWorklogInTransaction(tx: Prisma.TransactionCli
     action: "CREATED", entityType: "NativeWorklog", entityId: entry.id, title: "Bitácora profesional creada",
     metadata: { source: "native-portal", operationId: id } } });
   const confirmed = await result(tx, token, access.profileId, receipt);
-  finalAuthority(access, token, budget); return confirmed;
+  requireFinalNativeWorklogAuthority(access, token, budget); return confirmed;
 }
 
 export async function readNativeWorklogInTransaction(tx: Prisma.TransactionClient, token: WorkspacePortalToken,
   operationKey: string, budget: NativeWorklogBudget): Promise<NativeWorklogOperationResult> {
   budget.require(); if (!/^[a-f0-9]{32}$/.test(operationKey)) fail(503);
-  const access = await lockAccess(tx, token);
+  const access = await lockNativeWorklogAccess(tx, token);
   const receipt = await tx.terraqoNativeWorklogOperation.findUnique({ where: {
     actorId_workspaceId_operationKey: { actorId: token.sub, workspaceId: token.workspaceId, operationKey },
   } });
   const observation = await result(tx, token, access.profileId, receipt);
-  finalAuthority(access, token, budget); return observation;
+  requireFinalNativeWorklogAuthority(access, token, budget); return observation;
 }
 
 export function createNativeWorklog(database: Pick<PrismaClient, "$transaction">, token: WorkspacePortalToken,
