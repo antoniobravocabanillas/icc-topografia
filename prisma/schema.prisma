@@ -3653,7 +3653,9 @@ model TerraqoNativeWorklogDecision {
   qualityScore        Int
   moderationStatus    String
   riskScore           Int
+  contentKey          String
 
+  @@index([contentKey, createdAt], map: "NativeWorklogDecision_content_created_idx")
   @@index([createdAt], map: "NativeWorklogDecision_created_idx")
   @@schema("icc")
 }

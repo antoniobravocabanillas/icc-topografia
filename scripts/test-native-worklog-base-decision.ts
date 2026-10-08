@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { nativeWorklogContentKey } from "../lib/server/native-worklog-content-key";
 import { parseNativeWorklogPayload } from "../lib/server/native-worklog-payload";
 import { decideNativeDeclaredWorklog, NativeWorklogBaseDecisionError } from "../lib/server/native-worklog-base-decision";
 
@@ -47,6 +48,10 @@ async function main() {
   assert.throws(() => Object.assign(tampered, { fingerprint: "0".repeat(64) }));
   assert.throws(() => decideNativeDeclaredWorklog({ ...tampered, fingerprint: "0".repeat(64) }, decision.createdAt, counts), NativeWorklogBaseDecisionError);
   counts.rewardedInDay = 99;
+  assert.equal(nativeWorklogContentKey({ title: "Bitácora ICC", summary: "Trabajo   propio", projectId: "" }),
+    nativeWorklogContentKey({ title: "BITACORA ICC", summary: "TRABAJO propio", projectId: "" }));
+  assert.notEqual(nativeWorklogContentKey({ title: "ICC", summary: "Trabajo", projectId: "" }),
+    nativeWorklogContentKey({ title: "ICC", summary: "Trabajo", projectId: "proyecto" }));
   assert.equal(decision.rewardedInDay, 2); assert.equal(decision.tqPoints, 1);
   console.log("PASS native declared base policy: boundaries, quota/duplicate precedence, provenance, immutable replay; controlled values only, no SQL/awards.");
 }

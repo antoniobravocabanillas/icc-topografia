@@ -33,8 +33,19 @@ def main():
     environment = dict(os.environ, DATABASE_URL=direct, NODE_ENV="production", TEST_PORTAL_URL="https://api.terraqoglobal.com",
                        TERRAQO_MUTATING_TESTS="icc-topografia:20616116313")
     args = [shutil.which("node"), "--conditions=react-server", "--import", "tsx", "scripts/check-native-worklog-schema.ts", *sys.argv[1:]]
-    checked = subprocess.run(args, cwd=ROOT, env=environment, capture_output=True, text=True, encoding="utf-8", timeout=120)
+    checked = subprocess.run(args, cwd=ROOT, env=environment, capture_output=True, text=True, encoding="utf-8", timeout=210 if sys.argv[1:] == ["--core"] else 120)
     if checked.returncode:
+        # Forward only our bounded diagnostic category/source line, never raw errors.
+        for line in checked.stderr.splitlines():
+            try:
+                diagnostic = json.loads(line)
+            except ValueError:
+                continue
+            if diagnostic.get("outcome") == "failed" and diagnostic.get("category") in ("assertion", "unknown", "P2010", "P2028", "P2034"):
+                import re
+                location = diagnostic.get("location", "")
+                if re.fullmatch(r"(?:test-native-worklog-[a-z-]+|check-native-worklog-schema)\.ts:[0-9]+:[0-9]+", location):
+                    print(json.dumps({"category": diagnostic["category"], "location": location}))
         raise RuntimeError("Catalog check failed; private diagnostics suppressed")
     report = json.loads(checked.stdout.strip())
     if report["fingerprint"] != "d2e17d02f546dc4bf5e2540274633dd1b05a157edd7f02b8ed4a8f623278b3bd" or report["applied"]:
@@ -43,6 +54,11 @@ def main():
         decision = report["decisionSchema"]
         if decision != {"fingerprint": "85af9336c4049dc61070ab63ed1a731e35dc4f61daf723c581cdfd8dc6c22499", "constraints": 22, "indexes": 11, "applied": False}:
             raise RuntimeError("Decision catalog or rollback mode mismatch")
+    if sys.argv[1:] == ["--core"]:
+        decision = report["decisionSchema"]
+        if decision != {"fingerprint": "85af9336c4049dc61070ab63ed1a731e35dc4f61daf723c581cdfd8dc6c22499", "constraints": 22, "indexes": 11, "applied": False,
+                        "coreSchema": {"fingerprint": "74bf7259e20f0f84330a03567b1fd181d8c645203f71f8606ffb3b2436a624ad", "constraints": 23, "indexes": 12}}:
+            raise RuntimeError("Core decision catalog or rollback mode mismatch")
     after = inventory.run_inventory(direct, "after-check")
     if not all(before[key] == after[key] for key in keys):
         raise RuntimeError("Rollback changed catalog or identity")

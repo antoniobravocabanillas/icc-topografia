@@ -10,6 +10,7 @@ import { assertLegacyWorklogs, assertLegacyFirstWorklog, assertLegacyReputationO
   NativeWorklogLegacyGuardError } from "../lib/server/native-worklog-legacy-guard";
 
 import { applyNativeFirstWorklogInTransaction, reserveNativeFirstWorklog } from "../lib/server/native-worklog-first-award";
+import { nativeWorklogContentKey } from "../lib/server/native-worklog-content-key";
 
 /** Invoked only within the pinned DDL checker's outer rollback, never standalone. */
 export async function nativeWorklogCoreRollback(tx: Prisma.TransactionClient, workspaceId: string) {
@@ -33,6 +34,7 @@ export async function nativeWorklogCoreRollback(tx: Prisma.TransactionClient, wo
   const counts = async () => ({ entry: await tx.terraqoWorklogEntry.count({ where: { authorId: user.id } }),
     receipt: await tx.terraqoNativeWorklogOperation.count({ where: { actorId: user.id } }),
     accounting: await tx.terraqoNativeWorklogAccounting.count({ where: { operation: { actorId: user.id } } }),
+    decision: await tx.terraqoNativeWorklogDecision.count({ where: { operation: { actorId: user.id } } }),
     audit: await tx.activityLog.count({ where: { actorId: user.id } }) });
   async function rejected(run: () => Promise<unknown>, expected?: number) {
     const before = await counts();
@@ -46,7 +48,7 @@ export async function nativeWorklogCoreRollback(tx: Prisma.TransactionClient, wo
     assert.deepEqual(await counts(), before);
   }
   assert.deepEqual(await readNativeWorklogInTransaction(tx, token, payload.operationKey, budget()), { receipt: null, current: null });
-  assert.deepEqual(await counts(), { entry: 0, receipt: 0, accounting: 0, audit: 0 });
+  assert.deepEqual(await counts(), { entry: 0, receipt: 0, accounting: 0, decision: 0, audit: 0 });
   await rejected(() => createNativeWorklogInTransaction(tx, { ...token, jti: undefined }, initial, budget()), 401);
   await rejected(() => createNativeWorklogInTransaction(tx, { ...token, exp: Number.NaN }, initial, budget()), 401);
   await rejected(async () => {
@@ -73,8 +75,11 @@ export async function nativeWorklogCoreRollback(tx: Prisma.TransactionClient, wo
   assert.ok(created.receipt && created.current);
   assert.ok((await tx.terraqoProfessionalProfile.findUniqueOrThrow({ where: { id: profile.id } })).updatedAt > profile.updatedAt);
   assert.equal(created.receipt.worklogId, created.current.worklogId);
-  assert.deepEqual(await counts(), { entry: 1, receipt: 1, accounting: 1, audit: 1 });
+  assert.deepEqual(await counts(), { entry: 1, receipt: 1, accounting: 1, decision: 1, audit: 1 });
   const operation = await tx.terraqoNativeWorklogOperation.findFirstOrThrow({ where: { actorId: user.id } });
+  const savedDecision = await tx.terraqoNativeWorklogDecision.findUniqueOrThrow({ where: { operationId: operation.id } });
+  assert.equal(savedDecision.tqPoints, 1); assert.equal(savedDecision.trustScore, 1);
+  assert.equal(savedDecision.rewardedInDay, 0); assert.equal(savedDecision.trustedInWindow, 0);
   const accounting = await tx.terraqoNativeWorklogAccounting.findUniqueOrThrow({ where: { operationId: operation.id } });
   assert.equal(accounting.state, "PENDING"); assert.equal(accounting.completedAt, null); assert.equal(accounting.attempts, 0);
   const first = await tx.terraqoBuilderContribution.findUniqueOrThrow({ where: { sourceKey: `first-worklog:${user.id}` } });
@@ -154,7 +159,7 @@ export async function nativeWorklogCoreRollback(tx: Prisma.TransactionClient, wo
   }, 503);
   await rejected(async () => createNativeWorklogInTransaction(tx, token, await parsed({ outcome: "Otro resultado" }), budget()), 409);
   const newAction = await parsed({ operationKey: "b".repeat(32) });
-  function faultPort(delegate: "terraqoNativeWorklogAccounting" | "activityLog", after?: () => void) {
+  function faultPort(delegate: "terraqoNativeWorklogAccounting" | "terraqoNativeWorklogDecision" | "activityLog", after?: () => void) {
     return new Proxy(tx, { get(target, property) {
       if (property === delegate) return new Proxy(target[delegate], { get(port, key) {
         if (key === "create") return async (args: never) => {
@@ -167,6 +172,7 @@ export async function nativeWorklogCoreRollback(tx: Prisma.TransactionClient, wo
     } });
   }
   await rejected(() => createNativeWorklogInTransaction(faultPort("terraqoNativeWorklogAccounting"), token, newAction, budget()));
+  await rejected(() => createNativeWorklogInTransaction(faultPort("terraqoNativeWorklogDecision"), token, newAction, budget()));
   await rejected(() => createNativeWorklogInTransaction(faultPort("activityLog"), token, newAction, budget()));
   const expiring = { ...token };
   await rejected(() => createNativeWorklogInTransaction(faultPort("activityLog", () => { expiring.exp = 0; }), expiring, newAction, budget()), 401);
@@ -204,10 +210,51 @@ export async function nativeWorklogCoreRollback(tx: Prisma.TransactionClient, wo
   assert.deepEqual(historical.receipt, created.receipt); assert.equal(historical.current, null);
   await guardRejected(() => assertLegacyWorklogs(tx, [entry.id]));
   assert.deepEqual(await createNativeWorklogInTransaction(tx, token, initial, budget()), historical);
-  assert.deepEqual(await counts(), { entry: 2, receipt: 3, accounting: 3, audit: 3 });
+  await rejected(async () => {
+    await tx.terraqoNativeWorklogDecision.delete({ where: { operationId: operation.id } });
+    return readNativeWorklogInTransaction(tx, token, payload.operationKey, budget());
+  }, 503);
+  await rejected(async () => {
+    await tx.terraqoNativeWorklogDecision.delete({ where: { operationId: operation.id } });
+    return createNativeWorklogInTransaction(tx, token, await parsed({ operationKey: "f".repeat(32), title: "ICC incomplete decision" }), budget());
+  }, 503);
+  await tx.$executeRawUnsafe("SAVEPOINT native_decision_own_quota");
+  const normalized = await parsed({ operationKey: "1".repeat(32), title: payload.title.toUpperCase(), summary: payload.summary.toUpperCase(), outcome: "Different outcome" });
+  const dup = await createNativeWorklogInTransaction(tx, token, normalized, budget());
+  const dupReceipt = await tx.terraqoNativeWorklogOperation.findUniqueOrThrow({ where: { actorId_workspaceId_operationKey: { actorId: user.id, workspaceId, operationKey: normalized.payload.operationKey } } });
+  const dupDecision = await tx.terraqoNativeWorklogDecision.findUniqueOrThrow({ where: { operationId: dupReceipt.id } });
+  assert.ok(dup.receipt); assert.ok(dupDecision.priorDuplicates >= 1);
+  assert.equal(dupDecision.tqPoints + dupDecision.trustScore, 0); // First native target was deleted, key remains durable.
+  const unique = async (key: string, title: string) => {
+    const input = await parsed({ operationKey: key.repeat(32), title });
+    await createNativeWorklogInTransaction(tx, token, input, budget());
+    const op = await tx.terraqoNativeWorklogOperation.findUniqueOrThrow({ where: { actorId_workspaceId_operationKey: { actorId: user.id, workspaceId, operationKey: input.payload.operationKey } } });
+    return tx.terraqoNativeWorklogDecision.findUniqueOrThrow({ where: { operationId: op.id } });
+  };
+  const third = await unique("2", "ICC unique third own allocation");
+  assert.equal(third.rewardedInDay, 2); assert.equal(third.tqPoints, 1);
+  const fourth = await unique("3", "ICC unique fourth own allocation");
+  assert.equal(fourth.rewardedInDay, 3); assert.equal(fourth.tqPoints, 0); assert.equal(fourth.trustScore, 1);
+  // Manual own legacy state exercises retained counts, not a legacy awarding flow.
+  for (let i = 0; i < 8; i++) await tx.terraqoWorklogEntry.create({ data: { authorId: user.id, professionalProfileId: profile.id,
+    workspaceId, title: `ICC own legacy count ${i}`, summary: "Own temporary legacy trust count", visibility: "PRIVATE", trustScoreAwarded: 1 } });
+  const capped = await unique("4", "ICC unique weekly cap allocation");
+  assert.ok(capped.trustedInWindow >= 10); assert.equal(capped.trustScore, 0);
+  const legacyInput = await parsed({ operationKey: "5".repeat(32), title: "ICC own legacy duplicate" });
+  await tx.terraqoWorklogEntry.create({ data: { authorId: user.id, professionalProfileId: profile.id, workspaceId,
+    title: legacyInput.payload.title, summary: legacyInput.payload.summary, visibility: "PRIVATE", contentFingerprint: nativeWorklogContentKey(legacyInput.payload) } });
+  await createNativeWorklogInTransaction(tx, token, legacyInput, budget());
+  const legacyOp = await tx.terraqoNativeWorklogOperation.findUniqueOrThrow({ where: { actorId_workspaceId_operationKey: { actorId: user.id, workspaceId, operationKey: legacyInput.payload.operationKey } } });
+  assert.equal((await tx.terraqoNativeWorklogDecision.findUniqueOrThrow({ where: { operationId: legacyOp.id } })).moderationStatus, "DUPLICATE");
+  assert.deepEqual(await tx.terraqoNativeWorklogDecision.findUniqueOrThrow({ where: { operationId: operation.id } }), savedDecision);
+  await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT native_decision_own_quota");
+  await tx.$executeRawUnsafe("RELEASE SAVEPOINT native_decision_own_quota");
+  assert.deepEqual(await counts(), { entry: 2, receipt: 3, accounting: 3, decision: 3, audit: 3 });
   assert.equal(await tx.terraqoBuilderAccount.count({ where: { userId: user.id } }), 0);
   assert.equal(await tx.terraqoBuilderContribution.count({ where: { userId: user.id } }), 1);
   assert.equal((await tx.terraqoProfessionalProfile.findUniqueOrThrow({ where: { id: profile.id } })).liveCvEnabled, false);
+  assert.deepEqual(await tx.terraqoNativeWorklogDecision.findUniqueOrThrow({ where: { operationId: operation.id } }), savedDecision);
+  await tx.terraqoNativeWorklogDecision.deleteMany({ where: { operation: { actorId: user.id } } });
   await tx.terraqoNativeWorklogAccounting.deleteMany({ where: { operation: { actorId: user.id } } });
   await tx.terraqoNativeWorklogOperation.deleteMany({ where: { actorId: user.id } });
   await tx.activityLog.deleteMany({ where: { actorId: user.id } });

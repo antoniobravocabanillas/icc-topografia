@@ -6,7 +6,7 @@ import { parseNativeWorklogPayload } from "../lib/server/native-worklog-payload"
 import { decideNativeDeclaredWorklog } from "../lib/server/native-worklog-base-decision";
 
 export const NATIVE_DECISION_CATALOG = "85af9336c4049dc61070ab63ed1a731e35dc4f61daf723c581cdfd8dc6c22499";
-export async function nativeDecisionSchemaRollback(tx: Prisma.TransactionClient, workspaceId: string) {
+export async function nativeDecisionSchemaRollback(tx: Prisma.TransactionClient, workspaceId: string, core = false) {
   const [present] = await tx.$queryRaw<{ table: string | null; index: string | null }[]>`SELECT
     to_regclass('icc."TerraqoNativeWorklogDecision"')::text AS table,
     to_regclass('icc."NativeWorklogOperation_decision_binding_key"')::text AS index`;
@@ -93,7 +93,31 @@ export async function nativeDecisionSchemaRollback(tx: Prisma.TransactionClient,
     await tx.$executeRaw`DELETE FROM icc."TerraqoNativeWorklogOperation" WHERE id=${operationId}`;
     await tx.user.delete({ where: { id: user.id } });
     assert.equal(await tx.user.count({ where: { id: user.id } }), 0);
-    return { fingerprint, constraints: constraints.length, indexes: indexes.length, applied: false };
+    let coreSchema: { fingerprint: string; constraints: number; indexes: number } | undefined;
+    if (core) {
+      const extra = await readFile(new URL("../prisma/migrations/20261008162500_native_worklog_content_key/migration.sql", import.meta.url), "utf8");
+      for (const statement of extra.split(";").map(value => value.trim()).filter(Boolean)) await tx.$executeRawUnsafe(statement);
+      const columns = await tx.$queryRaw<Record<string, unknown>[]>`SELECT table_name,column_name,ordinal_position,data_type,
+        udt_name,is_nullable,column_default FROM information_schema.columns WHERE table_schema='icc'
+        AND table_name IN (${Prisma.join(tables)}) ORDER BY table_name,ordinal_position`;
+      const constraints = await tx.$queryRaw<Record<string, unknown>[]>`SELECT cl.relname AS table_name,c.contype,pg_get_constraintdef(c.oid) AS definition
+        FROM pg_constraint c JOIN pg_class cl ON cl.oid=c.conrelid JOIN pg_namespace n ON n.oid=cl.relnamespace
+        WHERE n.nspname='icc' AND cl.relname IN (${Prisma.join(tables)}) ORDER BY cl.relname,c.conname`;
+      const indexes = await tx.$queryRaw<Record<string, unknown>[]>`SELECT tablename,indexname,indexdef FROM pg_indexes WHERE schemaname='icc'
+        AND tablename IN (${Prisma.join(tables)}) ORDER BY tablename,indexname`;
+      assert.equal(constraints.length, 23); assert.equal(indexes.length, 12);
+      coreSchema = { fingerprint: createHash("sha256").update(JSON.stringify({ columns, constraints, indexes })).digest("hex"), constraints: 23, indexes: 12 };
+      assert.equal(coreSchema.fingerprint, "74bf7259e20f0f84330a03567b1fd181d8c645203f71f8606ffb3b2436a624ad");
+      const { nativeWorklogCoreRollback } = await import("./test-native-worklog-core-rollback");
+      await nativeWorklogCoreRollback(tx, workspaceId);
+    }
+    return { fingerprint, constraints: constraints.length, indexes: indexes.length, applied: false, ...(coreSchema ? { coreSchema } : {}) };
+  } catch (error: unknown) {
+    const category = error instanceof assert.AssertionError ? "assertion" :
+      error instanceof Prisma.PrismaClientKnownRequestError && /^[A-Z][0-9]{4}$/.test(error.code) ? error.code : "unknown";
+    const location = error instanceof Error ? error.stack?.match(/(?:test-native-worklog-core-rollback|test-native-worklog-decision-schema)\.ts:[0-9]+:[0-9]+/)?.[0] : undefined;
+    console.error(JSON.stringify({ outcome: "failed", category, location }));
+    throw error;
   } finally {
     await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT native_decision_schema");
     await tx.$executeRawUnsafe("RELEASE SAVEPOINT native_decision_schema");

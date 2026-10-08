@@ -122,8 +122,8 @@ async function main() {
       fingerprint = createHash("sha256").update(JSON.stringify({ columns, constraints, indexes })).digest("hex");
       assert.equal(fingerprint, EXPECTED_CATALOG);
       if (core) {
-        const { nativeWorklogCoreRollback } = await import("./test-native-worklog-core-rollback");
-        await nativeWorklogCoreRollback(tx, workspace.id);
+        const { nativeDecisionSchemaRollback } = await import("./test-native-worklog-decision-schema");
+        decisionSchema = await nativeDecisionSchemaRollback(tx, workspace.id, true);
       } else if (reconciliation) {
         const { nativeLegacyReleaseRollback } = await import("./test-native-worklog-legacy-release-rollback");
         await nativeLegacyReleaseRollback(tx, workspace.id);
@@ -134,7 +134,7 @@ async function main() {
       assert.equal(hash(await catalog(tx, false)), previous);
       assert.equal(await ledgerFingerprint(tx), ledger);
       throw rollback;
-    }, { maxWait: 5000, timeout: core || reconciliation ? 90000 : 30000 });
+    }, { maxWait: 5000, timeout: core ? 180000 : reconciliation ? 90000 : 30000 });
   } catch (error) { if (error !== rollback || !fingerprint) throw error; }
   if (ownerFence) {
     const { nativeOwnerFenceProof } = await import("./test-native-worklog-owner-fence");
@@ -149,6 +149,6 @@ main().catch((error: unknown) => {
   // Only bounded categories and source line numbers; never error messages, SQL or connection data.
   const category = error instanceof assert.AssertionError ? "assertion" :
     error instanceof Prisma.PrismaClientKnownRequestError && /^[A-Z][0-9]{4}$/.test(error.code) ? error.code : "unknown";
-  const location = error instanceof Error ? error.stack?.match(/(?:test-native-worklog-core-rollback|test-native-worklog-legacy-release-rollback|test-native-worklog-owner-fence|check-native-worklog-schema)\.ts:[0-9]+:[0-9]+/)?.[0] : undefined;
+  const location = error instanceof Error ? error.stack?.match(/(?:test-native-worklog-core-rollback|test-native-worklog-decision-schema|test-native-worklog-legacy-release-rollback|test-native-worklog-owner-fence|check-native-worklog-schema)\.ts:[0-9]+:[0-9]+/)?.[0] : undefined;
   console.error(JSON.stringify({ outcome: "failed", category, location })); process.exitCode = 1;
 }).finally(() => prisma.$disconnect());
