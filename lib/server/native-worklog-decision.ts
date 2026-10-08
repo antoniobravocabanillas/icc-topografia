@@ -12,7 +12,8 @@ export async function planNativeWorklogDecision(tx: Prisma.TransactionClient, ac
   const [broken] = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT o.id FROM icc."TerraqoNativeWorklogOperation" o
     LEFT JOIN icc."TerraqoNativeWorklogDecision" d ON d."operationId"=o.id
     LEFT JOIN icc."TerraqoNativeWorklogAccounting" a ON a."operationId"=o.id
-    WHERE o."actorId"=${actorId} AND (d."operationId" IS NULL OR a."operationId" IS NULL OR o."createdAt">${stamp}) LIMIT 1`);
+    LEFT JOIN icc."TerraqoNativeWorklogAuthority" proof ON proof."operationId"=o.id
+    WHERE o."actorId"=${actorId} AND (d."operationId" IS NULL OR a."operationId" IS NULL OR proof."operationId" IS NULL OR o."createdAt">${stamp}) LIMIT 1`);
   if (broken) fail();
   const contentKey = nativeWorklogContentKey(parsed.payload);
   const periods = decideNativeDeclaredWorklog(parsed, stamp.toISOString(), { priorDuplicates: 0, rewardedInDay: 0, trustedInWindow: 0 });

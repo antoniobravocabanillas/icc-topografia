@@ -12,11 +12,16 @@ import { reserveNativeFirstWorklog } from "./native-worklog-first-award";
 import { advanceNativeWorklogOwnerVersion } from "./native-worklog-owner-version";
 import { planNativeWorklogDecision, saveNativeWorklogDecision, requireNativeWorklogDecision } from "./native-worklog-decision";
 
+import { requireNativeCreationAuthority } from "./native-worklog-creation-authority";
+
+const lockedAccesses = new WeakSet<object>();
 const fail = (status: 401 | 403 | 404 | 409 | 503): never => { throw new NativeWorklogOperationError(status); };
 type Parsed = Awaited<ReturnType<typeof parseNativeWorklogPayload>>;
 
 export async function lockNativeWorklogAccess(tx: Prisma.TransactionClient, token: WorkspacePortalToken) {
-  if (token.role !== "PROFESSIONAL" || !token.jti || !Number.isFinite(token.exp) || token.exp <= Date.now() / 1000) fail(401);
+  if (token.role !== "PROFESSIONAL" || !token.jti || !Number.isSafeInteger(token.iat) || !Number.isSafeInteger(token.exp) ||
+    token.iat * 1000 < Date.UTC(2000, 0, 1) || token.iat > Date.now() / 1000 ||
+    token.exp * 1000 > Date.UTC(9998, 11, 31) || token.exp <= token.iat || token.exp <= Date.now() / 1000) fail(401);
   const [profile] = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`
     SELECT id FROM icc."TerraqoProfessionalProfile" WHERE "userId"=${token.sub} FOR UPDATE`);
   if (!profile) fail(404);
@@ -44,7 +49,11 @@ export async function lockNativeWorklogAccess(tx: Prisma.TransactionClient, toke
     SELECT expires FROM icc."VerificationToken" WHERE identifier=${`portal-session:${token.workspaceId}:${token.sub}`}
     AND token=${createHash("sha256").update(token.jti!).digest("hex")} AND expires>${stamp} FOR SHARE`);
   if (!grant) fail(401);
-  return { profileId: profile.id, grantExpires: grant.expires, paidThrough };
+  const access = Object.freeze({ profileId: profile.id, grantExpires: grant.expires, paidThrough,
+    actorId: token.sub, workspaceId: token.workspaceId, grantHash: createHash("sha256").update(token.jti!).digest("hex"),
+    tokenIssuedAt: new Date(token.iat * 1000), tokenExpiresAt: new Date(token.exp * 1000) });
+  lockedAccesses.add(access);
+  return access;
 }
 export function requireFinalNativeWorklogAuthority(access: Awaited<ReturnType<typeof lockNativeWorklogAccess>>, token: WorkspacePortalToken, budget: NativeWorklogBudget) {
   if (token.exp <= Date.now() / 1000 || access.grantExpires <= new Date()) fail(401);
@@ -57,6 +66,7 @@ async function result(tx: Prisma.TransactionClient, token: WorkspacePortalToken,
   if (receipt.professionalProfileId !== profileId || receipt.actorId !== token.sub || receipt.workspaceId !== token.workspaceId) fail(503);
   if (!await tx.terraqoNativeWorklogAccounting.findUnique({ where: { operationId: receipt.id }, select: { operationId: true } })) fail(503);
   await requireNativeWorklogDecision(tx, receipt);
+  await requireNativeCreationAuthority(tx, receipt);
   const [current] = receipt.worklogId ? await tx.$queryRaw<{ id: string; updatedAt: Date }[]>(Prisma.sql`
     SELECT id,"updatedAt" FROM icc."TerraqoWorklogEntry" WHERE id=${receipt.worklogId}
     AND "authorId"=${token.sub} AND "professionalProfileId"=${profileId} AND "workspaceId"=${token.workspaceId}
@@ -119,6 +129,16 @@ export async function createNativeWorklogInTransaction(tx: Prisma.TransactionCli
   } });
   // Missing accounting or audit aborts the entire creation; PENDING is not an award.
   await saveNativeWorklogDecision(tx, id, decision);
+  // Only the access object produced by our locked checks may attest creation.
+  // A failed insert or final expiry aborts entry, FIRST reservation and all receipts together.
+  if (!lockedAccesses.has(access) || access.actorId !== receipt.actorId || access.workspaceId !== receipt.workspaceId ||
+    access.profileId !== receipt.professionalProfileId) fail(503);
+  await tx.$executeRaw`INSERT INTO icc."TerraqoNativeWorklogAuthority"
+    ("operationId","actorId","workspaceId","professionalProfileId","createdAt",fingerprint,"policyVersion","grantHash",
+     "tokenIssuedAt","tokenExpiresAt","grantExpiresAt","paidThrough",role,modules)
+    VALUES (${id},${receipt.actorId},${receipt.workspaceId},${receipt.professionalProfileId},${createdAt},${receipt.fingerprint},
+     'native-creation-authority-v1',${access.grantHash},${access.tokenIssuedAt},${access.tokenExpiresAt},${access.grantExpires},
+     ${access.paidThrough},'PROFESSIONAL',ARRAY['LIVE_CV','PROFESSIONAL_NETWORK'])`;
   await tx.terraqoNativeWorklogAccounting.create({ data: { operationId: id, state: "PENDING", createdAt, nextAttemptAt: createdAt } });
   await tx.activityLog.create({ data: { actorId: token.sub, terraqoWorkspaceId: token.workspaceId,
     action: "CREATED", entityType: "NativeWorklog", entityId: entry.id, title: "Bitácora profesional creada",

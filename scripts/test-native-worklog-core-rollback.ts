@@ -294,6 +294,7 @@ export async function nativeWorklogCoreRollback(tx: Prisma.TransactionClient, wo
   assert.equal((await tx.terraqoProfessionalProfile.findUniqueOrThrow({ where: { id: profile.id } })).liveCvEnabled, false);
   assert.deepEqual(await tx.terraqoNativeWorklogDecision.findUniqueOrThrow({ where: { operationId: operation.id } }), savedDecision);
   await tx.terraqoNativeWorklogDecision.deleteMany({ where: { operation: { actorId: user.id } } });
+  await tx.$executeRaw`DELETE FROM icc."TerraqoNativeWorklogAuthority" WHERE "actorId"=${user.id}`;
   await tx.terraqoNativeWorklogAccounting.deleteMany({ where: { operation: { actorId: user.id } } });
   await tx.terraqoNativeWorklogOperation.deleteMany({ where: { actorId: user.id } });
   await tx.activityLog.deleteMany({ where: { actorId: user.id } });

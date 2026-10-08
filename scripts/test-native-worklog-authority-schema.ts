@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { Prisma } from "@prisma/client";
 
 const EXPECTED = "4f5a48e679e61fecac2d81855240cbc2895567e64571a91099a6566c89efe503";
-export async function nativeAuthoritySchemaRollback(tx: Prisma.TransactionClient, workspaceId: string) {
+export async function nativeAuthoritySchemaRollback(tx: Prisma.TransactionClient, workspaceId: string, afterSchema?: () => Promise<void>) {
   const [present] = await tx.$queryRaw<{ table: string | null; index: string | null }[]>`SELECT
     to_regclass('icc."TerraqoNativeWorklogAuthority"')::text AS table,
     to_regclass('icc."NativeWorklogOperation_authority_binding_key"')::text AS index`;
@@ -29,6 +29,10 @@ export async function nativeAuthoritySchemaRollback(tx: Prisma.TransactionClient
     assert.equal(Number(invalid.count), 0);
     const fingerprint = createHash("sha256").update(JSON.stringify({ columns, constraints, indexes })).digest("hex");
     assert.equal(fingerprint, EXPECTED);
+    if (afterSchema) {
+      await afterSchema();
+      return { fingerprint, constraints: 7, indexes: 2, applied: false };
+    }
     await assert.rejects(() => nativeAuthoritySchemaRollback(tx, workspaceId), assert.AssertionError);
     const marker = randomUUID(), operationId = createHash("sha256").update(marker).digest("hex");
     const stamp = new Date("2026-10-08T23:00:00.000Z");

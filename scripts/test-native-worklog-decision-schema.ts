@@ -6,7 +6,7 @@ import { parseNativeWorklogPayload } from "../lib/server/native-worklog-payload"
 import { decideNativeDeclaredWorklog } from "../lib/server/native-worklog-base-decision";
 
 export const NATIVE_DECISION_CATALOG = "85af9336c4049dc61070ab63ed1a731e35dc4f61daf723c581cdfd8dc6c22499";
-export async function nativeDecisionSchemaRollback(tx: Prisma.TransactionClient, workspaceId: string, core = false, release = false, edges = false, firstAccount = false, phases = false, phaseEdges = false, inventory = false, retry = false, authority = false, authoritySchemaOnly = false) {
+export async function nativeDecisionSchemaRollback(tx: Prisma.TransactionClient, workspaceId: string, core = false, release = false, edges = false, firstAccount = false, phases = false, phaseEdges = false, inventory = false, retry = false, authority = false, authoritySchemaOnly = false, creationAuthority = false) {
   const [present] = await tx.$queryRaw<{ table: string | null; index: string | null }[]>`SELECT
     to_regclass('icc."TerraqoNativeWorklogDecision"')::text AS table,
     to_regclass('icc."NativeWorklogOperation_decision_binding_key"')::text AS index`;
@@ -110,7 +110,11 @@ export async function nativeDecisionSchemaRollback(tx: Prisma.TransactionClient,
       coreSchema = { fingerprint: createHash("sha256").update(JSON.stringify({ columns, constraints, indexes })).digest("hex"), constraints: 23, indexes: 12 };
       assert.equal(coreSchema.fingerprint, "74bf7259e20f0f84330a03567b1fd181d8c645203f71f8606ffb3b2436a624ad");
       const { nativeWorklogCoreRollback } = await import("./test-native-worklog-core-rollback");
-      if (authoritySchemaOnly) {
+      if (creationAuthority) {
+        const { nativeAuthoritySchemaRollback } = await import("./test-native-worklog-authority-schema");
+        const { nativeCreationAuthorityRollback } = await import("./test-native-worklog-creation-authority-rollback");
+        authoritySchema = await nativeAuthoritySchemaRollback(tx, workspaceId, () => nativeCreationAuthorityRollback(tx, workspaceId));
+      } else if (authoritySchemaOnly) {
         const { nativeAuthoritySchemaRollback } = await import("./test-native-worklog-authority-schema");
         authoritySchema = await nativeAuthoritySchemaRollback(tx, workspaceId);
       } else if (authority) {
@@ -137,7 +141,10 @@ export async function nativeDecisionSchemaRollback(tx: Prisma.TransactionClient,
       } else if (release) {
         const { nativeBaseReleaseRollback } = await import("./test-native-worklog-base-release-rollback");
         await nativeBaseReleaseRollback(tx, workspaceId);
-      } else await nativeWorklogCoreRollback(tx, workspaceId);
+      } else {
+        const { nativeAuthoritySchemaRollback } = await import("./test-native-worklog-authority-schema");
+        authoritySchema = await nativeAuthoritySchemaRollback(tx, workspaceId, () => nativeWorklogCoreRollback(tx, workspaceId));
+      }
     }
     return { fingerprint, constraints: constraints.length, indexes: indexes.length, applied: false, ...(coreSchema ? { coreSchema } : {}), ...(authoritySchema ? { authoritySchema } : {}) };
   } catch (error: unknown) {
