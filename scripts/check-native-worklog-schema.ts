@@ -84,7 +84,8 @@ async function fixtureConstraints(tx: Prisma.TransactionClient, workspaceId: str
 
 async function main() {
   const core = process.argv[2] === "--core";
-  assert.ok(process.argv.length === 2 || (core && process.argv.length === 3));
+  const reconciliation = process.argv[2] === "--reconciliation";
+  assert.ok(process.argv.length === 2 || ((core || reconciliation) && process.argv.length === 3));
   assert.equal(process.env.TERRAQO_MUTATING_TESTS, "icc-topografia:20616116313");
   assert.equal(process.env.TEST_PORTAL_URL, "https://api.terraqoglobal.com");
   const workspace=await prisma.terraqoWorkspace.findFirstOrThrow({ where: { slug: "icc-topografia", active: true,
@@ -120,19 +121,22 @@ async function main() {
       if (core) {
         const { nativeWorklogCoreRollback } = await import("./test-native-worklog-core-rollback");
         await nativeWorklogCoreRollback(tx, workspace.id);
+      } else if (reconciliation) {
+        const { nativeLegacyReleaseRollback } = await import("./test-native-worklog-legacy-release-rollback");
+        await nativeLegacyReleaseRollback(tx, workspace.id);
       } else await fixtureConstraints(tx,workspace.id);
       assert.equal(hash(await catalog(tx, false)), previous);
       assert.equal(await ledgerFingerprint(tx), ledger);
       throw rollback;
-    }, { maxWait: 5000, timeout: core ? 90000 : 30000 });
+    }, { maxWait: 5000, timeout: core || reconciliation ? 90000 : 30000 });
   } catch (error) { if (error !== rollback || !fingerprint) throw error; }
   console.log(JSON.stringify({ mode: "checked-in-rollback", fingerprint, ledgerFingerprint: ledger, constraints: 14, indexes: 8,
-    ownFixtureConstraints: !core, ownCoreRollback: core, applied: false }));
+    ownFixtureConstraints: !core && !reconciliation, ownCoreRollback: core, ownLegacyReleaseRollback: reconciliation, applied: false }));
 }
 main().catch((error: unknown) => {
   // Only bounded categories and source line numbers; never error messages, SQL or connection data.
   const category = error instanceof assert.AssertionError ? "assertion" :
     error instanceof Prisma.PrismaClientKnownRequestError && /^[A-Z][0-9]{4}$/.test(error.code) ? error.code : "unknown";
-  const location = error instanceof Error ? error.stack?.match(/(?:test-native-worklog-core-rollback|check-native-worklog-schema)\.ts:[0-9]+:[0-9]+/)?.[0] : undefined;
+  const location = error instanceof Error ? error.stack?.match(/(?:test-native-worklog-core-rollback|test-native-worklog-legacy-release-rollback|check-native-worklog-schema)\.ts:[0-9]+:[0-9]+/)?.[0] : undefined;
   console.error(JSON.stringify({ outcome: "failed", category, location })); process.exitCode = 1;
 }).finally(() => prisma.$disconnect());
