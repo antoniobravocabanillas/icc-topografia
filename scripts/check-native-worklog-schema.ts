@@ -105,6 +105,7 @@ async function main() {
   }
   const core = process.argv[2] === "--core";
   const release = process.argv[2] === "--release";
+  const phaseEdges = process.argv[2] === "--phase-edges";
   const phases = process.argv[2] === "--phases";
   const firstAccount = process.argv[2] === "--first-account";
   const edges = process.argv[2] === "--base-edges";
@@ -112,7 +113,7 @@ async function main() {
   const ownerFence = process.argv[2] === "--owner-fence";
   const decision = process.argv[2] === "--decision";
   let decisionSchema: unknown;
-  assert.ok(process.argv.length === 2 || ((core || release || edges || phases || firstAccount || reconciliation || ownerFence || decision) && process.argv.length === 3));
+  assert.ok(process.argv.length === 2 || ((core || release || edges || phaseEdges || phases || firstAccount || reconciliation || ownerFence || decision) && process.argv.length === 3));
   assert.equal(process.env.TERRAQO_MUTATING_TESTS, "icc-topografia:20616116313");
   assert.equal(process.env.TEST_PORTAL_URL, "https://api.terraqoglobal.com");
   const workspace=await prisma.terraqoWorkspace.findFirstOrThrow({ where: { slug: "icc-topografia", active: true,
@@ -145,9 +146,9 @@ async function main() {
       assert.equal(Number(invalid[0].count), 0);
       fingerprint = createHash("sha256").update(JSON.stringify({ columns, constraints, indexes })).digest("hex");
       assert.equal(fingerprint, EXPECTED_CATALOG);
-      if (core || release || edges || phases || firstAccount) {
+      if (core || release || edges || phaseEdges || phases || firstAccount) {
         const { nativeDecisionSchemaRollback } = await import("./test-native-worklog-decision-schema");
-        decisionSchema = await nativeDecisionSchemaRollback(tx, workspace.id, true, release, edges, firstAccount, phases);
+        decisionSchema = await nativeDecisionSchemaRollback(tx, workspace.id, true, release, edges, firstAccount, phases, phaseEdges);
       } else if (reconciliation) {
         const { nativeLegacyReleaseRollback } = await import("./test-native-worklog-legacy-release-rollback");
         await nativeLegacyReleaseRollback(tx, workspace.id);
@@ -158,7 +159,7 @@ async function main() {
       assert.equal(hash(await catalog(tx, false)), previous);
       assert.equal(await ledgerFingerprint(tx), ledger);
       throw rollback;
-    }, { maxWait: 5000, timeout: (core || edges) ? 180000 : (release || reconciliation || firstAccount || phases) ? 90000 : 30000 });
+    }, { maxWait: 5000, timeout: (core || edges) ? 180000 : (release || reconciliation || firstAccount || phases || phaseEdges) ? 90000 : 30000 });
   } catch (error) { if (error !== rollback || !fingerprint) throw error; }
   if (ownerFence) {
     const { nativeOwnerFenceProof } = await import("./test-native-worklog-owner-fence");
@@ -166,14 +167,14 @@ async function main() {
     assert.equal(await ledgerFingerprint(prisma), ledger);
   }
   console.log(JSON.stringify({ mode: "checked-in-rollback", fingerprint, ledgerFingerprint: ledger, constraints: 14, indexes: 8,
-    ownFixtureConstraints: !core && !release && !edges && !firstAccount && !phases && !reconciliation && !ownerFence && !decision, ownCoreRollback: core, ownBaseReleaseRollback: release, ownBaseEdgesRollback: edges, ownFirstAccountRollback: firstAccount, ownAccountingPhasesRollback: phases, ownLegacyReleaseRollback: reconciliation,
+    ownFixtureConstraints: !core && !release && !edges && !firstAccount && !phases && !phaseEdges && !reconciliation && !ownerFence && !decision, ownCoreRollback: core, ownBaseReleaseRollback: release, ownBaseEdgesRollback: edges, ownFirstAccountRollback: firstAccount, ownAccountingPhasesRollback: phases, ownAccountingPhaseEdgesRollback: phaseEdges, ownLegacyReleaseRollback: reconciliation,
     ownOwnerFence: ownerFence, decisionSchema, applied: false }));
 }
 main().catch((error: unknown) => {
   // Only bounded categories and source line numbers; never error messages, SQL or connection data.
   const category = error instanceof assert.AssertionError ? "assertion" :
     error instanceof Prisma.PrismaClientKnownRequestError && /^[A-Z][0-9]{4}$/.test(error.code) ? error.code : "unknown";
-  const location = error instanceof Error ? error.stack?.match(/(?:test-native-worklog-combined-catalog|test-native-worklog-accounting-phases-rollback|test-native-worklog-first-account-rollback|test-native-worklog-base-edges-rollback|test-native-worklog-base-release-rollback|test-native-worklog-core-rollback|test-native-worklog-decision-schema|test-native-worklog-legacy-release-rollback|test-native-worklog-owner-fence|check-native-worklog-schema)\.ts:[0-9]+:[0-9]+/)?.[0] : undefined;
+  const location = error instanceof Error ? error.stack?.match(/(?:test-native-worklog-combined-catalog|test-native-worklog-accounting-phase-edges-rollback|test-native-worklog-accounting-phases-rollback|test-native-worklog-first-account-rollback|test-native-worklog-base-edges-rollback|test-native-worklog-base-release-rollback|test-native-worklog-core-rollback|test-native-worklog-decision-schema|test-native-worklog-legacy-release-rollback|test-native-worklog-owner-fence|check-native-worklog-schema)\.ts:[0-9]+:[0-9]+/)?.[0] : undefined;
   const code = error instanceof Prisma.PrismaClientKnownRequestError ? error.meta?.code : undefined;
   const sqlState = typeof code === "string" && /^[0-9A-Z]{5}$/.test(code) ? code : undefined;
   console.error(JSON.stringify({ outcome: "failed", category, location, sqlState })); process.exitCode = 1;
