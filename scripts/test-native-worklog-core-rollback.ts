@@ -11,6 +11,7 @@ import { assertLegacyWorklogs, assertLegacyFirstWorklog, assertLegacyReputationO
 
 import { applyNativeFirstWorklogInTransaction, reserveNativeFirstWorklog } from "../lib/server/native-worklog-first-award";
 import { nativeWorklogContentKey } from "../lib/server/native-worklog-content-key";
+import { applyNativeWorklogBaseInTransaction } from "../lib/server/native-worklog-base-accounting";
 
 /** Invoked only within the pinned DDL checker's outer rollback, never standalone. */
 export async function nativeWorklogCoreRollback(tx: Prisma.TransactionClient, workspaceId: string) {
@@ -85,6 +86,44 @@ export async function nativeWorklogCoreRollback(tx: Prisma.TransactionClient, wo
   const first = await tx.terraqoBuilderContribution.findUniqueOrThrow({ where: { sourceKey: `first-worklog:${user.id}` } });
   assert.equal(first.approvedPoints, 0); assert.equal(first.requestedPoints, 25);
   assert.equal(await tx.terraqoBuilderAccount.count({ where: { userId: user.id } }), 0);
+  await tx.$executeRawUnsafe("SAVEPOINT native_base_own_phase");
+  await rejected(() => applyNativeWorklogBaseInTransaction(new Proxy(tx, { get(target, key) {
+    if (key === "terraqoBuilderContribution") return new Proxy(target.terraqoBuilderContribution, { get(delegate, field) {
+      if (field === "create") return async () => {
+        const a = await tx.terraqoBuilderAccount.findUniqueOrThrow({ where: { userId: user.id } });
+        assert.equal(a.pendingPoints, 1); assert.equal(a.trustScore, 1);
+        throw new Error("CONTROLLED_BASE_CONTRIBUTION_FAULT");
+      };
+      return Reflect.get(delegate, field);
+    } });
+    return Reflect.get(target, key);
+  } }), operation.id));
+  assert.equal(await tx.terraqoBuilderAccount.count({ where: { userId: user.id } }), 0);
+  assert.equal(await applyNativeWorklogBaseInTransaction(tx, operation.id), "allocated");
+  assert.equal(await applyNativeWorklogBaseInTransaction(tx, operation.id), "historical");
+  const baseAccount = await tx.terraqoBuilderAccount.findUniqueOrThrow({ where: { userId: user.id } });
+  assert.equal(baseAccount.pendingPoints, 1); assert.equal(baseAccount.trustScore, 1);
+  assert.equal(baseAccount.availablePoints, 0); assert.equal(baseAccount.lifetimeEarned, 0);
+  assert.equal(baseAccount.contributionScore, 0);
+  assert.equal(await tx.terraqoBuilderLedger.count({ where: { accountId: baseAccount.id } }), 0);
+  await tx.terraqoBuilderContribution.create({ data: { userId: user.id, type: "BUG_REPORT", title: "Own retained future",
+    detail: "Own temporary accounting floor", approvedPoints: 2, availableAt: new Date(Date.now() + 86400000) } });
+  await tx.terraqoBuilderAccount.update({ where: { id: baseAccount.id }, data: { pendingPoints: 3, trustScore: 4 } });
+  assert.equal(await applyNativeWorklogBaseInTransaction(tx, operation.id), "historical");
+  const retainedAccount = await tx.terraqoBuilderAccount.findUniqueOrThrow({ where: { id: baseAccount.id } });
+  assert.equal(retainedAccount.pendingPoints, 3); assert.equal(retainedAccount.trustScore, 4);
+  await rejected(async () => {
+    await tx.terraqoBuilderAccount.update({ where: { id: baseAccount.id }, data: { pendingPoints: 2 } });
+    return applyNativeWorklogBaseInTransaction(tx, operation.id);
+  }, 503);
+  assert.equal((await tx.terraqoNativeWorklogAccounting.findUniqueOrThrow({ where: { operationId: operation.id } })).state, "PENDING");
+  assert.deepEqual(await tx.terraqoNativeWorklogDecision.findUniqueOrThrow({ where: { operationId: operation.id } }), savedDecision);
+  await rejected(async () => {
+    await tx.terraqoWorklogEntry.update({ where: { id: created.receipt!.worklogId }, data: { trustScoreAwarded: 0 } });
+    return applyNativeWorklogBaseInTransaction(tx, operation.id);
+  }, 503);
+  await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT native_base_own_phase");
+  await tx.$executeRawUnsafe("RELEASE SAVEPOINT native_base_own_phase");
   await tx.$executeRawUnsafe("SAVEPOINT native_first_own_award");
   // Fail after the account increment, before ledger creation: outer transaction must roll back.
   await rejected(() => applyNativeFirstWorklogInTransaction(new Proxy(tx, { get(target, property) {
