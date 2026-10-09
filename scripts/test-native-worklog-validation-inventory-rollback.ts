@@ -8,6 +8,7 @@ import { inspectNativeLegacyWorklogInventoryInTransaction } from "../lib/server/
 import { applyHistoricalNativeAccountingInTransaction } from "../lib/server/native-worklog-historical-accounting";
 import { quarantineNativeAccountingReviewInTransaction } from "../lib/server/native-worklog-accounting-review";
 import { NativeWorklogOperationError } from "../lib/server/native-worklog-http";
+import { chooseNativeFirstWorklogInTransaction, saveNativeFirstWorklogDecision } from "../lib/server/native-worklog-first-decision";
 import { NativeWorklogBudget } from "../lib/server/native-worklog-budget";
 
 /** Only the pinned checker's outer rollback; no standalone or existing-user mode. */
@@ -46,12 +47,15 @@ export async function nativeValidationInventoryRollback(tx: Prisma.TransactionCl
     const decision = decideNativeDeclaredWorklog(parsed, "2026-09-01T12:00:00.000Z", {
       priorDuplicates: 0, rewardedInDay: 0, trustedInWindow: 0 });
     const stamp = new Date(decision.createdAt), contentKey = nativeWorklogContentKey(parsed.payload);
+    const firstChoice = await chooseNativeFirstWorklogInTransaction(tx, validator.id, operationId, stamp);
+    assert.equal(firstChoice.disposition, "RESERVED");
     const nativeEntry = await tx.terraqoWorklogEntry.create({ data: { authorId: validator.id,
       professionalProfileId: profiles[0].id, workspaceId, title: parsed.payload.title, summary: parsed.payload.summary,
       visibility: "PRIVATE", contentFingerprint: contentKey, createdAt: stamp, updatedAt: stamp } });
     await tx.terraqoNativeWorklogOperation.create({ data: { id: operationId, actorId: validator.id, workspaceId,
       professionalProfileId: profiles[0].id, operationKey: parsed.payload.operationKey, fingerprint: decision.fingerprint,
       targetWorklogId: nativeEntry.id, worklogId: nativeEntry.id, createdAt: stamp, resultVersion: stamp } });
+    await saveNativeFirstWorklogDecision(tx, operationId, firstChoice);
     await tx.terraqoNativeWorklogAccounting.create({ data: { operationId } });
     await tx.terraqoNativeWorklogDecision.create({ data: { operationId, contentKey,
       policyVersion: decision.policyVersion, fingerprint: decision.fingerprint, priorDuplicates: 0, rewardedInDay: 0,
@@ -66,9 +70,6 @@ export async function nativeValidationInventoryRollback(tx: Prisma.TransactionCl
       policyVersion: "native-creation-authority-v1", grantHash: "c".repeat(64), tokenIssuedAt: stamp,
       tokenExpiresAt: new Date("2026-09-02T12:00:00.000Z"), grantExpiresAt: new Date("2026-09-02T12:00:00.000Z"),
       role: "PROFESSIONAL", modules: ["LIVE_CV", "PROFESSIONAL_NETWORK"], paidThrough: null } });
-    await tx.terraqoBuilderContribution.create({ data: { userId: validator.id, type: "FIRST_WORKLOG",
-      sourceKey: `first-worklog:${validator.id}`, title: "ICC own manual FIRST reserve", detail: `native-first-worklog-v1:${operationId}`,
-      requestedPoints: 25, approvedPoints: 0, status: "IN_REVIEW", createdAt: stamp } });
     await tx.terraqoBuilderContribution.create({ data: { userId: validator.id, type: "BUG_REPORT",
       title: "ICC own retained future", detail: "Own future floor", approvedPoints: 2,
       availableAt: new Date("2099-01-01T00:00:00.000Z") } });
@@ -82,6 +83,7 @@ export async function nativeValidationInventoryRollback(tx: Prisma.TransactionCl
         'contributions', (SELECT jsonb_agg(to_jsonb(r) ORDER BY r.id) FROM icc."TerraqoBuilderContribution" r WHERE r."userId" IN (${Prisma.join(own)})),
         'accounts', (SELECT jsonb_agg(to_jsonb(r) ORDER BY r.id) FROM icc."TerraqoBuilderAccount" r WHERE r."userId" IN (${Prisma.join(own)})),
         'receipt', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogOperation" r WHERE r.id=${operationId}),
+        'firstDecision', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogFirstDecision" r WHERE r."operationId"=${operationId}),
         'decision', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogDecision" r WHERE r."operationId"=${operationId}),
         'authority', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogAuthority" r WHERE r."operationId"=${operationId}),
         'outbox', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogAccounting" r WHERE r."operationId"=${operationId}),
@@ -188,6 +190,7 @@ export async function nativeValidationInventoryRollback(tx: Prisma.TransactionCl
     assert.deepEqual(await tx.terraqoBuilderLedger.findUniqueOrThrow({ where: { id: credit.id } }), credit);
     assert.equal(await tx.terraqoBuilderLedger.count({ where: { contributionId: contribution.id } }), 1);
     await tx.terraqoBuilderLedger.deleteMany({ where: { accountId: account.id } });
+    await tx.terraqoNativeWorklogFirstDecision.delete({ where: { operationId } });
     await tx.terraqoBuilderContribution.deleteMany({ where: { userId: validator.id } });
     await tx.terraqoBuilderAccount.delete({ where: { id: account.id } });
     await tx.terraqoWorklogValidation.delete({ where: { id: validation.id } });
@@ -197,6 +200,7 @@ export async function nativeValidationInventoryRollback(tx: Prisma.TransactionCl
     await tx.terraqoNativeWorklogOperation.delete({ where: { id: operationId } });
     await tx.user.delete({ where: { id: validator.id } }); await tx.user.delete({ where: { id: author.id } });
     assert.equal(await tx.terraqoNativeWorklogOperation.count({ where: { id: operationId } }), 0);
+    assert.equal(await tx.terraqoNativeWorklogFirstDecision.count({ where: { operationId } }), 0);
     assert.equal(await tx.user.count({ where: { id: { in: own } } }), 0);
     assert.equal(await tx.terraqoProfessionalProfile.count({ where: { userId: { in: own } } }), 0);
     assert.equal(await tx.terraqoWorklogEntry.count({ where: { authorId: { in: own } } }), 0);
