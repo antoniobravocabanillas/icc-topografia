@@ -11,7 +11,7 @@ import { NativeWorklogBudget } from "../lib/server/native-worklog-budget";
 import { applyHistoricalNativeAccountingInTransaction } from "../lib/server/native-worklog-historical-accounting";
 
 /** Only inside the pinned checker's outer DDL rollback, never standalone. */
-export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClient, workspaceId: string, historical = false, reviewOnly = false) {
+export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClient, workspaceId: string, historical = false, reviewOnly = false, legacyFirstOnly = false) {
   for (const tq of [1]) {
     const marker = randomUUID(), id = createHash("sha256").update(marker).digest("hex");
     const user = await tx.user.create({ data: { name: `ICC accounting-phases rollback ${marker}`,
@@ -77,6 +77,57 @@ export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClien
     };
     const run = () => runWith(tx, [old.id]);
     const reject = (e: unknown) => e instanceof NativeWorklogOperationError && e.status === 503;
+    if (legacyFirstOnly) {
+      const reviewedAt = new Date("2026-08-01T12:00:01.000Z");
+      await tx.terraqoBuilderContribution.update({ where: { id: first.id }, data: {
+        detail: "Own credited legacy FIRST", status: "VALIDATED", approvedPoints: 25,
+        createdAt: oldStamp, reviewedAt, releasedAt: null } });
+      await tx.terraqoBuilderAccount.update({ where: { id: account.id }, data: {
+        availablePoints: 25, lifetimeEarned: 25, contributionScore: 25 } });
+      const firstLedger = await tx.terraqoBuilderLedger.create({ data: {
+        accountId: account.id, contributionId: first.id, type: "CREDIT", pointsDelta: 25, scoreDelta: 25,
+        balanceAfter: 25, description: "Own manual credited legacy FIRST",
+        idempotencyKey: `contribution:${first.id}:25`, createdAt: new Date("2026-08-01T12:00:00.999Z") } });
+      const firstBefore = await tx.terraqoBuilderContribution.findUniqueOrThrow({ where: { id: first.id } });
+      const states = async () => ({
+        account: await tx.terraqoBuilderAccount.findUniqueOrThrow({ where: { id: account.id } }),
+        contributions: await tx.terraqoBuilderContribution.findMany({ where: { userId: user.id }, orderBy: { id: "asc" } }),
+        entries: await tx.terraqoWorklogEntry.findMany({ where: { authorId: user.id }, orderBy: { id: "asc" } }),
+        ledger: await tx.terraqoBuilderLedger.findMany({ where: { accountId: account.id }, orderBy: { id: "asc" } }),
+        outbox: await tx.terraqoNativeWorklogAccounting.findUniqueOrThrow({ where: { operationId: id } }),
+      });
+      for (const prepare of [
+        () => tx.terraqoBuilderLedger.delete({ where: { id: firstLedger.id } }),
+        () => tx.terraqoBuilderLedger.update({ where: { id: firstLedger.id }, data: { type: "REVERSAL", pointsDelta: -25, scoreDelta: -25 } }),
+        () => tx.terraqoBuilderContribution.update({ where: { id: first.id }, data: { status: "IN_REVIEW" } }),
+      ]) {
+        await tx.$executeRawUnsafe("SAVEPOINT own_legacy_first_review");
+        try {
+          await prepare(); const before = await states();
+          const result = await applyHistoricalNativeAccountingInTransaction(tx, id, new NativeWorklogBudget(), []);
+          assert.equal(result.outcome, "review-required");
+          if (result.outcome !== "review-required") assert.fail("Review required before credits");
+          assert.equal(result.legacyInspection.unsupported, 1);
+          assert.equal(result.completionAuthorized, false); assert.deepEqual(await states(), before);
+        } finally {
+          await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT own_legacy_first_review");
+          await tx.$executeRawUnsafe("RELEASE SAVEPOINT own_legacy_first_review");
+        }
+      }
+      assert.deepEqual(await run(), { outcome: "pending", base: "allocated", first: "historical", release: "released", legacy: ["released"] });
+      const saved = await states();
+      assert.deepEqual(await run(), { outcome: "pending", base: "released-history", first: "historical", release: "historical", legacy: ["historical"] });
+      assert.deepEqual(await states(), saved);
+      assert.deepEqual(await tx.terraqoBuilderContribution.findUniqueOrThrow({ where: { id: first.id } }), firstBefore);
+      assert.deepEqual(await tx.terraqoBuilderLedger.findUniqueOrThrow({ where: { id: firstLedger.id } }), firstLedger);
+      assert.equal(saved.account.availablePoints, 29); assert.equal(saved.account.pendingPoints, 2);
+      assert.equal(saved.account.lifetimeEarned, 29); assert.equal(saved.account.contributionScore, 29);
+      assert.equal(saved.account.trustScore, 1); assert.equal(saved.ledger.length, 3);
+      assert.equal(await tx.terraqoBuilderLedger.count({ where: { contributionId: first.id } }), 1);
+      assert.deepEqual(await tx.terraqoNativeWorklogDecision.findUniqueOrThrow({ where: { operationId: id } }), snapshot);
+      assert.equal(saved.outbox.state, "PENDING");
+      await cleanup(); continue;
+    }
     if (!historical || reviewOnly) {
       await assert.rejects(() => runWith(tx, [old.id, old.id]), reject);
       await assert.rejects(() => runWith(tx, Array.from({ length: 6 }, (_, i) => `${i}`.padStart(25, "a"))), reject);

@@ -83,7 +83,7 @@ async function fixtureConstraints(tx: Prisma.TransactionClient, workspaceId: str
 }
 
 async function main() {
-  if (["--worker-eligibility", "--worker-phases", "--worker-preflight"].includes(process.argv[2])) {
+  if (["--worker-eligibility", "--worker-phases", "--worker-preflight", "--worker-legacy-first"].includes(process.argv[2])) {
     assert.equal(process.argv.length, 3);
     assert.equal(process.env.TERRAQO_MUTATING_TESTS, "icc-topografia:20616116313");
     assert.equal(process.env.TEST_PORTAL_URL, "https://api.terraqoglobal.com");
@@ -104,9 +104,9 @@ async function main() {
         }
         combined = await readNativeWorklogCombinedCatalog(tx);
         assert.equal((combined as { state: string }).state, "exact");
-        if (process.argv[2] === "--worker-phases" || process.argv[2] === "--worker-preflight") {
+        if (["--worker-phases", "--worker-preflight", "--worker-legacy-first"].includes(process.argv[2])) {
           const { nativeAccountingPhasesRollback } = await import("./test-native-worklog-accounting-phases-rollback");
-          await nativeAccountingPhasesRollback(tx, workspace.id, true, process.argv[2] === "--worker-preflight");
+          await nativeAccountingPhasesRollback(tx, workspace.id, true, process.argv[2] === "--worker-preflight", process.argv[2] === "--worker-legacy-first");
         } else await nativeWorkerEligibilityRollback(tx, workspace.id);
         assert.deepEqual(await readNativeWorklogCombinedCatalog(tx), combined);
         throw rollback;
@@ -114,7 +114,7 @@ async function main() {
     } catch (error) { if (error !== rollback) throw error; }
     assert.deepEqual(await readNativeWorklogCombinedCatalog(prisma), { state: "absent" });
     assert.equal(await ledgerFingerprint(prisma), ledger);
-    console.log(JSON.stringify({ mode: process.argv[2] === "--worker-preflight" ? "worker-preflight-rollback" : process.argv[2] === "--worker-phases" ? "worker-phases-rollback" : "worker-eligibility-rollback", combined, ledgerFingerprint: ledger, applied: false }));
+    console.log(JSON.stringify({ mode: process.argv[2] === "--worker-legacy-first" ? "worker-legacy-first-rollback" : process.argv[2] === "--worker-preflight" ? "worker-preflight-rollback" : process.argv[2] === "--worker-phases" ? "worker-phases-rollback" : "worker-eligibility-rollback", combined, ledgerFingerprint: ledger, applied: false }));
     return;
   }
   if (process.argv[2] === "--combined") {

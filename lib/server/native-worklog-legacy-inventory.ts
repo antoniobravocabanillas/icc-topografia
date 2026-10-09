@@ -1,6 +1,7 @@
 import "server-only";
 import { Prisma } from "@prisma/client";
 import { NativeWorklogOperationError } from "./native-worklog-http";
+import { inspectLegacyFirstWorklogHistory } from "./native-worklog-legacy-first-policy";
 
 function fail(): never { throw new NativeWorklogOperationError(503); }
 const integer = (n: number) => Number.isSafeInteger(n) && n >= 0 && n <= 2147483647;
@@ -33,7 +34,8 @@ export async function inspectNativeLegacyWorklogInventoryInTransaction(tx: Prism
     WHERE "userId"=${receipt.actorId} AND id IN (${Prisma.join(ids.map(row => row.id))}) ORDER BY id FOR SHARE`);
   const contributions = ids.length ? await tx.terraqoBuilderContribution.findMany({ where: { ...where, id: { in: ids.map(row => row.id) } },
     take: 201, orderBy: { id: "asc" }, select: { id: true, sourceKey: true, type: true, status: true,
-      createdAt: true, availableAt: true, releasedAt: true, approvedPoints: true, requestedPoints: true, detail: true } }) : [];
+      userId: true, reviewedAt: true, createdAt: true, availableAt: true, releasedAt: true,
+      approvedPoints: true, requestedPoints: true, detail: true } }) : [];
   if (contributions.length !== ids.length) fail();
   const entryIds = contributions.flatMap(row => row.sourceKey?.startsWith("worklog:") ? [row.sourceKey.slice(8)] : []);
   if (entryIds.some(id => !/^[a-z0-9]{25}$/.test(id))) fail();
@@ -49,7 +51,7 @@ export async function inspectNativeLegacyWorklogInventoryInTransaction(tx: Prism
   // One global ledger cap, not 200 nested rows per contribution. Large history requires investigation.
   const ledger = ids.length ? await tx.terraqoBuilderLedger.findMany({ where: { contributionId: { in: ids.map(row => row.id) } },
     take: 201, orderBy: { id: "asc" }, select: { contributionId: true, accountId: true, redemptionId: true,
-      type: true, pointsDelta: true, scoreDelta: true } }) : [];
+      type: true, pointsDelta: true, scoreDelta: true, idempotencyKey: true, createdAt: true } }) : [];
   if (ledger.length > 200) fail();
   const targets = new Set(native.map(row => row.targetWorklogId)), firstNative = native[0].createdAt;
   const byEntry = new Map(entries.map(row => [row.id, row]));
@@ -63,6 +65,18 @@ export async function inspectNativeLegacyWorklogInventoryInTransaction(tx: Prism
         c.requestedPoints === 25 && (c.approvedPoints === 0 || c.approvedPoints === 25) &&
         native.some(row => c.detail === `native-first-worklog-v1:${row.id}` &&
           c.createdAt.getTime() === row.createdAt.getTime())) { counts.nativeFirst++; continue; }
+    if (c.type === "FIRST_WORKLOG" && !c.detail.startsWith("native-first-worklog-v1:")) {
+      const assessment = inspectLegacyFirstWorklogHistory({ actorId: receipt.actorId,
+        firstNativeCreatedAt: firstNative.toISOString(), observedAt: now.toISOString(), accountId: account?.id ?? null,
+        contribution: { ...c, createdAt: c.createdAt.toISOString(), reviewedAt: c.reviewedAt?.toISOString() ?? null,
+          availableAt: c.availableAt?.toISOString() ?? null, releasedAt: c.releasedAt?.toISOString() ?? null },
+        ledger: ledger.filter(row => row.contributionId === c.id).map(row => ({ ...row, createdAt: row.createdAt.toISOString() })) });
+      // Observation only. FIRST revalidates its locked history and account floor;
+      // incomplete legacy awards still stop every accounting phase before writes.
+      if (assessment.disposition === "CREDIT_HISTORY_OBSERVED") counts.historical++;
+      else counts.unsupported++;
+      continue;
+    }
     if (!c.sourceKey?.startsWith("worklog:") || c.type !== "BETA_PARTICIPATION") { counts.unsupported++; continue; }
     const entryId = c.sourceKey.slice(8);
     if (targets.has(entryId)) { counts.native++; continue; }

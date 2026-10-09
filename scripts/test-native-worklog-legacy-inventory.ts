@@ -10,10 +10,11 @@ function fixture() {
   const receipt = { actorId: "own", professionalProfileId: "profile", id: operationId };
   const c = { id: contributionId, sourceKey: `worklog:${entryId}`, type: "BETA_PARTICIPATION", status: "IN_REVIEW",
     createdAt: stamp, availableAt: stamp as Date | null, releasedAt: null as Date | null, approvedPoints: 3,
-    requestedPoints: 3, detail: "Own ordinary legacy" };
+    requestedPoints: 3, detail: "Own ordinary legacy", userId: "own", reviewedAt: null as Date | null };
   const e = { id: entryId, createdAt: stamp, tqPointsAwarded: 3 };
   const account = { id: "account", rewardsFrozenUntil: null as Date | null };
-  type Row = { contributionId: string; accountId: string; redemptionId: string | null; type: string; pointsDelta: number; scoreDelta: number };
+  type Row = { contributionId: string; accountId: string; redemptionId: string | null; type: string; pointsDelta: number; scoreDelta: number;
+    idempotencyKey?: string; createdAt?: Date };
   const ledger: Row[] = [];
   let entryMissing = false, overflow = "", owner = true, nativeTarget = false;
   let locks = 0;
@@ -73,6 +74,17 @@ async function main() {
   first.c.detail = "native-first-worklog-v1:malformed"; assert.equal((await first.run()).unsupported, 1);
   first.c.detail = `native-first-worklog-v1:${first.operationId}`; first.c.createdAt = new Date("2026-08-01T00:00:00.000Z");
   assert.equal((await first.run()).unsupported, 1);
+  const oldFirst = fixture(); oldFirst.c.type = "FIRST_WORKLOG"; oldFirst.c.sourceKey = "first-worklog:own";
+  oldFirst.c.requestedPoints = 25; oldFirst.c.approvedPoints = 25; oldFirst.c.status = "VALIDATED";
+  oldFirst.c.availableAt = null; oldFirst.c.reviewedAt = new Date("2026-08-01T00:00:01.000Z");
+  oldFirst.ledger.push({ contributionId: oldFirst.contributionId, accountId: "account", redemptionId: null,
+    type: "CREDIT", pointsDelta: 25, scoreDelta: 25, idempotencyKey: `contribution:${oldFirst.contributionId}:25`,
+    createdAt: new Date("2026-08-01T00:00:00.999Z") });
+  const oldBefore = JSON.stringify({ c: oldFirst.c, ledger: oldFirst.ledger });
+  const oldReport = await oldFirst.run(); assert.equal(oldReport.historical, 1); assert.equal(oldReport.unsupported, 0);
+  assert.equal(oldReport.completionAuthorized, false); assert.equal(oldReport.nativeFirst, 0);
+  assert.equal(JSON.stringify({ c: oldFirst.c, ledger: oldFirst.ledger }), oldBefore);
+  oldFirst.ledger[0].type = "REVERSAL"; assert.equal((await oldFirst.run()).unsupported, 1);
   for (const kind of ["native", "contributions", "ledger"]) {
     const f = fixture(); f.overflow(kind);
     await assert.rejects(f.run, (e: unknown) => e instanceof NativeWorklogOperationError && e.status === 503);
