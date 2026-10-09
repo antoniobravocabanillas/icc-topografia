@@ -11,6 +11,7 @@ import { settleSelectedNativeAccountingInTransaction } from "../lib/server/nativ
 import { reconcileNativeAccountingAcknowledgementInTransaction } from "../lib/server/native-worklog-accounting-acknowledgement";
 import { NativeWorklogBudget } from "../lib/server/native-worklog-budget";
 import { NativeWorklogOperationError } from "../lib/server/native-worklog-http";
+import { executeNativeAccounting } from "../lib/server/native-worklog-accounting-executor";
 
 /** LOCAL PG18 committed fixture, synthetic historical authority. Not JWT/core
  * capture, network loss or production-provider concurrency. No productive retry.
@@ -90,6 +91,70 @@ async function main() {
         'authority',(SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogAuthority" r WHERE r."operationId"=${operationId}),
         'outbox',(SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogAccounting" r WHERE r."operationId"=${operationId})) AS snapshot`))[0].snapshot;
     const before = await state(b);
+    const executorMode = process.env.TERRAQO_LOCAL_EXECUTOR_MODE;
+    if (executorMode) {
+      assert.equal(["confirmed", "pending"].includes(executorMode), true);
+      let primaryCalls = 0;
+      const uncertainDatabase = new Proxy(a, { get(target, field) {
+        if (field !== "$transaction") return Reflect.get(target, field);
+        return async (callback: (tx: Prisma.TransactionClient) => Promise<unknown>, options: { maxWait: number; timeout: number }) => {
+          primaryCalls++;
+          if (executorMode === "pending" && primaryCalls === 1) throw new Error("CONTROLLED_BEFORE_PRIMARY_CALLBACK");
+          const value = await target.$transaction(callback, options);
+          if (executorMode === "confirmed" && primaryCalls === 1) {
+            assert.equal((await b.terraqoNativeWorklogAccounting.findUniqueOrThrow({ where: { operationId } })).state, "APPLIED");
+            throw new Error("CONTROLLED_AFTER_PRIMARY_SQL_COMMITTED");
+          }
+          return value;
+        };
+      } });
+      if (executorMode === "confirmed") {
+        let clock = 0, casSeen = false, transactions = 0;
+        const budgetFailure = new Proxy(a, { get(target, field) {
+          if (field !== "$transaction") return Reflect.get(target, field);
+          return (callback: (tx: Prisma.TransactionClient) => Promise<unknown>, options: { maxWait: number; timeout: number }) => {
+            transactions++;
+            return target.$transaction(tx => callback(new Proxy(tx, { get(port, key) {
+              if (key !== "terraqoNativeWorklogAccounting") return Reflect.get(port, key);
+              return new Proxy(port.terraqoNativeWorklogAccounting, { get(delegate, method) {
+                if (method !== "updateMany") return Reflect.get(delegate, method);
+                return async (args: Prisma.TerraqoNativeWorklogAccountingUpdateManyArgs) => {
+                  const changed = await delegate.updateMany(args);
+                  assert.equal((await delegate.findUniqueOrThrow({ where: { operationId } })).state, "APPLIED");
+                  const balance = await tx.terraqoBuilderAccount.findUniqueOrThrow({ where: { userId: user.id } });
+                  assert.equal(balance.availablePoints, 6);
+                  assert.equal(await tx.terraqoBuilderLedger.count({ where: { accountId: balance.id } }), 2);
+                  casSeen = true; clock = 48000; return changed;
+                };
+              } });
+            } })), options);
+          };
+        } });
+        assert.deepEqual(await executeNativeAccounting(budgetFailure, operationId, new NativeWorklogBudget(() => clock)),
+          { outcome: "uncertain", retryAuthorized: false, ownerAccessAuthorized: false });
+        assert.equal(casSeen, true); assert.equal(transactions, 1);
+        assert.deepEqual(await state(b), before);
+      }
+      const outcome = await executeNativeAccounting(uncertainDatabase, operationId, new NativeWorklogBudget());
+      assert.deepEqual(outcome, { outcome: executorMode === "confirmed" ? "applied-history" : "quarantined",
+        retryAuthorized: false, ownerAccessAuthorized: false });
+      assert.equal(primaryCalls, 2);
+      const current = await state(b);
+      if (executorMode === "pending") {
+        const original = structuredClone(before) as Record<string, unknown>;
+        (original.outbox as Record<string, unknown>).state = "QUARANTINED";
+        assert.deepEqual(current, original);
+      } else {
+        const account = await b.terraqoBuilderAccount.findUniqueOrThrow({ where: { userId: user.id } });
+        assert.deepEqual([account.pendingPoints, account.availablePoints, account.trustScore], [2, 6, 5]);
+        assert.equal(await b.terraqoBuilderLedger.count({ where: { accountId: account.id } }), 2);
+      }
+      assert.deepEqual(await executeNativeAccounting(a, operationId, new NativeWorklogBudget()), outcome);
+      assert.deepEqual(await state(b), current);
+      console.log(JSON.stringify({ outcome: "passed", environment: "LOCAL_PG18_ONLY", executor_mode: executorMode,
+        primary_rejected_reconciled: true, phases_replayed: 0, attempts_charged: 0,
+        actual_transaction_rollback: executorMode === "confirmed", network_cut_proved: false }));
+    } else {
     let clock = 0, observedCommittedCandidate = false;
     await assert.rejects(() => a.$transaction(async tx => {
       const fault = new Proxy(tx, { get(target, field) {
@@ -146,6 +211,7 @@ async function main() {
       actual_transaction_rollback: true, native_release_ledgers: 1, legacy_release_ledgers: 1,
       applied_once: true, first_ineligible_no_credit: true, pending_retained: 2,
       confirmed_ack_exception: "CONTROLLED_CALLER_ONLY", network_cut_proved: false, cross_owner_proved: false }));
+    }
   } finally {
     try {
       if (userId) {

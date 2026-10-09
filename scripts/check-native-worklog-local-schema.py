@@ -53,7 +53,7 @@ def canonical(value):
 
 
 def main():
-    if sys.argv[1:] not in ([], ["--concurrency"], ["--settlement"], ["--authority"]):
+    if sys.argv[1:] not in ([], ["--concurrency"], ["--settlement"], ["--authority"], ["--executor-confirmed"], ["--executor-pending"]):
         raise RuntimeError("No external database or runner arguments accepted")
     spec = importlib.util.spec_from_file_location("schema_tools", ROOT / "scripts/rehearse-database-migration.py")
     helper = importlib.util.module_from_spec(spec)
@@ -153,14 +153,18 @@ def main():
         other_pid = int(sql(local, "SELECT pg_backend_pid();"))
         if pid == other_pid:
             raise RuntimeError("Independent connections not established")
-        if sys.argv[1:] in (["--concurrency"], ["--settlement"], ["--authority"]):
+        if sys.argv[1:]:
             marker = secrets.token_hex(16)
             sql(local, f"CREATE TABLE public.terraqo_owned_schema_test(marker text NOT NULL); INSERT INTO public.terraqo_owned_schema_test VALUES ('{marker}');")
             node_env = dict(base, NODE_ENV="production", TERRAQO_LOCAL_SCHEMA_MARKER=marker,
                             DATABASE_URL=f"postgresql://{role}:{password}@127.0.0.1:{port}/terraqo_own_native_schema?schema=icc&connection_limit=3")
             runner = {"--settlement": "scripts/test-native-worklog-local-settlement.ts",
                       "--authority": "scripts/test-native-worklog-local-authority.ts",
+                      "--executor-confirmed": "scripts/test-native-worklog-local-settlement.ts",
+                      "--executor-pending": "scripts/test-native-worklog-local-settlement.ts",
                       "--concurrency": "scripts/test-native-worklog-local-concurrency.ts"}[sys.argv[1]]
+            if sys.argv[1].startswith("--executor-"):
+                node_env["TERRAQO_LOCAL_EXECUTOR_MODE"] = sys.argv[1].removeprefix("--executor-")
             checked = subprocess.run([shutil.which("node"), "--conditions=react-server", "--import", "tsx",
                                       runner], cwd=ROOT, env=node_env,
                                      capture_output=True, text=True, encoding="utf-8", timeout=90)
@@ -176,7 +180,8 @@ def main():
                            "first_ineligible_no_credit", "pending_retained", "confirmed_ack_exception", "network_cut_proved",
                            "owner_key_isolation", "grant_revoked_before_create", "role_demoted_before_create",
                            "revoke_after_commit_denies_read", "demote_after_commit_denies_read",
-                           "new_grants_from_read", "accounting_credits", "validation_cross_owner_proved"}
+                           "new_grants_from_read", "accounting_credits", "validation_cross_owner_proved",
+                           "executor_mode", "primary_rejected_reconciled", "phases_replayed", "attempts_charged"}
                 if isinstance(report, dict) and set(report) <= allowed:
                     print(json.dumps(report), flush=True)
             if checked.returncode:
@@ -186,7 +191,8 @@ def main():
                           "source_native_objects": 0, "local_native_objects": native,
                           "independent_connections": 2, "password_enforced": True,
                           "schema_sha256": hashlib.sha256(json.dumps(before, sort_keys=True).encode()).hexdigest(),
-                          "concurrent_worklog_flows_proved": bool(sys.argv[1:]),
+                          "concurrent_worklog_flows_proved": sys.argv[1:] in (["--concurrency"], ["--settlement"], ["--authority"]),
+                          "executor_flow_proved": sys.argv[1:] in (["--executor-confirmed"], ["--executor-pending"]),
                           "production_native_applied": False}), flush=True)
     finally:
         for process in (source, target):
