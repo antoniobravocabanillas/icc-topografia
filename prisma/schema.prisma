@@ -901,9 +901,11 @@ model TerraqoBuilderContribution {
   reviewedAt      DateTime?
   implementedAt   DateTime?
   ledgerEntries   TerraqoBuilderLedger[]
+  nativeFirstDecisions TerraqoNativeWorklogFirstDecision[]
   createdAt       DateTime                         @default(now())
   updatedAt       DateTime                         @updatedAt
 
+  @@unique([id, userId], map: "NativeWorklogFirst_contribution_actor_key")
   @@index([userId, status, createdAt])
   @@index([status, createdAt])
   @@schema("icc")
@@ -3615,6 +3617,7 @@ model TerraqoNativeWorklogOperation {
   decisions              TerraqoNativeWorklogDecision[]
   // Composite FK with Authority.operationId PK retains at most one historical proof.
   authorities            TerraqoNativeWorklogAuthority[]
+  firstDecisions         TerraqoNativeWorklogFirstDecision[]
 
   @@unique([id, createdAt, fingerprint], map: "NativeWorklogOperation_decision_binding_key")
   @@unique([id, actorId, workspaceId, professionalProfileId, createdAt, fingerprint], map: "NativeWorklogOperation_authority_binding_key")
@@ -3679,6 +3682,24 @@ model TerraqoNativeWorklogAuthority {
   role                  String
   modules               String[]
   operation             TerraqoNativeWorklogOperation @relation(fields: [operationId, actorId, workspaceId, professionalProfileId, createdAt, fingerprint], references: [id, actorId, workspaceId, professionalProfileId, createdAt, fingerprint], onDelete: Restrict, onUpdate: Restrict, map: "NativeWorklogAuthority_receipt_fk")
+
+  @@schema("icc")
+}
+
+model TerraqoNativeWorklogFirstDecision {
+  operationId           String @id
+  actorId               String
+  workspaceId           String
+  professionalProfileId String
+  createdAt             DateTime @db.Timestamp(3)
+  fingerprint           String
+  policyVersion         String
+  disposition           String
+  contributionId        String?
+  priorReceipts         Int
+  priorEntries          Int
+  operation TerraqoNativeWorklogOperation @relation(fields: [operationId, actorId, workspaceId, professionalProfileId, createdAt, fingerprint], references: [id, actorId, workspaceId, professionalProfileId, createdAt, fingerprint], onDelete: Restrict, onUpdate: Restrict, map: "NativeWorklogFirstDecision_receipt_fk")
+  contribution TerraqoBuilderContribution? @relation(fields: [contributionId, actorId], references: [id, userId], onDelete: Restrict, onUpdate: Restrict, map: "NativeWorklogFirstDecision_contribution_fk")
 
   @@schema("icc")
 }

@@ -83,6 +83,53 @@ async function fixtureConstraints(tx: Prisma.TransactionClient, workspaceId: str
 }
 
 async function main() {
+  if (process.argv[2] === "--first-decision") {
+    assert.equal(process.argv.length, 3);
+    assert.equal(process.env.TERRAQO_MUTATING_TESTS, "icc-topografia:20616116313");
+    assert.equal(process.env.TEST_PORTAL_URL, "https://api.terraqoglobal.com");
+    const workspace = await prisma.terraqoWorkspace.findFirstOrThrow({ where: { slug: "icc-topografia", active: true,
+      companies: { some: { document: "20616116313", deletedAt: null } } }, select: { id: true } });
+    const { readNativeWorklogCombinedCatalog } = await import("./native-worklog-combined-catalog");
+    const ledger = await ledgerFingerprint(prisma);
+    let firstSchema: unknown;
+    try {
+      await prisma.$transaction(async tx => {
+        await tx.$executeRaw`SET LOCAL lock_timeout = '5s'`;
+        assert.deepEqual(await readNativeWorklogCombinedCatalog(tx), { state: "absent" });
+        const [initial] = await tx.$queryRaw<{ n: bigint }[]>`SELECT count(*) AS n FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+          WHERE n.nspname='icc' AND (c.relname='TerraqoNativeWorklogFirstDecision' OR c.relname LIKE 'NativeWorklogFirst%' OR c.relname='TerraqoNativeWorklogFirstDecision_pkey')`;
+        assert.equal(Number(initial.n), 0);
+        for (const name of ["20261008051000_native_worklog_operations", "20261008161000_native_worklog_decision",
+          "20261008162500_native_worklog_content_key", "20261008232500_native_worklog_authority_snapshot",
+          "20261009035000_native_worklog_first_decision"]) {
+          const ddl = await readFile(new URL(`../prisma/migrations/${name}/migration.sql`, import.meta.url), "utf8");
+          for (const statement of ddl.split(";").map(value => value.trim()).filter(Boolean)) await tx.$executeRawUnsafe(statement);
+        }
+        assert.equal((await readNativeWorklogCombinedCatalog(tx)).state, "exact");
+        const columns = await tx.$queryRaw<Record<string, unknown>[]>`SELECT table_name,column_name,ordinal_position,data_type,
+          udt_name,is_nullable,column_default FROM information_schema.columns WHERE table_schema='icc' AND table_name='TerraqoNativeWorklogFirstDecision' ORDER BY ordinal_position`;
+        const constraints = await tx.$queryRaw<Record<string, unknown>[]>`SELECT c.contype,pg_get_constraintdef(c.oid) AS definition
+          FROM pg_constraint c JOIN pg_class cl ON cl.oid=c.conrelid JOIN pg_namespace n ON n.oid=cl.relnamespace
+          WHERE n.nspname='icc' AND cl.relname='TerraqoNativeWorklogFirstDecision' ORDER BY c.conname`;
+        const indexes = await tx.$queryRaw<Record<string, unknown>[]>`SELECT tablename,indexname,indexdef FROM pg_indexes
+          WHERE schemaname='icc' AND (tablename='TerraqoNativeWorklogFirstDecision' OR indexname='NativeWorklogFirst_contribution_actor_key') ORDER BY tablename,indexname`;
+        firstSchema = { fingerprint: hash({ columns, constraints, indexes }), constraints: constraints.length, indexes: indexes.length };
+        assert.equal(constraints.length, 6); assert.equal(indexes.length, 2);
+        assert.deepEqual(firstSchema, { fingerprint: "ae4b4d571842674bf07bd1b6391aaa6c39e6f5d37b8d9bea088ae8a29271cd8f", constraints: 6, indexes: 2 });
+        const { nativeFirstDecisionRollback } = await import("./test-native-worklog-first-decision-rollback");
+        await nativeFirstDecisionRollback(tx, workspace.id);
+        assert.equal(await ledgerFingerprint(tx), ledger);
+        throw rollback;
+      }, { maxWait: 5000, timeout: 90000 });
+    } catch (error) { if (error !== rollback) throw error; }
+    assert.deepEqual(await readNativeWorklogCombinedCatalog(prisma), { state: "absent" });
+    const [remaining] = await prisma.$queryRaw<{ n: bigint }[]>`SELECT count(*) AS n FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+      WHERE n.nspname='icc' AND (c.relname='TerraqoNativeWorklogFirstDecision' OR c.relname LIKE 'NativeWorklogFirst%' OR c.relname='TerraqoNativeWorklogFirstDecision_pkey')`;
+    assert.equal(Number(remaining.n), 0);
+    assert.equal(await ledgerFingerprint(prisma), ledger);
+    console.log(JSON.stringify({ mode: "first-decision-rollback", firstSchema, ledgerFingerprint: ledger, applied: false }));
+    return;
+  }
   if (["--worker-eligibility", "--worker-phases", "--worker-preflight", "--worker-selection", "--worker-backlog", "--worker-settlement", "--worker-deferred", "--worker-ack", "--worker-legacy-first", "--legacy-validation-5", "--legacy-validation-20", "--validation-review-5", "--validation-preflight-5", "--validation-preflight-20", "--validation-phases-5", "--validation-phases-20"].includes(process.argv[2])) {
     assert.equal(process.argv.length, 3);
     assert.equal(process.env.TERRAQO_MUTATING_TESTS, "icc-topografia:20616116313");
@@ -220,7 +267,7 @@ main().catch((error: unknown) => {
   // Only bounded categories and source line numbers; never error messages, SQL or connection data.
   const category = error instanceof assert.AssertionError ? "assertion" :
     error instanceof Prisma.PrismaClientKnownRequestError && /^[A-Z][0-9]{4}$/.test(error.code) ? error.code : "unknown";
-  const location = error instanceof Error ? error.stack?.match(/(?:test-native-worklog-validation-inventory-rollback|test-native-worklog-legacy-validation-rollback|test-native-worklog-worker-eligibility-rollback|test-native-worklog-creation-authority-rollback|test-native-worklog-authority-schema|test-native-worklog-authorized-accounting-rollback|test-native-worklog-accounting-retry-rollback|test-native-worklog-combined-catalog|test-native-worklog-legacy-inventory-rollback|test-native-worklog-accounting-phase-edges-rollback|test-native-worklog-accounting-phases-rollback|test-native-worklog-first-account-rollback|test-native-worklog-base-edges-rollback|test-native-worklog-base-release-rollback|test-native-worklog-core-rollback|test-native-worklog-decision-schema|test-native-worklog-legacy-release-rollback|test-native-worklog-owner-fence|check-native-worklog-schema)\.ts:[0-9]+:[0-9]+/)?.[0] : undefined;
+  const location = error instanceof Error ? error.stack?.match(/(?:test-native-worklog-first-decision-rollback|test-native-worklog-validation-inventory-rollback|test-native-worklog-legacy-validation-rollback|test-native-worklog-worker-eligibility-rollback|test-native-worklog-creation-authority-rollback|test-native-worklog-authority-schema|test-native-worklog-authorized-accounting-rollback|test-native-worklog-accounting-retry-rollback|test-native-worklog-combined-catalog|test-native-worklog-legacy-inventory-rollback|test-native-worklog-accounting-phase-edges-rollback|test-native-worklog-accounting-phases-rollback|test-native-worklog-first-account-rollback|test-native-worklog-base-edges-rollback|test-native-worklog-base-release-rollback|test-native-worklog-core-rollback|test-native-worklog-decision-schema|test-native-worklog-legacy-release-rollback|test-native-worklog-owner-fence|check-native-worklog-schema)\.ts:[0-9]+:[0-9]+/)?.[0] : undefined;
   const code = error instanceof Prisma.PrismaClientKnownRequestError ? error.meta?.code : undefined;
   const sqlState = typeof code === "string" && /^[0-9A-Z]{5}$/.test(code) ? code : undefined;
   console.error(JSON.stringify({ outcome: "failed", category, location, sqlState })); process.exitCode = 1;
