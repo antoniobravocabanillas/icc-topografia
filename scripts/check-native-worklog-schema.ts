@@ -180,7 +180,7 @@ async function main() {
     console.log(JSON.stringify({ mode: process.argv[2].startsWith("--validation-") || ["--legacy-validation-5", "--legacy-validation-20", "--worker-settlement", "--worker-deferred", "--worker-ack"].includes(process.argv[2]) ? `${process.argv[2].slice(2)}-rollback` : process.argv[2] === "--worker-backlog" ? "worker-backlog-rollback" : process.argv[2] === "--worker-selection" ? "worker-selection-rollback" : process.argv[2] === "--worker-legacy-first" ? "worker-legacy-first-rollback" : process.argv[2] === "--worker-preflight" ? "worker-preflight-rollback" : process.argv[2] === "--worker-phases" ? "worker-phases-rollback" : "worker-eligibility-rollback", combined, ledgerFingerprint: ledger, applied: false }));
     return;
   }
-  if (process.argv[2] === "--combined") {
+  if (["--combined", "--complete"].includes(process.argv[2])) {
     assert.equal(process.argv.length, 3);
     assert.equal(process.env.TERRAQO_MUTATING_TESTS, "icc-topografia:20616116313");
     assert.equal(process.env.TEST_PORTAL_URL, "https://api.terraqoglobal.com");
@@ -189,15 +189,19 @@ async function main() {
     let combined: unknown;
     const ledger = await ledgerFingerprint(prisma);
     const { nativeCombinedCatalogRollback } = await import("./test-native-worklog-combined-catalog");
+    const { nativeCompleteCatalogRollback } = await import("./test-native-worklog-complete-catalog");
+    const { readNativeWorklogCompleteCatalog } = await import("./native-worklog-complete-catalog");
+    const initialComplete = process.argv[2] === "--complete" ? await readNativeWorklogCompleteCatalog(prisma) : null;
     try {
       await prisma.$transaction(async tx => {
         await tx.$executeRaw`SET LOCAL lock_timeout = '5s'`;
-        combined = await nativeCombinedCatalogRollback(tx);
+        combined = process.argv[2] === "--complete" ? await nativeCompleteCatalogRollback(tx) : await nativeCombinedCatalogRollback(tx);
         throw rollback;
       }, { maxWait: 5000, timeout: 60000 });
     } catch (error) { if (error !== rollback) throw error; }
     assert.equal(await ledgerFingerprint(prisma), ledger);
-    console.log(JSON.stringify({ mode: "combined-rollback", combined, ledgerFingerprint: ledger, applied: false }));
+    if (initialComplete) assert.deepEqual(await readNativeWorklogCompleteCatalog(prisma), initialComplete);
+    console.log(JSON.stringify({ mode: `${process.argv[2].slice(2)}-rollback`, combined, ledgerFingerprint: ledger, applied: false }));
     return;
   }
   const core = process.argv[2] === "--core";
