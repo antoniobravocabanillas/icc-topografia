@@ -11,7 +11,7 @@ const integer = (n: number) => Number.isSafeInteger(n) && n >= 0 && n <= 2147483
  * payment, worker authorization, or completion decision. Counts never expose identities.
  * Even an empty inventory cannot authorize APPLIED: account floors/auth/FIRST remain separate.
  */
-export async function inspectNativeLegacyWorklogInventoryInTransaction(tx: Prisma.TransactionClient, operationId: string) {
+async function scanNativeLegacyWorklogInventoryInTransaction(tx: Prisma.TransactionClient, operationId: string) {
   if (!/^[a-f0-9]{64}$/.test(operationId)) fail();
   const identity = await tx.terraqoNativeWorklogOperation.findUnique({ where: { id: operationId } });
   if (!identity) fail();
@@ -89,6 +89,7 @@ export async function inspectNativeLegacyWorklogInventoryInTransaction(tx: Prism
   const now = new Date();
   const counts = { inspected: contributions.length, native: 0, nativeFirst: 0, unsupported: 0, missingReference: 0,
     ambiguous: 0, historical: 0, rejected: 0, unfunded: 0, frozen: 0, future: 0, due: 0 };
+  const dueIds: string[] = [];
   for (const c of contributions) {
     if (c.sourceKey?.startsWith("worklog-validation:") && c.type === "EXPERIENCE_VALIDATION") {
       const v = byValidation.get(c.sourceKey.slice(19));
@@ -142,7 +143,24 @@ export async function inspectNativeLegacyWorklogInventoryInTransaction(tx: Prism
     if (!account) { counts.ambiguous++; continue; }
     if (account.rewardsFrozenUntil && account.rewardsFrozenUntil > now) { counts.frozen++; continue; }
     if (c.availableAt > now) { counts.future++; continue; }
-    counts.due++;
+    counts.due++; dueIds.push(c.id);
   }
-  return Object.freeze({ completionAuthorized: false as const, outboxState: outbox.state, ...counts });
+  return { inspection: Object.freeze({ completionAuthorized: false as const, outboxState: outbox.state, ...counts }),
+    dueIds };
+}
+
+export async function inspectNativeLegacyWorklogInventoryInTransaction(tx: Prisma.TransactionClient, operationId: string) {
+  return (await scanNativeLegacyWorklogInventoryInTransaction(tx, operationId)).inspection;
+}
+
+/** Server-internal selection only. IDs never belong in HTTP/portal DTOs; they do
+ * not authorize credit or completion. Scan every bounded family before selecting
+ * at most five due legacy releases. Broken history yields no selection at all.
+ */
+export async function selectNativeLegacyReleasesInTransaction(tx: Prisma.TransactionClient, operationId: string) {
+  const { inspection, dueIds } = await scanNativeLegacyWorklogInventoryInTransaction(tx, operationId);
+  const blocked = inspection.outboxState !== "PENDING" || inspection.unsupported || inspection.missingReference ||
+    inspection.ambiguous || inspection.rejected || inspection.unfunded;
+  return Object.freeze({ inspection, contributionIds: Object.freeze(blocked ? [] : dueIds.slice(0, 5)),
+    completionAuthorized: false as const });
 }

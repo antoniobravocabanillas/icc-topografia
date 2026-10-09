@@ -8,10 +8,11 @@ import { applyNativeWorklogAccountingPhasesInTransaction } from "../lib/server/n
 import { releaseNativeWorklogBaseInTransaction } from "../lib/server/native-worklog-base-release";
 import { NativeWorklogOperationError } from "../lib/server/native-worklog-http";
 import { NativeWorklogBudget } from "../lib/server/native-worklog-budget";
+import { applySelectedNativeAccountingInTransaction } from "../lib/server/native-worklog-selected-accounting";
 import { applyHistoricalNativeAccountingInTransaction } from "../lib/server/native-worklog-historical-accounting";
 
 /** Only inside the pinned checker's outer DDL rollback, never standalone. */
-export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClient, workspaceId: string, historical = false, reviewOnly = false, legacyFirstOnly = false) {
+export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClient, workspaceId: string, historical = false, reviewOnly = false, legacyFirstOnly = false, selectionOnly = false) {
   for (const tq of [1]) {
     const marker = randomUUID(), id = createHash("sha256").update(marker).digest("hex");
     const user = await tx.user.create({ data: { name: `ICC accounting-phases rollback ${marker}`,
@@ -77,6 +78,57 @@ export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClien
     };
     const run = () => runWith(tx, [old.id]);
     const reject = (e: unknown) => e instanceof NativeWorklogOperationError && e.status === 503;
+    if (selectionOnly) {
+      const states = async () => {
+        const [row] = await tx.$queryRaw<unknown[]>(Prisma.sql`SELECT jsonb_build_object(
+          'account', (SELECT to_jsonb(r) FROM icc."TerraqoBuilderAccount" r WHERE r.id=${account.id}),
+          'contributions', (SELECT jsonb_agg(to_jsonb(r) ORDER BY r.id) FROM icc."TerraqoBuilderContribution" r WHERE r."userId"=${user.id}),
+          'ledger', (SELECT jsonb_agg(to_jsonb(r) ORDER BY r.id) FROM icc."TerraqoBuilderLedger" r WHERE r."accountId"=${account.id}),
+          'entries', (SELECT jsonb_agg(to_jsonb(r) ORDER BY r.id) FROM icc."TerraqoWorklogEntry" r WHERE r."authorId"=${user.id}),
+          'receipt', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogOperation" r WHERE r.id=${id}),
+          'decision', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogDecision" r WHERE r."operationId"=${id}),
+          'authority', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogAuthority" r WHERE r."operationId"=${id}),
+          'outbox', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogAccounting" r WHERE r."operationId"=${id})
+        ) AS snapshot`);
+        return row;
+      };
+      const before = await states();
+      let injected = false;
+      const proxy = new Proxy(tx, { get(target, key) {
+        if (key !== "terraqoBuilderLedger") return Reflect.get(target, key);
+        return new Proxy(target.terraqoBuilderLedger, { get(model, field) {
+          if (field !== "create") return Reflect.get(model, field);
+          return async (args: Prisma.TerraqoBuilderLedgerCreateArgs) => {
+            const row = await model.create(args);
+            if (args.data.contributionId === old.id) {
+              const current = await target.terraqoBuilderAccount.findUniqueOrThrow({ where: { id: account.id } });
+              assert.equal(current.availablePoints, 29); assert.equal(current.pendingPoints, 2);
+              assert.equal(await model.count({ where: { accountId: account.id } }), 3);
+              await target.terraqoWorklogEntry.update({ where: { id: oldEntry.id }, data: { tqPointsAwarded: 2 } });
+              injected = true; // Own SQL inconsistency after all real credits, before post-verification.
+            }
+            return row;
+          };
+        } });
+      } });
+      await tx.$executeRawUnsafe("SAVEPOINT own_selection_postverify");
+      await assert.rejects(() => applySelectedNativeAccountingInTransaction(proxy, id, new NativeWorklogBudget()), reject);
+      assert.equal(injected, true);
+      await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT own_selection_postverify");
+      await tx.$executeRawUnsafe("RELEASE SAVEPOINT own_selection_postverify");
+      assert.deepEqual(await states(), before);
+      const result = await applySelectedNativeAccountingInTransaction(tx, id, new NativeWorklogBudget());
+      assert.deepEqual(result, { outcome: "pending", selected: 1, remainingDue: 0, future: 0, frozen: 0, completionAuthorized: false });
+      assert.ok(!JSON.stringify(result).includes(old.id));
+      const saved = await states();
+      assert.deepEqual(await applySelectedNativeAccountingInTransaction(tx, id, new NativeWorklogBudget()),
+        { outcome: "pending", selected: 0, remainingDue: 0, future: 0, frozen: 0, completionAuthorized: false });
+      assert.deepEqual(await states(), saved);
+      assert.equal((await tx.terraqoBuilderAccount.findUniqueOrThrow({ where: { id: account.id } })).availablePoints, 29);
+      assert.equal(await tx.terraqoBuilderLedger.count({ where: { accountId: account.id } }), 3);
+      assert.equal((await tx.terraqoNativeWorklogAccounting.findUniqueOrThrow({ where: { operationId: id } })).state, "PENDING");
+      await cleanup(); continue;
+    }
     if (legacyFirstOnly) {
       const reviewedAt = new Date("2026-08-01T12:00:01.000Z");
       await tx.terraqoBuilderContribution.update({ where: { id: first.id }, data: {

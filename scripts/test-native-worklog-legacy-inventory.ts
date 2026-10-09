@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import type { Prisma } from "@prisma/client";
-import { inspectNativeLegacyWorklogInventoryInTransaction } from "../lib/server/native-worklog-legacy-inventory";
+import { inspectNativeLegacyWorklogInventoryInTransaction, selectNativeLegacyReleasesInTransaction } from "../lib/server/native-worklog-legacy-inventory";
 import { NativeWorklogOperationError } from "../lib/server/native-worklog-http";
 
 // Controlled read ports, no SQL/authorization/concurrency claim. Every write port throws.
@@ -23,6 +23,7 @@ function fixture() {
   const ledger: Row[] = [];
   let entryMissing = false, overflow = "", owner = true, nativeTarget = false;
   let locks = 0;
+  let familySize = 1, invalidLast = false;
   const port = {
     $queryRaw: async (sql: Prisma.Sql) => {
       const text = sql.strings.join("?"); locks++;
@@ -38,10 +39,11 @@ function fixture() {
       } },
     terraqoBuilderContribution: { findMany: async (args: { take: number; where: { userId: string } }) => {
       assert.equal(args.take, 201); assert.equal(args.where.userId, "own");
-      return Array.from({ length: overflow === "contributions" ? 201 : 1 }, () => c);
+      return Array.from({ length: overflow === "contributions" ? 201 : familySize }, (_, i) => ({ ...c, approvedPoints: invalidLast && i === familySize - 1 ? 2 : c.approvedPoints, id: familySize === 1 ? contributionId : `${i}`.padStart(25, "b"),
+        sourceKey: familySize === 1 ? c.sourceKey : `worklog:${`${i}`.padStart(25, "a")}` }));
     } },
     terraqoWorklogEntry: { findMany: async (args: { take: number }) => {
-      assert.equal(args.take, 201); return entryMissing ? [] : Array.from({ length: overflow === "validationEntries" ? 201 : 1 }, () => e); } },
+      assert.equal(args.take, 201); return entryMissing ? [] : Array.from({ length: overflow === "validationEntries" ? 201 : familySize }, (_, i) => ({ ...e, id: familySize === 1 ? entryId : `${i}`.padStart(25, "a") })); } },
     terraqoWorklogValidation: { findMany: async (args: { take: number; where: { validatorUserId: string } }) => {
       assert.equal(args.take, 201); assert.equal(args.where.validatorUserId, "own");
       return !validationEnabled || validationMissing ? [] : Array.from({ length: overflow === "validations" ? 201 : 1 }, () => validation); } },
@@ -52,11 +54,29 @@ function fixture() {
   };
   // No write methods exist on the controlled ORM: any accidental mutation fails this test.
   const run = () => inspectNativeLegacyWorklogInventoryInTransaction(port as unknown as Prisma.TransactionClient, operationId);
-  return { run, c, e, account, ledger, locks: () => locks, missing: () => { entryMissing = true; },
+  const select = () => selectNativeLegacyReleasesInTransaction(port as unknown as Prisma.TransactionClient, operationId);
+  return { run, select, family: (size: number) => { familySize = size; }, badLast: () => { invalidLast = true; }, c, e, account, ledger, locks: () => locks, missing: () => { entryMissing = true; },
     overflow: (kind: string) => { overflow = kind; }, ownerMissing: () => { owner = false; }, native: () => { nativeTarget = true; }, contributionId, operationId, nativeStamp, validation, validationId,
     enableValidation: () => { validationEnabled = true; }, missingValidation: () => { validationMissing = true; } };
 }
 async function main() {
+  const family = fixture(); family.family(6);
+  const picked = await family.select();
+  assert.equal(picked.inspection.due, 6); assert.equal(picked.contributionIds.length, 5);
+  assert.equal(new Set(picked.contributionIds).size, 5);
+  assert.deepEqual([...picked.contributionIds], [...picked.contributionIds].sort());
+  assert.ok(Object.isFrozen(picked)); assert.ok(Object.isFrozen(picked.contributionIds));
+  assert.equal(picked.completionAuthorized, false);
+  family.badLast();
+  const omitted = await family.select(); assert.equal(omitted.inspection.ambiguous, 1);
+  assert.equal(omitted.inspection.due, 5); assert.deepEqual(omitted.contributionIds, []);
+  family.e.tqPointsAwarded = 2;
+  const blocked = await family.select(); assert.equal(blocked.inspection.ambiguous, 5);
+  assert.deepEqual(blocked.contributionIds, []);
+  const futureSelection = fixture(); futureSelection.c.availableAt = new Date("2099-01-01T00:00:00.000Z");
+  assert.deepEqual((await futureSelection.select()).contributionIds, []);
+  const frozenSelection = fixture(); frozenSelection.account.rewardsFrozenUntil = new Date("2099-01-01T00:00:00.000Z");
+  assert.deepEqual((await frozenSelection.select()).contributionIds, []);
   const base = fixture(), initial = JSON.stringify(base.c);
   const report = await base.run(); assert.equal(report.due, 1); assert.equal(report.completionAuthorized, false);
   assert.ok(Object.isFrozen(report)); assert.ok(base.locks() >= 5); assert.equal(JSON.stringify(base.c), initial);
