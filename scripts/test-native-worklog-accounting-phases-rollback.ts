@@ -8,11 +8,12 @@ import { applyNativeWorklogAccountingPhasesInTransaction } from "../lib/server/n
 import { releaseNativeWorklogBaseInTransaction } from "../lib/server/native-worklog-base-release";
 import { NativeWorklogOperationError } from "../lib/server/native-worklog-http";
 import { NativeWorklogBudget } from "../lib/server/native-worklog-budget";
-import { applySelectedNativeAccountingInTransaction } from "../lib/server/native-worklog-selected-accounting";
+import { applySelectedNativeAccountingInTransaction, settleSelectedNativeAccountingInTransaction } from "../lib/server/native-worklog-selected-accounting";
+import { reconcileNativeAccountingAcknowledgementInTransaction } from "../lib/server/native-worklog-accounting-acknowledgement";
 import { applyHistoricalNativeAccountingInTransaction } from "../lib/server/native-worklog-historical-accounting";
 
 /** Only inside the pinned checker's outer DDL rollback, never standalone. */
-export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClient, workspaceId: string, historical = false, reviewOnly = false, legacyFirstOnly = false, selectionOnly = false, backlogOnly = false) {
+export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClient, workspaceId: string, historical = false, reviewOnly = false, legacyFirstOnly = false, selectionOnly = false, backlogOnly = false, settlementMode = "") {
   for (const tq of [1]) {
     const marker = randomUUID(), id = createHash("sha256").update(marker).digest("hex");
     const user = await tx.user.create({ data: { name: `ICC accounting-phases rollback ${marker}`,
@@ -78,6 +79,92 @@ export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClien
     };
     const run = () => runWith(tx, [old.id]);
     const reject = (e: unknown) => e instanceof NativeWorklogOperationError && e.status === 503;
+    if (settlementMode) {
+      assert.equal(historical, true);
+      const states = async () => {
+        const [row] = await tx.$queryRaw<Array<{ snapshot: Record<string, unknown> }>>(Prisma.sql`SELECT jsonb_build_object(
+          'account', (SELECT to_jsonb(r) FROM icc."TerraqoBuilderAccount" r WHERE r.id=${account.id}),
+          'contributions', (SELECT jsonb_agg(to_jsonb(r) ORDER BY r.id) FROM icc."TerraqoBuilderContribution" r WHERE r."userId"=${user.id}),
+          'ledger', (SELECT jsonb_agg(to_jsonb(r) ORDER BY r.id) FROM icc."TerraqoBuilderLedger" r WHERE r."accountId"=${account.id}),
+          'entries', (SELECT jsonb_agg(to_jsonb(r) ORDER BY r.id) FROM icc."TerraqoWorklogEntry" r WHERE r."authorId"=${user.id}),
+          'receipt', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogOperation" r WHERE r.id=${id}),
+          'decision', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogDecision" r WHERE r."operationId"=${id}),
+          'authority', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogAuthority" r WHERE r."operationId"=${id}),
+          'outbox', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogAccounting" r WHERE r."operationId"=${id})
+        ) AS snapshot`);
+        return row.snapshot;
+      };
+      if (settlementMode === "--worker-ack") {
+        await tx.terraqoBuilderAccount.update({ where: { id: account.id }, data: {
+          availablePoints: 2, lifetimeEarned: 2, contributionScore: 2, trustScore: 4 } });
+        await tx.terraqoBuilderLedger.create({ data: { accountId: account.id, contributionId: old.id,
+          type: "CREDIT", pointsDelta: 2, scoreDelta: 2, balanceAfter: 2,
+          description: "Own uncertain acknowledgement retained credit", idempotencyKey: `own-ack:${id}` } });
+      }
+      if (settlementMode === "--worker-deferred") {
+        await tx.terraqoBuilderAccount.update({ where: { id: account.id }, data: { rewardsFrozenUntil: new Date("2099-01-01T00:00:00.000Z") } });
+        const result = await settleSelectedNativeAccountingInTransaction(tx, id, new NativeWorklogBudget());
+        assert.equal(result.outcome, "pending"); assert.equal(result.completionAuthorized, false);
+        const saved = await states();
+        const outbox = saved.outbox as { state: string; attempts: number; nextAttemptAt: string; completedAt: null };
+        assert.equal(outbox.state, "PENDING"); assert.equal(outbox.attempts, 0); assert.equal(outbox.completedAt, null);
+        assert.ok(Date.parse(outbox.nextAttemptAt) > Date.now());
+        const balance = saved.account as { pendingPoints: number; availablePoints: number; trustScore: number };
+        assert.equal(balance.pendingPoints, 6); assert.equal(balance.availablePoints, 0); assert.equal(balance.trustScore, 1);
+        assert.equal(saved.ledger, null);
+        assert.deepEqual(await settleSelectedNativeAccountingInTransaction(tx, id, new NativeWorklogBudget()), { outcome: "deferred", completionAuthorized: false });
+        assert.deepEqual(await states(), saved);
+      } else {
+        const before = await states(); let elapsed = 0, injected = false;
+        const budget = new NativeWorklogBudget(() => elapsed);
+        const proxy = new Proxy(tx, { get(target, key) {
+          if (key !== "terraqoNativeWorklogAccounting") return Reflect.get(target, key);
+          return new Proxy(target.terraqoNativeWorklogAccounting, { get(model, field) {
+            if (field !== "updateMany") return Reflect.get(model, field);
+            return async (args: Prisma.TerraqoNativeWorklogAccountingUpdateManyArgs) => {
+              const result = await model.updateMany(args);
+              assert.equal(result.count, 1);
+              const outbox = await model.findUniqueOrThrow({ where: { operationId: id } });
+              assert.equal(outbox.state, settlementMode === "--worker-ack" ? "QUARANTINED" : "APPLIED");
+              if (settlementMode !== "--worker-ack") {
+                assert.equal((await target.terraqoBuilderAccount.findUniqueOrThrow({ where: { id: account.id } })).availablePoints, 29);
+                assert.equal(await target.terraqoBuilderLedger.count({ where: { accountId: account.id } }), 3);
+              }
+              injected = true; elapsed = 48000; return result;
+            };
+          } });
+        } });
+        const execute = (port: Prisma.TransactionClient, limit: NativeWorklogBudget) => settlementMode === "--worker-ack"
+          ? reconcileNativeAccountingAcknowledgementInTransaction(port, id, limit)
+          : settleSelectedNativeAccountingInTransaction(port, id, limit);
+        await tx.$executeRawUnsafe("SAVEPOINT own_settlement_final_budget");
+        await assert.rejects(() => execute(proxy, budget), reject); assert.equal(injected, true);
+        await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT own_settlement_final_budget");
+        await tx.$executeRawUnsafe("RELEASE SAVEPOINT own_settlement_final_budget");
+        assert.deepEqual(await states(), before);
+        const result = await execute(tx, new NativeWorklogBudget());
+        if (settlementMode === "--worker-ack") {
+          assert.deepEqual(result, { outcome: "quarantined", replayAuthorized: false });
+          const after = await states();
+          assert.deepEqual(after, { ...before, outbox: { ...(before.outbox as object), state: "QUARANTINED" } });
+          assert.deepEqual(await execute(tx, new NativeWorklogBudget()), result);
+          assert.deepEqual(await states(), after);
+        } else {
+          assert.deepEqual(result, { outcome: "applied", completionAuthorized: true });
+          const after = await states();
+          const outbox = after.outbox as { state: string; attempts: number; completedAt: string };
+          assert.equal(outbox.state, "APPLIED"); assert.equal(outbox.attempts, 0); assert.ok(outbox.completedAt);
+          const balance = after.account as { pendingPoints: number; availablePoints: number; lifetimeEarned: number; contributionScore: number; trustScore: number };
+          assert.equal(balance.pendingPoints, 2); assert.equal(balance.availablePoints, 29);
+          assert.equal(balance.lifetimeEarned, 29); assert.equal(balance.contributionScore, 29); assert.equal(balance.trustScore, 1);
+          assert.equal((after.ledger as unknown[]).length, 3);
+          assert.deepEqual(await reconcileNativeAccountingAcknowledgementInTransaction(tx, id, new NativeWorklogBudget()), { outcome: "applied-history", replayAuthorized: false });
+          assert.deepEqual(await execute(tx, new NativeWorklogBudget()), { outcome: "deferred", completionAuthorized: false });
+          assert.deepEqual(await states(), after);
+        }
+      }
+      await cleanup(); continue;
+    }
     if (backlogOnly) {
       assert.equal(historical, true);
       const additions = Array.from({ length: 5 }, () => ({ entryId: `c${randomBytes(12).toString("hex")}`,

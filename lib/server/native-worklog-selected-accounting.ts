@@ -17,6 +17,20 @@ const requiresReview = (inspection: Awaited<ReturnType<typeof inspectNativeLegac
  */
 export async function applySelectedNativeAccountingInTransaction(tx: Prisma.TransactionClient,
   operationId: string, budget: NativeWorklogBudget) {
+  return applySelected(tx, operationId, budget, false);
+}
+
+/** Directed settlement only. Completion and all credits share the caller transaction.
+ * Deferred phases retain earned balances and are scheduled without consuming attempts.
+ * No global worker, retry on exceptions or inference about uncertain commits.
+ */
+export async function settleSelectedNativeAccountingInTransaction(tx: Prisma.TransactionClient,
+  operationId: string, budget: NativeWorklogBudget) {
+  return applySelected(tx, operationId, budget, true);
+}
+
+async function applySelected(tx: Prisma.TransactionClient, operationId: string,
+  budget: NativeWorklogBudget, settle: boolean) {
   const eligibility = await inspectNativeWorkerEligibilityInTransaction(tx, operationId, budget);
   if (eligibility.disposition !== "INSPECT_PHASES")
     return Object.freeze({ outcome: "deferred" as const, completionAuthorized: false as const });
@@ -38,6 +52,25 @@ export async function applySelectedNativeAccountingInTransaction(tx: Prisma.Tran
       after.due !== selected.inspection.due - selected.contributionIds.length ||
       after.future !== selected.inspection.future || after.frozen !== selected.inspection.frozen)
     throw new NativeWorklogOperationError(503);
+  if (settle) {
+    const current = await tx.terraqoNativeWorklogAccounting.findUniqueOrThrow({ where: { operationId } });
+    const complete = after.due === 0 && after.future === 0 && after.frozen === 0 &&
+      (phases.first === "credited" || phases.first === "historical") &&
+      (phases.release === "released" || phases.release === "historical");
+    // An absent FIRST allocation is deliberately not sufficient evidence of
+    // ineligibility to authorize completion; preserve it for later reconciliation.
+    const now = new Date();
+    const nextAttemptAt = new Date(Math.max(current.nextAttemptAt.getTime(), now.getTime() + 60000));
+    budget.require();
+    const changed = await tx.terraqoNativeWorklogAccounting.updateMany({ where: {
+      operationId, state: "PENDING", attempts: current.attempts,
+      nextAttemptAt: current.nextAttemptAt, completedAt: null },
+      data: complete ? { state: "APPLIED", completedAt: now } : { nextAttemptAt } });
+    if (changed.count !== 1) throw new NativeWorklogOperationError(503);
+    // Failure here MUST roll back completion, every credit and all earlier phases.
+    budget.require();
+    if (complete) return Object.freeze({ outcome: "applied" as const, completionAuthorized: true as const });
+  }
   budget.require();
   return Object.freeze({ outcome: "pending" as const, selected: selected.contributionIds.length,
     remainingDue: after.due, future: after.future, frozen: after.frozen,
