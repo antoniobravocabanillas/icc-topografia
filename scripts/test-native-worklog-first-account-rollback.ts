@@ -32,6 +32,54 @@ export async function nativeFirstAccountRollback(tx: Prisma.TransactionClient, w
     }
   }
   const unavailable = (error: unknown) => error instanceof NativeWorklogOperationError && error.status === 503;
+  // Actual legacy lifecycle shape, manually prepared only on this new own fixture.
+  // Full-object comparison detects date normalization, credits, and account mutations.
+  await isolated(async () => {
+    const createdAt = new Date("2026-08-01T00:00:00.000Z"), reviewedAt = new Date("2026-08-01T00:00:01.000Z");
+    await tx.terraqoBuilderContribution.update({ where: { id: first.id }, data: {
+      detail: "Own legacy FIRST history", status: "VALIDATED", approvedPoints: 25,
+      createdAt, reviewedAt, releasedAt: null } });
+    await tx.terraqoBuilderAccount.update({ where: { id: account.id }, data: {
+      availablePoints: 28, lifetimeEarned: 28, contributionScore: 28 } });
+    await tx.terraqoBuilderLedger.create({ data: { accountId: account.id, contributionId: first.id,
+      type: "CREDIT", pointsDelta: 25, scoreDelta: 25, balanceAfter: 28,
+      description: "Own manual legacy FIRST credit", idempotencyKey: `contribution:${first.id}:25`,
+      createdAt: new Date("2026-08-01T00:00:00.999Z") } });
+    const complete = async () => ({
+      account: await tx.terraqoBuilderAccount.findUniqueOrThrow({ where: { id: account.id } }),
+      first: await tx.terraqoBuilderContribution.findUniqueOrThrow({ where: { id: first.id } }),
+      ledger: await tx.terraqoBuilderLedger.findMany({ where: { accountId: account.id }, orderBy: { id: "asc" } }),
+      outbox: await tx.terraqoNativeWorklogAccounting.findUniqueOrThrow({ where: { operationId: id } }),
+    });
+    const baseline = await complete();
+    assert.equal(await applyNativeFirstWorklogInTransaction(tx, id), "historical");
+    assert.equal(await applyNativeFirstWorklogInTransaction(tx, id), "historical");
+    assert.deepEqual(await complete(), baseline);
+    await tx.terraqoBuilderContribution.update({ where: { id: first.id }, data: { status: "IMPLEMENTED" } });
+    const implemented = await complete();
+    assert.equal(await applyNativeFirstWorklogInTransaction(tx, id), "historical");
+    assert.deepEqual(await complete(), implemented);
+    await tx.terraqoBuilderAccount.update({ where: { id: account.id }, data: { pendingPoints: 1 } });
+    const insufficient = await complete();
+    await assert.rejects(() => applyNativeFirstWorklogInTransaction(tx, id), unavailable);
+    assert.deepEqual(await complete(), insufficient);
+    await tx.terraqoBuilderAccount.update({ where: { id: account.id }, data: { pendingPoints: 2 } });
+    await tx.terraqoBuilderLedger.updateMany({ where: { contributionId: first.id }, data: {
+      idempotencyKey: `native-first-worklog:${first.id}:25` } });
+    const wrongKey = await complete();
+    await assert.rejects(() => applyNativeFirstWorklogInTransaction(tx, id), unavailable);
+    assert.deepEqual(await complete(), wrongKey);
+  });
+  await isolated(async () => {
+    await tx.terraqoBuilderContribution.update({ where: { id: first.id }, data: {
+      detail: "Own unfinished legacy review", status: "VALIDATED" } });
+    const savedAccount = await tx.terraqoBuilderAccount.findUniqueOrThrow({ where: { id: account.id } });
+    const savedFirst = await tx.terraqoBuilderContribution.findUniqueOrThrow({ where: { id: first.id } });
+    assert.equal(await applyNativeFirstWorklogInTransaction(tx, id), "deferred");
+    assert.deepEqual(await tx.terraqoBuilderAccount.findUniqueOrThrow({ where: { id: account.id } }), savedAccount);
+    assert.deepEqual(await tx.terraqoBuilderContribution.findUniqueOrThrow({ where: { id: first.id } }), savedFirst);
+    assert.equal(await tx.terraqoBuilderLedger.count({ where: { accountId: account.id } }), 0);
+  });
   for (const field of ["availablePoints", "lifetimeEarned", "contributionScore"] as const) await isolated(async () => {
     await tx.terraqoBuilderAccount.update({ where: { id: account.id }, data: { [field]: 2147483647 } });
     await assert.rejects(() => applyNativeFirstWorklogInTransaction(tx, id), unavailable);

@@ -60,6 +60,11 @@ for (const field of ["availablePoints", "lifetimeEarned", "contributionScore"] a
 }
 const frozen = fixture(); frozen.account.rewardsFrozenUntil = new Date("2099-01-01T00:00:00.000Z");
 assert.equal(await run(frozen), "deferred"); assert.equal(frozen.writes(), 0);
+const legacy = fixture(); legacy.contribution.detail = "Own unfinished legacy review";
+legacy.contribution.status = "VALIDATED";
+const legacyBefore = JSON.stringify({ account: legacy.account, contribution: legacy.contribution });
+assert.equal(await run(legacy), "deferred"); assert.equal(legacy.writes(), 0);
+assert.equal(JSON.stringify({ account: legacy.account, contribution: legacy.contribution }), legacyBefore);
 const floor = fixture(); floor.account.pendingPoints = 1;
 await assert.rejects(run(floor)); assert.equal(floor.writes(), 0);
 for (const rows of [

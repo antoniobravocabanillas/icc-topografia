@@ -144,13 +144,13 @@ export async function nativeWorklogCoreRollback(tx: Prisma.TransactionClient, wo
   }, 503);
   await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT native_first_own_award");
   await tx.$executeRawUnsafe("RELEASE SAVEPOINT native_first_own_award");
-  // Existing legacy reservation is recovered on the same source/contribution, never another25.
+  // Unfinished legacy review remains deferred; native accounting cannot promote it.
   await tx.$executeRawUnsafe("SAVEPOINT native_first_existing_own");
   await tx.terraqoBuilderContribution.update({ where: { id: first.id }, data: { detail: "Own legacy contribution", status: "IN_REVIEW" } });
   assert.equal(await applyNativeFirstWorklogInTransaction(tx, operation.id), "deferred");
   await tx.terraqoBuilderContribution.update({ where: { id: first.id }, data: { status: "VALIDATED" } });
-  assert.equal(await applyNativeFirstWorklogInTransaction(tx, operation.id), "credited");
-  assert.equal(await applyNativeFirstWorklogInTransaction(tx, operation.id), "historical");
+  assert.equal(await applyNativeFirstWorklogInTransaction(tx, operation.id), "deferred");
+  assert.equal(await applyNativeFirstWorklogInTransaction(tx, operation.id), "deferred");
   assert.equal(await tx.terraqoBuilderContribution.count({ where: { userId: user.id } }), 1);
   await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT native_first_existing_own");
   await tx.$executeRawUnsafe("RELEASE SAVEPOINT native_first_existing_own");

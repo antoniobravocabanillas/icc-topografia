@@ -1,6 +1,7 @@
 import "server-only";
 import { Prisma } from "@prisma/client";
 import { NativeWorklogOperationError } from "./native-worklog-http";
+import { inspectLegacyFirstWorklogHistory } from "./native-worklog-legacy-first-policy";
 
 function fail(): never { throw new NativeWorklogOperationError(503); }
 const integer = (n: number) => Number.isSafeInteger(n) && n >= 0 && n <= 2147483647;
@@ -57,10 +58,31 @@ export async function applyNativeFirstWorklogInTransaction(tx: Prisma.Transactio
   const credited = contribution.ledgerEntries.reduce((sum, row) => sum + row.pointsDelta, 0);
   if (credited !== contribution.approvedPoints || credited > 25) fail();
   if (credited === 25) {
+    if (!contribution.detail.startsWith("native-first-worklog-v1:")) {
+      const firstNative = await tx.terraqoNativeWorklogOperation.findFirst({ where: { actorId: identity.actorId },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { createdAt: true } });
+      if (!firstNative) fail();
+      const assessment = inspectLegacyFirstWorklogHistory({ actorId: identity.actorId,
+        firstNativeCreatedAt: firstNative.createdAt.toISOString(), observedAt: new Date().toISOString(),
+        accountId: account?.id ?? null,
+        contribution: { ...contribution, createdAt: contribution.createdAt.toISOString(),
+          reviewedAt: contribution.reviewedAt?.toISOString() ?? null,
+          availableAt: contribution.availableAt?.toISOString() ?? null,
+          releasedAt: contribution.releasedAt?.toISOString() ?? null },
+        ledger: contribution.ledgerEntries.map(row => ({ ...row, createdAt: row.createdAt.toISOString() })) });
+      if (assessment.disposition !== "CREDIT_HISTORY_OBSERVED" || !account) fail();
+      await assertFirstAccountFloor(tx, identity.actorId, account);
+      // Legacy review already credited this award without releasedAt. Preserve all
+      // dates/balances and never manufacture a native receipt or replacement credit.
+      return "historical" as const;
+    }
     if (!account || contribution.status !== "VALIDATED" || !contribution.releasedAt || contribution.availableAt) fail();
     await assertFirstAccountFloor(tx, identity.actorId, account);
     return "historical" as const;
   }
+  // A legacy reservation is not the native creation decision. An unfinished legacy
+  // review cannot be promoted by this phase; its earned/pending state stays intact.
+  if (!contribution.detail.startsWith("native-first-worklog-v1:")) return "deferred" as const;
   if (["REJECTED", "IN_REVIEW"].includes(contribution.status) &&
       !(contribution.status === "IN_REVIEW" && contribution.detail.startsWith("native-first-worklog-v1:")))
     return "deferred" as const;
