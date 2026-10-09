@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def main():
-    if sys.argv[1:] not in ([], ["--core"], ["--reconciliation"], ["--owner-fence"], ["--decision"], ["--combined"], ["--worker-eligibility"], ["--worker-phases"], ["--worker-preflight"], ["--worker-legacy-first"], ["--legacy-validation-5"], ["--legacy-validation-20"], ["--release"], ["--base-edges"], ["--first-account"], ["--phases"], ["--phase-edges"], ["--legacy-inventory"], ["--accounting-retry"], ["--accounting-authority"], ["--authority-schema"], ["--creation-authority"]):
+    if sys.argv[1:] not in ([], ["--core"], ["--reconciliation"], ["--owner-fence"], ["--decision"], ["--combined"], ["--worker-eligibility"], ["--worker-phases"], ["--worker-preflight"], ["--worker-legacy-first"], ["--legacy-validation-5"], ["--legacy-validation-20"], ["--validation-preflight-5"], ["--validation-preflight-20"], ["--validation-phases-5"], ["--validation-phases-20"], ["--release"], ["--base-edges"], ["--first-account"], ["--phases"], ["--phase-edges"], ["--legacy-inventory"], ["--accounting-retry"], ["--accounting-authority"], ["--authority-schema"], ["--creation-authority"]):
         raise RuntimeError("Unsupported mode")
     spec = importlib.util.spec_from_file_location("worklog_inventory", ROOT / "scripts/inventory-database-migration.py")
     inventory = importlib.util.module_from_spec(spec)
@@ -51,8 +51,8 @@ def main():
                     print(json.dumps(safe))
         raise RuntimeError("Catalog check failed; private diagnostics suppressed")
     report = json.loads(checked.stdout.strip())
-    if sys.argv[1:] in (["--combined"], ["--worker-eligibility"], ["--worker-phases"], ["--worker-preflight"], ["--worker-legacy-first"], ["--legacy-validation-5"], ["--legacy-validation-20"]):
-        if report != {"mode": f"{sys.argv[1][2:]}-rollback" if sys.argv[1:] in (["--legacy-validation-5"], ["--legacy-validation-20"]) else "worker-legacy-first-rollback" if sys.argv[1:] == ["--worker-legacy-first"] else "worker-preflight-rollback" if sys.argv[1:] == ["--worker-preflight"] else "worker-phases-rollback" if sys.argv[1:] == ["--worker-phases"] else "worker-eligibility-rollback" if sys.argv[1:] == ["--worker-eligibility"] else "combined-rollback", "combined": {"state": "exact", "fingerprint": "55bb6318b6ff7379a6dc12bf801e42e25fb49c26a6ae8760a2eccadf30ac6279", "constraints": 30, "indexes": 14}, "ledgerFingerprint": "63b2a899b04e053157f7212cd53bc2409118fb25a21cda713995450a9be40798", "applied": False}:
+    if sys.argv[1:] in (["--combined"], ["--worker-eligibility"], ["--worker-phases"], ["--worker-preflight"], ["--worker-legacy-first"], ["--legacy-validation-5"], ["--legacy-validation-20"], ["--validation-preflight-5"], ["--validation-preflight-20"], ["--validation-phases-5"], ["--validation-phases-20"]):
+        if report != {"mode": f"{sys.argv[1][2:]}-rollback" if sys.argv[1:] in (["--legacy-validation-5"], ["--legacy-validation-20"], ["--validation-preflight-5"], ["--validation-preflight-20"], ["--validation-phases-5"], ["--validation-phases-20"]) else "worker-legacy-first-rollback" if sys.argv[1:] == ["--worker-legacy-first"] else "worker-preflight-rollback" if sys.argv[1:] == ["--worker-preflight"] else "worker-phases-rollback" if sys.argv[1:] == ["--worker-phases"] else "worker-eligibility-rollback" if sys.argv[1:] == ["--worker-eligibility"] else "combined-rollback", "combined": {"state": "exact", "fingerprint": "55bb6318b6ff7379a6dc12bf801e42e25fb49c26a6ae8760a2eccadf30ac6279", "constraints": 30, "indexes": 14}, "ledgerFingerprint": "63b2a899b04e053157f7212cd53bc2409118fb25a21cda713995450a9be40798", "applied": False}:
             raise RuntimeError("Combined catalog or rollback mode mismatch")
     elif report["fingerprint"] != "d2e17d02f546dc4bf5e2540274633dd1b05a157edd7f02b8ed4a8f623278b3bd" or report["applied"]:
         raise RuntimeError("Pinned fingerprint or mode mismatch")

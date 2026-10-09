@@ -83,7 +83,7 @@ async function fixtureConstraints(tx: Prisma.TransactionClient, workspaceId: str
 }
 
 async function main() {
-  if (["--worker-eligibility", "--worker-phases", "--worker-preflight", "--worker-legacy-first", "--legacy-validation-5", "--legacy-validation-20"].includes(process.argv[2])) {
+  if (["--worker-eligibility", "--worker-phases", "--worker-preflight", "--worker-legacy-first", "--legacy-validation-5", "--legacy-validation-20", "--validation-preflight-5", "--validation-preflight-20", "--validation-phases-5", "--validation-phases-20"].includes(process.argv[2])) {
     assert.equal(process.argv.length, 3);
     assert.equal(process.env.TERRAQO_MUTATING_TESTS, "icc-topografia:20616116313");
     assert.equal(process.env.TEST_PORTAL_URL, "https://api.terraqoglobal.com");
@@ -104,7 +104,11 @@ async function main() {
         }
         combined = await readNativeWorklogCombinedCatalog(tx);
         assert.equal((combined as { state: string }).state, "exact");
-        if (["--legacy-validation-5", "--legacy-validation-20"].includes(process.argv[2])) {
+        if (process.argv[2].startsWith("--validation-")) {
+          const { nativeValidationInventoryRollback } = await import("./test-native-worklog-validation-inventory-rollback");
+          await nativeValidationInventoryRollback(tx, workspace.id, process.argv[2].endsWith("-5") ? 5 : 20,
+            process.argv[2].startsWith("--validation-phases-"));
+        } else if (["--legacy-validation-5", "--legacy-validation-20"].includes(process.argv[2])) {
           const { nativeLegacyValidationRollback } = await import("./test-native-worklog-legacy-validation-rollback");
           await nativeLegacyValidationRollback(tx, workspace.id, process.argv[2] === "--legacy-validation-5" ? 5 : 20);
         } else if (["--worker-phases", "--worker-preflight", "--worker-legacy-first"].includes(process.argv[2])) {
@@ -117,7 +121,7 @@ async function main() {
     } catch (error) { if (error !== rollback) throw error; }
     assert.deepEqual(await readNativeWorklogCombinedCatalog(prisma), { state: "absent" });
     assert.equal(await ledgerFingerprint(prisma), ledger);
-    console.log(JSON.stringify({ mode: ["--legacy-validation-5", "--legacy-validation-20"].includes(process.argv[2]) ? `${process.argv[2].slice(2)}-rollback` : process.argv[2] === "--worker-legacy-first" ? "worker-legacy-first-rollback" : process.argv[2] === "--worker-preflight" ? "worker-preflight-rollback" : process.argv[2] === "--worker-phases" ? "worker-phases-rollback" : "worker-eligibility-rollback", combined, ledgerFingerprint: ledger, applied: false }));
+    console.log(JSON.stringify({ mode: process.argv[2].startsWith("--validation-") || ["--legacy-validation-5", "--legacy-validation-20"].includes(process.argv[2]) ? `${process.argv[2].slice(2)}-rollback` : process.argv[2] === "--worker-legacy-first" ? "worker-legacy-first-rollback" : process.argv[2] === "--worker-preflight" ? "worker-preflight-rollback" : process.argv[2] === "--worker-phases" ? "worker-phases-rollback" : "worker-eligibility-rollback", combined, ledgerFingerprint: ledger, applied: false }));
     return;
   }
   if (process.argv[2] === "--combined") {
@@ -216,7 +220,7 @@ main().catch((error: unknown) => {
   // Only bounded categories and source line numbers; never error messages, SQL or connection data.
   const category = error instanceof assert.AssertionError ? "assertion" :
     error instanceof Prisma.PrismaClientKnownRequestError && /^[A-Z][0-9]{4}$/.test(error.code) ? error.code : "unknown";
-  const location = error instanceof Error ? error.stack?.match(/(?:test-native-worklog-legacy-validation-rollback|test-native-worklog-worker-eligibility-rollback|test-native-worklog-creation-authority-rollback|test-native-worklog-authority-schema|test-native-worklog-authorized-accounting-rollback|test-native-worklog-accounting-retry-rollback|test-native-worklog-combined-catalog|test-native-worklog-legacy-inventory-rollback|test-native-worklog-accounting-phase-edges-rollback|test-native-worklog-accounting-phases-rollback|test-native-worklog-first-account-rollback|test-native-worklog-base-edges-rollback|test-native-worklog-base-release-rollback|test-native-worklog-core-rollback|test-native-worklog-decision-schema|test-native-worklog-legacy-release-rollback|test-native-worklog-owner-fence|check-native-worklog-schema)\.ts:[0-9]+:[0-9]+/)?.[0] : undefined;
+  const location = error instanceof Error ? error.stack?.match(/(?:test-native-worklog-validation-inventory-rollback|test-native-worklog-legacy-validation-rollback|test-native-worklog-worker-eligibility-rollback|test-native-worklog-creation-authority-rollback|test-native-worklog-authority-schema|test-native-worklog-authorized-accounting-rollback|test-native-worklog-accounting-retry-rollback|test-native-worklog-combined-catalog|test-native-worklog-legacy-inventory-rollback|test-native-worklog-accounting-phase-edges-rollback|test-native-worklog-accounting-phases-rollback|test-native-worklog-first-account-rollback|test-native-worklog-base-edges-rollback|test-native-worklog-base-release-rollback|test-native-worklog-core-rollback|test-native-worklog-decision-schema|test-native-worklog-legacy-release-rollback|test-native-worklog-owner-fence|check-native-worklog-schema)\.ts:[0-9]+:[0-9]+/)?.[0] : undefined;
   const code = error instanceof Prisma.PrismaClientKnownRequestError ? error.meta?.code : undefined;
   const sqlState = typeof code === "string" && /^[0-9A-Z]{5}$/.test(code) ? code : undefined;
   console.error(JSON.stringify({ outcome: "failed", category, location, sqlState })); process.exitCode = 1;

@@ -2,6 +2,7 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 import { NativeWorklogOperationError } from "./native-worklog-http";
 import { inspectLegacyFirstWorklogHistory } from "./native-worklog-legacy-first-policy";
+import { inspectLegacyWorklogValidationHistory } from "./native-worklog-legacy-validation-policy";
 
 function fail(): never { throw new NativeWorklogOperationError(503); }
 const integer = (n: number) => Number.isSafeInteger(n) && n >= 0 && n <= 2147483647;
@@ -37,6 +38,36 @@ export async function inspectNativeLegacyWorklogInventoryInTransaction(tx: Prism
       userId: true, reviewedAt: true, createdAt: true, availableAt: true, releasedAt: true,
       approvedPoints: true, requestedPoints: true, detail: true } }) : [];
   if (contributions.length !== ids.length) fail();
+  // Validation rewards belong to the validator, while their target can belong to
+  // another author. Bound every lookup to this owner's contribution source IDs.
+  const validationIds = [...new Set(contributions.flatMap(row => {
+    const id = row.sourceKey?.startsWith("worklog-validation:") ? row.sourceKey.slice(19) : "";
+    return /^[a-z0-9]{25}$/.test(id) ? [id] : [];
+  }))].sort();
+  if (validationIds.length) await tx.$queryRaw(Prisma.sql`SELECT id FROM icc."TerraqoWorklogValidation"
+    WHERE "validatorUserId"=${receipt.actorId} AND id IN (${Prisma.join(validationIds)}) ORDER BY id FOR SHARE`);
+  const validations = validationIds.length ? await tx.terraqoWorklogValidation.findMany({
+    where: { validatorUserId: receipt.actorId, id: { in: validationIds } }, take: 201, orderBy: { id: "asc" },
+    select: { id: true, worklogId: true, workspaceId: true, requestedByUserId: true, validatorUserId: true,
+      status: true, credentialId: true, createdAt: true, requestedAt: true, resolvedAt: true } }) : [];
+  if (validations.length > 200) fail();
+  const validationTargets = [...new Set(validations.map(row => row.worklogId))].sort();
+  if (validationTargets.length) await tx.$queryRaw(Prisma.sql`SELECT id FROM icc."TerraqoWorklogEntry"
+    WHERE id IN (${Prisma.join(validationTargets)}) ORDER BY id FOR SHARE`);
+  const validationEntries = validationTargets.length ? await tx.terraqoWorklogEntry.findMany({
+    where: { id: { in: validationTargets } }, take: 201, orderBy: { id: "asc" },
+    select: { id: true, authorId: true, workspaceId: true, createdAt: true, deletedAt: true } }) : [];
+  if (validationEntries.length > 200) fail();
+  // Durable targets survive SET NULL/deletion; actor-local receipt history alone
+  // cannot classify another author's target. Native core never attaches receipts
+  // to existing legacy entries. No identity from these reads leaves this helper.
+  const targetReceipts = validationTargets.length ? await tx.terraqoNativeWorklogOperation.findMany({
+    where: { targetWorklogId: { in: validationTargets } }, take: 201, orderBy: { id: "asc" },
+    select: { targetWorklogId: true } }) : [];
+  if (targetReceipts.length > 200) fail();
+  const nativeValidationTargets = new Set(targetReceipts.map(row => row.targetWorklogId));
+  const byValidation = new Map(validations.map(row => [row.id, row]));
+  const byValidationEntry = new Map(validationEntries.map(row => [row.id, row]));
   const entryIds = contributions.flatMap(row => row.sourceKey?.startsWith("worklog:") ? [row.sourceKey.slice(8)] : []);
   if (entryIds.some(id => !/^[a-z0-9]{25}$/.test(id))) fail();
   if (entryIds.length) await tx.$queryRaw(Prisma.sql`SELECT id FROM icc."TerraqoWorklogEntry"
@@ -59,6 +90,22 @@ export async function inspectNativeLegacyWorklogInventoryInTransaction(tx: Prism
   const counts = { inspected: contributions.length, native: 0, nativeFirst: 0, unsupported: 0, missingReference: 0,
     ambiguous: 0, historical: 0, rejected: 0, unfunded: 0, frozen: 0, future: 0, due: 0 };
   for (const c of contributions) {
+    if (c.sourceKey?.startsWith("worklog-validation:") && c.type === "EXPERIENCE_VALIDATION") {
+      const v = byValidation.get(c.sourceKey.slice(19));
+      const w = v && byValidationEntry.get(v.worklogId);
+      const assessment = inspectLegacyWorklogValidationHistory({ actorId: receipt.actorId,
+        firstNativeCreatedAt: firstNative.toISOString(), observedAt: now.toISOString(), accountId: account?.id ?? null,
+        contribution: { ...c, createdAt: c.createdAt.toISOString(), reviewedAt: c.reviewedAt?.toISOString() ?? null,
+          availableAt: c.availableAt?.toISOString() ?? null, releasedAt: c.releasedAt?.toISOString() ?? null },
+        validation: v ? { ...v, createdAt: v.createdAt.toISOString(), requestedAt: v.requestedAt.toISOString(),
+          resolvedAt: v.resolvedAt?.toISOString() ?? null } : null,
+        worklog: w ? { ...w, workspaceId: w.workspaceId ?? "", createdAt: w.createdAt.toISOString(),
+          deletedAt: w.deletedAt?.toISOString() ?? null, nativeTarget: nativeValidationTargets.has(w.id) } : null,
+        ledger: ledger.filter(row => row.contributionId === c.id).map(row => ({ ...row, createdAt: row.createdAt.toISOString() })) });
+      if (assessment.disposition === "CREDIT_HISTORY_OBSERVED") counts.historical++;
+      else counts.unsupported++;
+      continue;
+    }
     // This only identifies the native family. The FIRST phase independently validates
     // status/account/credit history before settlement; a marker never authorizes credit.
     if (c.type === "FIRST_WORKLOG" && c.sourceKey === `first-worklog:${receipt.actorId}` &&

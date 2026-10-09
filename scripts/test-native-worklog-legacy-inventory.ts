@@ -11,7 +11,12 @@ function fixture() {
   const c = { id: contributionId, sourceKey: `worklog:${entryId}`, type: "BETA_PARTICIPATION", status: "IN_REVIEW",
     createdAt: stamp, availableAt: stamp as Date | null, releasedAt: null as Date | null, approvedPoints: 3,
     requestedPoints: 3, detail: "Own ordinary legacy", userId: "own", reviewedAt: null as Date | null };
-  const e = { id: entryId, createdAt: stamp, tqPointsAwarded: 3 };
+  const e = { id: entryId, createdAt: stamp, tqPointsAwarded: 3, authorId: "author", workspaceId: "workspace", deletedAt: null as Date | null };
+  const validationId = "v".repeat(25);
+  const validation = { id: validationId, worklogId: entryId, workspaceId: "workspace", requestedByUserId: "author",
+    validatorUserId: "own", status: "APPROVED", credentialId: "own-metadata",
+    createdAt: stamp, requestedAt: stamp, resolvedAt: stamp as Date | null };
+  let validationEnabled = false, validationMissing = false;
   const account = { id: "account", rewardsFrozenUntil: null as Date | null };
   type Row = { contributionId: string; accountId: string; redemptionId: string | null; type: string; pointsDelta: number; scoreDelta: number;
     idempotencyKey?: string; createdAt?: Date };
@@ -26,15 +31,20 @@ function fixture() {
       return [];
     },
     terraqoNativeWorklogOperation: { findUnique: async () => receipt, findUniqueOrThrow: async () => receipt,
-      findMany: async (args: { take: number }) => {
+      findMany: async (args: { take: number; where?: { targetWorklogId?: unknown } }) => {
         assert.equal(args.take, 201);
+        if (args.where?.targetWorklogId) return Array.from({ length: overflow === "targetReceipts" ? 201 : nativeTarget ? 1 : 0 }, () => ({ targetWorklogId: entryId }));
         return Array.from({ length: overflow === "native" ? 201 : 1 }, () => ({ id: operationId, targetWorklogId: nativeTarget ? entryId : "native", createdAt: nativeStamp }));
       } },
     terraqoBuilderContribution: { findMany: async (args: { take: number; where: { userId: string } }) => {
       assert.equal(args.take, 201); assert.equal(args.where.userId, "own");
       return Array.from({ length: overflow === "contributions" ? 201 : 1 }, () => c);
     } },
-    terraqoWorklogEntry: { findMany: async () => entryMissing ? [] : [e] },
+    terraqoWorklogEntry: { findMany: async (args: { take: number }) => {
+      assert.equal(args.take, 201); return entryMissing ? [] : Array.from({ length: overflow === "validationEntries" ? 201 : 1 }, () => e); } },
+    terraqoWorklogValidation: { findMany: async (args: { take: number; where: { validatorUserId: string } }) => {
+      assert.equal(args.take, 201); assert.equal(args.where.validatorUserId, "own");
+      return !validationEnabled || validationMissing ? [] : Array.from({ length: overflow === "validations" ? 201 : 1 }, () => validation); } },
     terraqoBuilderAccount: { findUnique: async () => account },
     terraqoBuilderLedger: { findMany: async (args: { take: number }) => {
       assert.equal(args.take, 201); return overflow === "ledger" ? Array.from({ length: 201 }, () => ledger[0]) : ledger;
@@ -43,7 +53,8 @@ function fixture() {
   // No write methods exist on the controlled ORM: any accidental mutation fails this test.
   const run = () => inspectNativeLegacyWorklogInventoryInTransaction(port as unknown as Prisma.TransactionClient, operationId);
   return { run, c, e, account, ledger, locks: () => locks, missing: () => { entryMissing = true; },
-    overflow: (kind: string) => { overflow = kind; }, ownerMissing: () => { owner = false; }, native: () => { nativeTarget = true; }, contributionId, operationId, nativeStamp };
+    overflow: (kind: string) => { overflow = kind; }, ownerMissing: () => { owner = false; }, native: () => { nativeTarget = true; }, contributionId, operationId, nativeStamp, validation, validationId,
+    enableValidation: () => { validationEnabled = true; }, missingValidation: () => { validationMissing = true; } };
 }
 async function main() {
   const base = fixture(), initial = JSON.stringify(base.c);
@@ -85,6 +96,35 @@ async function main() {
   assert.equal(oldReport.completionAuthorized, false); assert.equal(oldReport.nativeFirst, 0);
   assert.equal(JSON.stringify({ c: oldFirst.c, ledger: oldFirst.ledger }), oldBefore);
   oldFirst.ledger[0].type = "REVERSAL"; assert.equal((await oldFirst.run()).unsupported, 1);
+  function creditedValidation(points: 5 | 20) {
+    const f = fixture(); f.enableValidation();
+    f.c.sourceKey = `worklog-validation:${f.validationId}`; f.c.type = "EXPERIENCE_VALIDATION";
+    f.c.status = "VALIDATED"; f.c.requestedPoints = points; f.c.approvedPoints = points; f.c.availableAt = null;
+    f.c.reviewedAt = new Date("2026-08-01T00:00:01.000Z");
+    f.ledger.push({ contributionId: f.contributionId, accountId: "account", redemptionId: null, type: "CREDIT",
+      pointsDelta: points, scoreDelta: points, idempotencyKey: `contribution:${f.contributionId}:${points}`,
+      createdAt: new Date("2026-08-01T00:00:00.999Z") });
+    return f;
+  }
+  for (const points of [5, 20] as const) {
+    const f = creditedValidation(points), before = JSON.stringify({ c: f.c, v: f.validation, e: f.e, ledger: f.ledger });
+    const r = await f.run(); assert.equal(r.historical, 1); assert.equal(r.unsupported, 0);
+    assert.equal(r.completionAuthorized, false); assert.equal(JSON.stringify({ c: f.c, v: f.validation, e: f.e, ledger: f.ledger }), before);
+    assert.ok(!JSON.stringify(r).includes(f.validationId));
+  }
+  for (const prepare of [
+    (f: ReturnType<typeof creditedValidation>) => f.missingValidation(),
+    (f: ReturnType<typeof creditedValidation>) => f.missing(),
+    (f: ReturnType<typeof creditedValidation>) => f.native(),
+    (f: ReturnType<typeof creditedValidation>) => { f.validation.validatorUserId = "other"; },
+    (f: ReturnType<typeof creditedValidation>) => { f.validation.requestedByUserId = "own"; },
+    (f: ReturnType<typeof creditedValidation>) => { f.ledger[0].type = "REVERSAL"; },
+  ]) {
+    const f = creditedValidation(20); prepare(f); assert.equal((await f.run()).unsupported, 1);
+  }
+  for (const kind of ["validations", "validationEntries", "targetReceipts"]) {
+    const f = creditedValidation(5); f.overflow(kind); await assert.rejects(f.run);
+  }
   for (const kind of ["native", "contributions", "ledger"]) {
     const f = fixture(); f.overflow(kind);
     await assert.rejects(f.run, (e: unknown) => e instanceof NativeWorklogOperationError && e.status === 503);
