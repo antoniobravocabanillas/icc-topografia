@@ -53,7 +53,7 @@ def canonical(value):
 
 
 def main():
-    if sys.argv[1:] not in ([], ["--concurrency"], ["--settlement"], ["--authority"], ["--executor-confirmed"], ["--executor-pending"]):
+    if sys.argv[1:] not in ([], ["--concurrency"], ["--settlement"], ["--authority"], ["--executor-confirmed"], ["--executor-pending"], ["--validation-locks"]):
         raise RuntimeError("No external database or runner arguments accepted")
     spec = importlib.util.spec_from_file_location("schema_tools", ROOT / "scripts/rehearse-database-migration.py")
     helper = importlib.util.module_from_spec(spec)
@@ -162,9 +162,12 @@ def main():
                       "--authority": "scripts/test-native-worklog-local-authority.ts",
                       "--executor-confirmed": "scripts/test-native-worklog-local-settlement.ts",
                       "--executor-pending": "scripts/test-native-worklog-local-settlement.ts",
+                      "--validation-locks": "scripts/test-native-worklog-local-settlement.ts",
                       "--concurrency": "scripts/test-native-worklog-local-concurrency.ts"}[sys.argv[1]]
             if sys.argv[1].startswith("--executor-"):
                 node_env["TERRAQO_LOCAL_EXECUTOR_MODE"] = sys.argv[1].removeprefix("--executor-")
+            if sys.argv[1] == "--validation-locks":
+                node_env["TERRAQO_LOCAL_VALIDATION_LOCKS"] = "1"
             checked = subprocess.run([shutil.which("node"), "--conditions=react-server", "--import", "tsx",
                                       runner], cwd=ROOT, env=node_env,
                                      capture_output=True, text=True, encoding="utf-8", timeout=90)
@@ -191,7 +194,7 @@ def main():
                           "source_native_objects": 0, "local_native_objects": native,
                           "independent_connections": 2, "password_enforced": True,
                           "schema_sha256": hashlib.sha256(json.dumps(before, sort_keys=True).encode()).hexdigest(),
-                          "concurrent_worklog_flows_proved": sys.argv[1:] in (["--concurrency"], ["--settlement"], ["--authority"]),
+                          "concurrent_worklog_flows_proved": sys.argv[1:] in (["--concurrency"], ["--settlement"], ["--authority"], ["--validation-locks"]),
                           "executor_flow_proved": sys.argv[1:] in (["--executor-confirmed"], ["--executor-pending"]),
                           "production_native_applied": False}), flush=True)
     finally:

@@ -12,6 +12,7 @@ import { reconcileNativeAccountingAcknowledgementInTransaction } from "../lib/se
 import { NativeWorklogBudget } from "../lib/server/native-worklog-budget";
 import { NativeWorklogOperationError } from "../lib/server/native-worklog-http";
 import { executeNativeAccounting } from "../lib/server/native-worklog-accounting-executor";
+import { testNativeValidationLocks } from "./test-native-worklog-local-validation-locks";
 
 /** LOCAL PG18 committed fixture, synthetic historical authority. Not JWT/core
  * capture, network loss or production-provider concurrency. No productive retry.
@@ -91,6 +92,10 @@ async function main() {
         'authority',(SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogAuthority" r WHERE r."operationId"=${operationId}),
         'outbox',(SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogAccounting" r WHERE r."operationId"=${operationId})) AS snapshot`))[0].snapshot;
     const before = await state(b);
+    if (process.env.TERRAQO_LOCAL_VALIDATION_LOCKS === "1") {
+      await testNativeValidationLocks(a, b, user.id, workspace.id, operationId, state);
+      return;
+    }
     const executorMode = process.env.TERRAQO_LOCAL_EXECUTOR_MODE;
     if (executorMode) {
       assert.equal(["confirmed", "pending"].includes(executorMode), true);
