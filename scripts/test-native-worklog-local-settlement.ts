@@ -15,6 +15,7 @@ import { executeNativeAccounting } from "../lib/server/native-worklog-accounting
 import { testNativeValidationLocks } from "./test-native-worklog-local-validation-locks";
 import { testNativeReciprocalWorkers } from "./test-native-worklog-local-reciprocal-workers";
 import { testNativeLocalOperations } from "./test-native-worklog-local-operations";
+import { testNativeLocalSchemaGate } from "./test-native-worklog-local-schema-gate";
 
 /** LOCAL isolated committed fixture, synthetic historical authority. Not JWT/core
  * capture, network loss or production-provider concurrency. No productive retry.
@@ -34,6 +35,10 @@ async function main() {
       SELECT current_setting('TimeZone') AS timezone,current_setting('default_transaction_isolation') AS isolation`;
     assert.equal(settings.timezone, "UTC"); assert.equal(settings.isolation, "read committed");
     assert.equal(await a.user.count(), 0); assert.equal(await a.terraqoWorkspace.count(), 0);
+    if (process.env.TERRAQO_LOCAL_SCHEMA_GATE === "1") {
+      await testNativeLocalSchemaGate(a);
+      return;
+    }
     const workspace = await a.terraqoWorkspace.create({ data: { slug: "icc-topografia", name: "ICC own LOCAL settlement" } });
     workspaceId = workspace.id;
     companyId = (await a.company.create({ data: { legalName: "ICC Topografia OWN LOCAL fixture",
@@ -254,6 +259,6 @@ async function main() {
 }
 main().catch((error: unknown) => {
   const category = error instanceof Prisma.PrismaClientKnownRequestError ? error.code : error instanceof assert.AssertionError ? "assertion" : "unknown";
-  const location = error instanceof Error ? error.stack?.match(/(?:test-native-worklog-local-settlement|native-worklog-local-barrier)\.ts:\d+:\d+/)?.[0] : undefined;
+  const location = error instanceof Error ? error.stack?.match(/(?:test-native-worklog-local-settlement|test-native-worklog-local-schema-gate|native-worklog-local-barrier)\.ts:\d+:\d+/)?.[0] : undefined;
   console.error(JSON.stringify({ outcome: "failed", category, location })); process.exitCode = 1;
 });
