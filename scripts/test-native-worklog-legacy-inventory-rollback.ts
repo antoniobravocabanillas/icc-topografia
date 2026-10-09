@@ -59,7 +59,7 @@ export async function nativeLegacyInventoryRollback(tx: Prisma.TransactionClient
       assert.ok(!JSON.stringify(result).includes(user.id)); assert.ok(!JSON.stringify(result).includes(old.id));
       return result;
     }
-    const normal = await unchangedReads(); assert.equal(normal.inspected, 2); assert.equal(normal.due, 1); assert.equal(normal.unsupported, 1);
+    const normal = await unchangedReads(); assert.equal(normal.inspected, 2); assert.equal(normal.due, 1); assert.equal(normal.unsupported, 0); assert.equal(normal.nativeFirst, 1);
     async function isolated(runCase: () => Promise<void>) {
       await tx.$executeRawUnsafe("SAVEPOINT own_inventory_case");
       try { await runCase(); } finally {

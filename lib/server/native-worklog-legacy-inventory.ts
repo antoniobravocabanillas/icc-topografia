@@ -23,7 +23,7 @@ export async function inspectNativeLegacyWorklogInventoryInTransaction(tx: Prism
     WHERE "operationId"=${operationId} FOR SHARE`);
   if (!outbox) fail();
   const native = await tx.terraqoNativeWorklogOperation.findMany({ where: { actorId: receipt.actorId },
-    take: 201, orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { targetWorklogId: true, createdAt: true } });
+    take: 201, orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { id: true, targetWorklogId: true, createdAt: true } });
   if (!native.length || native.length > 200) fail();
   const where = { userId: receipt.actorId, OR: [{ sourceKey: { startsWith: "worklog:" } },
     { sourceKey: { startsWith: "worklog-validation:" } }, { type: "FIRST_WORKLOG" as const }] };
@@ -33,7 +33,7 @@ export async function inspectNativeLegacyWorklogInventoryInTransaction(tx: Prism
     WHERE "userId"=${receipt.actorId} AND id IN (${Prisma.join(ids.map(row => row.id))}) ORDER BY id FOR SHARE`);
   const contributions = ids.length ? await tx.terraqoBuilderContribution.findMany({ where: { ...where, id: { in: ids.map(row => row.id) } },
     take: 201, orderBy: { id: "asc" }, select: { id: true, sourceKey: true, type: true, status: true,
-      createdAt: true, availableAt: true, releasedAt: true, approvedPoints: true } }) : [];
+      createdAt: true, availableAt: true, releasedAt: true, approvedPoints: true, requestedPoints: true, detail: true } }) : [];
   if (contributions.length !== ids.length) fail();
   const entryIds = contributions.flatMap(row => row.sourceKey?.startsWith("worklog:") ? [row.sourceKey.slice(8)] : []);
   if (entryIds.some(id => !/^[a-z0-9]{25}$/.test(id))) fail();
@@ -54,9 +54,15 @@ export async function inspectNativeLegacyWorklogInventoryInTransaction(tx: Prism
   const targets = new Set(native.map(row => row.targetWorklogId)), firstNative = native[0].createdAt;
   const byEntry = new Map(entries.map(row => [row.id, row]));
   const now = new Date();
-  const counts = { inspected: contributions.length, native: 0, unsupported: 0, missingReference: 0,
+  const counts = { inspected: contributions.length, native: 0, nativeFirst: 0, unsupported: 0, missingReference: 0,
     ambiguous: 0, historical: 0, rejected: 0, unfunded: 0, frozen: 0, future: 0, due: 0 };
   for (const c of contributions) {
+    // This only identifies the native family. The FIRST phase independently validates
+    // status/account/credit history before settlement; a marker never authorizes credit.
+    if (c.type === "FIRST_WORKLOG" && c.sourceKey === `first-worklog:${receipt.actorId}` &&
+        c.requestedPoints === 25 && (c.approvedPoints === 0 || c.approvedPoints === 25) &&
+        native.some(row => c.detail === `native-first-worklog-v1:${row.id}` &&
+          c.createdAt.getTime() === row.createdAt.getTime())) { counts.nativeFirst++; continue; }
     if (!c.sourceKey?.startsWith("worklog:") || c.type !== "BETA_PARTICIPATION") { counts.unsupported++; continue; }
     const entryId = c.sourceKey.slice(8);
     if (targets.has(entryId)) { counts.native++; continue; }

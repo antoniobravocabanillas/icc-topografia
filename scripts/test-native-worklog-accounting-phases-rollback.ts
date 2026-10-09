@@ -11,7 +11,7 @@ import { NativeWorklogBudget } from "../lib/server/native-worklog-budget";
 import { applyHistoricalNativeAccountingInTransaction } from "../lib/server/native-worklog-historical-accounting";
 
 /** Only inside the pinned checker's outer DDL rollback, never standalone. */
-export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClient, workspaceId: string, historical = false) {
+export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClient, workspaceId: string, historical = false, reviewOnly = false) {
   for (const tq of [1]) {
     const marker = randomUUID(), id = createHash("sha256").update(marker).digest("hex");
     const user = await tx.user.create({ data: { name: `ICC accounting-phases rollback ${marker}`,
@@ -55,6 +55,20 @@ export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClien
     await tx.terraqoBuilderContribution.create({ data: { userId: user.id, type: "BUG_REPORT", title: "Own future retained",
       detail: "Manual future retained", approvedPoints: 2, availableAt: new Date("2099-01-01T00:00:00.000Z") } });
     const account = await tx.terraqoBuilderAccount.create({ data: { userId: user.id, pendingPoints: 5 } });
+    async function cleanup() {
+      await tx.terraqoBuilderLedger.deleteMany({ where: { accountId: account.id } });
+      await tx.terraqoBuilderContribution.deleteMany({ where: { userId: user.id } });
+      await tx.terraqoBuilderAccount.delete({ where: { id: account.id } });
+      if (historical) await tx.terraqoNativeWorklogAuthority.delete({ where: { operationId: id } });
+      await tx.terraqoNativeWorklogDecision.delete({ where: { operationId: id } });
+      await tx.terraqoNativeWorklogAccounting.delete({ where: { operationId: id } });
+      await tx.terraqoNativeWorklogOperation.delete({ where: { id } });
+      await tx.user.delete({ where: { id: user.id } });
+      assert.equal(await tx.user.count({ where: { id: user.id } }), 0);
+      assert.equal(await tx.terraqoBuilderContribution.count({ where: { userId: user.id } }), 0);
+      assert.equal(await tx.terraqoBuilderAccount.count({ where: { userId: user.id } }), 0);
+      assert.equal(await tx.terraqoBuilderLedger.count({ where: { accountId: account.id } }), 0);
+    }
     const runWith = async (port: Prisma.TransactionClient, ids: readonly string[], budget = new NativeWorklogBudget()) => {
       if (!historical) return applyNativeWorklogAccountingPhasesInTransaction(port, id, ids);
       const result = await applyHistoricalNativeAccountingInTransaction(port, id, budget, ids);
@@ -63,9 +77,11 @@ export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClien
     };
     const run = () => runWith(tx, [old.id]);
     const reject = (e: unknown) => e instanceof NativeWorklogOperationError && e.status === 503;
-    await assert.rejects(() => runWith(tx, [old.id, old.id]), reject);
-    await assert.rejects(() => runWith(tx, Array.from({ length: 6 }, (_, i) => `${i}`.padStart(25, "a"))), reject);
-    if (historical) {
+    if (!historical || reviewOnly) {
+      await assert.rejects(() => runWith(tx, [old.id, old.id]), reject);
+      await assert.rejects(() => runWith(tx, Array.from({ length: 6 }, (_, i) => `${i}`.padStart(25, "a"))), reject);
+    }
+    if (historical && reviewOnly) {
       await tx.$executeRawUnsafe("SAVEPOINT own_historical_no_authority");
       await tx.terraqoNativeWorklogAuthority.delete({ where: { operationId: id } });
       await assert.rejects(run, reject);
@@ -74,6 +90,44 @@ export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClien
       await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT own_historical_no_authority");
       await tx.$executeRawUnsafe("RELEASE SAVEPOINT own_historical_no_authority");
     }
+    if (historical && reviewOnly) {
+      async function ownStates() {
+        return { account: await tx.terraqoBuilderAccount.findUniqueOrThrow({ where: { id: account.id } }),
+          entries: await tx.terraqoWorklogEntry.findMany({ where: { authorId: user.id }, orderBy: { id: "asc" } }),
+          contributions: await tx.terraqoBuilderContribution.findMany({ where: { userId: user.id }, orderBy: { id: "asc" } }),
+          ledger: await tx.terraqoBuilderLedger.findMany({ where: { accountId: account.id }, orderBy: { id: "asc" } }),
+          outbox: await tx.terraqoNativeWorklogAccounting.findUniqueOrThrow({ where: { operationId: id } }) };
+      }
+      async function reviewCase(prepare: () => Promise<unknown>, field: "missingReference" | "ambiguous" | "unsupported" | "rejected" | "unfunded") {
+        await tx.$executeRawUnsafe("SAVEPOINT own_omitted_legacy_review");
+        try {
+          await prepare();
+          const before = await ownStates();
+          // Omit ALL legacy IDs: preflight must still see the entire relevant family.
+          const result = await applyHistoricalNativeAccountingInTransaction(tx, id, new NativeWorklogBudget(), []);
+          assert.equal(result.outcome, "review-required");
+          if (result.outcome !== "review-required") assert.fail("Review disposition required");
+          assert.equal(result.legacyInspection[field], 1); assert.equal(result.completionAuthorized, false);
+          assert.ok(!JSON.stringify(result).includes(old.id)); assert.ok(!JSON.stringify(result).includes(user.id));
+          assert.deepEqual(await ownStates(), before);
+        } finally {
+          await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT own_omitted_legacy_review");
+          await tx.$executeRawUnsafe("RELEASE SAVEPOINT own_omitted_legacy_review");
+        }
+      }
+      await reviewCase(() => tx.terraqoWorklogEntry.delete({ where: { id: oldEntry.id } }), "missingReference");
+      await reviewCase(() => tx.terraqoBuilderLedger.create({ data: { accountId: account.id, contributionId: old.id,
+        type: "REVERSAL", pointsDelta: -1, scoreDelta: -1, balanceAfter: 0,
+        description: "Own omitted legacy review proof", idempotencyKey: `own-preflight:${marker}` } }), "ambiguous");
+      await reviewCase(() => tx.terraqoBuilderContribution.create({ data: { userId: user.id, type: "EXPERIENCE_VALIDATION",
+        sourceKey: `worklog-validation:${oldEntry.id}`, title: "Own unsupported legacy validation",
+        detail: "Manual review case", approvedPoints: 1, createdAt: oldStamp } }), "unsupported");
+      await reviewCase(() => tx.terraqoBuilderContribution.update({ where: { id: first.id },
+        data: { detail: "native-first-worklog-v1:malformed" } }), "unsupported");
+      await reviewCase(() => tx.terraqoBuilderContribution.update({ where: { id: old.id }, data: { status: "REJECTED" } }), "rejected");
+      await reviewCase(() => tx.terraqoBuilderContribution.update({ where: { id: old.id }, data: { availableAt: null } }), "unfunded");
+    }
+    if (reviewOnly) { await cleanup(); continue; }
     await tx.$executeRawUnsafe("SAVEPOINT own_phases_fault");
     const faulty = new Proxy(tx, { get(target, property) {
       if (property === "terraqoBuilderLedger") return new Proxy(target.terraqoBuilderLedger, { get(ledger, method) {
@@ -134,31 +188,22 @@ export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClien
     assert.equal(saved.pendingPoints, 2); assert.equal(saved.availablePoints, 29); assert.equal(saved.lifetimeEarned, 29);
     assert.equal(saved.contributionScore, 29); assert.equal(saved.trustScore, 1);
     assert.equal(await tx.terraqoBuilderLedger.count({ where: { accountId: account.id } }), 3);
-    await tx.$executeRawUnsafe("SAVEPOINT own_phases_history_floor");
-    await tx.terraqoBuilderAccount.update({ where: { id: account.id }, data: { pendingPoints: 1 } });
-    await assert.rejects(run, reject);
-    await assert.rejects(() => releaseNativeWorklogBaseInTransaction(tx, id), reject);
-    await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT own_phases_history_floor");
-    await tx.$executeRawUnsafe("RELEASE SAVEPOINT own_phases_history_floor");
-    await tx.$executeRawUnsafe("SAVEPOINT own_phases_missing");
-    await tx.terraqoWorklogEntry.update({ where: { id: entry.id }, data: { deletedAt: new Date() } });
-    assert.deepEqual(await run(), { outcome: "deferred" });
-    assert.deepEqual(await tx.terraqoBuilderAccount.findUniqueOrThrow({ where: { id: account.id } }), saved);
-    await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT own_phases_missing");
-    await tx.$executeRawUnsafe("RELEASE SAVEPOINT own_phases_missing");
+    if (!historical) {
+      await tx.$executeRawUnsafe("SAVEPOINT own_phases_history_floor");
+      await tx.terraqoBuilderAccount.update({ where: { id: account.id }, data: { pendingPoints: 1 } });
+      await assert.rejects(run, reject);
+      await assert.rejects(() => releaseNativeWorklogBaseInTransaction(tx, id), reject);
+      await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT own_phases_history_floor");
+      await tx.$executeRawUnsafe("RELEASE SAVEPOINT own_phases_history_floor");
+      await tx.$executeRawUnsafe("SAVEPOINT own_phases_missing");
+      await tx.terraqoWorklogEntry.update({ where: { id: entry.id }, data: { deletedAt: new Date() } });
+      assert.deepEqual(await run(), { outcome: "deferred" });
+      assert.deepEqual(await tx.terraqoBuilderAccount.findUniqueOrThrow({ where: { id: account.id } }), saved);
+      await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT own_phases_missing");
+      await tx.$executeRawUnsafe("RELEASE SAVEPOINT own_phases_missing");
+    }
     assert.deepEqual(await tx.terraqoNativeWorklogDecision.findUniqueOrThrow({ where: { operationId: id } }), snapshot);
     assert.equal((await tx.terraqoNativeWorklogAccounting.findUniqueOrThrow({ where: { operationId: id } })).state, "PENDING");
-    await tx.terraqoBuilderLedger.deleteMany({ where: { accountId: account.id } });
-    await tx.terraqoBuilderContribution.deleteMany({ where: { userId: user.id } });
-    await tx.terraqoBuilderAccount.delete({ where: { id: account.id } });
-    if (historical) await tx.terraqoNativeWorklogAuthority.delete({ where: { operationId: id } });
-    await tx.terraqoNativeWorklogDecision.delete({ where: { operationId: id } });
-    await tx.terraqoNativeWorklogAccounting.delete({ where: { operationId: id } });
-    await tx.terraqoNativeWorklogOperation.delete({ where: { id } });
-    await tx.user.delete({ where: { id: user.id } });
-    assert.equal(await tx.user.count({ where: { id: user.id } }), 0);
-    assert.equal(await tx.terraqoBuilderContribution.count({ where: { userId: user.id } }), 0);
-    assert.equal(await tx.terraqoBuilderAccount.count({ where: { userId: user.id } }), 0);
-    assert.equal(await tx.terraqoBuilderLedger.count({ where: { accountId: account.id } }), 0);
+    await cleanup();
   }
 }
