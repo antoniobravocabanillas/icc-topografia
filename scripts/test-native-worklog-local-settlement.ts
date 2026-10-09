@@ -16,6 +16,7 @@ import { testNativeValidationLocks } from "./test-native-worklog-local-validatio
 import { testNativeReciprocalWorkers } from "./test-native-worklog-local-reciprocal-workers";
 import { testNativeLocalOperations } from "./test-native-worklog-local-operations";
 import { testNativeLocalSchemaGate } from "./test-native-worklog-local-schema-gate";
+import { testNativeLocalBootstrap } from "./test-native-worklog-local-bootstrap";
 
 /** LOCAL isolated committed fixture, synthetic historical authority. Not JWT/core
  * capture, network loss or production-provider concurrency. No productive retry.
@@ -35,6 +36,10 @@ async function main() {
       SELECT current_setting('TimeZone') AS timezone,current_setting('default_transaction_isolation') AS isolation`;
     assert.equal(settings.timezone, "UTC"); assert.equal(settings.isolation, "read committed");
     assert.equal(await a.user.count(), 0); assert.equal(await a.terraqoWorkspace.count(), 0);
+    if (process.env.TERRAQO_LOCAL_BOOTSTRAP === "1") {
+      await testNativeLocalBootstrap(a, b);
+      return;
+    }
     if (process.env.TERRAQO_LOCAL_SCHEMA_GATE === "1") {
       await testNativeLocalSchemaGate(a);
       return;
