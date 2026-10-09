@@ -83,7 +83,7 @@ async function fixtureConstraints(tx: Prisma.TransactionClient, workspaceId: str
 }
 
 async function main() {
-  if (["--worker-eligibility", "--worker-phases", "--worker-preflight", "--worker-legacy-first", "--legacy-validation-5", "--legacy-validation-20", "--validation-preflight-5", "--validation-preflight-20", "--validation-phases-5", "--validation-phases-20"].includes(process.argv[2])) {
+  if (["--worker-eligibility", "--worker-phases", "--worker-preflight", "--worker-legacy-first", "--legacy-validation-5", "--legacy-validation-20", "--validation-review-5", "--validation-preflight-5", "--validation-preflight-20", "--validation-phases-5", "--validation-phases-20"].includes(process.argv[2])) {
     assert.equal(process.argv.length, 3);
     assert.equal(process.env.TERRAQO_MUTATING_TESTS, "icc-topografia:20616116313");
     assert.equal(process.env.TEST_PORTAL_URL, "https://api.terraqoglobal.com");
@@ -107,7 +107,7 @@ async function main() {
         if (process.argv[2].startsWith("--validation-")) {
           const { nativeValidationInventoryRollback } = await import("./test-native-worklog-validation-inventory-rollback");
           await nativeValidationInventoryRollback(tx, workspace.id, process.argv[2].endsWith("-5") ? 5 : 20,
-            process.argv[2].startsWith("--validation-phases-"));
+            process.argv[2].startsWith("--validation-phases-"), process.argv[2] === "--validation-review-5");
         } else if (["--legacy-validation-5", "--legacy-validation-20"].includes(process.argv[2])) {
           const { nativeLegacyValidationRollback } = await import("./test-native-worklog-legacy-validation-rollback");
           await nativeLegacyValidationRollback(tx, workspace.id, process.argv[2] === "--legacy-validation-5" ? 5 : 20);

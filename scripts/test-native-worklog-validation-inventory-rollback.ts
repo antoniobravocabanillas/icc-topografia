@@ -6,10 +6,12 @@ import { nativeWorklogContentKey } from "../lib/server/native-worklog-content-ke
 import { decideNativeDeclaredWorklog } from "../lib/server/native-worklog-base-decision";
 import { inspectNativeLegacyWorklogInventoryInTransaction } from "../lib/server/native-worklog-legacy-inventory";
 import { applyHistoricalNativeAccountingInTransaction } from "../lib/server/native-worklog-historical-accounting";
+import { quarantineNativeAccountingReviewInTransaction } from "../lib/server/native-worklog-accounting-review";
+import { NativeWorklogOperationError } from "../lib/server/native-worklog-http";
 import { NativeWorklogBudget } from "../lib/server/native-worklog-budget";
 
 /** Only the pinned checker's outer rollback; no standalone or existing-user mode. */
-export async function nativeValidationInventoryRollback(tx: Prisma.TransactionClient, workspaceId: string, reward: 5 | 20, phasesOnly: boolean) {
+export async function nativeValidationInventoryRollback(tx: Prisma.TransactionClient, workspaceId: string, reward: 5 | 20, phasesOnly: boolean, reviewOnly = false) {
   for (const points of [reward]) {
     const marker = randomUUID();
     const validator = await tx.user.create({ data: { role: "CUSTOMER", name: `ICC validation rollback ${marker}`,
@@ -90,7 +92,56 @@ export async function nativeValidationInventoryRollback(tx: Prisma.TransactionCl
     const inspect = () => inspectNativeLegacyWorklogInventoryInTransaction(tx, operationId);
     const run = () => applyHistoricalNativeAccountingInTransaction(tx, operationId, new NativeWorklogBudget(), []);
     const contributionBefore = await tx.terraqoBuilderContribution.findUniqueOrThrow({ where: { id: contribution.id } });
-    if (!phasesOnly) {
+    if (reviewOnly) {
+      const baseline = await state();
+      const clean = await quarantineNativeAccountingReviewInTransaction(tx, operationId, new NativeWorklogBudget());
+      assert.deepEqual(clean, { outcome: "inspection-only", completionAuthorized: false });
+      assert.deepEqual(await state(), baseline);
+      // Two independent invalid histories; each savepoint preserves earned state.
+      for (const change of [
+        () => tx.terraqoWorklogValidation.delete({ where: { id: validation.id } }),
+        () => tx.terraqoBuilderLedger.update({ where: { id: credit.id }, data: { type: "REVERSAL", pointsDelta: -points, scoreDelta: -points } }),
+      ]) {
+        await tx.$executeRawUnsafe("SAVEPOINT own_durable_review");
+        try {
+          await change(); const prepared = await state();
+          let clock = 0;
+          const budget = new NativeWorklogBudget(() => clock);
+          const proxy = new Proxy(tx, { get(target, key) {
+            if (key !== "terraqoNativeWorklogAccounting") return Reflect.get(target, key);
+            return new Proxy(target.terraqoNativeWorklogAccounting, { get(model, field) {
+              if (field !== "updateMany") return Reflect.get(model, field);
+              return async (args: Prisma.TerraqoNativeWorklogAccountingUpdateManyArgs) => {
+                const changed = await model.updateMany(args);
+                assert.equal(changed.count, 1);
+                assert.equal((await model.findUniqueOrThrow({ where: { operationId } })).state, "QUARANTINED");
+                clock = 48000; return changed;
+              };
+            } });
+          } });
+          await tx.$executeRawUnsafe("SAVEPOINT own_review_budget");
+          await assert.rejects(() => quarantineNativeAccountingReviewInTransaction(proxy, operationId, budget),
+            error => error instanceof NativeWorklogOperationError && error.status === 503);
+          await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT own_review_budget");
+          await tx.$executeRawUnsafe("RELEASE SAVEPOINT own_review_budget");
+          assert.deepEqual(await state(), prepared);
+          const quarantined = await quarantineNativeAccountingReviewInTransaction(tx, operationId, new NativeWorklogBudget());
+          assert.deepEqual(quarantined, { outcome: "quarantined", completionAuthorized: false });
+          const saved = await state();
+          // Every business object remains exact; only outbox.state may change.
+          const expected = JSON.parse(JSON.stringify(prepared));
+          expected.snapshot.outbox.state = "QUARANTINED";
+          assert.deepEqual(saved, expected);
+          assert.deepEqual(await quarantineNativeAccountingReviewInTransaction(tx, operationId, new NativeWorklogBudget()),
+            { outcome: "unchanged", completionAuthorized: false });
+          assert.deepEqual(await state(), saved);
+        } finally {
+          await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT own_durable_review");
+          await tx.$executeRawUnsafe("RELEASE SAVEPOINT own_durable_review");
+        }
+        assert.deepEqual(await state(), baseline);
+      }
+    } else if (!phasesOnly) {
       const baseline = await state();
       for (let repeat = 0; repeat < 2; repeat++) {
         const result = await inspect();
