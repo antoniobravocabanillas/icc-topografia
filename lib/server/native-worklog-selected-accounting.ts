@@ -55,10 +55,10 @@ async function applySelected(tx: Prisma.TransactionClient, operationId: string,
   if (settle) {
     const current = await tx.terraqoNativeWorklogAccounting.findUniqueOrThrow({ where: { operationId } });
     const complete = after.due === 0 && after.future === 0 && after.frozen === 0 &&
-      (phases.first === "credited" || phases.first === "historical") &&
+      (phases.first === "credited" || phases.first === "historical" || phases.first === "ineligible") &&
       (phases.release === "released" || phases.release === "historical");
-    // An absent FIRST allocation is deliberately not sufficient evidence of
-    // ineligibility to authorize completion; preserve it for later reconciliation.
+    // FIRST's ineligible outcome requires the locked, durable creation decision;
+    // a missing allocation or proof fails closed before this completion write.
     const now = new Date();
     const nextAttemptAt = new Date(Math.max(current.nextAttemptAt.getTime(), now.getTime() + 60000));
     budget.require();

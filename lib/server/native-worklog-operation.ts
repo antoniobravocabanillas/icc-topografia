@@ -8,7 +8,7 @@ import { NativeWorklogOperationError, type NativeWorklogOperationResult } from "
 import { isParsedNativeWorklogSnapshot, nativeWorklogFingerprint, type parseNativeWorklogPayload } from "./native-worklog-payload";
 import { NativeWorklogBudget } from "./native-worklog-budget";
 
-import { reserveNativeFirstWorklog } from "./native-worklog-first-award";
+import { chooseNativeFirstWorklogInTransaction, saveNativeFirstWorklogDecision, requireNativeFirstWorklogDecision } from "./native-worklog-first-decision";
 import { advanceNativeWorklogOwnerVersion } from "./native-worklog-owner-version";
 import { planNativeWorklogDecision, saveNativeWorklogDecision, requireNativeWorklogDecision } from "./native-worklog-decision";
 
@@ -67,6 +67,7 @@ async function result(tx: Prisma.TransactionClient, token: WorkspacePortalToken,
   if (!await tx.terraqoNativeWorklogAccounting.findUnique({ where: { operationId: receipt.id }, select: { operationId: true } })) fail(503);
   await requireNativeWorklogDecision(tx, receipt);
   await requireNativeCreationAuthority(tx, receipt);
+  await requireNativeFirstWorklogDecision(tx, receipt.id);
   const [current] = receipt.worklogId ? await tx.$queryRaw<{ id: string; updatedAt: Date }[]>(Prisma.sql`
     SELECT id,"updatedAt" FROM icc."TerraqoWorklogEntry" WHERE id=${receipt.worklogId}
     AND "authorId"=${token.sub} AND "professionalProfileId"=${profileId} AND "workspaceId"=${token.workspaceId}
@@ -114,7 +115,7 @@ export async function createNativeWorklogInTransaction(tx: Prisma.TransactionCli
   const id = createHash("sha256").update(JSON.stringify(["native-worklog-operation-v1", token.sub, token.workspaceId, payload.operationKey])).digest("hex");
   await advanceNativeWorklogOwnerVersion(tx, access.profileId, token.sub, createdAt);
   const decision = await planNativeWorklogDecision(tx, token.sub, parsed, createdAt);
-  await reserveNativeFirstWorklog(tx, { actorId: token.sub, operationId: id, createdAt });
+  const firstChoice = await chooseNativeFirstWorklogInTransaction(tx, token.sub, id, createdAt);
   const entry = await tx.terraqoWorklogEntry.create({ data: {
     authorId: token.sub, professionalProfileId: access.profileId, workspaceId: token.workspaceId,
     projectId: payload.projectId || null, title: payload.title, summary: payload.summary, outcome: payload.outcome || null,
@@ -129,6 +130,7 @@ export async function createNativeWorklogInTransaction(tx: Prisma.TransactionCli
   } });
   // Missing accounting or audit aborts the entire creation; PENDING is not an award.
   await saveNativeWorklogDecision(tx, id, decision);
+  await saveNativeFirstWorklogDecision(tx, id, firstChoice);
   // Only the access object produced by our locked checks may attest creation.
   // A failed insert or final expiry aborts entry, FIRST reservation and all receipts together.
   if (!lockedAccesses.has(access) || access.actorId !== receipt.actorId || access.workspaceId !== receipt.workspaceId ||

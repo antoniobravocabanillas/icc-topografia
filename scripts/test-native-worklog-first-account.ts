@@ -5,7 +5,9 @@ import { applyNativeFirstWorklogInTransaction } from "../lib/server/native-workl
 const op = "a".repeat(64);
 function fixture() {
   const date = new Date("2026-09-01T12:00:00.000Z");
-  const identity = { id: op, actorId: "own", professionalProfileId: "profile", createdAt: date };
+  const identity = { id: op, actorId: "own", workspaceId: "workspace", fingerprint: "b".repeat(64), professionalProfileId: "profile", createdAt: date };
+  const firstChoice = { ...identity, policyVersion: "native-first-decision-v1", disposition: "RESERVED",
+    contributionId: "first", priorReceipts: 0, priorEntries: 0 };
   const account = { id: "account", userId: "own", pendingPoints: 2, availablePoints: 3,
     lifetimeEarned: 3, contributionScore: 3, trustScore: 4, rewardsFrozenUntil: null as Date | null };
   const contribution = { id: "first", userId: "own", type: "FIRST_WORKLOG", requestedPoints: 25,
@@ -21,6 +23,7 @@ function fixture() {
       if (sql.includes("TerraqoBuilderAccount")) locked = true;
       if (sql.includes("TerraqoProfessionalProfile")) return [{ id: "profile" }];
       if (sql.includes("TerraqoNativeWorklogAccounting")) return [{ state: "PENDING" }];
+      if (sql.includes("TerraqoNativeWorklogFirstDecision")) return [firstChoice];
       return [];
     },
     terraqoNativeWorklogOperation: { findUnique: async () => identity },
@@ -32,8 +35,8 @@ function fixture() {
         account.lifetimeEarned += 25; account.contributionScore += 25; return { ...account }; }
     },
     terraqoBuilderContribution: {
-      findUnique: async (args: { include: { ledgerEntries: { take: number } } }) => {
-        assert.equal(args.include.ledgerEntries.take, 2); return contribution;
+      findUnique: async (args: { include?: { ledgerEntries: { take: number } } }) => {
+        if (args.include) assert.equal(args.include.ledgerEntries.take, 2); return contribution;
       },
       findMany: async (args: { take: number; include: { ledgerEntries: { take: number } } }) => {
         assert(locked); assert.equal(args.take, 201); assert.equal(args.include.ledgerEntries.take, 201); return retained;
@@ -44,7 +47,7 @@ function fixture() {
     terraqoBuilderLedger: { create: async () => { writes++; contribution.ledgerEntries.push({
       accountId: account.id, redemptionId: null, type: "CREDIT", pointsDelta: 25, scoreDelta: 25 }); } }
   } as unknown as Prisma.TransactionClient;
-  return { tx, account, contribution, writes: () => writes, setRetained: (rows: typeof retained) => { retained = rows; } };
+  return { tx, account, contribution, firstChoice, writes: () => writes, setRetained: (rows: typeof retained) => { retained = rows; } };
 }
 const run = (f: ReturnType<typeof fixture>) => applyNativeFirstWorklogInTransaction(f.tx, op);
 async function main() {
@@ -61,6 +64,7 @@ for (const field of ["availablePoints", "lifetimeEarned", "contributionScore"] a
 const frozen = fixture(); frozen.account.rewardsFrozenUntil = new Date("2099-01-01T00:00:00.000Z");
 assert.equal(await run(frozen), "deferred"); assert.equal(frozen.writes(), 0);
 const legacy = fixture(); legacy.contribution.detail = "Own unfinished legacy review";
+legacy.firstChoice.disposition = "EXISTING";
 legacy.contribution.status = "VALIDATED";
 const legacyBefore = JSON.stringify({ account: legacy.account, contribution: legacy.contribution });
 assert.equal(await run(legacy), "deferred"); assert.equal(legacy.writes(), 0);

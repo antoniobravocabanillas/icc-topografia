@@ -4,6 +4,7 @@ import { NativeWorklogOperationError } from "./native-worklog-http";
 import { NativeWorklogBudget } from "./native-worklog-budget";
 import { requireNativeCreationAuthority } from "./native-worklog-creation-authority";
 import { requireNativeWorklogDecision } from "./native-worklog-decision";
+import { requireNativeFirstWorklogDecision } from "./native-worklog-first-decision";
 
 function fail(): never { throw new NativeWorklogOperationError(503); }
 type Accounting = { state: string; attempts: number; nextAttemptAt: Date; completedAt: Date | null };
@@ -43,6 +44,7 @@ export async function inspectNativeWorkerEligibilityInTransaction(tx: Prisma.Tra
   await tx.$queryRaw(Prisma.sql`SELECT "operationId" FROM icc."TerraqoNativeWorklogDecision"
     WHERE "operationId"=${operationId} FOR SHARE`);
   await requireNativeWorklogDecision(tx, receipt);
+  await requireNativeFirstWorklogDecision(tx, operationId);
   budget.require();
   const result = (disposition: "TERMINAL" | "REVIEW_REQUIRED" | "NOT_DUE" | "TARGET_MISSING" | "INSPECT_PHASES") =>
     Object.freeze({ disposition, completionAuthorized: false as const, ownerAccessAuthorized: false as const });

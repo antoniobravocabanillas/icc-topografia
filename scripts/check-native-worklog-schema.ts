@@ -83,7 +83,7 @@ async function fixtureConstraints(tx: Prisma.TransactionClient, workspaceId: str
 }
 
 async function main() {
-  if (process.argv[2] === "--first-decision") {
+  if (["--first-decision", "--first-creation-reserved", "--first-creation-existing", "--first-creation-ineligible", "--first-settlement"].includes(process.argv[2])) {
     assert.equal(process.argv.length, 3);
     assert.equal(process.env.TERRAQO_MUTATING_TESTS, "icc-topografia:20616116313");
     assert.equal(process.env.TEST_PORTAL_URL, "https://api.terraqoglobal.com");
@@ -116,8 +116,17 @@ async function main() {
         firstSchema = { fingerprint: hash({ columns, constraints, indexes }), constraints: constraints.length, indexes: indexes.length };
         assert.equal(constraints.length, 6); assert.equal(indexes.length, 2);
         assert.deepEqual(firstSchema, { fingerprint: "ae4b4d571842674bf07bd1b6391aaa6c39e6f5d37b8d9bea088ae8a29271cd8f", constraints: 6, indexes: 2 });
-        const { nativeFirstDecisionRollback } = await import("./test-native-worklog-first-decision-rollback");
-        await nativeFirstDecisionRollback(tx, workspace.id);
+        if (process.argv[2] === "--first-decision") {
+          const { nativeFirstDecisionRollback } = await import("./test-native-worklog-first-decision-rollback");
+          await nativeFirstDecisionRollback(tx, workspace.id);
+        } else if (process.argv[2] === "--first-settlement") {
+          const { nativeFirstSettlementRollback } = await import("./test-native-worklog-first-settlement-rollback");
+          await nativeFirstSettlementRollback(tx, workspace.id);
+        } else {
+          const { nativeFirstCreationRollback } = await import("./test-native-worklog-first-creation-rollback");
+          const disposition = process.argv[2].endsWith("-reserved") ? "RESERVED" : process.argv[2].endsWith("-existing") ? "EXISTING" : "INELIGIBLE";
+          await nativeFirstCreationRollback(tx, workspace.id, disposition);
+        }
         assert.equal(await ledgerFingerprint(tx), ledger);
         throw rollback;
       }, { maxWait: 5000, timeout: 90000 });
@@ -127,7 +136,7 @@ async function main() {
       WHERE n.nspname='icc' AND (c.relname='TerraqoNativeWorklogFirstDecision' OR c.relname LIKE 'NativeWorklogFirst%' OR c.relname='TerraqoNativeWorklogFirstDecision_pkey')`;
     assert.equal(Number(remaining.n), 0);
     assert.equal(await ledgerFingerprint(prisma), ledger);
-    console.log(JSON.stringify({ mode: "first-decision-rollback", firstSchema, ledgerFingerprint: ledger, applied: false }));
+    console.log(JSON.stringify({ mode: `${process.argv[2].slice(2)}-rollback`, firstSchema, ledgerFingerprint: ledger, applied: false }));
     return;
   }
   if (["--worker-eligibility", "--worker-phases", "--worker-preflight", "--worker-selection", "--worker-backlog", "--worker-settlement", "--worker-deferred", "--worker-ack", "--worker-legacy-first", "--legacy-validation-5", "--legacy-validation-20", "--validation-review-5", "--validation-preflight-5", "--validation-preflight-20", "--validation-phases-5", "--validation-phases-20"].includes(process.argv[2])) {

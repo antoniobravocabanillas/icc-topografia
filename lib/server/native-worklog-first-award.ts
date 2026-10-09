@@ -2,6 +2,7 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 import { NativeWorklogOperationError } from "./native-worklog-http";
 import { inspectLegacyFirstWorklogHistory } from "./native-worklog-legacy-first-policy";
+import { requireNativeFirstWorklogDecision } from "./native-worklog-first-decision";
 
 function fail(): never { throw new NativeWorklogOperationError(503); }
 const integer = (n: number) => Number.isSafeInteger(n) && n >= 0 && n <= 2147483647;
@@ -41,11 +42,14 @@ export async function applyNativeFirstWorklogInTransaction(tx: Prisma.Transactio
     SELECT state FROM icc."TerraqoNativeWorklogAccounting" WHERE "operationId"=${operationId} FOR UPDATE`);
   if (!accounting.length) fail();
   if (accounting[0].state !== "PENDING") return "deferred" as const;
+  const choice = await requireNativeFirstWorklogDecision(tx, operationId);
+  // Absence alone cannot prove ineligibility. Only the creation snapshot may do so.
+  if (choice.disposition === "INELIGIBLE") return "ineligible" as const;
   await tx.$queryRaw(Prisma.sql`SELECT id FROM icc."TerraqoBuilderContribution"
     WHERE "sourceKey"=${source(identity.actorId)} FOR UPDATE`);
   const contribution = await tx.terraqoBuilderContribution.findUnique({ where: { sourceKey: source(identity.actorId) },
     include: { ledgerEntries: { take: 2, orderBy: { id: "asc" } } } });
-  if (!contribution) return "ineligible" as const;
+  if (!contribution) fail();
   if (contribution.userId !== identity.actorId || contribution.type !== "FIRST_WORKLOG" ||
       contribution.requestedPoints !== 25 || ![0, 25].includes(contribution.approvedPoints)) fail();
   const initial = await tx.terraqoBuilderAccount.findUnique({ where: { userId: identity.actorId } });

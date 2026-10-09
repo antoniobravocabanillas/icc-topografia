@@ -14,10 +14,13 @@ function fixture() {
     grantExpiresAt: new Date("2026-09-02T00:00:00.000Z"), paidThrough: new Date("2026-09-03T00:00:00.000Z") as Date | null,
     role: "PROFESSIONAL", modules: ["LIVE_CV", "PROFESSIONAL_NETWORK"] };
   const decision = { fingerprint: receipt.fingerprint, createdAt, policyVersion: "native-declared-lima-v1", contentKey: "d".repeat(64) };
+  const first = { ...receipt, policyVersion: "native-first-decision-v1", disposition: "INELIGIBLE",
+    contributionId: null, priorReceipts: 0, priorEntries: 1 };
   const outbox = { state: "PENDING", attempts: 0, nextAttemptAt: createdAt, completedAt: null as Date | null };
   const calls: string[] = [];
   let owner = true, missingProof = false, missingDecision = false, missingOutbox = false, reads = 0, changedBinding = false;
   const port = {
+    terraqoBuilderContribution: { findUnique: async () => null },
     terraqoNativeWorklogOperation: { findUnique: async () => {
       reads++; return reads > 1 && changedBinding ? { ...receipt, workspaceId: "other" } : receipt;
     } },
@@ -28,6 +31,8 @@ function fixture() {
       if (query.includes("TerraqoNativeWorklogAccounting")) { calls.push("outbox"); return missingOutbox ? [] : [outbox]; }
       if (query.includes("TerraqoNativeWorklogAuthority")) { calls.push("authority"); return missingProof ? [] : [proof]; }
       if (query.includes("TerraqoNativeWorklogDecision")) { calls.push("decision"); return []; }
+      if (query.includes("TerraqoNativeWorklogFirstDecision")) { calls.push("first"); return [first]; }
+      if (query.includes("TerraqoBuilderContribution")) { calls.push("allocation"); return []; }
       if (query.includes("TerraqoNativeWorklogOperation")) { calls.push("receipt"); return []; }
       throw Error("Unexpected query: no current grants, membership, balances or writes permitted");
     },
@@ -44,7 +49,7 @@ async function main() {
   const result = await f.run(); // Token/grant/paidThrough expired now, valid at creation.
   assert.deepEqual(result, { disposition: "INSPECT_PHASES", completionAuthorized: false, ownerAccessAuthorized: false });
   assert.ok(Object.isFrozen(result));
-  assert.deepEqual(f.calls, ["owner", "receipt", "outbox", "authority", "decision"]);
+  assert.deepEqual(f.calls, ["owner", "receipt", "outbox", "authority", "decision", "owner", "receipt", "first", "allocation"]);
   assert.equal(JSON.stringify({ receipt: f.receipt, proof: f.proof, decision: f.decision, outbox: f.outbox }), snapshot);
   assert.deepEqual(await f.run(), result);
   for (const state of ["APPLIED", "QUARANTINED"]) {
@@ -74,7 +79,7 @@ async function main() {
   const late = fixture(); let checks = 0;
   const lateBudget = new NativeWorklogBudget(() => ++checks >= 3 ? 48000 : 0);
   await assert.rejects(() => late.run(lateBudget), rejected);
-  assert.deepEqual(late.calls, ["owner", "receipt", "outbox", "authority", "decision"]);
+  assert.deepEqual(late.calls, ["owner", "receipt", "outbox", "authority", "decision", "owner", "receipt", "first", "allocation"]);
   await assert.rejects(() => fixture().run(undefined, () => new Date(NaN)), rejected);
   const invalidId = fixture(); invalidId.receipt.id = "invalid";
   await assert.rejects(() => invalidId.run(), rejected); assert.deepEqual(invalidId.calls, []);
