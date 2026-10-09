@@ -93,6 +93,7 @@ export async function nativeValidationInventoryRollback(tx: Prisma.TransactionCl
     }
     const inspect = () => inspectNativeLegacyWorklogInventoryInTransaction(tx, operationId);
     const run = () => applyHistoricalNativeAccountingInTransaction(tx, operationId, new NativeWorklogBudget(), []);
+    const firstBefore = await tx.terraqoNativeWorklogFirstDecision.findUniqueOrThrow({ where: { operationId } });
     const contributionBefore = await tx.terraqoBuilderContribution.findUniqueOrThrow({ where: { id: contribution.id } });
     if (reviewOnly) {
       const baseline = await state();
@@ -186,6 +187,7 @@ export async function nativeValidationInventoryRollback(tx: Prisma.TransactionCl
       assert.equal(await tx.terraqoBuilderLedger.count({ where: { accountId: account.id } }), 3);
       assert.equal((await tx.terraqoNativeWorklogAccounting.findUniqueOrThrow({ where: { operationId } })).state, "PENDING");
     }
+    assert.deepEqual(await tx.terraqoNativeWorklogFirstDecision.findUniqueOrThrow({ where: { operationId } }), firstBefore);
     assert.deepEqual(await tx.terraqoBuilderContribution.findUniqueOrThrow({ where: { id: contribution.id } }), contributionBefore);
     assert.deepEqual(await tx.terraqoBuilderLedger.findUniqueOrThrow({ where: { id: credit.id } }), credit);
     assert.equal(await tx.terraqoBuilderLedger.count({ where: { contributionId: contribution.id } }), 1);

@@ -83,7 +83,7 @@ async function fixtureConstraints(tx: Prisma.TransactionClient, workspaceId: str
 }
 
 async function main() {
-  if (["--first-decision", "--first-creation-reserved", "--first-creation-existing", "--first-creation-ineligible", "--first-settlement", "--worker-eligibility-five", "--worker-settlement-five", "--worker-deferred-five", "--worker-ack-five", "--worker-backlog-five", "--worker-selection-five", "--validation-review-5-five"].includes(process.argv[2])) {
+  if (["--first-decision", "--first-creation-reserved", "--first-creation-existing", "--first-creation-ineligible", "--first-settlement", "--worker-eligibility-five", "--worker-settlement-five", "--worker-deferred-five", "--worker-ack-five", "--worker-backlog-five", "--worker-selection-five", "--validation-review-5-five", "--validation-preflight-5-five", "--validation-preflight-20-five", "--validation-phases-5-five", "--validation-phases-20-five"].includes(process.argv[2])) {
     assert.equal(process.argv.length, 3);
     assert.equal(process.env.TERRAQO_MUTATING_TESTS, "icc-topografia:20616116313");
     assert.equal(process.env.TEST_PORTAL_URL, "https://api.terraqoglobal.com");
@@ -120,7 +120,11 @@ async function main() {
         firstSchema = { fingerprint: hash({ columns, constraints, indexes }), constraints: constraints.length, indexes: indexes.length };
         assert.equal(constraints.length, 6); assert.equal(indexes.length, 2);
         assert.deepEqual(firstSchema, { fingerprint: "ae4b4d571842674bf07bd1b6391aaa6c39e6f5d37b8d9bea088ae8a29271cd8f", constraints: 6, indexes: 2 });
-        if (process.argv[2] === "--validation-review-5-five") {
+        if (["--validation-preflight-5-five", "--validation-preflight-20-five", "--validation-phases-5-five", "--validation-phases-20-five"].includes(process.argv[2])) {
+          const { nativeValidationInventoryRollback } = await import("./test-native-worklog-validation-inventory-rollback");
+          await nativeValidationInventoryRollback(tx, workspace.id, process.argv[2].endsWith("-5-five") ? 5 : 20,
+            process.argv[2].startsWith("--validation-phases-"));
+        } else if (process.argv[2] === "--validation-review-5-five") {
           const { nativeValidationInventoryRollback } = await import("./test-native-worklog-validation-inventory-rollback");
           await nativeValidationInventoryRollback(tx, workspace.id, 5, false, true);
         } else if (process.argv[2] === "--worker-selection-five") {
