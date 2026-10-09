@@ -200,6 +200,9 @@ export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClien
         ) AS snapshot`);
         return row.snapshot;
       };
+      const beforeBatches = await states();
+      const firstProof = beforeBatches.firstDecision as { disposition: string };
+      assert.equal(firstProof.disposition, "RESERVED");
       const batchOne = await applySelectedNativeAccountingInTransaction(tx, id, new NativeWorklogBudget());
       assert.deepEqual(batchOne, { outcome: "pending", selected: 5, remainingDue: 1, future: 0, frozen: 0, completionAuthorized: false });
       const afterOne = await states();
@@ -232,7 +235,11 @@ export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClien
         assert.ok(finalContributions.find(c => c.id === row.id)?.releasedAt);
       }
       assert.equal(finalLedger.filter(row => row.contributionId === first.id).length, 1);
-      for (const key of ["entries", "receipt", "decision", "authority", "outbox"]) assert.deepEqual(afterTwo[key], afterOne[key]);
+      assert.equal(await tx.terraqoNativeWorklogFirstDecision.count({ where: { operationId: id } }), 1);
+      for (const key of ["entries", "receipt", "firstDecision", "decision", "authority", "outbox"]) {
+        assert.deepEqual(afterTwo[key], afterOne[key]);
+        if (key !== "entries") assert.deepEqual(afterTwo[key], beforeBatches[key]);
+      }
       assert.equal((afterTwo.outbox as { state: string }).state, "PENDING");
       assert.ok(!JSON.stringify([batchOne, batchTwo]).includes(user.id));
       await cleanup();
@@ -242,6 +249,7 @@ export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClien
       assert.equal(await tx.terraqoNativeWorklogDecision.count({ where: { operationId: id } }), 0);
       assert.equal(await tx.terraqoNativeWorklogAuthority.count({ where: { operationId: id } }), 0);
       assert.equal(await tx.terraqoNativeWorklogAccounting.count({ where: { operationId: id } }), 0);
+      assert.equal(await tx.terraqoNativeWorklogFirstDecision.count({ where: { operationId: id } }), 0);
       continue;
     }
     if (selectionOnly) {
