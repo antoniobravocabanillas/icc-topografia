@@ -4,15 +4,16 @@ import { executeNativeAccounting } from "../lib/server/native-worklog-accounting
 import { NativeWorklogBudget } from "../lib/server/native-worklog-budget";
 
 // Bundle-only phase ports. No productive module can read this test global.
-type Ports = { review: () => Promise<{ outcome: string }>; settle: () => Promise<{ outcome: string }>;
+type Ports = { schema: () => Promise<void>; review: () => Promise<{ outcome: string }>; settle: () => Promise<{ outcome: string }>;
   ack: () => Promise<{ outcome: string }> };
 const controlled = globalThis as typeof globalThis & { __nativeExecutorPorts: Ports };
 async function main() {
   const id = "a".repeat(64);
   async function check(mode: string, expected: string) {
-    let state = "PENDING", calls = 0, reviews = 0, phases = 0, ack = 0, clock = 0;
+    let state = "PENDING", calls = 0, reviews = 0, phases = 0, ack = 0, clock = 0, schema = 0;
     const budget = new NativeWorklogBudget(() => clock);
     controlled.__nativeExecutorPorts = {
+      schema: async () => { schema++; if (mode === "schema-invalid" || (mode === "recovery-schema-invalid" && calls === 2)) throw new Error("CONTROLLED_SCHEMA_REJECTION"); },
       review: async () => { reviews++; if (mode === "review") { state = "QUARANTINED"; return { outcome: "quarantined" }; }
         if (["terminal", "future", "quarantine"].includes(mode)) return { outcome: "unchanged" };
         return { outcome: "inspection-only" }; },
@@ -35,14 +36,16 @@ async function main() {
       }
       if (calls === 2 && mode === "recovery-failure") throw new Error("CONTROLLED_RECOVERY_UNAVAILABLE");
       const value = await callback({ terraqoNativeWorklogAccounting: { findUniqueOrThrow: async () => ({ state }) } } as unknown as Prisma.TransactionClient);
-      if (calls === 1 && mode === "confirmed-reply-lost") throw new Error("CONTROLLED_AFTER_CALLBACK_SUCCESS");
+      if (calls === 1 && ["confirmed-reply-lost", "recovery-schema-invalid"].includes(mode)) throw new Error("CONTROLLED_AFTER_CALLBACK_SUCCESS");
       return value;
     } } as unknown as Pick<PrismaClient, "$transaction">;
     const output = await executeNativeAccounting(database, id, budget);
     assert.deepEqual(output, { outcome: expected, retryAuthorized: false, ownerAccessAuthorized: false });
     assert.equal(Object.isFrozen(output), true);
     assert.equal(phases <= 1, true); assert.equal(reviews <= 1, true); assert.equal(ack <= 1, true);
-    assert.equal(calls, mode === "initial-budget" ? 0 : ["before-callback", "confirmed-reply-lost", "callback-failure", "regression", "recovery-failure"].includes(mode) ? 2 : 1);
+    assert.equal(calls, mode === "initial-budget" ? 0 : ["before-callback", "confirmed-reply-lost", "callback-failure", "regression", "recovery-failure", "schema-invalid", "recovery-schema-invalid"].includes(mode) ? 2 : 1);
+    if (mode === "schema-invalid") { assert.equal(schema, 2); assert.equal(reviews + phases + ack, 0); assert.equal(state, "PENDING"); }
+    if (mode === "recovery-schema-invalid") { assert.equal(schema, 2); assert.equal(ack, 0); assert.equal(state, "APPLIED"); }
     if (["terminal", "future", "quarantine", "review", "before-callback", "recovery-failure", "no-recovery-budget", "initial-budget"].includes(mode)) assert.equal(phases, 0);
     if (mode === "confirmed-reply-lost") assert.equal(state, "APPLIED");
   }
@@ -50,7 +53,8 @@ async function main() {
     ["terminal", "applied-history"], ["future", "not-due"], ["quarantine", "quarantined"],
     ["before-callback", "quarantined"], ["confirmed-reply-lost", "applied-history"],
     ["callback-failure", "quarantined"], ["regression", "quarantined"], ["recovery-failure", "uncertain"],
-    ["no-recovery-budget", "uncertain"], ["initial-budget", "budget-deferred"]]) await check(mode, expected);
+    ["no-recovery-budget", "uncertain"], ["initial-budget", "budget-deferred"],
+    ["schema-invalid", "uncertain"], ["recovery-schema-invalid", "uncertain"]]) await check(mode, expected);
   await assert.rejects(() => executeNativeAccounting({} as Pick<PrismaClient, "$transaction">, "invalid", new NativeWorklogBudget()));
   console.log("native-accounting-executor controlled orchestration PASS; no SQL rollback or transport proof");
 }

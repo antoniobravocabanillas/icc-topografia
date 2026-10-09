@@ -42,6 +42,21 @@ export async function testNativeLocalOperations(a: PrismaClient, b: PrismaClient
   assert.equal(executeCalls, 0);
   assert.deepEqual(await state(b), baseline);
 
+  // The runner has already verified a disposable, empty-origin LOCAL database.
+  // Drift is committed only there so both primary and recovery connections see it.
+  // No production schema or caller-supplied SQL is involved.
+  await a.$executeRaw`ALTER TABLE icc."TerraqoNativeWorklogAccounting" ALTER COLUMN attempts SET DEFAULT 1`;
+  try {
+    const rejected = await handleNativeAccountingOperations(request(command), ports(a));
+    assert.equal(rejected.status, 503);
+    assert.deepEqual(await rejected.json(), { result: { outcome: "uncertain",
+      retryAuthorized: false, ownerAccessAuthorized: false } });
+    assert.deepEqual(await state(b), baseline);
+    assert.equal((await b.terraqoNativeWorklogAccounting.findUniqueOrThrow({ where: { operationId } })).state, "PENDING");
+  } finally {
+    await a.$executeRaw`ALTER TABLE icc."TerraqoNativeWorklogAccounting" ALTER COLUMN attempts SET DEFAULT 0`;
+  }
+
   // Real independent connections and primary transactions. No mocked executor or
   // caller-supplied phase IDs; committed receipt state reconciles the second call.
   const replies = await Promise.all([
@@ -78,7 +93,7 @@ export async function testNativeLocalOperations(a: PrismaClient, b: PrismaClient
   assert.deepEqual(await missing.json(), { result: { outcome: "uncertain",
     retryAuthorized: false, ownerAccessAuthorized: false } });
   assert.deepEqual(await state(b), committed);
-  assert.equal(executeCalls, 4);
+  assert.equal(executeCalls, 5);
   console.log(JSON.stringify({ outcome: "passed", environment: "LOCAL_ISOLATED_ONLY",
     operations_boundary_proved: true, rejected_commands_execute_calls: 0,
     concurrent_requests: 2, accounting_credits: 2, attempts_charged: 0,

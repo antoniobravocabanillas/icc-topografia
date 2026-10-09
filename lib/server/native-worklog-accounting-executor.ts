@@ -5,6 +5,7 @@ import { NativeWorklogOperationError } from "./native-worklog-http";
 import { quarantineNativeAccountingReviewInTransaction } from "./native-worklog-accounting-review";
 import { settleSelectedNativeAccountingInTransaction } from "./native-worklog-selected-accounting";
 import { reconcileNativeAccountingAcknowledgementInTransaction } from "./native-worklog-accounting-acknowledgement";
+import { assertNativeWorklogSchemaInTransaction } from "./native-worklog-schema-gate";
 
 type Outcome = "applied" | "applied-history" | "quarantined" | "pending" | "not-due" | "budget-deferred" | "uncertain";
 const result = (outcome: Outcome) => Object.freeze({ outcome, retryAuthorized: false as const,
@@ -13,8 +14,10 @@ const options = { maxWait: 1000, timeout: 7000 };
 
 /** Internal directed executor; no route, scheduler, global selection or user token.
  * Budget must be created by the trusted caller BEFORE beginning this operation.
- * Primary review, credits and completion share one transaction. ANY rejection is
- * acknowledgement uncertainty, never evidence of rollback: reconcile in a new
+ * Primary review, credits and completion share one transaction.
+ * Both transactions require the exact schema
+ * before touching accounting state; there is no caller-supplied gate bypass.
+ * A rejected primary remains acknowledgement uncertainty: reconcile in a new
  * transaction without replaying phases or charging an attempt. PENDING is then
  * quarantined for review; APPLIED is retained. Transient auto-retry is deliberately
  * unavailable until a separate protocol can positively establish prior rollback.
@@ -26,6 +29,7 @@ export async function executeNativeAccounting(database: Pick<PrismaClient, "$tra
   try {
     return await database.$transaction(async tx => {
       budget.require();
+      await assertNativeWorklogSchemaInTransaction(tx, budget);
       const review = await quarantineNativeAccountingReviewInTransaction(tx, operationId, budget);
       if (review.outcome === "quarantined") return result("quarantined");
       if (review.outcome === "unchanged") {
@@ -48,6 +52,9 @@ export async function executeNativeAccounting(database: Pick<PrismaClient, "$tra
     try {
       return await database.$transaction(async tx => {
         budget.require();
+        // Recovery also fails closed on schema drift; never quarantine or infer
+        // rollback using a catalog that no longer matches the accounting contract.
+        await assertNativeWorklogSchemaInTransaction(tx, budget);
         const observed = await reconcileNativeAccountingAcknowledgementInTransaction(tx, operationId, budget);
         budget.require();
         return result(observed.outcome === "applied-history" ? "applied-history" : "quarantined");
