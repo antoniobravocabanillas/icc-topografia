@@ -268,6 +268,8 @@ export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClien
         return row;
       };
       const before = await states();
+      const firstProof = await tx.terraqoNativeWorklogFirstDecision.findUniqueOrThrow({ where: { operationId: id } });
+      assert.equal(firstProof.disposition, "RESERVED");
       let injected = false;
       const proxy = new Proxy(tx, { get(target, key) {
         if (key !== "terraqoBuilderLedger") return Reflect.get(target, key);
@@ -292,6 +294,7 @@ export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClien
       await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT own_selection_postverify");
       await tx.$executeRawUnsafe("RELEASE SAVEPOINT own_selection_postverify");
       assert.deepEqual(await states(), before);
+      assert.deepEqual(await tx.terraqoNativeWorklogFirstDecision.findUniqueOrThrow({ where: { operationId: id } }), firstProof);
       const result = await applySelectedNativeAccountingInTransaction(tx, id, new NativeWorklogBudget());
       assert.deepEqual(result, { outcome: "pending", selected: 1, remainingDue: 0, future: 0, frozen: 0, completionAuthorized: false });
       assert.ok(!JSON.stringify(result).includes(old.id));
@@ -302,7 +305,16 @@ export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClien
       assert.equal((await tx.terraqoBuilderAccount.findUniqueOrThrow({ where: { id: account.id } })).availablePoints, 29);
       assert.equal(await tx.terraqoBuilderLedger.count({ where: { accountId: account.id } }), 3);
       assert.equal((await tx.terraqoNativeWorklogAccounting.findUniqueOrThrow({ where: { operationId: id } })).state, "PENDING");
-      await cleanup(); continue;
+      assert.deepEqual(await tx.terraqoNativeWorklogFirstDecision.findUniqueOrThrow({ where: { operationId: id } }), firstProof);
+      await cleanup();
+      assert.equal(await tx.terraqoProfessionalProfile.count({ where: { id: profile.id } }), 0);
+      assert.equal(await tx.terraqoWorklogEntry.count({ where: { authorId: user.id } }), 0);
+      assert.equal(await tx.terraqoNativeWorklogOperation.count({ where: { actorId: user.id } }), 0);
+      assert.equal(await tx.terraqoNativeWorklogFirstDecision.count({ where: { operationId: id } }), 0);
+      assert.equal(await tx.terraqoNativeWorklogAuthority.count({ where: { operationId: id } }), 0);
+      assert.equal(await tx.terraqoNativeWorklogDecision.count({ where: { operationId: id } }), 0);
+      assert.equal(await tx.terraqoNativeWorklogAccounting.count({ where: { operationId: id } }), 0);
+      continue;
     }
     if (legacyFirstOnly) {
       const reviewedAt = new Date("2026-08-01T12:00:01.000Z");
