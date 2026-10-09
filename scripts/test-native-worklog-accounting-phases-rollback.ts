@@ -11,6 +11,7 @@ import { NativeWorklogBudget } from "../lib/server/native-worklog-budget";
 import { applySelectedNativeAccountingInTransaction, settleSelectedNativeAccountingInTransaction } from "../lib/server/native-worklog-selected-accounting";
 import { reconcileNativeAccountingAcknowledgementInTransaction } from "../lib/server/native-worklog-accounting-acknowledgement";
 import { applyHistoricalNativeAccountingInTransaction } from "../lib/server/native-worklog-historical-accounting";
+import { chooseNativeFirstWorklogInTransaction, saveNativeFirstWorklogDecision } from "../lib/server/native-worklog-first-decision";
 
 /** Only inside the pinned checker's outer DDL rollback, never standalone. */
 export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClient, workspaceId: string, historical = false, reviewOnly = false, legacyFirstOnly = false, selectionOnly = false, backlogOnly = false, settlementMode = "") {
@@ -25,12 +26,16 @@ export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClien
     const d = decideNativeDeclaredWorklog(parsed, "2026-09-01T12:00:00.000Z", {
       priorDuplicates: 0, rewardedInDay: tq ? 0 : 3, trustedInWindow: 0 });
     const stamp = new Date(d.createdAt), contentKey = nativeWorklogContentKey(parsed.payload);
+    // Real durable choice; the later legacy/account/authority fixtures remain synthetic.
+    const firstChoice = await chooseNativeFirstWorklogInTransaction(tx, user.id, id, stamp);
+    assert.equal(firstChoice.disposition, "RESERVED");
     const entry = await tx.terraqoWorklogEntry.create({ data: { authorId: user.id, professionalProfileId: profile.id,
       workspaceId, title: parsed.payload.title, summary: parsed.payload.summary, visibility: "PRIVATE",
       contentFingerprint: contentKey, createdAt: stamp, updatedAt: stamp } });
     await tx.terraqoNativeWorklogOperation.create({ data: { id, actorId: user.id, workspaceId, professionalProfileId: profile.id,
       operationKey: parsed.payload.operationKey, fingerprint: d.fingerprint, targetWorklogId: entry.id,
       worklogId: entry.id, resultVersion: stamp, createdAt: stamp } });
+    await saveNativeFirstWorklogDecision(tx, id, firstChoice);
     await tx.terraqoNativeWorklogAccounting.create({ data: { operationId: id } });
     await tx.terraqoNativeWorklogDecision.create({ data: { operationId: id, contentKey,
       policyVersion: d.policyVersion, fingerprint: d.fingerprint, priorDuplicates: d.priorDuplicates,
@@ -44,9 +49,7 @@ export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClien
       policyVersion: "native-creation-authority-v1", grantHash: "c".repeat(64), tokenIssuedAt: stamp,
       tokenExpiresAt: new Date("2026-09-02T12:00:00.000Z"), grantExpiresAt: new Date("2026-09-02T12:00:00.000Z"),
       paidThrough: null, role: "PROFESSIONAL", modules: ["LIVE_CV", "PROFESSIONAL_NETWORK"] } });
-    const first = await tx.terraqoBuilderContribution.create({ data: { userId: user.id, type: "FIRST_WORKLOG",
-      sourceKey: `first-worklog:${user.id}`, title: "Own manual FIRST reserve", detail: `native-first-worklog-v1:${id}`,
-      requestedPoints: 25, approvedPoints: 0, status: "IN_REVIEW", createdAt: stamp } });
+    const first = await tx.terraqoBuilderContribution.findUniqueOrThrow({ where: { sourceKey: `first-worklog:${user.id}` } });
     const oldStamp = new Date("2026-08-01T12:00:00.000Z");
     const oldEntry = await tx.terraqoWorklogEntry.create({ data: { authorId: user.id, professionalProfileId: profile.id,
       workspaceId, title: "Own manual legacy earned", summary: "Own legacy accounting state only.",
@@ -59,6 +62,7 @@ export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClien
     const account = await tx.terraqoBuilderAccount.create({ data: { userId: user.id, pendingPoints: 5 } });
     async function cleanup() {
       await tx.terraqoBuilderLedger.deleteMany({ where: { accountId: account.id } });
+      await tx.terraqoNativeWorklogFirstDecision.delete({ where: { operationId: id } });
       await tx.terraqoBuilderContribution.deleteMany({ where: { userId: user.id } });
       await tx.terraqoBuilderAccount.delete({ where: { id: account.id } });
       if (historical) await tx.terraqoNativeWorklogAuthority.delete({ where: { operationId: id } });
@@ -88,6 +92,7 @@ export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClien
           'ledger', (SELECT jsonb_agg(to_jsonb(r) ORDER BY r.id) FROM icc."TerraqoBuilderLedger" r WHERE r."accountId"=${account.id}),
           'entries', (SELECT jsonb_agg(to_jsonb(r) ORDER BY r.id) FROM icc."TerraqoWorklogEntry" r WHERE r."authorId"=${user.id}),
           'receipt', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogOperation" r WHERE r.id=${id}),
+          'firstDecision', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogFirstDecision" r WHERE r."operationId"=${id}),
           'decision', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogDecision" r WHERE r."operationId"=${id}),
           'authority', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogAuthority" r WHERE r."operationId"=${id}),
           'outbox', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogAccounting" r WHERE r."operationId"=${id})
@@ -188,6 +193,7 @@ export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClien
           'ledger', (SELECT jsonb_agg(to_jsonb(r) ORDER BY r.id) FROM icc."TerraqoBuilderLedger" r WHERE r."accountId"=${account.id}),
           'entries', (SELECT jsonb_agg(to_jsonb(r) ORDER BY r.id) FROM icc."TerraqoWorklogEntry" r WHERE r."authorId"=${user.id}),
           'receipt', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogOperation" r WHERE r.id=${id}),
+          'firstDecision', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogFirstDecision" r WHERE r."operationId"=${id}),
           'decision', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogDecision" r WHERE r."operationId"=${id}),
           'authority', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogAuthority" r WHERE r."operationId"=${id}),
           'outbox', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogAccounting" r WHERE r."operationId"=${id})
@@ -246,6 +252,7 @@ export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClien
           'ledger', (SELECT jsonb_agg(to_jsonb(r) ORDER BY r.id) FROM icc."TerraqoBuilderLedger" r WHERE r."accountId"=${account.id}),
           'entries', (SELECT jsonb_agg(to_jsonb(r) ORDER BY r.id) FROM icc."TerraqoWorklogEntry" r WHERE r."authorId"=${user.id}),
           'receipt', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogOperation" r WHERE r.id=${id}),
+          'firstDecision', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogFirstDecision" r WHERE r."operationId"=${id}),
           'decision', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogDecision" r WHERE r."operationId"=${id}),
           'authority', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogAuthority" r WHERE r."operationId"=${id}),
           'outbox', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogAccounting" r WHERE r."operationId"=${id})
