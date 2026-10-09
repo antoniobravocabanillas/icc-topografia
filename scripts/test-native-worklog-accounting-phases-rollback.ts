@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { parseNativeWorklogPayload } from "../lib/server/native-worklog-payload";
 import { nativeWorklogContentKey } from "../lib/server/native-worklog-content-key";
@@ -12,7 +12,7 @@ import { applySelectedNativeAccountingInTransaction } from "../lib/server/native
 import { applyHistoricalNativeAccountingInTransaction } from "../lib/server/native-worklog-historical-accounting";
 
 /** Only inside the pinned checker's outer DDL rollback, never standalone. */
-export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClient, workspaceId: string, historical = false, reviewOnly = false, legacyFirstOnly = false, selectionOnly = false) {
+export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClient, workspaceId: string, historical = false, reviewOnly = false, legacyFirstOnly = false, selectionOnly = false, backlogOnly = false) {
   for (const tq of [1]) {
     const marker = randomUUID(), id = createHash("sha256").update(marker).digest("hex");
     const user = await tx.user.create({ data: { name: `ICC accounting-phases rollback ${marker}`,
@@ -78,6 +78,79 @@ export async function nativeAccountingPhasesRollback(tx: Prisma.TransactionClien
     };
     const run = () => runWith(tx, [old.id]);
     const reject = (e: unknown) => e instanceof NativeWorklogOperationError && e.status === 503;
+    if (backlogOnly) {
+      assert.equal(historical, true);
+      const additions = Array.from({ length: 5 }, () => ({ entryId: `c${randomBytes(12).toString("hex")}`,
+        contributionId: `c${randomBytes(12).toString("hex")}` }));
+      await tx.terraqoWorklogEntry.createMany({ data: additions.map(row => ({ id: row.entryId,
+        authorId: user.id, professionalProfileId: profile.id, workspaceId, title: "Own backlog earned",
+        summary: "Own temporary backlog SQL accounting evidence.", visibility: "PRIVATE" as const,
+        createdAt: oldStamp, tqPointsAwarded: 1 })) });
+      await tx.terraqoBuilderContribution.createMany({ data: additions.map(row => ({ id: row.contributionId,
+        userId: user.id, workspaceId, type: "BETA_PARTICIPATION" as const, sourceKey: `worklog:${row.entryId}`,
+        title: "Own backlog pending", detail: "Manual earned state", approvedPoints: 1,
+        createdAt: oldStamp, availableAt: new Date("2026-08-08T12:00:00.000Z") })) });
+      await tx.terraqoBuilderAccount.update({ where: { id: account.id }, data: { pendingPoints: 10 } });
+      const ordered = [{ id: old.id, points: 3 }, ...additions.map(row => ({ id: row.contributionId, points: 1 }))]
+        .sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+      const firstBatchPoints = ordered.slice(0, 5).reduce((sum, row) => sum + row.points, 0);
+      const states = async () => {
+        const [row] = await tx.$queryRaw<Array<{ snapshot: Record<string, unknown> }>>(Prisma.sql`SELECT jsonb_build_object(
+          'account', (SELECT to_jsonb(r) FROM icc."TerraqoBuilderAccount" r WHERE r.id=${account.id}),
+          'contributions', (SELECT jsonb_agg(to_jsonb(r) ORDER BY r.id) FROM icc."TerraqoBuilderContribution" r WHERE r."userId"=${user.id}),
+          'ledger', (SELECT jsonb_agg(to_jsonb(r) ORDER BY r.id) FROM icc."TerraqoBuilderLedger" r WHERE r."accountId"=${account.id}),
+          'entries', (SELECT jsonb_agg(to_jsonb(r) ORDER BY r.id) FROM icc."TerraqoWorklogEntry" r WHERE r."authorId"=${user.id}),
+          'receipt', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogOperation" r WHERE r.id=${id}),
+          'decision', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogDecision" r WHERE r."operationId"=${id}),
+          'authority', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogAuthority" r WHERE r."operationId"=${id}),
+          'outbox', (SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogAccounting" r WHERE r."operationId"=${id})
+        ) AS snapshot`);
+        return row.snapshot;
+      };
+      const batchOne = await applySelectedNativeAccountingInTransaction(tx, id, new NativeWorklogBudget());
+      assert.deepEqual(batchOne, { outcome: "pending", selected: 5, remainingDue: 1, future: 0, frozen: 0, completionAuthorized: false });
+      const afterOne = await states();
+      const firstAccount = afterOne.account as { pendingPoints: number; availablePoints: number; lifetimeEarned: number; contributionScore: number; trustScore: number };
+      assert.equal(firstAccount.pendingPoints, 10 - firstBatchPoints);
+      for (const value of [firstAccount.availablePoints, firstAccount.lifetimeEarned, firstAccount.contributionScore])
+        assert.equal(value, 26 + firstBatchPoints);
+      assert.equal(firstAccount.trustScore, 1);
+      const firstContributions = afterOne.contributions as Array<{ id: string; releasedAt: string | null }>;
+      const firstLedger = afterOne.ledger as Array<{ contributionId: string }>;
+      assert.equal(firstLedger.length, 7);
+      for (const row of ordered.slice(0, 5)) assert.ok(firstContributions.find(c => c.id === row.id)?.releasedAt);
+      assert.equal(firstContributions.find(c => c.id === ordered[5].id)?.releasedAt, null);
+      // Two bounded calls in the same rollback transaction: this does not prove
+      // transport acknowledgements, separately committed batches or concurrency.
+      const batchTwo = await applySelectedNativeAccountingInTransaction(tx, id, new NativeWorklogBudget());
+      assert.deepEqual(batchTwo, { outcome: "pending", selected: 1, remainingDue: 0, future: 0, frozen: 0, completionAuthorized: false });
+      const afterTwo = await states();
+      const finalAccount = afterTwo.account as typeof firstAccount;
+      assert.equal(finalAccount.pendingPoints, 2); assert.equal(finalAccount.trustScore, 1);
+      for (const value of [finalAccount.availablePoints, finalAccount.lifetimeEarned, finalAccount.contributionScore]) assert.equal(value, 34);
+      const finalLedger = afterTwo.ledger as Array<{ contributionId: string }>;
+      const finalContributions = afterTwo.contributions as typeof firstContributions;
+      assert.equal(finalLedger.length, 8);
+      for (const prior of firstLedger) assert.deepEqual(finalLedger.find(row => row.contributionId === prior.contributionId), prior);
+      for (const prior of firstContributions.filter(row => row.id !== ordered[5].id))
+        assert.deepEqual(finalContributions.find(row => row.id === prior.id), prior);
+      for (const row of ordered) {
+        assert.equal(finalLedger.filter(credit => credit.contributionId === row.id).length, 1);
+        assert.ok(finalContributions.find(c => c.id === row.id)?.releasedAt);
+      }
+      assert.equal(finalLedger.filter(row => row.contributionId === first.id).length, 1);
+      for (const key of ["entries", "receipt", "decision", "authority", "outbox"]) assert.deepEqual(afterTwo[key], afterOne[key]);
+      assert.equal((afterTwo.outbox as { state: string }).state, "PENDING");
+      assert.ok(!JSON.stringify([batchOne, batchTwo]).includes(user.id));
+      await cleanup();
+      assert.equal(await tx.terraqoProfessionalProfile.count({ where: { id: profile.id } }), 0);
+      assert.equal(await tx.terraqoWorklogEntry.count({ where: { authorId: user.id } }), 0);
+      assert.equal(await tx.terraqoNativeWorklogOperation.count({ where: { actorId: user.id } }), 0);
+      assert.equal(await tx.terraqoNativeWorklogDecision.count({ where: { operationId: id } }), 0);
+      assert.equal(await tx.terraqoNativeWorklogAuthority.count({ where: { operationId: id } }), 0);
+      assert.equal(await tx.terraqoNativeWorklogAccounting.count({ where: { operationId: id } }), 0);
+      continue;
+    }
     if (selectionOnly) {
       const states = async () => {
         const [row] = await tx.$queryRaw<unknown[]>(Prisma.sql`SELECT jsonb_build_object(

@@ -83,7 +83,7 @@ async function fixtureConstraints(tx: Prisma.TransactionClient, workspaceId: str
 }
 
 async function main() {
-  if (["--worker-eligibility", "--worker-phases", "--worker-preflight", "--worker-selection", "--worker-legacy-first", "--legacy-validation-5", "--legacy-validation-20", "--validation-review-5", "--validation-preflight-5", "--validation-preflight-20", "--validation-phases-5", "--validation-phases-20"].includes(process.argv[2])) {
+  if (["--worker-eligibility", "--worker-phases", "--worker-preflight", "--worker-selection", "--worker-backlog", "--worker-legacy-first", "--legacy-validation-5", "--legacy-validation-20", "--validation-review-5", "--validation-preflight-5", "--validation-preflight-20", "--validation-phases-5", "--validation-phases-20"].includes(process.argv[2])) {
     assert.equal(process.argv.length, 3);
     assert.equal(process.env.TERRAQO_MUTATING_TESTS, "icc-topografia:20616116313");
     assert.equal(process.env.TEST_PORTAL_URL, "https://api.terraqoglobal.com");
@@ -111,9 +111,9 @@ async function main() {
         } else if (["--legacy-validation-5", "--legacy-validation-20"].includes(process.argv[2])) {
           const { nativeLegacyValidationRollback } = await import("./test-native-worklog-legacy-validation-rollback");
           await nativeLegacyValidationRollback(tx, workspace.id, process.argv[2] === "--legacy-validation-5" ? 5 : 20);
-        } else if (["--worker-phases", "--worker-preflight", "--worker-selection", "--worker-legacy-first"].includes(process.argv[2])) {
+        } else if (["--worker-phases", "--worker-preflight", "--worker-selection", "--worker-backlog", "--worker-legacy-first"].includes(process.argv[2])) {
           const { nativeAccountingPhasesRollback } = await import("./test-native-worklog-accounting-phases-rollback");
-          await nativeAccountingPhasesRollback(tx, workspace.id, true, process.argv[2] === "--worker-preflight", process.argv[2] === "--worker-legacy-first", process.argv[2] === "--worker-selection");
+          await nativeAccountingPhasesRollback(tx, workspace.id, true, process.argv[2] === "--worker-preflight", process.argv[2] === "--worker-legacy-first", process.argv[2] === "--worker-selection", process.argv[2] === "--worker-backlog");
         } else await nativeWorkerEligibilityRollback(tx, workspace.id);
         assert.deepEqual(await readNativeWorklogCombinedCatalog(tx), combined);
         throw rollback;
@@ -121,7 +121,7 @@ async function main() {
     } catch (error) { if (error !== rollback) throw error; }
     assert.deepEqual(await readNativeWorklogCombinedCatalog(prisma), { state: "absent" });
     assert.equal(await ledgerFingerprint(prisma), ledger);
-    console.log(JSON.stringify({ mode: process.argv[2].startsWith("--validation-") || ["--legacy-validation-5", "--legacy-validation-20"].includes(process.argv[2]) ? `${process.argv[2].slice(2)}-rollback` : process.argv[2] === "--worker-selection" ? "worker-selection-rollback" : process.argv[2] === "--worker-legacy-first" ? "worker-legacy-first-rollback" : process.argv[2] === "--worker-preflight" ? "worker-preflight-rollback" : process.argv[2] === "--worker-phases" ? "worker-phases-rollback" : "worker-eligibility-rollback", combined, ledgerFingerprint: ledger, applied: false }));
+    console.log(JSON.stringify({ mode: process.argv[2].startsWith("--validation-") || ["--legacy-validation-5", "--legacy-validation-20"].includes(process.argv[2]) ? `${process.argv[2].slice(2)}-rollback` : process.argv[2] === "--worker-backlog" ? "worker-backlog-rollback" : process.argv[2] === "--worker-selection" ? "worker-selection-rollback" : process.argv[2] === "--worker-legacy-first" ? "worker-legacy-first-rollback" : process.argv[2] === "--worker-preflight" ? "worker-preflight-rollback" : process.argv[2] === "--worker-phases" ? "worker-phases-rollback" : "worker-eligibility-rollback", combined, ledgerFingerprint: ledger, applied: false }));
     return;
   }
   if (process.argv[2] === "--combined") {
