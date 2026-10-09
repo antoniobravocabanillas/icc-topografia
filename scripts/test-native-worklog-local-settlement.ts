@@ -14,6 +14,7 @@ import { NativeWorklogOperationError } from "../lib/server/native-worklog-http";
 import { executeNativeAccounting } from "../lib/server/native-worklog-accounting-executor";
 import { testNativeValidationLocks } from "./test-native-worklog-local-validation-locks";
 import { testNativeReciprocalWorkers } from "./test-native-worklog-local-reciprocal-workers";
+import { testNativeLocalOperations } from "./test-native-worklog-local-operations";
 
 /** LOCAL isolated committed fixture, synthetic historical authority. Not JWT/core
  * capture, network loss or production-provider concurrency. No productive retry.
@@ -93,6 +94,10 @@ async function main() {
         'authority',(SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogAuthority" r WHERE r."operationId"=${operationId}),
         'outbox',(SELECT to_jsonb(r) FROM icc."TerraqoNativeWorklogAccounting" r WHERE r."operationId"=${operationId})) AS snapshot`))[0].snapshot;
     const before = await state(b);
+    if (process.env.TERRAQO_LOCAL_OPERATIONS === "1") {
+      await testNativeLocalOperations(a, b, operationId, user.id, state);
+      return;
+    }
     if (process.env.TERRAQO_LOCAL_RECIPROCAL_WORKERS === "1") {
       await testNativeReciprocalWorkers(a, b, user.id, workspace.id, operationId);
       return;

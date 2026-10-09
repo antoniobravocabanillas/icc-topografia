@@ -58,7 +58,7 @@ def main():
     local_major = int(local_version.split()[2].split(".")[0])
     if local_major not in (17, 18):
         raise RuntimeError("Unsupported isolated PostgreSQL major")
-    if sys.argv[1:] not in ([], ["--concurrency"], ["--settlement"], ["--authority"], ["--executor-confirmed"], ["--executor-pending"], ["--validation-locks"], ["--reciprocal-workers"]):
+    if sys.argv[1:] not in ([], ["--concurrency"], ["--settlement"], ["--authority"], ["--executor-confirmed"], ["--executor-pending"], ["--validation-locks"], ["--reciprocal-workers"], ["--operations"]):
         raise RuntimeError("No external database or runner arguments accepted")
     spec = importlib.util.spec_from_file_location("schema_tools", ROOT / "scripts/rehearse-database-migration.py")
     helper = importlib.util.module_from_spec(spec)
@@ -172,6 +172,7 @@ def main():
                       "--executor-pending": "scripts/test-native-worklog-local-settlement.ts",
                       "--validation-locks": "scripts/test-native-worklog-local-settlement.ts",
                       "--reciprocal-workers": "scripts/test-native-worklog-local-settlement.ts",
+                      "--operations": "scripts/test-native-worklog-local-settlement.ts",
                       "--concurrency": "scripts/test-native-worklog-local-concurrency.ts"}[sys.argv[1]]
             if sys.argv[1].startswith("--executor-"):
                 node_env["TERRAQO_LOCAL_EXECUTOR_MODE"] = sys.argv[1].removeprefix("--executor-")
@@ -179,6 +180,8 @@ def main():
                 node_env["TERRAQO_LOCAL_VALIDATION_LOCKS"] = "1"
             if sys.argv[1] == "--reciprocal-workers":
                 node_env["TERRAQO_LOCAL_RECIPROCAL_WORKERS"] = "1"
+            if sys.argv[1] == "--operations":
+                node_env["TERRAQO_LOCAL_OPERATIONS"] = "1"
             checked = subprocess.run([shutil.which("node"), "--conditions=react-server", "--import", "tsx",
                                       runner], cwd=ROOT, env=node_env,
                                      capture_output=True, text=True, encoding="utf-8", timeout=90)
@@ -196,7 +199,9 @@ def main():
                            "revoke_after_commit_denies_read", "demote_after_commit_denies_read",
                            "new_grants_from_read", "accounting_credits", "validation_cross_owner_proved",
                            "executor_mode", "primary_rejected_reconciled", "phases_replayed", "attempts_charged",
-                           "reciprocal_workers", "primary_transactions", "legacy_entries_unchanged", "validation_credits_unchanged"}
+                           "reciprocal_workers", "primary_transactions", "legacy_entries_unchanged", "validation_credits_unchanged",
+                           "operations_boundary_proved", "rejected_commands_execute_calls", "concurrent_requests",
+                           "deployed_http_proved", "production_secret_proved"}
                 if isinstance(report, dict) and set(report) <= allowed:
                     print(json.dumps(report), flush=True)
             if checked.returncode:
@@ -207,7 +212,8 @@ def main():
                           "independent_connections": 2, "password_enforced": True,
                           "schema_sha256": hashlib.sha256(json.dumps(before, sort_keys=True).encode()).hexdigest(),
                           "concurrent_worklog_flows_proved": sys.argv[1:] in (["--concurrency"], ["--settlement"], ["--authority"], ["--validation-locks"], ["--reciprocal-workers"]),
-                          "executor_flow_proved": sys.argv[1:] in (["--executor-confirmed"], ["--executor-pending"], ["--reciprocal-workers"]),
+                          "executor_flow_proved": sys.argv[1:] in (["--executor-confirmed"], ["--executor-pending"], ["--reciprocal-workers"], ["--operations"]),
+                          "internal_operations_flow_proved": sys.argv[1:] == ["--operations"],
                           "production_native_applied": False}), flush=True)
     finally:
         for process in (source, target):
