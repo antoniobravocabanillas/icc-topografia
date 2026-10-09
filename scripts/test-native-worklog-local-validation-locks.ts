@@ -78,7 +78,7 @@ export async function testNativeValidationLocks(a: PrismaClient, b: PrismaClient
     assert.deepEqual(await b.terraqoWorklogValidation.findUniqueOrThrow({ where: { id: validation.id } }), validationBefore);
     assert.deepEqual(await b.user.findUniqueOrThrow({ where: { id: author.id } }), authorBefore);
     assert.deepEqual(await b.terraqoProfessionalProfile.findUniqueOrThrow({ where: { id: profile.id } }), profileBefore);
-    console.log(JSON.stringify({ outcome: "passed", environment: "LOCAL_PG18_ONLY", blocked_pairs: 2,
+    console.log(JSON.stringify({ outcome: "passed", environment: "LOCAL_ISOLATED_ONLY", blocked_pairs: 2,
       validation_cross_owner_proved: true, accounting_credits: 0, network_cut_proved: false }));
   } finally {
     if (contributionId) {

@@ -107,7 +107,7 @@ async function main() {
     assert.equal(await a.terraqoNativeWorklogAuthority.count(), 4);
     assert.equal(await a.terraqoNativeWorklogAccounting.count({ where: { state: "PENDING" } }), 4);
     assert.equal(await a.terraqoWorklogEntry.count({ where: { visibility: "PRIVATE" } }), 4);
-    console.log(JSON.stringify({ outcome: "passed", environment: "LOCAL_PG18_ONLY", blocked_pairs: 4,
+    console.log(JSON.stringify({ outcome: "passed", environment: "LOCAL_ISOLATED_ONLY", blocked_pairs: 4,
       owner_key_isolation: true, grant_revoked_before_create: 401, role_demoted_before_create: 403,
       revoke_after_commit_denies_read: true, demote_after_commit_denies_read: true,
       new_grants_from_read: 0, accounting_credits: 0, jwt_http_proved: false, validation_cross_owner_proved: false }));

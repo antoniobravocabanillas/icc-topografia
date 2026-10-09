@@ -142,7 +142,7 @@ export async function testNativeReciprocalWorkers(a: PrismaClient, b: PrismaClie
     assert.deepEqual(await Promise.all([a, b].map((client, index) => executeNativeAccounting(client, operations[index], new NativeWorklogBudget()))),
       actors.map(() => ({ outcome: "applied-history", retryAuthorized: false, ownerAccessAuthorized: false })));
     assert.deepEqual(await snapshot(), after);
-    console.log(JSON.stringify({ outcome: "passed", environment: "LOCAL_PG18_ONLY", reciprocal_workers: 2,
+    console.log(JSON.stringify({ outcome: "passed", environment: "LOCAL_ISOLATED_ONLY", reciprocal_workers: 2,
       primary_transactions: 2, legacy_entries_unchanged: true, validation_credits_unchanged: true,
       accounting_credits: 4, first_credit: 0, attempts_charged: 0, network_cut_proved: false }));
   } finally {

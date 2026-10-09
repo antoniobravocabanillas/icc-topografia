@@ -15,7 +15,7 @@ import { executeNativeAccounting } from "../lib/server/native-worklog-accounting
 import { testNativeValidationLocks } from "./test-native-worklog-local-validation-locks";
 import { testNativeReciprocalWorkers } from "./test-native-worklog-local-reciprocal-workers";
 
-/** LOCAL PG18 committed fixture, synthetic historical authority. Not JWT/core
+/** LOCAL isolated committed fixture, synthetic historical authority. Not JWT/core
  * capture, network loss or production-provider concurrency. No productive retry.
  */
 async function main() {
@@ -161,7 +161,7 @@ async function main() {
       }
       assert.deepEqual(await executeNativeAccounting(a, operationId, new NativeWorklogBudget()), outcome);
       assert.deepEqual(await state(b), current);
-      console.log(JSON.stringify({ outcome: "passed", environment: "LOCAL_PG18_ONLY", executor_mode: executorMode,
+      console.log(JSON.stringify({ outcome: "passed", environment: "LOCAL_ISOLATED_ONLY", executor_mode: executorMode,
         primary_rejected_reconciled: true, phases_replayed: 0, attempts_charged: 0,
         actual_transaction_rollback: executorMode === "confirmed", network_cut_proved: false }));
     } else {
@@ -217,7 +217,7 @@ async function main() {
     assert.deepEqual([account.pendingPoints, account.availablePoints, account.lifetimeEarned, account.contributionScore, account.trustScore], [2, 6, 6, 6, 5]);
     assert.equal(await b.terraqoBuilderLedger.count({ where: { accountId: account.id } }), 2);
     assert.equal(await b.terraqoBuilderContribution.count({ where: { userId: user.id, type: "FIRST_WORKLOG" } }), 0);
-    console.log(JSON.stringify({ outcome: "passed", environment: "LOCAL_PG18_ONLY", blocked_pairs: 3,
+    console.log(JSON.stringify({ outcome: "passed", environment: "LOCAL_ISOLATED_ONLY", blocked_pairs: 3,
       actual_transaction_rollback: true, native_release_ledgers: 1, legacy_release_ledgers: 1,
       applied_once: true, first_ineligible_no_credit: true, pending_retained: 2,
       confirmed_ack_exception: "CONTROLLED_CALLER_ONLY", network_cut_proved: false, cross_owner_proved: false }));

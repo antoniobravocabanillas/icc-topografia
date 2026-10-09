@@ -1,4 +1,4 @@
-"""Read-only source schema export into a disposable loopback PostgreSQL 18 cluster.
+"""Read-only source schema export into a disposable loopback PostgreSQL 17/18 cluster.
 
 No source rows, password files, production DDL, migration ledger writes or jobs.
 Passwords and the schema dump stay in memory. Local authentication is changed
@@ -19,7 +19,7 @@ import tempfile
 from urllib.parse import unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parent.parent
-BIN = Path("C:/Program Files/PostgreSQL/18/bin")
+BIN = Path(os.environ.get("TERRAQO_LOCAL_POSTGRES_BIN", "C:/Program Files/PostgreSQL/18/bin")).resolve()
 MIGRATIONS = (
     "20261008051000_native_worklog_operations",
     "20261008161000_native_worklog_decision",
@@ -53,11 +53,17 @@ def canonical(value):
 
 
 def main():
+    # The trusted local tool path selects binaries, never source credentials or a database.
+    local_version = run([str(BIN / "postgres.exe"), "--version"])
+    local_major = int(local_version.split()[2].split(".")[0])
+    if local_major not in (17, 18):
+        raise RuntimeError("Unsupported isolated PostgreSQL major")
     if sys.argv[1:] not in ([], ["--concurrency"], ["--settlement"], ["--authority"], ["--executor-confirmed"], ["--executor-pending"], ["--validation-locks"], ["--reciprocal-workers"]):
         raise RuntimeError("No external database or runner arguments accepted")
     spec = importlib.util.spec_from_file_location("schema_tools", ROOT / "scripts/rehearse-database-migration.py")
     helper = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(helper)
+    helper.BIN = BIN
     direct = next(line.split("=", 1)[1].strip().strip('"').strip("'")
                   for line in (ROOT / ".env").read_text(encoding="utf-8").splitlines()
                   if line.startswith("DATABASE_URL="))
@@ -137,6 +143,8 @@ def main():
         sql(local, dump)
         dump = None
         target = helper.session(local)
+        if int(helper.query(target, "SELECT current_setting('server_version_num')")) // 10000 != local_major:
+            raise RuntimeError("Isolated server major differs from selected binaries")
         restored = canonical(helper.structure(target))
         if before != restored:
             raise RuntimeError("Schema-only local definitions differ")
@@ -193,7 +201,7 @@ def main():
                     print(json.dumps(report), flush=True)
             if checked.returncode:
                 raise RuntimeError("Own local concurrency runner failed")
-        print(json.dumps({"outcome": "passed", "source_major": 17, "local_major": 18,
+        print(json.dumps({"outcome": "passed", "source_major": 17, "local_major": local_major,
                           "schema_only_definitions_equal": True, "imported_rows": 0,
                           "source_native_objects": 0, "local_native_objects": native,
                           "independent_connections": 2, "password_enforced": True,

@@ -125,7 +125,7 @@ async function main() {
     (error: unknown) => error instanceof NativeWorklogOperationError && error.status === 409);
     assert.equal(await a.terraqoNativeWorklogAccounting.count({ where: { operation: { actorId: user.id }, state: "PENDING" } }), 3);
     assert.equal(await a.terraqoWorklogEntry.count({ where: { authorId: user.id, visibility: "PRIVATE" } }), 3);
-    console.log(JSON.stringify({ outcome: "passed", environment: "LOCAL_PG18_ONLY", blocked_pairs: 3,
+    console.log(JSON.stringify({ outcome: "passed", environment: "LOCAL_ISOLATED_ONLY", blocked_pairs: 3,
       same_key_receipts: 1, total_receipts: 3, first_reservations: 1, first_credit: 25, first_ledgers: 1,
       jwt_http_proved: false, cross_owner_proved: false, release_settlement_proved: false }));
   } finally {
