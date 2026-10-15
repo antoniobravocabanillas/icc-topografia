@@ -15,28 +15,24 @@ export default async function TerraqoHomePage() {
         visibility: "PUBLIC",
         deletedAt: null,
         moderationStatus: { not: "REJECTED" },
-        author: { emailVerified: { not: null } },
-        professionalProfile: {
-          username: { not: null },
-          liveCvEnabled: true,
-        },
       },
-      orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
-      take: 3,
+      orderBy: [{ updatedAt: "desc" }, { occurredAt: "desc" }, { createdAt: "desc" }],
+      take: 10,
       select: {
         id: true,
         title: true,
         summary: true,
         occurredAt: true,
+        updatedAt: true,
         locationLabel: true,
         author: { select: { name: true, image: true } },
-        professionalProfile: { select: { username: true, headline: true } },
+        professionalProfile: { select: { username: true, headline: true, liveCvEnabled: true } },
         workspace: { select: { name: true, brandName: true } },
         project: { select: { title: true } },
         media: {
           where: { contentType: { startsWith: "image/" } },
           orderBy: { sortOrder: "asc" },
-          take: 1,
+          take: 4,
           select: { id: true },
         },
       },
@@ -49,14 +45,18 @@ export default async function TerraqoHomePage() {
     title: worklog.title,
     summary: worklog.summary,
     occurredAt: worklog.occurredAt.toISOString(),
+    updatedAt: worklog.updatedAt.toISOString(),
     location: worklog.locationLabel,
     authorName: worklog.author.name || "Profesional Terraqo",
     authorImage: worklog.author.image,
     headline: worklog.professionalProfile.headline,
-    username: worklog.professionalProfile.username!,
+    username: worklog.professionalProfile.username,
+    profilePublished: Boolean(worklog.professionalProfile.liveCvEnabled && worklog.professionalProfile.username),
     context: worklog.project?.title || worklog.workspace?.brandName || worklog.workspace?.name || null,
-    imageUrl: worklog.media[0]
-      ? `/api/public/cv/${encodeURIComponent(worklog.professionalProfile.username!)}/worklogs/${worklog.media[0].id}`
-      : null,
+    imageUrls: worklog.professionalProfile.username
+      ? worklog.media.map((media) =>
+          `/api/public/cv/${encodeURIComponent(worklog.professionalProfile.username!)}/worklogs/${media.id}`
+        )
+      : [],
   }))} />;
 }
