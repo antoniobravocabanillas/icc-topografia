@@ -6,14 +6,15 @@ import {
   createAttendanceOptions,
   createPasskeyRegistrationOptions,
   createWorklogValidationOptions,
+  FieldVerificationError,
   getFieldVerificationStatus,
   requestWorklogValidation,
-  resolveWebAuthnContext,
   syncAttendanceLocationSamples,
   verifyAttendance,
   verifyPasskeyRegistration,
   verifyWorklogValidation
 } from "@/lib/terraqo/field-verification";
+import { resolveWebAuthnContext, WebAuthnContextError } from "@/lib/terraqo/webauthn-context";
 import { terraqoAttendanceLocationSyncSchema, terraqoAttendanceOptionsSchema, terraqoWorklogValidationRequestSchema } from "@/lib/validations/terraqo";
 
 const requestSchema = z.discriminatedUnion("action", [
@@ -40,7 +41,15 @@ export async function runFieldVerificationAction(input: {
     select: { id: true, name: true, brandName: true, domain: true }
   });
   if (!workspace) throw new Error("Workspace no encontrado.");
-  const context = resolveWebAuthnContext({ request: input.request, workspace, portalOrigin: input.portalOrigin });
+  let context;
+  try {
+    context = resolveWebAuthnContext({ request: input.request, workspace, portalOrigin: input.portalOrigin });
+  } catch (error) {
+    if (error instanceof WebAuthnContextError) {
+      throw new FieldVerificationError(error.message, error.status);
+    }
+    throw error;
+  }
   const fingerprint = attendanceRequestFingerprint(input.request);
 
   switch (body.action) {

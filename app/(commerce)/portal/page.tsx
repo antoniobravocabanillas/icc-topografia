@@ -16,6 +16,7 @@ import { createCustomerTicketAction, replyCustomerTicketAction, respondPublicQuo
 import { createMetadata } from "@/lib/seo";
 import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 import { worklogInclude } from "@/lib/terraqo/worklog";
+import { selectProfessionalWorkspaceMembership } from "@/lib/terraqo/professional-workspace";
 import { formatCurrency } from "@/lib/utils";
 
 export const metadata = createMetadata({
@@ -186,13 +187,16 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
       where: {
         userId: professionalProfile.userId,
         active: true,
-        role: "PROFESSIONAL",
         workspace: { active: true, deletedAt: null },
       },
-      select: { workspaceId: true },
+      select: {
+        workspaceId: true,
+        role: true,
+        workRelationship: { select: { status: true } },
+      },
       orderBy: { joinedAt: "desc" },
     });
-    professionalWorkspaceId = memberships[0]?.workspaceId || null;
+    professionalWorkspaceId = selectProfessionalWorkspaceMembership(memberships)?.workspaceId || null;
     const workspaceIds = memberships.map((membership) => membership.workspaceId);
 
     const [participants, pendingTeamInvitations, pendingExperienceValidations, weekWorklogs, weekValidatedWorklogs, weekTrustAggregate, newConnections, totalWorklogs, verifiedExperiences, validationBackings, forumPosts, networkWorklogs, jobPosts, networkValidations] = await Promise.all([

@@ -34,12 +34,14 @@ export type VerificationStatus = {
 type ApiEnvelope<T> = { data?: T; error?: { message?: string; details?: { code?: string; distanceMeters?: number; radiusMeters?: number } } };
 
 export async function requestFieldVerification<T>(endpoint: string, body: object) {
-  const response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const response = await fetch(endpoint, { method: "POST", cache: "no-store", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   const payload = await response.json().catch(() => ({})) as ApiEnvelope<T>;
   if (!response.ok) {
     const error = new Error(payload.error?.message || "No pudimos completar la operacion.") as Error & {
+      status?: number;
       details?: { code?: string; distanceMeters?: number; radiusMeters?: number };
     };
+    error.status = response.status;
     error.details = payload.error?.details;
     throw error;
   }
@@ -77,15 +79,24 @@ export function FieldVerificationPanel({ endpoint, compact = false }: { endpoint
   const [now, setNow] = useState(() => Date.now());
 
   const load = useCallback(async () => {
-    try {
-      setLoadError("");
-      const next = await requestFieldVerification<VerificationStatus>(endpoint, { action: "status" });
-      setStatus(next);
-      const active = next.latestAttendance?.type === "CHECK_IN" ? next.latestAttendance : null;
-      setAttendanceContext(active?.context || (next.projects.length ? "PROJECT" : "PERSONAL_FIELD"));
-      setProjectId((current) => active?.projectId || current || next.membership.currentProjectId || next.projects[0]?.id || "");
-    } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "No pudimos cargar asistencia y validaciones.");
+    setLoadError("");
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const next = await requestFieldVerification<VerificationStatus>(endpoint, { action: "status" });
+        setStatus(next);
+        const active = next.latestAttendance?.type === "CHECK_IN" ? next.latestAttendance : null;
+        setAttendanceContext(active?.context || (next.projects.length ? "PROJECT" : "PERSONAL_FIELD"));
+        setProjectId((current) => active?.projectId || current || next.membership.currentProjectId || next.projects[0]?.id || "");
+        return;
+      } catch (error) {
+        const statusCode = error && typeof error === "object" && "status" in error ? Number(error.status) : 0;
+        const transient = statusCode === 0 || statusCode >= 500;
+        if (attempt === 0 && transient) {
+          await new Promise((resolve) => window.setTimeout(resolve, 450));
+          continue;
+        }
+        setLoadError(error instanceof Error ? error.message : "No pudimos cargar asistencia y validaciones.");
+      }
     }
   }, [endpoint]);
 

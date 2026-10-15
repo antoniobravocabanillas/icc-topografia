@@ -12,6 +12,7 @@ import { assertLegacyWorklogs } from "@/lib/server/native-worklog-legacy-guard";
 import type { AttendanceRequestFingerprint } from "@/lib/terraqo/request-fingerprint";
 import { awardAutomatedBuilderContribution, consumeBuilderValidationCredit, syncWorklogReputation } from "@/lib/terraqo/builders";
 import { activeCompensation, calculateJornada } from "@/lib/terraqo/jornada";
+import { compatibleWebAuthnRpIds, type WebAuthnContext } from "@/lib/terraqo/webauthn-context";
 
 const SUPERVISOR_ROLES: TerraqoMemberRole[] = ["OWNER", "ADMIN", "MANAGER"];
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
@@ -26,12 +27,6 @@ export class FieldVerificationError extends Error {
   }
 }
 
-type WebAuthnContext = {
-  rpId: string;
-  expectedOrigin: string;
-  rpName: string;
-};
-
 type LocationPayload = {
   context: TerraqoAttendanceContext;
   projectId?: string;
@@ -40,38 +35,6 @@ type LocationPayload = {
   longitude: number;
   accuracyMeters: number;
 };
-
-function normalizeDomain(domain: string) {
-  return domain.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/$/, "");
-}
-
-export function resolveWebAuthnContext(input: {
-  request: Request;
-  workspace?: { domain: string | null; brandName: string | null; name: string } | null;
-  portalOrigin?: string | null;
-}) {
-  const requestUrl = new URL(input.request.url);
-  let expectedOrigin = requestUrl.origin;
-
-  if (input.portalOrigin) {
-    const portalUrl = new URL(input.portalOrigin);
-    const workspaceDomain = input.workspace?.domain ? normalizeDomain(input.workspace.domain) : "";
-    const portalDomain = normalizeDomain(portalUrl.hostname);
-    const localDevelopment = process.env.NODE_ENV !== "production" && ["localhost", "127.0.0.1"].includes(portalUrl.hostname);
-    const domainMatches = workspaceDomain && (portalDomain === workspaceDomain || portalDomain === `www.${workspaceDomain}` || `www.${portalDomain}` === workspaceDomain);
-    if (!domainMatches && !localDevelopment) {
-      throw new FieldVerificationError("El dominio del portal no esta autorizado para validar identidad.", 403);
-    }
-    expectedOrigin = portalUrl.origin;
-  }
-
-  const originUrl = new URL(expectedOrigin);
-  return {
-    expectedOrigin,
-    rpId: originUrl.hostname,
-    rpName: input.workspace?.brandName || input.workspace?.name || "Portal Terraqo"
-  } satisfies WebAuthnContext;
-}
 
 async function requireMembership(userId: string, workspaceId: string) {
   const membership = await prisma.terraqoWorkspaceMember.findFirst({
@@ -168,7 +131,7 @@ export async function getFieldVerificationStatus(userId: string, workspaceId: st
         project: { select: { title: true, location: true } }
       }
     }),
-    prisma.terraqoWebAuthnCredential.count({ where: { userId, rpId } }),
+    prisma.terraqoWebAuthnCredential.count({ where: { userId, rpId: { in: compatibleWebAuthnRpIds(rpId) } } }),
     prisma.terraqoWorkspaceMember.findMany({
       where: { workspaceId, active: true, role: { in: SUPERVISOR_ROLES }, userId: { not: userId } },
       select: { userId: true, title: true, user: { select: { name: true, image: true, email: true } } },
@@ -307,13 +270,19 @@ async function createAuthenticationChallenge(input: {
   context: WebAuthnContext;
   payload: Prisma.InputJsonValue;
 }) {
-  const credentials = await prisma.terraqoWebAuthnCredential.findMany({ where: { userId: input.userId, rpId: input.context.rpId } });
+  const credentials = await prisma.terraqoWebAuthnCredential.findMany({
+    where: { userId: input.userId, rpId: { in: compatibleWebAuthnRpIds(input.context.rpId) } },
+  });
   if (!credentials.length) throw new FieldVerificationError("Activa primero la validacion segura de este dispositivo.", 409, { code: "PASSKEY_REQUIRED" });
+  const effectiveRpId = credentials.some((credential) => credential.rpId === input.context.rpId)
+    ? input.context.rpId
+    : credentials[0].rpId;
+  const effectiveCredentials = credentials.filter((credential) => credential.rpId === effectiveRpId);
   const options = await generateAuthenticationOptions({
-    rpID: input.context.rpId,
+    rpID: effectiveRpId,
     timeout: CHALLENGE_TTL_MS,
     userVerification: "required",
-    allowCredentials: credentials.map((credential) => ({
+    allowCredentials: effectiveCredentials.map((credential) => ({
       id: Buffer.from(credential.credentialId, "base64url"),
       type: "public-key" as const,
       transports: credential.transports as AuthenticatorTransportFuture[]
@@ -324,7 +293,7 @@ async function createAuthenticationChallenge(input: {
     workspaceId: input.workspaceId,
     purpose: input.purpose,
     challenge: options.challenge,
-    context: input.context,
+    context: { ...input.context, rpId: effectiveRpId },
     payload: input.payload
   });
   return { challengeId: stored.id, options };

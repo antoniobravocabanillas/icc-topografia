@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { PortalShell } from "@/components/portal/portal-shell";
 import { SessionPresence } from "@/components/auth/session-presence";
 import { prisma } from "@/lib/prisma";
+import { selectProfessionalWorkspaceMembership } from "@/lib/terraqo/professional-workspace";
 import { resolveWorkspaceVisualIdentity } from "@/lib/terraqo/workspace-visual-identity";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +34,7 @@ export default async function PortalLayout({
             take: 10,
             select: {
               role: true,
+              workRelationship: { select: { status: true } },
               workspace: {
                 select: {
                   id: true,
@@ -58,8 +60,7 @@ export default async function PortalLayout({
       })
     : null;
   const membership = user?.terraqoProfessionalProfile
-    ? user.terraqoMemberships.find((item) => item.role === "PROFESSIONAL") ||
-      user.terraqoMemberships[0]
+    ? selectProfessionalWorkspaceMembership(user.terraqoMemberships)
     : user?.terraqoMemberships[0];
   const portalType = user?.terraqoProfessionalProfile
     ? "professional"
