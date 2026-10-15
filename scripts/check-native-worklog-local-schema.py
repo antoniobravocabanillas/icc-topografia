@@ -58,7 +58,7 @@ def main():
     local_major = int(local_version.split()[2].split(".")[0])
     if local_major not in (17, 18):
         raise RuntimeError("Unsupported isolated PostgreSQL major")
-    if sys.argv[1:] not in ([], ["--concurrency"], ["--settlement"], ["--authority"], ["--executor-confirmed"], ["--executor-pending"], ["--validation-locks"], ["--reciprocal-workers"], ["--operations"], ["--schema-gate"], ["--bootstrap"]):
+    if sys.argv[1:] not in ([], ["--concurrency"], ["--settlement"], ["--authority"], ["--executor-confirmed"], ["--executor-pending"], ["--validation-locks"], ["--reciprocal-workers"], ["--operations"], ["--schema-gate"], ["--bootstrap"], ["--portal"]):
         raise RuntimeError("No external database or runner arguments accepted")
     spec = importlib.util.spec_from_file_location("schema_tools", ROOT / "scripts/rehearse-database-migration.py")
     helper = importlib.util.module_from_spec(spec)
@@ -103,7 +103,17 @@ def main():
         before = canonical(helper.structure(source))
         reserved = int(helper.query(source, "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='icc' AND (c.relname LIKE 'NativeWorklog%' OR c.relname LIKE 'TerraqoNativeWorklog%')"))
         if reserved:
-            raise RuntimeError("Source native schema no longer absent")
+            # After the controlled bootstrap, source may already contain the exact
+            # pinned schema. Verify it read-only; never repair or reapply source DDL.
+            checked_source = run([shutil.which("node"), "--conditions=react-server", "--import", "tsx",
+                                  "scripts/check-native-worklog-bootstrap.ts", "--snapshot"],
+                                 dict(base, DATABASE_URL=direct, NODE_ENV="production",
+                                      TERRAQO_MUTATING_TESTS="icc-topografia:20616116313"))
+            if json.loads(checked_source)["catalog"] != {
+                "state": "exact", "fingerprint": "25a238b070233aee9d5014c03790e73edb8c4daa6d2c4f357c62b37eb6d38880",
+                "constraints": 36, "indexes": 16,
+            }:
+                raise RuntimeError("Source native schema differs from pin")
         dump = run([str(BIN / "pg_dump.exe"), "-w", "--schema-only", "--schema=icc",
                     "--no-owner", "--no-acl"], source_env)
         after = canonical(helper.structure(source))
@@ -152,8 +162,9 @@ def main():
                                        for table in sorted({row[0] for row in before["columns"]}))
         if int(helper.query(target, "SELECT coalesce(sum(n),0) FROM (" + count_sql + ") empty_tables")) != 0:
             raise RuntimeError("Local imported tables contain data")
-        for migration in MIGRATIONS:
-            sql(local, (ROOT / "prisma/migrations" / migration / "migration.sql").read_text(encoding="utf-8"))
+        if not reserved:
+            for migration in MIGRATIONS:
+                sql(local, (ROOT / "prisma/migrations" / migration / "migration.sql").read_text(encoding="utf-8"))
         native = json.loads(helper.query(target, "SELECT json_build_object('tables',count(DISTINCT c.oid),'constraints',(SELECT count(*) FROM pg_constraint k JOIN pg_class t ON t.oid=k.conrelid JOIN pg_namespace n ON n.oid=t.relnamespace WHERE n.nspname='icc' AND t.relname LIKE 'TerraqoNativeWorklog%' AND k.contype<>'n'),'indexes',(SELECT count(*) FROM pg_indexes WHERE schemaname='icc' AND (tablename LIKE 'TerraqoNativeWorklog%' OR indexname='NativeWorklogFirst_contribution_actor_key'))) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='icc' AND c.relkind='r' AND c.relname LIKE 'TerraqoNativeWorklog%'"))
         if native != {"tables": 5, "constraints": 36, "indexes": 16}:
             raise RuntimeError("Local native object counts differ")
@@ -167,6 +178,7 @@ def main():
             node_env = dict(base, NODE_ENV="production", TERRAQO_LOCAL_SCHEMA_MARKER=marker,
                             DATABASE_URL=f"postgresql://{role}:{password}@127.0.0.1:{port}/terraqo_own_native_schema?schema=icc&connection_limit=3")
             runner = {"--settlement": "scripts/test-native-worklog-local-settlement.ts",
+                      "--portal": "scripts/test-native-worklog-local-portal.ts",
                       "--authority": "scripts/test-native-worklog-local-authority.ts",
                       "--executor-confirmed": "scripts/test-native-worklog-local-settlement.ts",
                       "--executor-pending": "scripts/test-native-worklog-local-settlement.ts",
@@ -215,14 +227,14 @@ def main():
                 raise RuntimeError("Own local concurrency runner failed")
         print(json.dumps({"outcome": "passed", "source_major": 17, "local_major": local_major,
                           "schema_only_definitions_equal": True, "imported_rows": 0,
-                          "source_native_objects": 0, "local_native_objects": native,
+                          "source_native_objects": reserved, "local_native_objects": native,
                           "independent_connections": 2, "password_enforced": True,
                           "schema_sha256": hashlib.sha256(json.dumps(before, sort_keys=True).encode()).hexdigest(),
                           "concurrent_worklog_flows_proved": sys.argv[1:] in (["--concurrency"], ["--settlement"], ["--authority"], ["--validation-locks"], ["--reciprocal-workers"]),
                           "executor_flow_proved": sys.argv[1:] in (["--executor-confirmed"], ["--executor-pending"], ["--reciprocal-workers"], ["--operations"]),
                           "internal_operations_flow_proved": sys.argv[1:] == ["--operations"],
                           "schema_gate_proved": sys.argv[1:] == ["--schema-gate"],
-                          "production_native_applied": False}), flush=True)
+                          "source_ddl_applied_by_check": False}), flush=True)
     finally:
         for process in (source, target):
             if process and process.poll() is None:

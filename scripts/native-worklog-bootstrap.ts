@@ -17,7 +17,8 @@ const digest = (value: unknown) => createHash("sha256").update(JSON.stringify(va
 /** Schema definitions and migration ledgers, never application row contents.
  * The one authorized external index is excluded from both sides of comparison.
  */
-export async function nativeBootstrapBaseline(tx: Prisma.TransactionClient) {
+export async function nativeBootstrapBaseline(tx: Prisma.TransactionClient,
+  evidence?: (hashes: Readonly<Record<string, string>>) => void) {
   const columns = await tx.$queryRaw`SELECT table_schema,table_name,column_name,ordinal_position,data_type,udt_name,is_nullable,column_default
     FROM information_schema.columns WHERE table_schema IN ('icc','public') AND table_name NOT LIKE 'TerraqoNativeWorklog%'
     ORDER BY table_schema,table_name,ordinal_position`;
@@ -29,7 +30,7 @@ export async function nativeBootstrapBaseline(tx: Prisma.TransactionClient) {
     WHERE schemaname IN ('icc','public') AND tablename NOT LIKE 'TerraqoNativeWorklog%'
     AND indexname<>'NativeWorklogFirst_contribution_actor_key' ORDER BY schemaname,tablename,indexname`;
   const extensions = await tx.$queryRaw`SELECT extname,extversion,extnamespace::regnamespace::text AS namespace FROM pg_extension ORDER BY extname`;
-  const identity = await tx.$queryRaw`SELECT current_database() AS database,current_user AS actor`;
+  const identity = await tx.$queryRaw<{ database: string; actor: string }[]>`SELECT current_database() AS database,current_user AS actor`;
   const ledgers: unknown[] = [];
   for (const schema of ["icc", "public"]) {
     const name = `${schema}."_prisma_migrations"`;
@@ -37,7 +38,10 @@ export async function nativeBootstrapBaseline(tx: Prisma.TransactionClient) {
     ledgers.push({ schema, rows: found.present
       ? await tx.$queryRawUnsafe(`SELECT to_jsonb(m) AS row FROM ${name} m ORDER BY id`) : null });
   }
-  return digest({ columns, constraints, indexes, extensions, identity, ledgers });
+  const parts = { columns, constraints, indexes, extensions, identity, ledgers };
+  evidence?.(Object.freeze({ ...Object.fromEntries(Object.entries(parts).map(([key, value]) => [key, digest(value)])),
+    databaseIdentity: digest(identity.map(row => row.database)), principalIdentity: digest(identity.map(row => row.actor)) }));
+  return digest(parts);
 }
 
 /** Offline maintenance tool, not a runtime caller or a production CLI.

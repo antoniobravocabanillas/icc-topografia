@@ -13,6 +13,7 @@ import { advanceNativeWorklogOwnerVersion } from "./native-worklog-owner-version
 import { planNativeWorklogDecision, saveNativeWorklogDecision, requireNativeWorklogDecision } from "./native-worklog-decision";
 
 import { requireNativeCreationAuthority } from "./native-worklog-creation-authority";
+import { assertNativeWorklogSchemaInTransaction } from "./native-worklog-schema-gate";
 
 const lockedAccesses = new WeakSet<object>();
 const fail = (status: 401 | 403 | 404 | 409 | 503): never => { throw new NativeWorklogOperationError(status); };
@@ -163,10 +164,16 @@ export async function readNativeWorklogInTransaction(tx: Prisma.TransactionClien
 export function createNativeWorklog(database: Pick<PrismaClient, "$transaction">, token: WorkspacePortalToken,
   parsed: Parsed, budget: NativeWorklogBudget) {
   budget.require(8000);
-  return database.$transaction(tx => createNativeWorklogInTransaction(tx, token, parsed, budget), { maxWait: 1000, timeout: 7000 });
+  return database.$transaction(async tx => {
+    await assertNativeWorklogSchemaInTransaction(tx, budget);
+    return createNativeWorklogInTransaction(tx, token, parsed, budget);
+  }, { maxWait: 1000, timeout: 7000 });
 }
 export function readNativeWorklog(database: Pick<PrismaClient, "$transaction">, token: WorkspacePortalToken,
   operationKey: string, budget: NativeWorklogBudget) {
   budget.require(8000);
-  return database.$transaction(tx => readNativeWorklogInTransaction(tx, token, operationKey, budget), { maxWait: 1000, timeout: 7000 });
+  return database.$transaction(async tx => {
+    await assertNativeWorklogSchemaInTransaction(tx, budget);
+    return readNativeWorklogInTransaction(tx, token, operationKey, budget);
+  }, { maxWait: 1000, timeout: 7000 });
 }

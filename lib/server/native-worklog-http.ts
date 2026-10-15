@@ -13,7 +13,7 @@ export type NativeWorklogOperationResult = {
 type Parsed = Awaited<ReturnType<typeof parseNativeWorklogPayload>>;
 type Ports = {
   authenticate(request: Request, slug: string): Promise<WorkspacePortalToken | null>;
-  // Future SQL core must revalidate grant/role/member/modules/project and expiry under locks.
+  // SQL repeats grant/role/member/modules/project and expiry checks under locks.
   create(input: Parsed, token: WorkspacePortalToken, budget: NativeWorklogBudget): Promise<NativeWorklogOperationResult>;
   read(token: WorkspacePortalToken, operationKey: string, budget: NativeWorklogBudget): Promise<NativeWorklogOperationResult>;
 };
@@ -27,7 +27,7 @@ function projectResult(result: NativeWorklogOperationResult) {
   } : null, current: result.current ? {worklogId:result.current.worklogId,version:result.current.version} : null };
 }
 
-/** Preparatory boundary only: no route or SQL/adjudication implementation is wired.
+/** Native creation/read boundary composed by the fixed portal adapter.
  * Server supplies ports; clients cannot supply an actor, workspace, digest or dependency.
  * Receipt confirms historical creation, not current publication or points settlement. */
 export async function handleNativeWorklogOperation(request: Request, workspaceSlug: string, ports: Ports) {
