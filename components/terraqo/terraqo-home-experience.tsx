@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { ArrowLeft, ArrowRight, BadgeCheck, BellRing, BriefcaseBusiness, CalendarDays, Check, FileCheck2, MapPin, Network, ShieldCheck, UserRoundCheck, Workflow } from "lucide-react";
+import { terraqoDomains } from "@/lib/terraqo-domains";
 import styles from "./terraqo-home-experience.module.css";
 
 const views = [
@@ -87,7 +88,7 @@ export function TerraqoHomeExperience({ latestWorklogs }: { latestWorklogs: Home
         <span className={styles.eyebrow}>La red del trabajo real</span>
         <h1>Tu trabajo merece <em>ser reconocido.</em></h1>
         <p>Convierte cada proyecto en parte de tu trayectoria. Personas, empresas y evidencia conectadas con contexto verificable.</p>
-        <div className={styles.actions}><Link href="/registro">Crear mi identidad <ArrowRight aria-hidden="true" /></Link><Link href="/producto">Conoce Terraqo <ArrowRight aria-hidden="true" /></Link></div>
+        <div className={styles.actions}><Link href={`${terraqoDomains.portal}/registro`} prefetch={false}>Crear mi identidad <ArrowRight aria-hidden="true" /></Link><Link href="/producto">Conoce Terraqo <ArrowRight aria-hidden="true" /></Link></div>
         <div className={styles.facts}><span><Check aria-hidden="true" /> Perfil independiente</span><span><Check aria-hidden="true" /> Evidencia verificable</span><span><Check aria-hidden="true" /> Propiedad de tus datos</span></div>
       </div>
       <div className={styles.signalBoard}>
@@ -108,6 +109,6 @@ export function TerraqoHomeExperience({ latestWorklogs }: { latestWorklogs: Home
     <section className={styles.networkSection}><div className={styles.sectionIntro}><span>Red profesional</span><h2>Conecta con capacidad demostrada, no con ruido.</h2><p>Descubre profesionales y empresas por experiencia visible, especialidad, disponibilidad y trabajo documentado.</p></div><div className={styles.people}>{signals.map(([initials,name,event],index)=><article key={name}><header><i>{initials}</i><div><h3>{name}</h3><p>{index===2?"Empresa verificada":"Profesional disponible"}</p></div>{index<2&&<BadgeCheck />}</header><span>{event}</span><footer><Link href="/red">Explorar en la red</Link><ArrowRight /></footer></article>)}</div></section>
     <section className={styles.trust}><div><span>Confianza por capas</span><h2>No toda información tiene el mismo peso.</h2><p>Terraqo diferencia lo declarado de aquello revisado, respaldado o confirmado.</p><Link href="/plataforma">Conocer la arquitectura <ArrowRight /></Link></div><ol>{[["01","Declarado"],["02","Revisado por Terraqo"],["03","Respaldado por supervisor"],["04","Confirmado por empresa"]].map(([n,label])=><li key={n}><b>{n}</b><span>{label}</span><FileCheck2 /></li>)}</ol></section>
     <section className={styles.automation}><BellRing /><div><span>Automatización por suscripción</span><h2>El seguimiento ocurre mientras el equipo trabaja.</h2><p>Professional activa alertas y asignaciones; Premium suma condiciones; Enterprise incorpora integraciones y gobierno avanzado.</p></div><Link href="/automatizacion">Comparar capacidades <ArrowRight /></Link></section>
-    <section className={styles.closing}><Network /><h2>Construye una identidad profesional que crece mientras trabajas.</h2><p>Trabajo real. Contexto compartido. Confianza verificable.</p><div className={styles.actions}><Link href="/registro">Crear cuenta <ArrowRight /></Link><Link href="/membresias">Ver membresías</Link></div></section>
+    <section className={styles.closing}><Network /><h2>Construye una identidad profesional que crece mientras trabajas.</h2><p>Trabajo real. Contexto compartido. Confianza verificable.</p><div className={styles.actions}><Link href={`${terraqoDomains.portal}/registro`} prefetch={false}>Crear cuenta <ArrowRight /></Link><Link href="/membresias">Ver membresías</Link></div></section>
   </div>;
 }
