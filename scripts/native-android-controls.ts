@@ -69,6 +69,22 @@ export async function fillLabel(serial: string, label: string, value: string) {
   }
   throw new Error(`Native input unavailable: ${label}`);
 }
+/** Fixed ASCII fixture text only; credentials keep the narrower fillLabel path. */
+export async function fillSentenceLabel(serial: string, label: string, value: string) {
+  assert.match(value, /^[a-zA-Z0-9][a-zA-Z0-9 .,_:-]*$/);
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const node = nodes(await snapshot(serial)).find(node => node.includes('class="android.widget.EditText"') &&
+      (node.includes(`content-desc="${label}`) || node.includes(`text="${label}`) || node.includes(`hint="${label}"`)));
+    if (node) {
+      shell(serial, `input tap ${center(node)}`); await pause(400);
+      shell(serial, "input keyevent 123");
+      shell(serial, `input text ${value.replaceAll(" ", "%s")}`);
+      await hideShownKeyboard(serial); await pause(300); return;
+    }
+    await scroll(serial);
+  }
+  throw new Error(`Native sentence input unavailable: ${label}`);
+}
 export async function fillLastLabel(serial: string, label: string, value: string) {
   for (let attempt=0;attempt<9;attempt++) {
     const node=nodes(await snapshot(serial)).reverse().find(node=>node.includes('class="android.widget.EditText"') &&

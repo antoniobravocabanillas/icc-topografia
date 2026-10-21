@@ -1,11 +1,15 @@
 import bcrypt from "bcryptjs";
 import { randomBytes } from "node:crypto";
-import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { createEmailVerificationToken, sendEmailVerificationCode } from "@/lib/server/email-verification";
 import { getSubdivisionName } from "@/lib/locations";
 import { fail, handleApiError, ok, parseJson } from "@/lib/server/api";
+import {
+  calculatePublicCheckoutPrice,
+  MAX_PUBLIC_CHECKOUT_QUANTITY,
+  PublicCheckoutPricingError,
+} from "@/lib/server/public-checkout-pricing";
 
 type RouteContext = { params: Promise<{ workspaceSlug: string }> };
 
@@ -14,14 +18,8 @@ const publicCheckoutSchema = z.object({
   items: z.array(z.object({
     productId: z.string().trim().min(1),
     slug: z.string().trim().optional(),
-    quantity: z.coerce.number().int().positive(),
+    quantity: z.coerce.number().int().positive().max(MAX_PUBLIC_CHECKOUT_QUANTITY),
   })).min(1),
-  totals: z.object({
-    subtotal: z.coerce.number().nonnegative().optional(),
-    igv: z.coerce.number().nonnegative().optional(),
-    shipping: z.coerce.number().nonnegative().optional(),
-    total: z.coerce.number().nonnegative().optional(),
-  }).optional(),
   shippingMethod: z.string().trim().default("standard"),
   paymentMethod: z.enum(["bank", "card", "delivery"]).default("bank"),
   customerType: z.string().trim().default("person"),
@@ -102,21 +100,28 @@ export async function POST(request: Request, { params }: RouteContext) {
     const missingItem = payload.items.find((item) => !productByKey.get(item.productId) && (!item.slug || !productByKey.get(item.slug)));
     if (missingItem) return fail(`Producto no disponible para este workspace: ${missingItem.productId}`, 404);
 
-    const orderItems = payload.items.map((item) => {
+    const priceInputs = payload.items.map((item) => {
       const product = productByKey.get(item.productId) || (item.slug ? productByKey.get(item.slug) : undefined);
       if (!product) throw new Error("Producto no encontrado");
-      const unitPrice = product.price || new Prisma.Decimal(0);
       return {
         productId: product.id,
         quantity: item.quantity,
-        unitPrice,
-        subtotal: unitPrice.mul(item.quantity),
+        price: product.price,
+        currency: product.currency,
+        requiresQuote: product.requiresQuote,
       };
     });
 
+    let serverPrice: ReturnType<typeof calculatePublicCheckoutPrice>;
+    try {
+      serverPrice = calculatePublicCheckoutPrice(priceInputs);
+    } catch (error) {
+      if (error instanceof PublicCheckoutPricingError) return fail(error.message, 409);
+      throw error;
+    }
+
+    const orderItems = serverPrice.items;
     const canonicalItems = normalizeItems(orderItems);
-    const itemSubtotal = orderItems.reduce((sum, item) => sum.add(item.subtotal), new Prisma.Decimal(0));
-    const total = new Prisma.Decimal(payload.totals?.total ?? Number(itemSubtotal));
     const recentSince = new Date(Date.now() - 10 * 60 * 1000);
 
     const documentOwner = await prisma.client.findFirst({
@@ -306,8 +311,8 @@ export async function POST(request: Request, { params }: RouteContext) {
           customerPhone: payload.customer.phone,
           terraqoWorkspaceId: workspace.id,
           status: "PENDING",
-          total,
-          currency: orderItems[0]?.unitPrice ? products[0]?.currency || "USD" : "USD",
+          total: serverPrice.total,
+          currency: serverPrice.currency,
           addressId: address?.id,
           notes: [
             `Codigo publico: ${publicOrderCode}`,

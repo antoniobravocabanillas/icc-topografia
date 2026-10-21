@@ -77,7 +77,7 @@ export function ProductImageUploader({ initialImages = [] }: ProductImageUploade
           {images.map((image) => (
             <div key={image} className="overflow-hidden rounded-md border bg-background">
               <div className="relative aspect-[4/3] bg-muted">
-                <Image src={image} alt="Vista previa del producto" fill sizes="25vw" className="object-cover" />
+                <Image src={image} alt="Vista previa del producto" fill sizes="25vw" className="object-cover" unoptimized />
               </div>
               <div className="flex items-center justify-between gap-2 p-2">
                 <span className="truncate text-xs font-normal text-muted-foreground">{image}</span>

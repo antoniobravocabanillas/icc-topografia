@@ -1,9 +1,14 @@
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { confirmedLocalDisposableDatabaseUrl } from "./lib/confirmed-local-disposable-database";
 const rollbackMessage = "PRIVATE_STORAGE_TEST_ROLLBACK";
 
 async function main() {
+  process.env.DATABASE_URL = confirmedLocalDisposableDatabaseUrl({
+    value: process.env.ISOLATION_TEST_DATABASE_URL,
+    expected: process.env.ISOLATION_TEST_EXPECTED_DATABASE,
+    valueVariable: "ISOLATION_TEST_DATABASE_URL",
+    expectedVariable: "ISOLATION_TEST_EXPECTED_DATABASE",
+  });
+  const { prisma } = await import("../lib/prisma");
   try {
     await prisma.$transaction(async (tx) => {
       const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -45,7 +50,9 @@ async function main() {
       return;
     }
     throw error;
+  } finally {
+    await prisma.$disconnect();
   }
 }
 
-main().finally(() => prisma.$disconnect());
+main().catch((error) => { console.error(error); process.exit(1); });

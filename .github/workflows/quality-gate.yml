@@ -1,0 +1,54 @@
+name: Terraqo quality gate
+
+"on":
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: terraqo-quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Static and local contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Configure Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.13.0
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate
+
+      - name: Reject material production advisories
+        run: npm audit --omit=dev --audit-level=moderate
+
+      - name: Check source encoding
+        run: npm run check:encoding
+
+      - name: Check release candidate hygiene
+        run: npm run check:release-candidate
+
+      - name: Lint maintained sources
+        run: npm run lint
+
+      - name: Type-check application
+        run: npm run typecheck
+
+      - name: Run non-mutating Terraqo contracts
+        run: npm run test:terraqo-local-contracts
+
+      - name: Build production artifact
+        run: npm run build

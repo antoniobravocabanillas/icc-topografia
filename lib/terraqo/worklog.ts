@@ -5,6 +5,9 @@ import { prisma } from "@/lib/prisma";
 import { assertLegacyWorklogs } from "@/lib/server/native-worklog-legacy-guard";
 import { requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 import { terraqoWorklogCreateSchema } from "@/lib/validations/terraqo";
+import { terraqoWorklogRevisionSchema } from "@/lib/validations/terraqo";
+import { worklogRevisionHash } from "@/lib/terraqo/worklog-revision";
+import { worklogCreateOperationFingerprint } from "@/lib/terraqo/worklog-create-operation";
 import {
   awardAutomatedBuilderContribution,
   syncWorklogReputation,
@@ -60,6 +63,18 @@ export const worklogInclude = {
     },
   },
   _count: { select: { comments: true, reactions: true } },
+  currentRevision: {
+    select: {
+      id: true,
+      revisionNo: true,
+      contributionRole: true,
+      responsibilities: true,
+      methods: true,
+      tools: true,
+      contentHash: true,
+      createdAt: true,
+    },
+  },
 } satisfies Prisma.TerraqoWorklogEntryInclude;
 
 export type WorklogWithContext = Prisma.TerraqoWorklogEntryGetPayload<{
@@ -180,6 +195,7 @@ export async function createProfessionalWorklog(input: {
   userId: string;
   payload: z.infer<typeof terraqoWorklogCreateSchema>;
   requiredWorkspaceId?: string;
+  operationKey?: string;
 }) {
   const profile = await prisma.terraqoProfessionalProfile.findUnique({
     where: { userId: input.userId },
@@ -282,9 +298,32 @@ export async function createProfessionalWorklog(input: {
   const contentFingerprint = createHash("sha256")
     .update(fingerprintSource)
     .digest("hex");
-  const { worklog, priorWorklogs } = await prisma.$transaction(async tx => {
+  const operationFingerprint = worklogCreateOperationFingerprint(
+    input.payload,
+    workspaceId,
+  );
+  const { worklog, priorWorklogs, replayed } = await prisma.$transaction(async tx => {
     await tx.$queryRaw(Prisma.sql`SELECT id FROM icc."TerraqoProfessionalProfile" WHERE "userId"=${input.userId} FOR UPDATE`);
-    const worklog = await tx.terraqoWorklogEntry.create({
+    if (input.operationKey) {
+      const existing = await tx.terraqoWorklogCreateOperation.findUnique({
+        where: {
+          actorId_operationKey: {
+            actorId: input.userId,
+            operationKey: input.operationKey,
+          },
+        },
+        include: { worklog: { include: worklogInclude } },
+      });
+      if (existing) {
+        if (existing.fingerprint !== operationFingerprint)
+          throw new TerraqoWorklogError(
+            "La clave de reintento ya fue usada con otro contenido.",
+            409,
+          );
+        return { worklog: existing.worklog, priorWorklogs: 0, replayed: true };
+      }
+    }
+    const created = await tx.terraqoWorklogEntry.create({
       data: {
         professionalProfileId: profile.id,
         authorId: input.userId,
@@ -307,14 +346,45 @@ export async function createProfessionalWorklog(input: {
         occurredAt: new Date(),
         evidenceStatus: input.payload.projectId ? "LINKED" : "DECLARED",
       },
+      select: { id: true },
+    });
+    const revision = await tx.terraqoWorklogRevision.create({
+      data: {
+        worklogId: created.id,
+        revisionNo: 1,
+        title: input.payload.title,
+        summary: input.payload.summary,
+        outcome: input.payload.outcome,
+        contributionRole: input.payload.contributionRole,
+        responsibilities: input.payload.responsibilities || [],
+        methods: input.payload.methods || [],
+        tools: input.payload.tools || [],
+        contentHash: worklogRevisionHash(input.payload),
+        createdById: input.userId,
+      },
+      select: { id: true },
+    });
+    const worklog = await tx.terraqoWorklogEntry.update({
+      where: { id: created.id },
+      data: { currentRevisionId: revision.id },
       include: worklogInclude,
     });
+    if (input.operationKey) {
+      await tx.terraqoWorklogCreateOperation.create({
+        data: {
+          actorId: input.userId,
+          operationKey: input.operationKey,
+          fingerprint: operationFingerprint,
+          worklogId: worklog.id,
+        },
+      });
+    }
     const priorWorklogs = await tx.terraqoWorklogEntry.count({
       where: { authorId: input.userId, deletedAt: null },
     });
-    return { worklog, priorWorklogs };
+    return { worklog, priorWorklogs, replayed: false };
   });
-  if (priorWorklogs === 1) {
+  if (!replayed && priorWorklogs === 1) {
     try {
       await awardAutomatedBuilderContribution({
         userId: input.userId,
@@ -331,6 +401,7 @@ export async function createProfessionalWorklog(input: {
     }
   }
   try {
+    if (replayed) return worklog;
     await syncWorklogReputation(worklog.id);
   } catch (error) {
     console.warn(
@@ -339,6 +410,59 @@ export async function createProfessionalWorklog(input: {
     );
   }
   return worklog;
+}
+
+export async function reviseProfessionalWorklog(input: {
+  userId: string;
+  worklogId: string;
+  payload: z.infer<typeof terraqoWorklogRevisionSchema>;
+}) {
+  await assertLegacyWorklogs(prisma, [input.worklogId]);
+  return prisma.$transaction(async (tx) => {
+    const current = await tx.terraqoWorklogEntry.findFirst({
+      where: { id: input.worklogId, authorId: input.userId, deletedAt: null },
+      select: { id: true, version: true, professionalProfileId: true },
+    });
+    if (!current) throw new TerraqoWorklogError("Recurso no disponible.", 404);
+    await tx.$queryRaw(Prisma.sql`SELECT id FROM icc."TerraqoProfessionalProfile" WHERE id=${current.professionalProfileId} FOR UPDATE`);
+    const locked = await tx.terraqoWorklogEntry.findUnique({
+      where: { id: current.id },
+      select: { version: true },
+    });
+    if (!locked || locked.version !== input.payload.expectedVersion)
+      throw new TerraqoWorklogError(
+        "La bitácora cambió en otra sesión. Recarga y compara la versión actual antes de guardar.",
+        409,
+      );
+    const nextVersion = locked.version + 1;
+    const revision = await tx.terraqoWorklogRevision.create({
+      data: {
+        worklogId: current.id,
+        revisionNo: nextVersion,
+        title: input.payload.title,
+        summary: input.payload.summary,
+        outcome: input.payload.outcome,
+        contributionRole: input.payload.contributionRole,
+        responsibilities: input.payload.responsibilities,
+        methods: input.payload.methods,
+        tools: input.payload.tools,
+        contentHash: worklogRevisionHash(input.payload),
+        createdById: input.userId,
+      },
+      select: { id: true },
+    });
+    return tx.terraqoWorklogEntry.update({
+      where: { id: current.id },
+      data: {
+        title: input.payload.title,
+        summary: input.payload.summary,
+        outcome: input.payload.outcome,
+        version: nextVersion,
+        currentRevisionId: revision.id,
+      },
+      include: worklogInclude,
+    });
+  }, { isolationLevel: "Serializable" });
 }
 
 export async function setWorklogContinuity(input: {

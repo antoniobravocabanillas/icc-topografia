@@ -1,9 +1,17 @@
-import { PrismaClient } from "@prisma/client";
-import { createOrGetMeeting, getMeetingForUser, TerraqoMeetError } from "../lib/terraqo/meet";
-
-const prisma = new PrismaClient();
+import { confirmedLocalDisposableDatabaseUrl } from "./lib/confirmed-local-disposable-database";
 
 async function main() {
+  process.env.DATABASE_URL = confirmedLocalDisposableDatabaseUrl({
+    value: process.env.ISOLATION_TEST_DATABASE_URL,
+    expected: process.env.ISOLATION_TEST_EXPECTED_DATABASE,
+    valueVariable: "ISOLATION_TEST_DATABASE_URL",
+    expectedVariable: "ISOLATION_TEST_EXPECTED_DATABASE",
+  });
+  const [{ prisma }, { createOrGetMeeting, getMeetingForUser, TerraqoMeetError }] = await Promise.all([
+    import("../lib/prisma"),
+    import("../lib/terraqo/meet"),
+  ]);
+  try {
   const [professional, colleague, workspace] = await Promise.all([
     prisma.user.findUnique({ where: { email: "demo.profesional@terraqo.com" }, select: { id: true } }),
     prisma.user.findUnique({ where: { email: "demo.colega@terraqo.com" }, select: { id: true } }),
@@ -52,6 +60,9 @@ async function main() {
     await prisma.terraqoConversation.delete({ where: { id: conversation.id } }).catch(() => undefined);
     await prisma.user.delete({ where: { id: outsider.id } }).catch(() => undefined);
   }
+  } finally {
+    await prisma.$disconnect();
+  }
 }
 
-main().then(() => prisma.$disconnect()).catch(async (error) => { console.error(error); await prisma.$disconnect(); process.exit(1); });
+main().catch((error) => { console.error(error); process.exit(1); });

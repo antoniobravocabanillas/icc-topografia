@@ -3,9 +3,10 @@
 import { startAuthentication, startRegistration } from "@simplewebauthn/browser";
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, BadgeCheck, CalendarClock, CheckCircle2, Fingerprint, LocateFixed, LogIn, LogOut, MapPin, RefreshCw, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { fieldVerificationRetryDelay, isRetryableFieldVerificationStatus } from "@/lib/client/field-verification-recovery";
 
 export type VerificationStatus = {
   hasPasskey: boolean;
@@ -77,30 +78,59 @@ export function FieldVerificationPanel({ endpoint, compact = false }: { endpoint
   const [loadError, setLoadError] = useState("");
   const [changingProject, setChangingProject] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const retryTimerRef = useRef<number | null>(null);
+  const consecutiveFailuresRef = useRef(0);
 
   const load = useCallback(async () => {
-    setLoadError("");
+    if (retryTimerRef.current !== null) {
+      window.clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
         const next = await requestFieldVerification<VerificationStatus>(endpoint, { action: "status" });
         setStatus(next);
+        setLoadError("");
+        consecutiveFailuresRef.current = 0;
         const active = next.latestAttendance?.type === "CHECK_IN" ? next.latestAttendance : null;
         setAttendanceContext(active?.context || (next.projects.length ? "PROJECT" : "PERSONAL_FIELD"));
         setProjectId((current) => active?.projectId || current || next.membership.currentProjectId || next.projects[0]?.id || "");
         return;
       } catch (error) {
         const statusCode = error && typeof error === "object" && "status" in error ? Number(error.status) : 0;
-        const transient = statusCode === 0 || statusCode >= 500;
+        const transient = isRetryableFieldVerificationStatus(statusCode);
         if (attempt === 0 && transient) {
           await new Promise((resolve) => window.setTimeout(resolve, 450));
           continue;
         }
         setLoadError(error instanceof Error ? error.message : "No pudimos cargar asistencia y validaciones.");
+        if (transient) {
+          const delay = fieldVerificationRetryDelay(consecutiveFailuresRef.current);
+          consecutiveFailuresRef.current += 1;
+          retryTimerRef.current = window.setTimeout(() => {
+            retryTimerRef.current = null;
+            void load();
+          }, delay);
+        }
+        return;
       }
     }
   }, [endpoint]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+    const online = () => void load();
+    const visible = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    window.addEventListener("online", online);
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      window.removeEventListener("online", online);
+      document.removeEventListener("visibilitychange", visible);
+      if (retryTimerRef.current !== null) window.clearTimeout(retryTimerRef.current);
+    };
+  }, [load]);
 
   useEffect(() => {
     const reload = () => void load();
@@ -202,8 +232,8 @@ export function FieldVerificationPanel({ endpoint, compact = false }: { endpoint
   }
 
   if (!status && loadError) return (
-    <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50/60 p-5 sm:flex-row sm:items-center sm:justify-between">
-      <div><p className="font-semibold text-amber-950">Control de campo no disponible</p><p className="mt-1 text-sm text-amber-900/75">{loadError}</p></div>
+    <div role="alert" aria-live="polite" className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50/60 p-5 sm:flex-row sm:items-center sm:justify-between">
+      <div><p className="font-semibold text-amber-950">Estamos recuperando el control de jornada</p><p className="mt-1 text-sm text-amber-900/75">{loadError} Reintentaremos automáticamente; también puedes hacerlo ahora.</p></div>
       <Button type="button" variant="outline" onClick={() => void load()}><RefreshCw className="mr-2 h-4 w-4" /> Reintentar</Button>
     </div>
   );

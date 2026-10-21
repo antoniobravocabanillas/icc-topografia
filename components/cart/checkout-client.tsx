@@ -118,7 +118,7 @@ export function CheckoutClient() {
             <Card key={item.productId} className="overflow-hidden">
               <CardContent className="grid gap-4 p-4 md:grid-cols-[120px_1fr_auto] md:items-center">
                 <Link href={`/tienda/${item.slug}`} className="relative aspect-[4/3] overflow-hidden rounded-md border bg-white">
-                  {item.image ? <Image src={item.image} alt={item.name} fill sizes="120px" className="object-contain p-2" /> : null}
+                  {item.image ? <Image src={item.image} alt={item.name} fill sizes="120px" className="object-contain p-2" unoptimized /> : null}
                 </Link>
                 <div>
                   <p className="text-xs font-semibold uppercase text-muted-foreground">{item.brand}{item.model ? ` - ${item.model}` : ""}</p>

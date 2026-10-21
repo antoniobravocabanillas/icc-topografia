@@ -33,7 +33,7 @@ export function ProductGallery({ images, productName, badge, requiresQuote }: Pr
             {badge ? <span className="rounded-md bg-primary px-3 py-2 text-xs font-black uppercase text-primary-foreground">{badge}</span> : null}
             {requiresQuote ? <span className="rounded-md border bg-white px-3 py-2 text-xs font-black uppercase text-primary">Cotizacion</span> : null}
           </div>
-          <Image src={activeImage} alt={productName} fill sizes="(min-width: 1024px) 48vw, 100vw" className="object-contain p-10" priority />
+          <Image src={activeImage} alt={productName} fill sizes="(min-width: 1024px) 48vw, 100vw" className="object-contain p-10" priority unoptimized />
           <Button type="button" variant="ghost" size="icon" className="absolute bottom-5 right-5 rounded-full bg-white/90 shadow-lg" onClick={() => setIsZoomed(true)} aria-label="Ampliar imagen">
             <Maximize2 className="h-4 w-4" />
           </Button>
@@ -57,7 +57,7 @@ export function ProductGallery({ images, productName, badge, requiresQuote }: Pr
               className={cn("relative aspect-square rounded-md border bg-white p-2 transition", activeIndex === index ? "border-primary ring-2 ring-primary/15" : "border-primary/10 hover:border-primary/40")}
               aria-label={`Ver imagen ${index + 1}`}
             >
-              <Image src={image} alt={`${productName} ${index + 1}`} fill sizes="100px" className="object-contain p-2" />
+              <Image src={image} alt={`${productName} ${index + 1}`} fill sizes="100px" className="object-contain p-2" unoptimized />
             </button>
           ))}
         </div>
@@ -66,7 +66,7 @@ export function ProductGallery({ images, productName, badge, requiresQuote }: Pr
       {isZoomed ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-6" onClick={() => setIsZoomed(false)}>
           <div className="relative h-[86vh] w-full max-w-5xl rounded-lg bg-white" onClick={(event) => event.stopPropagation()}>
-            <Image src={activeImage} alt={productName} fill sizes="90vw" className="object-contain p-8" />
+            <Image src={activeImage} alt={productName} fill sizes="90vw" className="object-contain p-8" unoptimized />
             <Button type="button" className="absolute right-4 top-4" onClick={() => setIsZoomed(false)}>Cerrar</Button>
           </div>
         </div>

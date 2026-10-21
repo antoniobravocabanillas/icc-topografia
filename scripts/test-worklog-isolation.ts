@@ -1,7 +1,16 @@
-import { prisma } from "../lib/prisma";
-import { canViewWorklog, createProfessionalWorklog, visibleWorklogWhere } from "../lib/terraqo/worklog";
+import { confirmedLocalDisposableDatabaseUrl } from "./lib/confirmed-local-disposable-database";
 
 async function main() {
+  process.env.DATABASE_URL = confirmedLocalDisposableDatabaseUrl({
+    value: process.env.WORKLOG_ISOLATION_DATABASE_URL,
+    expected: process.env.WORKLOG_ISOLATION_EXPECTED_DATABASE,
+    valueVariable: "WORKLOG_ISOLATION_DATABASE_URL",
+    expectedVariable: "WORKLOG_ISOLATION_EXPECTED_DATABASE",
+  });
+  const [{ prisma }, { canViewWorklog, createProfessionalWorklog, visibleWorklogWhere }] = await Promise.all([
+    import("../lib/prisma"),
+    import("../lib/terraqo/worklog"),
+  ]);
   const workspace = await prisma.terraqoWorkspace.findUnique({
     where: { slug: "icc-topografia" },
     select: {
@@ -89,8 +98,7 @@ async function main() {
   }
 }
 
-main().catch(async (error) => {
+main().catch((error) => {
   console.error(error);
-  await prisma.$disconnect();
   process.exit(1);
 });

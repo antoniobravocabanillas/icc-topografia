@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { reserveStorage } from "@/lib/terraqo/billing/storage-quota";
 import {
@@ -56,6 +58,7 @@ export async function uploadMessageAttachment(
     Math.max(0, Math.min(Number(form.get("durationMs") || 0), 3_600_000)) ||
     null;
   const file = form.get("file");
+  const operationKey = String(form.get("operationKey") || "").trim();
   if (!conversationId || !(file instanceof File))
     throw new TerraqoMessagingError("Selecciona un archivo válido.");
   if (!file.size || file.size > MAX_MESSAGE_ATTACHMENT_SIZE)
@@ -64,6 +67,28 @@ export async function uploadMessageAttachment(
     file.type.split(";")[0]?.trim().toLowerCase() || "application/octet-stream";
   if (!ALLOWED_MESSAGE_ATTACHMENT_TYPES.has(contentType))
     throw new TerraqoMessagingError("Este tipo de archivo no está permitido.");
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(operationKey))
+    throw new TerraqoMessagingError("La solicitud no incluye una clave de reintento válida.", 400);
+
+  const bytes = await file.arrayBuffer();
+  const fingerprint = createHash("sha256").update(JSON.stringify({
+    conversationId,
+    body,
+    fileName: file.name,
+    contentType,
+    size: file.size,
+    durationMs,
+    contentHash: createHash("sha256").update(Buffer.from(bytes)).digest("hex"),
+  })).digest("hex");
+  const replay = await prisma.terraqoMessageOperation.findUnique({
+    where: { actorId_operationKey: { actorId: userId, operationKey } },
+    include: { message: { include: { attachmentItems: true } } },
+  });
+  if (replay) {
+    if (replay.fingerprint !== fingerprint || replay.message.conversationId !== conversationId)
+      throw new TerraqoMessagingError("La clave de reintento ya fue usada con otro mensaje.", 409);
+    return replay.message;
+  }
 
   const participant = await activeParticipant(userId, conversationId);
   const kind = contentType.startsWith("audio/")
@@ -75,7 +100,7 @@ export async function uploadMessageAttachment(
   const store = getMessageAttachmentStore();
   const reservation=await reserveStorage(userId,file.size);
   try {
-  await store.set(storageKey, await file.arrayBuffer(), {
+  await store.set(storageKey, bytes, {
     metadata: {
       conversationId,
       uploadedBy: userId,
@@ -105,6 +130,9 @@ export async function uploadMessageAttachment(
         },
         include: { attachmentItems: true },
       });
+      await tx.terraqoMessageOperation.create({
+        data: { actorId: userId, operationKey, fingerprint, messageId: message.id },
+      });
       await tx.terraqoConversation.update({
         where: { id: conversationId },
         data: { lastMessageAt: message.createdAt },
@@ -118,6 +146,14 @@ export async function uploadMessageAttachment(
   } catch (error) {
     await reservation.release();
     await store.delete(storageKey).catch(() => undefined);
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const concurrent = await prisma.terraqoMessageOperation.findUnique({
+        where: { actorId_operationKey: { actorId: userId, operationKey } },
+        include: { message: { include: { attachmentItems: true } } },
+      });
+      if (concurrent?.fingerprint === fingerprint && concurrent.message.conversationId === conversationId)
+        return concurrent.message;
+    }
     throw error;
   }
 }

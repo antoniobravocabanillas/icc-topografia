@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import {
   ArrowRight,
   Award,
@@ -35,6 +36,11 @@ import { TerraqoAvatar } from "@/components/terraqo/terraqo-avatar";
 import { TerraqoPublicHeader } from "@/components/terraqo/terraqo-public-header";
 import { PublicCvActivityExplorer, type PublicCvActivityRecord } from "@/components/terraqo/public-cv-activity-explorer";
 import { PublicCvProjectExplorer } from "@/components/terraqo/public-cv-project-explorer";
+import { publicCvEvidenceHref } from "@/lib/terraqo/public-cv-permalink";
+import {
+  encodeWorklogArchiveCursor,
+  parseWorklogArchiveFilters,
+} from "@/lib/terraqo/worklog-archive-contract";
 
 type PublicCVPageProps = {
   profile: PublicCvProfile;
@@ -323,11 +329,32 @@ export function PublicCVPage({ profile }: PublicCVPageProps) {
   );
 }
 
-export function PublicCVSectionPage({ profile, section }: { profile: PublicCvProfile; section: PublicCvSection }) {
+export function PublicCVSectionPage({
+  profile,
+  section,
+  initialRecordId,
+}: {
+  profile: PublicCvProfile;
+  section: PublicCvSection;
+  initialRecordId?: string;
+}) {
   const username = profile.username || "perfil";
   const copy = PUBLIC_CV_SECTIONS[section];
   const projects = uniqueProjects(profile, null);
-  const evidence = profile.worklogs;
+  const orderedWorklogs = [...profile.worklogs].sort(
+    (left, right) =>
+      right.occurredAt.getTime() - left.occurredAt.getTime() ||
+      right.id.localeCompare(left.id),
+  );
+  const initialArchiveWorklogs = orderedWorklogs.slice(0, 80);
+  const requestedWorklog = initialRecordId
+    ? orderedWorklogs.find((worklog) => worklog.id === initialRecordId)
+    : undefined;
+  const evidence =
+    requestedWorklog &&
+    !initialArchiveWorklogs.some((worklog) => worklog.id === requestedWorklog.id)
+      ? [requestedWorklog, ...initialArchiveWorklogs]
+      : initialArchiveWorklogs;
 
   if (section === "evidencias") {
     const worklogRecords: PublicCvActivityRecord[] = evidence.map((worklog) => ({
@@ -515,11 +542,27 @@ export function PublicCVSectionPage({ profile, section }: { profile: PublicCvPro
 
     const activityRecords = [...worklogRecords, ...experienceRecords, ...educationRecords, ...documentRecords, ...projectRecords]
       .sort((left, right) => new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime());
+    const lastInitialWorklog = initialArchiveWorklogs.at(-1);
+    const initialNextCursor =
+      orderedWorklogs.length > initialArchiveWorklogs.length && lastInitialWorklog
+        ? encodeWorklogArchiveCursor(
+            lastInitialWorklog.occurredAt,
+            lastInitialWorklog.id,
+            parseWorklogArchiveFilters({ alcance: "all", limite: "20" }),
+          )
+        : null;
 
     return (
       <div className="terraqo-brand-surface tq-cv-v3 min-h-screen bg-[#07111f]">
         <TerraqoPublicHeader tone="dark" />
-        <PublicCvActivityExplorer username={username} profileName={profile.user.name || username} records={activityRecords} />
+        <PublicCvActivityExplorer
+          username={username}
+          profileName={profile.user.name || username}
+          records={activityRecords}
+          initialRecordId={initialRecordId}
+          profileId={profile.id}
+          initialNextCursor={initialNextCursor}
+        />
       </div>
     );
   }
@@ -1141,7 +1184,7 @@ function EvidenceCard({ worklog, username }: { worklog: PublicCvProfile["worklog
       </div>
     </article>
   );
-  return username ? <Link href={`${publicCvPath(username, "evidencias")}#${worklog.id}`} aria-label={`Ver actividad: ${worklog.title}`}>{content}</Link> : content;
+  return username ? <Link href={publicCvEvidenceHref(username, worklog.id)} aria-label={`Ver actividad: ${worklog.title}`}>{content}</Link> : content;
 }
 
 function SkillsAndTools({ profile, username, extended = false }: { profile: PublicCvProfile; username?: string; extended?: boolean }) {
@@ -1284,7 +1327,14 @@ function VisualFrame({ src, label, compact = false }: { src?: string; label: str
   return (
     <div className={compact ? "relative h-28 overflow-hidden bg-[#0e1a26]" : "relative h-36 overflow-hidden bg-[#0e1a26]"}>
       {src ? (
-        <img src={src} alt={label} loading="lazy" className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]" />
+        <Image
+          src={src}
+          alt={label}
+          fill
+          sizes={compact ? "(max-width: 768px) 100vw, 280px" : "(max-width: 768px) 100vw, 420px"}
+          unoptimized
+          className="object-cover transition duration-500 group-hover:scale-[1.03]"
+        />
       ) : (
         <div className="grid h-full w-full place-items-center bg-[radial-gradient(circle_at_45%_35%,rgba(72,138,201,0.24),transparent_35%),linear-gradient(135deg,#0e1a26,#07111f)]">
           <Gauge className="h-8 w-8 text-[#488ac9]" />

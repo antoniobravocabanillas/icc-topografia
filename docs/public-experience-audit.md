@@ -27,7 +27,7 @@ Estas pruebas automatizadas no equivalen a certificación de accesibilidad ni a 
 
 ## Seguridad y pendientes explícitos
 
-Se actualizaron Next.js, Auth, adaptador Prisma y dependencias vulnerables. El análisis de dependencias de producción quedó sin avisos críticos, altos o moderados. Persisten cuatro avisos bajos relacionados con SimpleWebAuthn y dependientes: la corrección mayor requiere migrar y validar flujos de passkeys. No se declara riesgo cero.
+Se actualizaron Next.js, Auth, adaptador Prisma y dependencias vulnerables. El 20 de octubre de 2026, Next.js se fijó en 15.5.27 para corregir dos avisos moderados de cache poisoning presentes en 15.5.25. `npm audit --omit=dev` quedó sin avisos críticos, altos o moderados. Persisten cuatro avisos bajos relacionados con SimpleWebAuthn y dependientes: la corrección mayor requiere migrar y validar flujos de passkeys. No se declara riesgo cero.
 
 Culqi sandbox respondió HTTP 200 a una consulta de planes, sin cargos. El propietario decidió definir los planes antes de cobrar. Checkout, renovación, cancelación, conciliación y pruebas 3DS están pendientes y no se presentan como funcionalidades activas. No hubo cambios de esquema ni migraciones de base de datos.
 

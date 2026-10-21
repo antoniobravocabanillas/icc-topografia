@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { selectProfessionalWorkspaceMembership } from "../lib/terraqo/professional-workspace";
-import { compatibleWebAuthnRpIds, resolveWebAuthnContext } from "../lib/terraqo/webauthn-context";
+import { compatibleWebAuthnRpIds, resolveWebAuthnContext, selectCompatibleWebAuthnRpId } from "../lib/terraqo/webauthn-context";
 
 function request(url: string, headers: Record<string, string> = {}) {
   return new Request(url, { headers });
@@ -26,6 +26,10 @@ assert.equal(hiddenInternalHostContext.expectedOrigin, "https://portal.terraqogl
 assert.equal(hiddenInternalHostContext.rpId, "portal.terraqoglobal.com");
 assert.deepEqual(compatibleWebAuthnRpIds("portal.terraqoglobal.com"), ["portal.terraqoglobal.com", "terraqoglobal.com"]);
 assert.deepEqual(compatibleWebAuthnRpIds("icctopografia.com"), ["icctopografia.com"]);
+assert.equal(selectCompatibleWebAuthnRpId("portal.terraqoglobal.com", ["terraqoglobal.com"]), "terraqoglobal.com");
+assert.equal(selectCompatibleWebAuthnRpId("portal.terraqoglobal.com", ["terraqoglobal.com", "portal.terraqoglobal.com"]), "portal.terraqoglobal.com");
+assert.equal(selectCompatibleWebAuthnRpId("admin.terraqoglobal.com", ["portal.terraqoglobal.com"]), null);
+assert.equal(selectCompatibleWebAuthnRpId("icctopografia.com", ["terraqoglobal.com"]), null);
 
 const memberships = [
   { workspaceId: "owner-only", role: "OWNER", workRelationship: null },

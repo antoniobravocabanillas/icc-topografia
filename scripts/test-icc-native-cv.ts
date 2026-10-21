@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
-import { prisma } from "../lib/prisma";
 import { shell, snapshot, pause, login, tapLabel, fillLabel, capture, scroll } from "./native-android-controls";
+
+let prisma: (typeof import("../lib/prisma"))["prisma"];
 let stage = "initialization";
 async function main() {
   assert.equal(process.env.TERRAQO_MUTATING_TESTS, "icc-topografia:20616116313");
+  ({ prisma } = await import("../lib/prisma"));
   const workspace = await prisma.terraqoWorkspace.findFirst({ where: { slug: "icc-topografia", active: true, deletedAt: null,
     companies: { some: { document: "20616116313", deletedAt: null } } }, select: { id: true } }); assert.ok(workspace);
   const run = randomUUID(), email = `cv-native-${run}@example.test`, password = randomBytes(24).toString("hex");
@@ -70,4 +72,4 @@ async function main() {
     console.log("CLEANUP CV: temporary account, profile, education, audit and grants removed.");
   }
 }
-main().catch((error: unknown) => { console.error(`CV native stage: ${stage}`); console.error(error instanceof assert.AssertionError ? error.message : "Native CV control failed; private diagnostics suppressed."); process.exitCode = 1; }).finally(async () => prisma.$disconnect());
+main().catch((error: unknown) => { console.error(`CV native stage: ${stage}`); console.error(error instanceof assert.AssertionError ? error.message : "Native CV control failed; private diagnostics suppressed."); process.exitCode = 1; }).finally(async () => prisma?.$disconnect());

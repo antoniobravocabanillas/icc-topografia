@@ -83,7 +83,7 @@ export default async function StorePage() {
             >
               <div className="grid gap-4 md:grid-cols-[0.78fr_1fr]">
                 <div className="relative min-h-[420px] overflow-hidden rounded-lg bg-[#eef8f6]">
-                  <Image src={featuredMeta.image} alt={featured.name} fill sizes="420px" className="object-contain p-8 transition duration-700 group-hover:scale-[1.04]" />
+                  <Image src={featuredMeta.image} alt={featured.name} fill sizes="420px" className="object-contain p-8 transition duration-700 group-hover:scale-[1.04]" unoptimized />
                   <div className="absolute left-5 top-5 rounded-lg bg-primary px-3 py-2 font-mono text-xs font-bold uppercase tracking-[0.18em] text-white">
                     Equipo destacado
                   </div>

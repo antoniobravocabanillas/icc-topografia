@@ -109,3 +109,16 @@ TypeScript y lint focalizado aprobados. La prueba publicada se ejecuta con
 fijos, firma runtime en memoria, dos usuarios nuevos propios y limpieza ordenada
 tras revocación. No modificar módulos/planes, lanzar accounting global ni usar
 usuarios existentes para esta prueba.
+
+HTTPS publicado aprobado el15octubre: e6ff153, Netlify6ad15f6bb093f03c93fc021e
+production/ready, health200. Dos POST200, un recibo/una auditoría propios; GET
+histórico, conflicto409, aislamiento de segundo propietario, legacy401 y
+democión/revocación401. PENDING sin créditos; dos usuarios temporales, recibos,
+decisiones, reservas FIRST, auditorías y grants eliminados. No corte de red real
+ni worker/adjudicación desplegado acreditados.
+
+Primeras dos ejecuciones HTTPS se detuvieron en una aserción literal de la cabecera
+Cache-Control: la infraestructura normaliza `private, no-store` a `private,no-store`.
+Ambos POST ya respondían200. La prueba verifica ahora las dos directivas por su
+semántica; la ejecución completa posterior pasó. Esos intentos también confirmaron
+limpieza propia. No se atribuye el fallo al core ni se debilitan las directivas.

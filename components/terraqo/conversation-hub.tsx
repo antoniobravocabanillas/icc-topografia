@@ -162,6 +162,7 @@ function ConversationWorkspace({
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
   const sendingRef = useRef(false);
+  const operationKeyRef = useRef("");
   const mountedRef = useRef(true);
   const acquiringRef = useRef(false);
   const streamRef = useRef<MediaStream | null>(null);
@@ -185,6 +186,17 @@ function ConversationWorkspace({
   }, [selected?.id]);
 
   useEffect(() => setHub(data), [data]);
+  useEffect(() => {
+    if (!selected?.id) return;
+    setBody(window.localStorage.getItem(`terraqo:message-draft:${selected.id}`) || "");
+    operationKeyRef.current = "";
+  }, [selected?.id]);
+  useEffect(() => {
+    if (!selected?.id) return;
+    const key = `terraqo:message-draft:${selected.id}`;
+    if (body) window.localStorage.setItem(key, body);
+    else window.localStorage.removeItem(key);
+  }, [body, selected?.id]);
   useEffect(() => {
     let timer = 0;
     const refresh = () => {
@@ -356,6 +368,8 @@ function ConversationWorkspace({
     sendingRef.current = true;
     setSending(true);
     setError("");
+    const operationKey = operationKeyRef.current || crypto.randomUUID();
+    operationKeyRef.current = operationKey;
     try {
       const response = file
         ? await fetch("/api/terraqo/messages/attachments", {
@@ -365,6 +379,7 @@ function ConversationWorkspace({
               form.set("conversationId", selected.id);
               form.set("body", messageBody);
               form.set("file", file);
+              form.set("operationKey", operationKey);
               if (durationMs) form.set("durationMs", String(durationMs));
               return form;
             })(),
@@ -376,6 +391,7 @@ function ConversationWorkspace({
               action: "send",
               conversationId: selected.id,
               body: messageBody,
+              operationKey,
             }),
           });
       const payload = await response.json();
@@ -384,6 +400,7 @@ function ConversationWorkspace({
           payload?.error?.message || "No pudimos enviar el mensaje.",
         );
       setBody("");
+      operationKeyRef.current = "";
       clearAttachment();
       await refreshHub();
       window.dispatchEvent(new CustomEvent("terraqo:message-sent"));
@@ -648,7 +665,8 @@ function ConversationWorkspace({
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {selected.workspaceId &&
+                  {!selected.contexts.length &&
+                  selected.workspaceId &&
                   hub.meetWorkspaceIds.includes(selected.workspaceId) ? (
                     selected.meetings[0] ? (
                       <Button asChild variant="outline" size="icon">
@@ -730,6 +748,26 @@ function ConversationWorkspace({
                         Conversación privada
                       </span>
                     </div>
+                    {selected.contexts.length ? (
+                      <aside className="mx-auto w-full max-w-2xl rounded-2xl border border-[#0b6f68]/15 bg-[#edf8f6] px-4 py-3 text-left">
+                        <div className="flex items-start gap-3">
+                          <BadgeCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#0b6f68]" />
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#0b6f68]">
+                              Contexto de la conversación
+                            </p>
+                            <p className="mt-1 text-sm font-semibold text-slate-800">
+                              {selected.contexts
+                                .map((context) => context.labelSnapshot)
+                                .join(" · ")}
+                            </p>
+                            <p className="mt-1 text-xs leading-5 text-slate-600">
+                              Esta referencia no concede acceso a expedientes, evidencias ni documentos protegidos.
+                            </p>
+                          </div>
+                        </div>
+                      </aside>
+                    ) : null}
                     {selected.messages.map((message) => (
                       <MessageBubble
                         key={message.id}

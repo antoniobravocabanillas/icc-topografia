@@ -52,6 +52,7 @@ export const adminNavigation: AdminNavItem[] = [
   { group: "Workspace", label: "Inicio", href: "/admin", icon: "home", roles: allRoles },
   { group: "Comercial", label: "Leads", href: "/admin/leads", icon: "activity", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"], module: "CRM" },
   { group: "Comercial", label: "Oportunidades", href: "/admin/oportunidades", icon: "briefcase", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"], module: "CRM" },
+  { group: "Comercial", label: "Necesidades y talento", href: "/admin/necesidades", icon: "community", roles: ["ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"], module: "PROFESSIONAL_NETWORK" },
   { group: "Comercial", label: "Cotizaciones", href: "/admin/cotizaciones", icon: "receipt", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"], module: "CRM" },
   { group: "Comercial", label: "Clientes 360", href: "/admin/clientes", icon: "building", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SUPPORT"], module: "CRM" },
   { group: "Comercial", label: "Ventas", href: "/admin/ventas", icon: "chart", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"], module: "CRM" },

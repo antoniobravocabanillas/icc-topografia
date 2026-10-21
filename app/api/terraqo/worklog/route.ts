@@ -10,6 +10,7 @@ import {
   terraqoWorklogContinuitySchema,
   terraqoWorklogCreateSchema,
 } from "@/lib/validations/terraqo";
+import { isValidWorklogOperationKey } from "@/lib/terraqo/worklog-create-operation";
 
 export async function GET() {
   const { response, session } = await requireUser();
@@ -31,8 +32,15 @@ export async function POST(request: Request) {
 
   try {
     const payload = await parseJson(request, terraqoWorklogCreateSchema);
+    const operationKey = request.headers.get("Idempotency-Key")?.trim();
+    if (!isValidWorklogOperationKey(operationKey))
+      return fail("La solicitud no incluye una clave de reintento válida.", 400);
     return created(
-      await createProfessionalWorklog({ userId: session.user.id, payload }),
+      await createProfessionalWorklog({
+        userId: session.user.id,
+        payload,
+        operationKey,
+      }),
     );
   } catch (error) {
     if (error instanceof TerraqoWorklogError)

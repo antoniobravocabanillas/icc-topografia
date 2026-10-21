@@ -19,16 +19,22 @@ import {
   FolderKanban,
   ImageIcon,
   Lightbulb,
+  LoaderCircle,
   MapPin,
   Milestone,
   Search,
   ShieldCheck,
   Sparkles,
+  RotateCcw,
   Wrench,
   type LucideIcon
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { EvidenceGallery } from "@/components/terraqo/evidence-gallery";
+import {
+  publicCvEvidenceHref,
+  requestedPublicCvRecordId,
+} from "@/lib/terraqo/public-cv-permalink";
 
 export type PublicCvActivityRecord = {
   id: string;
@@ -65,6 +71,33 @@ export type PublicCvActivityRecord = {
     validatorName: string | null;
     validatorImage: string | null;
   }>;
+};
+
+type EvidencePageItem = {
+  id: string;
+  title: string;
+  summary: string;
+  outcome: string | null;
+  type: string;
+  evidenceStatus: string;
+  occurredAt: string;
+  createdAt: string;
+  locationLabel: string | null;
+  skills: string[];
+  evidenceUrls: string[];
+  project: { title: string } | null;
+  workspace: { brandName: string | null; name: string } | null;
+  media: Array<{ id: string; fileName: string; contentType: string }>;
+  validations: PublicCvActivityRecord["validations"];
+};
+
+type EvidencePageResponse = {
+  data?: {
+    items: EvidencePageItem[];
+    page: { hasMore: boolean; nextCursor: string | null };
+    scopeCounts: { records: number };
+  };
+  error?: { message?: string };
 };
 
 type ActivityFilter = "all" | "updates" | "validations" | "documents" | "projects";
@@ -126,20 +159,88 @@ function evidenceImage(record: PublicCvActivityRecord) {
   return externalImage || record.project?.image || null;
 }
 
-export function PublicCvActivityExplorer({ username, profileName, records }: { username: string; profileName: string; records: PublicCvActivityRecord[] }) {
+export function PublicCvActivityExplorer({
+  username,
+  profileName,
+  records,
+  initialRecordId,
+  profileId,
+  initialNextCursor,
+}: {
+  username: string;
+  profileName: string;
+  records: PublicCvActivityRecord[];
+  initialRecordId?: string;
+  profileId: string;
+  initialNextCursor: string | null;
+}) {
+  const [loadedRecords, setLoadedRecords] = useState(records);
   const [activeFilter, setActiveFilter] = useState<ActivityFilter>("all");
   const [query, setQuery] = useState("");
-  const [selectedId, setSelectedId] = useState(records[0]?.id || "");
+  const [selectedId, setSelectedId] = useState(
+    records.some((record) => record.id === initialRecordId)
+      ? initialRecordId || ""
+      : records[0]?.id || "",
+  );
   const [copied, setCopied] = useState(false);
+  const [nextCursor, setNextCursor] = useState(initialNextCursor);
+  const [totalWorklogs, setTotalWorklogs] = useState<number | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const initialSyntheticCount = useMemo(
+    () => records.filter((record) => /^(experience|education|document|project)-/.test(record.id)).length,
+    [records],
+  );
+
+  const allRecords = useMemo(
+    () =>
+      [...loadedRecords].sort(
+        (left, right) =>
+          new Date(right.occurredAt).getTime() -
+            new Date(left.occurredAt).getTime() ||
+          right.id.localeCompare(left.id),
+      ),
+    [loadedRecords],
+  );
 
   useEffect(() => {
-    const requested = new URLSearchParams(window.location.search).get("registro");
-    if (requested && records.some((record) => record.id === requested)) setSelectedId(requested);
-  }, [records]);
+    const previousScrollRestoration = window.history.scrollRestoration;
+    window.history.scrollRestoration = "manual";
+
+    const selectRequestedRecord = (event?: Event) => {
+      const requested = requestedPublicCvRecordId(window.location);
+      if (!requested || !allRecords.some((record) => record.id === requested))
+        return;
+
+      setSelectedId(requested);
+      if (window.location.hash) {
+        window.history.replaceState(
+          {},
+          "",
+          publicCvEvidenceHref(username, requested),
+        );
+      }
+      const historyState = event instanceof PopStateEvent ? event.state : null;
+      if (typeof historyState?.terraqoScrollY === "number") {
+        window.requestAnimationFrame(() =>
+          window.scrollTo({ top: historyState.terraqoScrollY, behavior: "auto" }),
+        );
+      }
+    };
+
+    selectRequestedRecord();
+    window.addEventListener("hashchange", selectRequestedRecord);
+    window.addEventListener("popstate", selectRequestedRecord);
+    return () => {
+      window.history.scrollRestoration = previousScrollRestoration;
+      window.removeEventListener("hashchange", selectRequestedRecord);
+      window.removeEventListener("popstate", selectRequestedRecord);
+    };
+  }, [allRecords, username]);
 
   const visibleRecords = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase("es");
-    return records.filter((record) => {
+    return allRecords.filter((record) => {
       if (!recordMatchesFilter(record, activeFilter)) return false;
       if (!normalizedQuery) return true;
       return [record.title, record.summary, record.outcome, record.project?.title, record.project?.clientName, record.workspace, ...record.skills]
@@ -148,19 +249,96 @@ export function PublicCvActivityExplorer({ username, profileName, records }: { u
         .toLocaleLowerCase("es")
         .includes(normalizedQuery);
     });
-  }, [activeFilter, query, records]);
+  }, [activeFilter, allRecords, query]);
 
   useEffect(() => {
     if (visibleRecords.length && !visibleRecords.some((record) => record.id === selectedId)) setSelectedId(visibleRecords[0].id);
   }, [selectedId, visibleRecords]);
 
-  const selected = records.find((record) => record.id === selectedId) || visibleRecords[0] || records[0] || null;
+  const selected = allRecords.find((record) => record.id === selectedId) || visibleRecords[0] || allRecords[0] || null;
+
+  async function loadMore() {
+    if (!nextCursor || isLoadingMore) return;
+    setIsLoadingMore(true);
+    setLoadError(null);
+    try {
+      const params = new URLSearchParams({
+        period: "all",
+        limit: "20",
+        cursor: nextCursor,
+      });
+      const response = await fetch(
+        `/api/v1/profiles/${encodeURIComponent(profileId)}/evidence?${params.toString()}`,
+        { credentials: "same-origin" },
+      );
+      const payload = (await response.json()) as EvidencePageResponse;
+      if (!response.ok || !payload.data) {
+        throw new Error(payload.error?.message || "No se pudo cargar la actividad.");
+      }
+      const nextRecords = payload.data.items.map<PublicCvActivityRecord>((item) => ({
+        id: item.id,
+        title: item.title,
+        summary: item.summary,
+        outcome: item.outcome,
+        type: item.type,
+        evidenceStatus: item.evidenceStatus,
+        occurredAt: item.occurredAt,
+        createdAt: item.createdAt,
+        locationLabel: item.locationLabel,
+        skills: item.skills,
+        evidenceUrls: item.evidenceUrls,
+        project: item.project
+          ? {
+              title: item.project.title,
+              clientName: null,
+              location: null,
+              category: null,
+              image: null,
+            }
+          : null,
+        workspace: item.workspace?.brandName || item.workspace?.name || null,
+        media: item.media.map((media) => ({
+          ...media,
+          href: `/api/public/cv/${encodeURIComponent(username)}/worklogs/${encodeURIComponent(media.id)}`,
+          downloadHref: `/api/public/cv/${encodeURIComponent(username)}/worklogs/${encodeURIComponent(media.id)}?download=1`,
+        })),
+        validations: item.validations,
+      }));
+      setLoadedRecords((current) => {
+        const byId = new Map(current.map((record) => [record.id, record]));
+        for (const record of nextRecords) byId.set(record.id, record);
+        return Array.from(byId.values());
+      });
+      setNextCursor(payload.data.page.nextCursor);
+      setTotalWorklogs(payload.data.scopeCounts.records);
+    } catch (error) {
+      setLoadError(
+        error instanceof Error
+          ? error.message
+          : "No se pudo cargar la actividad. Inténtalo nuevamente.",
+      );
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }
 
   function selectRecord(id: string) {
+    if (id === selected?.id) return;
+    window.history.replaceState(
+      {
+        ...(window.history.state || {}),
+        terraqoRecordId: selected?.id || null,
+        terraqoScrollY: window.scrollY,
+      },
+      "",
+      window.location.href,
+    );
     setSelectedId(id);
-    const nextUrl = new URL(window.location.href);
-    nextUrl.searchParams.set("registro", id);
-    window.history.replaceState({}, "", nextUrl);
+    window.history.pushState(
+      { terraqoRecordId: id, terraqoScrollY: window.scrollY },
+      "",
+      publicCvEvidenceHref(username, id),
+    );
     if (window.matchMedia("(max-width: 1279px)").matches) {
       window.setTimeout(() => document.getElementById("detalle-registro")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
     }
@@ -168,8 +346,10 @@ export function PublicCvActivityExplorer({ username, profileName, records }: { u
 
   async function copySelectedLink() {
     if (!selected) return;
-    const url = new URL(window.location.href);
-    url.searchParams.set("registro", selected.id);
+    const url = new URL(
+      publicCvEvidenceHref(username, selected.id),
+      window.location.origin,
+    );
     await navigator.clipboard.writeText(url.toString());
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1800);
@@ -198,7 +378,7 @@ export function PublicCvActivityExplorer({ username, profileName, records }: { u
               </div>
               <div className="flex shrink-0 items-center gap-4 border-l border-[#27415d] pl-5 lg:w-[175px]">
                 <span className="grid h-12 w-12 place-items-center rounded-full border border-[#4374ba]/55 bg-[#4374ba]/15 text-[#7fa8ff]"><FileText className="h-5 w-5" /></span>
-                <div><strong className="block text-3xl font-black leading-none">{records.length}</strong><span className="mt-1 block text-xs text-[#91a5b9]">registros públicos</span></div>
+                <div><strong className="block text-3xl font-black leading-none">{totalWorklogs === null ? allRecords.length : totalWorklogs + initialSyntheticCount}</strong><span className="mt-1 block text-xs text-[#91a5b9]">registros públicos</span></div>
               </div>
             </div>
 
@@ -256,6 +436,38 @@ export function PublicCvActivityExplorer({ username, profileName, records }: { u
                   <p className="mt-2 text-sm text-[#91a5b9]">Prueba otra categoría o limpia el texto de búsqueda.</p>
                 </div>
               )}
+              {nextCursor && !loadError ? (
+                <div className="relative z-10 mt-5 border-t border-[#1d344d] pt-5 text-center">
+                  <button
+                    type="button"
+                    onClick={loadMore}
+                    disabled={isLoadingMore}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-[#35506e] bg-[#0e1a26] px-5 py-2.5 text-sm font-black text-[#dbe6f2] transition hover:border-[#488ac9] hover:bg-[#4374ba]/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7fa8ff] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07111f] disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {isLoadingMore ? (
+                      <LoaderCircle className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                    ) : (
+                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    )}
+                    {isLoadingMore ? "Cargando actividad" : "Cargar más actividad"}
+                  </button>
+                </div>
+              ) : null}
+              {loadError ? (
+                <div className="relative z-10 mt-4 rounded-lg border border-[#8d4d51] bg-[#321c25] px-4 py-3 text-sm text-[#ffd7d9]" role="alert">
+                  <p>{loadError}</p>
+                  <button type="button" onClick={loadMore} className="mt-2 inline-flex min-h-11 items-center gap-2 font-black text-white underline decoration-[#7fa8ff] underline-offset-4">
+                    <RotateCcw className="h-4 w-4" aria-hidden="true" /> Reintentar
+                  </button>
+                </div>
+              ) : null}
+              <p className="sr-only" aria-live="polite" aria-atomic="true">
+                {isLoadingMore
+                  ? "Cargando más actividad pública."
+                  : loadError
+                    ? loadError
+                    : `${allRecords.length} registros disponibles en pantalla.`}
+              </p>
             </div>
           </section>
 

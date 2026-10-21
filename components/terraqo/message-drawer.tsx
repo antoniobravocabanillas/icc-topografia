@@ -63,6 +63,7 @@ export function MessageDrawer({ currentUserId }: { currentUserId: string }) {
   const [body, setBody] = useState("");
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const sendingRef = useRef(false);
+  const operationKeyRef = useRef("");
   const drawerRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -164,11 +165,24 @@ export function MessageDrawer({ currentUserId }: { currentUserId: string }) {
   const selected =
     hub?.conversations.find((item) => item.id === selectedId) || null;
   const selectedPerson = selected ? other(selected, currentUserId) : null;
+  useEffect(() => {
+    if (!selected?.id) return;
+    setBody(window.localStorage.getItem(`terraqo:message-draft:${selected.id}`) || "");
+    operationKeyRef.current = "";
+  }, [selected?.id]);
+  useEffect(() => {
+    if (!selected?.id) return;
+    const key = `terraqo:message-draft:${selected.id}`;
+    if (body) window.localStorage.setItem(key, body);
+    else window.localStorage.removeItem(key);
+  }, [body, selected?.id]);
   async function sendMessage(messageBody: string): Promise<boolean> {
     if (!selected || sendingRef.current || !messageBody.trim()) return false;
     sendingRef.current = true;
     setBusy(true);
     setError("");
+    const operationKey = operationKeyRef.current || crypto.randomUUID();
+    operationKeyRef.current = operationKey;
     try {
       const response = await fetch("/api/terraqo/messages", {
         method: "POST",
@@ -177,6 +191,7 @@ export function MessageDrawer({ currentUserId }: { currentUserId: string }) {
           action: "send",
           conversationId: selected.id,
           body: messageBody,
+          operationKey,
         }),
       });
       const payload = await response.json();
@@ -185,6 +200,7 @@ export function MessageDrawer({ currentUserId }: { currentUserId: string }) {
           payload?.error?.message || "No pudimos enviar el mensaje.",
         );
       setBody("");
+      operationKeyRef.current = "";
       await load(selected.id);
       window.dispatchEvent(new CustomEvent("terraqo:message-sent"));
       return true;

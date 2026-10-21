@@ -55,3 +55,8 @@ export function compatibleWebAuthnRpIds(rpId: string) {
   }
   return [rpId];
 }
+
+export function selectCompatibleWebAuthnRpId(requestedRpId: string, availableRpIds: Iterable<string>) {
+  const available = new Set(availableRpIds);
+  return compatibleWebAuthnRpIds(requestedRpId).find((candidate) => available.has(candidate)) || null;
+}

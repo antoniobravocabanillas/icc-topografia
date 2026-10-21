@@ -233,7 +233,7 @@ function SectorCard({ sector, services, index }: { sector: SectorView; services:
         <div className={isFeatured ? "grid h-full md:grid-cols-[0.95fr_1.05fr]" : "flex h-full flex-col"}>
           <div className={`icc-image-depth relative overflow-hidden ${isFeatured ? "min-h-[360px]" : "h-48"}`}>
             {sector.image ? (
-                  <Image src={sector.image} alt={sector.name} fill sizes={isFeatured ? "(min-width: 1280px) 25vw, 100vw" : "(min-width: 1280px) 20vw, (min-width: 768px) 50vw, 100vw"} className="object-cover opacity-78 transition duration-700 group-hover:scale-[1.04]" />
+                  <Image src={sector.image} alt={sector.name} fill sizes={isFeatured ? "(min-width: 1280px) 25vw, 100vw" : "(min-width: 1280px) 20vw, (min-width: 768px) 50vw, 100vw"} className="object-cover opacity-78 transition duration-700 group-hover:scale-[1.04]" unoptimized />
             ) : (
               <div className="absolute inset-0 bg-[#061827] opacity-100 [background-image:linear-gradient(rgba(36,200,238,0.16)_1px,transparent_1px),linear-gradient(90deg,rgba(11,131,196,0.13)_1px,transparent_1px)] [background-size:34px_34px]" />
             )}

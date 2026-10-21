@@ -19,6 +19,7 @@ import {
   type WorklogContinuityOption,
 } from "@/components/terraqo/worklog-continuity-control";
 import { EvidenceGallery } from "@/components/terraqo/evidence-gallery";
+import { formatWorklogDay } from "@/lib/terraqo/worklog-archive-contract";
 
 const typeLabels: Record<string, string> = {
   FIELD_UPDATE: "Avance de trabajo",
@@ -57,10 +58,12 @@ export function WorklogCard({
   worklog,
   viewerId,
   continuityOptions = [],
+  timeZone = "America/Lima",
 }: {
   worklog: WorklogWithContext;
   viewerId: string;
   continuityOptions?: WorklogContinuityOption[];
+  timeZone?: string;
 }) {
   const ownReaction = worklog.reactions.find(
     (reaction) => reaction.userId === viewerId,
@@ -93,9 +96,10 @@ export function WorklogCard({
         <div className="flex flex-wrap gap-2 text-xs font-semibold text-muted-foreground">
           <span className="inline-flex items-center gap-1 rounded-md border px-2 py-1">
             <CalendarDays className="h-3.5 w-3.5" />
-            {new Intl.DateTimeFormat("es-PE", { dateStyle: "medium" }).format(
-              worklog.occurredAt,
-            )}
+            {new Intl.DateTimeFormat("es-PE", {
+              dateStyle: "medium",
+              timeZone,
+            }).format(worklog.occurredAt)}
           </span>
           <span className="inline-flex items-center gap-1 rounded-md border px-2 py-1">
             <LockKeyhole className="h-3.5 w-3.5" />
@@ -168,7 +172,7 @@ export function WorklogCard({
         >
           {worklog.previousWorklog ? (
             <a
-              href={`/portal/bitacora?fecha=${worklog.previousWorklog.occurredAt.toISOString().slice(0, 10)}#worklog-${worklog.previousWorklog.id}`}
+              href={`/portal/bitacora?fecha=${formatWorklogDay(worklog.previousWorklog.occurredAt, timeZone)}&mes=${formatWorklogDay(worklog.previousWorklog.occurredAt, timeZone).slice(0, 7)}&tz=${encodeURIComponent(timeZone)}#worklog-${worklog.previousWorklog.id}`}
               className="inline-flex items-center gap-2 text-primary hover:underline"
             >
               <ArrowLeft className="h-3.5 w-3.5" /> Anterior:{" "}
@@ -179,7 +183,7 @@ export function WorklogCard({
           )}
           {worklog.nextWorklog ? (
             <a
-              href={`/portal/bitacora?fecha=${worklog.nextWorklog.occurredAt.toISOString().slice(0, 10)}#worklog-${worklog.nextWorklog.id}`}
+              href={`/portal/bitacora?fecha=${formatWorklogDay(worklog.nextWorklog.occurredAt, timeZone)}&mes=${formatWorklogDay(worklog.nextWorklog.occurredAt, timeZone).slice(0, 7)}&tz=${encodeURIComponent(timeZone)}#worklog-${worklog.nextWorklog.id}`}
               className="inline-flex items-center gap-2 text-primary hover:underline sm:justify-end"
             >
               Siguiente: {worklog.nextWorklog.title}{" "}

@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { randomUUID } from "node:crypto";
 import { auth } from "@/auth";
 import { sendMessage, startConversation } from "@/lib/terraqo/messaging";
 
@@ -27,7 +28,7 @@ export async function sendMessageAction(basePath: string, formData: FormData) {
   const session = await auth();
   if (!session?.user?.id) redirect("/cuenta");
   const conversationId = String(formData.get("conversationId") || "");
-  await sendMessage({ userId: session.user.id, conversationId, body: String(formData.get("body") || "") });
+  await sendMessage({ userId: session.user.id, conversationId, body: String(formData.get("body") || ""), operationKey: String(formData.get("operationKey") || "") || randomUUID() });
   revalidatePath(safePath(basePath));
   redirect(`${safePath(basePath)}?conversation=${conversationId}`);
 }

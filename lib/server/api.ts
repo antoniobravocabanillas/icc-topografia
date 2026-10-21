@@ -1,8 +1,10 @@
+import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { BillingError } from "@/lib/terraqo/billing/provider";
 import { NativeWorklogLegacyGuardError } from "./native-worklog-legacy-guard";
+import { TerraqoEntitlementError } from "@/lib/terraqo/product-entitlements";
 
 export type ApiListMeta = {
   page: number;
@@ -12,7 +14,10 @@ export type ApiListMeta = {
 };
 
 export function ok<T>(data: T, init?: ResponseInit) {
-  return NextResponse.json({ data }, init);
+  const requestId = randomUUID();
+  const headers = new Headers(init?.headers);
+  headers.set("x-request-id", requestId);
+  return NextResponse.json({ data }, { ...init, headers });
 }
 
 export function created<T>(data: T) {
@@ -20,15 +25,42 @@ export function created<T>(data: T) {
 }
 
 export function paginated<T>(data: T, meta: ApiListMeta) {
-  return NextResponse.json({ data, meta });
+  const requestId = randomUUID();
+  return NextResponse.json({ data, meta }, { headers: { "x-request-id": requestId } });
 }
 
-export function fail(message: string, status = 400, details?: unknown) {
-  return NextResponse.json({ error: { message, details } }, { status });
+function defaultErrorCode(status: number) {
+  if (status === 400) return "BAD_REQUEST";
+  if (status === 401) return "AUTH_REQUIRED";
+  if (status === 403) return "FORBIDDEN";
+  if (status === 404) return "NOT_FOUND";
+  if (status === 409) return "CONFLICT";
+  if (status === 413) return "PAYLOAD_TOO_LARGE";
+  if (status === 422) return "VALIDATION_ERROR";
+  if (status === 429) return "RATE_LIMITED";
+  if (status === 503) return "DEPENDENCY_UNAVAILABLE";
+  return status >= 500 ? "INTERNAL_ERROR" : "REQUEST_FAILED";
+}
+
+export function fail(message: string, status = 400, details?: unknown, correlationId?: string) {
+  const requestId = correlationId || randomUUID();
+  const detailRecord = details && typeof details === "object" && !Array.isArray(details) ? details as Record<string, unknown> : null;
+  const code = typeof detailRecord?.code === "string" ? detailRecord.code : defaultErrorCode(status);
+  const retryable = typeof detailRecord?.retryable === "boolean" ? detailRecord.retryable : status === 429 || status >= 500;
+  const fieldErrors = detailRecord && "fieldErrors" in detailRecord ? detailRecord.fieldErrors : undefined;
+  const headers = new Headers({ "x-request-id": requestId });
+  if (status === 429) {
+    const retryAfterSeconds = typeof detailRecord?.retryAfterSeconds === "number" ? detailRecord.retryAfterSeconds : 60;
+    headers.set("Retry-After", String(Math.max(1, Math.ceil(retryAfterSeconds))));
+  }
+  return NextResponse.json({
+    error: { code, message, fieldErrors, retryable, requestId, details },
+  }, { status, headers });
 }
 
 export function handleApiError(error: unknown) {
   if (error instanceof NativeWorklogLegacyGuardError) return fail(error.message, error.status);
+  if (error instanceof TerraqoEntitlementError) return fail(error.message, error.status, { code: error.code, retryable: false, retryAfterSeconds: error.retryAfterSeconds });
   if(error instanceof BillingError)return fail(error.code==="STORAGE_QUOTA_REACHED"?"Alcanzaste la capacidad de tu plan. Revisa tu membresía para ampliar el espacio.":"No se pudo autorizar esta operación de membresía.",error.status);
   if (error instanceof ZodError) {
     return fail("Datos invalidos", 422, error.flatten());
@@ -39,8 +71,12 @@ export function handleApiError(error: unknown) {
     if (error.code === "P2025") return fail("Registro no encontrado", 404);
   }
 
-  console.error(error);
-  return fail("Error interno del servidor", 500);
+  const requestId = randomUUID();
+  console.error("Terraqo API error", {
+    requestId,
+    errorType: error instanceof Error ? error.name : typeof error,
+  });
+  return fail("Error interno del servidor", 500, undefined, requestId);
 }
 
 export function getPagination(searchParams: URLSearchParams) {

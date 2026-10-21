@@ -48,6 +48,7 @@ export function ProfessionalDocumentPreview({ href, title, fileName, contentType
             </div>
             <div className="min-h-0 flex-1 bg-slate-100 p-3">
               {contentType.startsWith("image/") ? (
+                // eslint-disable-next-line @next/next/no-img-element -- Protected document previews must be requested directly with the active browser session.
                 <img src={`${href}?inline=1`} alt={fileName} className="h-full w-full rounded-md bg-white object-contain" />
               ) : contentType === "application/pdf" ? (
                 <object data={`${href}?inline=1`} type="application/pdf" className="h-full w-full rounded-md bg-white">

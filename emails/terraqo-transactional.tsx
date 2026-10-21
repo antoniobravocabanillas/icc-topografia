@@ -2,6 +2,8 @@ import React, { type CSSProperties, type ReactNode } from "react";
 import { render } from "@react-email/render";
 import { terraqoDomains } from "@/lib/terraqo-domains";
 
+/* eslint-disable @next/next/no-head-element, @next/next/no-img-element -- Transactional email markup is rendered outside Next.js; email clients require literal HTML elements. */
+
 const colors = {
   ink: "#0e1a26",
   blue: "#4374ba",

@@ -3,6 +3,7 @@ import { generateAuthenticationOptions, generateRegistrationOptions, verifyAuthe
 import type { AuthenticationResponseJSON, AuthenticatorTransportFuture, RegistrationResponseJSON } from "@simplewebauthn/types";
 import { prisma } from "@/lib/prisma";
 import { publicRequestOrigin } from "@/lib/server/request-origin";
+import { compatibleWebAuthnRpIds, selectCompatibleWebAuthnRpId } from "@/lib/terraqo/webauthn-context";
 
 const TTL = 5 * 60 * 1000;
 
@@ -54,10 +55,13 @@ export async function accountPasskeyLoginOptions(email: string, request: Request
   const { rpId, origin } = context(request);
   const user = await prisma.user.findUnique({ where: { email: normalized }, select: { id: true } });
   if (!user) return null;
-  const credentials = await prisma.terraqoWebAuthnCredential.findMany({ where: { userId: user.id, rpId } });
+  const compatibleCredentials = await prisma.terraqoWebAuthnCredential.findMany({ where: { userId: user.id, rpId: { in: compatibleWebAuthnRpIds(rpId) } } });
+  const effectiveRpId = selectCompatibleWebAuthnRpId(rpId, compatibleCredentials.map((item) => item.rpId));
+  if (!effectiveRpId) return null;
+  const credentials = compatibleCredentials.filter((item) => item.rpId === effectiveRpId);
   if (!credentials.length) return null;
-  const options = await generateAuthenticationOptions({ rpID: rpId, timeout: TTL, userVerification: "required", allowCredentials: credentials.map((item) => ({ id: Buffer.from(item.credentialId, "base64url"), type: "public-key" as const, transports: item.transports as AuthenticatorTransportFuture[] })) });
-  const challenge = await prisma.terraqoWebAuthnChallenge.create({ data: { userId: user.id, purpose: "LOGIN", challenge: options.challenge, rpId, expectedOrigin: origin, expiresAt: new Date(Date.now() + TTL) } });
+  const options = await generateAuthenticationOptions({ rpID: effectiveRpId, timeout: TTL, userVerification: "required", allowCredentials: credentials.map((item) => ({ id: Buffer.from(item.credentialId, "base64url"), type: "public-key" as const, transports: item.transports as AuthenticatorTransportFuture[] })) });
+  const challenge = await prisma.terraqoWebAuthnChallenge.create({ data: { userId: user.id, purpose: "LOGIN", challenge: options.challenge, rpId: effectiveRpId, expectedOrigin: origin, expiresAt: new Date(Date.now() + TTL) } });
   return { challengeId: challenge.id, options };
 }
 

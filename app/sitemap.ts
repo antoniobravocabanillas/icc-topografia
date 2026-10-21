@@ -9,20 +9,25 @@ export const revalidate = 3600;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes = ["", "/plataforma", "/producto", "/automatizacion", "/membresias", "/red", "/contacto", "/privacidad", "/terminos", "/legal", "/devoluciones", "/libro-de-reclamaciones"];
-  const companies=await safeDb("sitemap:companies",prisma.terraqoWorkspace.findMany({where:{active:true,deletedAt:null},select:{slug:true,publicSlug:true,settings:true,updatedAt:true}}),[]);
-  const profiles = await safeDb(
-    "sitemap:public-cv-profiles",
-    prisma.terraqoProfessionalProfile.findMany({
-      where: {
-        username: { not: null },
-        liveCvEnabled: true,
-        friendDiscoveryEnabled: true
-      },
-      select: { username: true, updatedAt: true },
-      orderBy: { updatedAt: "desc" }
-    }),
-    []
-  );
+  const databaseConfigured = Boolean(process.env.DATABASE_URL?.trim());
+  const companies = databaseConfigured
+    ? await safeDb("sitemap:companies", prisma.terraqoWorkspace.findMany({ where: { active: true, deletedAt: null }, select: { slug: true, publicSlug: true, settings: true, updatedAt: true } }), [])
+    : [];
+  const profiles = databaseConfigured
+    ? await safeDb(
+        "sitemap:public-cv-profiles",
+        prisma.terraqoProfessionalProfile.findMany({
+          where: {
+            username: { not: null },
+            liveCvEnabled: true,
+            friendDiscoveryEnabled: true
+          },
+          select: { username: true, updatedAt: true },
+          orderBy: { updatedAt: "desc" }
+        }),
+        []
+      )
+    : [];
   const sections = ["experiencias", "educacion", "proyectos", "evidencias", "capacidades", "documentos"];
 
   return [

@@ -30,7 +30,7 @@ def main():
                             capture_output=True, text=True, encoding="utf-8", timeout=300)
     allowed = {"outcome", "stage", "category", "deployed_https", "concurrent_requests", "own_receipts",
                "own_audits", "accounting_credits", "cross_owner_isolation", "legacy_rejected",
-               "revocation_checked", "network_cut_proved", "own_fixtures_absent"}
+               "revocation_checked", "network_cut_proved", "own_fixtures_absent", "http_statuses", "cache_controls", "nosniff"}
     for line in (result.stdout + "\n" + result.stderr).splitlines():
         try:
             report = json.loads(line)

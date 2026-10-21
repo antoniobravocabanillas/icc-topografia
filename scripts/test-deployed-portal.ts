@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
-import { prisma } from "../lib/prisma";
 import type { WorkspacePortalToken } from "../lib/server/workspace-portal-session";
 import { toWorkspacePortalRole } from "../lib/server/workspace-portal-policy";
+
+let prismaClient: (typeof import("../lib/prisma"))["prisma"] | undefined;
 
 // Customer records are read-only. Temporary session grants are always removed.
 // Supply secrets through the
@@ -11,7 +12,14 @@ async function main() {
   const origin = new URL(process.env.TEST_PORTAL_URL || "https://api.terraqoglobal.com");
   assert.ok(origin.protocol === "https:" && (origin.hostname === "api.terraqoglobal.com" ||
     origin.hostname.endsWith("--iridescent-fenglisu-d6595c.netlify.app")));
+  assert.equal(
+    process.env.TERRAQO_DEPLOYED_PORTAL_TESTS,
+    "temporary-session-grant",
+    "Explicit deployed portal fixture consent is required.",
+  );
   assert.ok(process.env.AUTH_SECRET && process.env.DATABASE_URL, "Server configuration is required.");
+  ({ prisma: prismaClient } = await import("../lib/prisma"));
+  const prisma = prismaClient;
   const issue = (payload: Omit<WorkspacePortalToken, "iat" | "exp">) => {
     // The workstation clock runs a few seconds ahead of the server. Backdate
     // synthetic test tokens instead of weakening the server's time validation.
@@ -134,4 +142,4 @@ async function main() {
 main().catch((error: unknown) => {
   console.error(error instanceof assert.AssertionError ? error.message : "Runtime verification failed; sensitive diagnostics suppressed.");
   process.exitCode = 1;
-}).finally(async () => { await prisma.$disconnect(); });
+}).finally(async () => { await prismaClient?.$disconnect(); });

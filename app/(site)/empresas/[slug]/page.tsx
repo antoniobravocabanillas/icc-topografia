@@ -3,25 +3,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Prisma } from "@prisma/client";
-import {
-  ArrowRight,
-  BadgeCheck,
-  BriefcaseBusiness,
-  CalendarDays,
-  ChevronRight,
-  Factory,
-  FolderKanban,
-  Globe2,
-  Layers3,
-  Mail,
-  MapPin,
-  MessageSquareText,
-  Phone,
-  ShieldCheck,
-  Sparkles,
-  Target,
-  UsersRound
-} from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { fontClassName, resolveWorkspaceVisualIdentity } from "@/lib/terraqo/workspace-visual-identity";
 import { cn } from "@/lib/utils";
@@ -58,8 +39,6 @@ type CompanyLiveProfile = {
   publicEnabled?: boolean;
 };
 
-type VisualIdentity = ReturnType<typeof resolveWorkspaceVisualIdentity>;
-
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -68,24 +47,6 @@ function companyProfile(settings: Prisma.JsonValue | null | undefined): CompanyL
   const raw = (settings as Prisma.JsonObject).companyLiveProfile;
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
   return raw as CompanyLiveProfile;
-}
-
-function patternStyle(pattern: string, primary: string, accent: string): CSSProperties {
-  if (pattern === "clean") return {};
-  if (pattern === "dark-panel") {
-    return {
-      backgroundImage: `radial-gradient(circle at 18% 20%, ${accent}25, transparent 34%), linear-gradient(135deg, ${primary}, #0e1a26)`
-    };
-  }
-  if (pattern === "topographic") {
-    return {
-      backgroundImage: `radial-gradient(circle at 0 0, ${accent}22 0 2px, transparent 2px), repeating-radial-gradient(circle at 12% 18%, ${primary}1f 0 1px, transparent 1px 24px)`
-    };
-  }
-  return {
-    backgroundImage: `linear-gradient(${primary}10 1px, transparent 1px), linear-gradient(90deg, ${primary}10 1px, transparent 1px)`,
-    backgroundSize: "64px 64px"
-  };
 }
 
 function serviceParts(value: string) {
@@ -167,8 +128,6 @@ export default async function PublicCompanyProfilePage({ params }: PageProps) {
   const visualIdentity = resolveWorkspaceVisualIdentity(workspace.settings);
   const name = workspace.brandName || workspace.name;
   const headline = profile.headline || workspace.description || `Servicios especializados conectados a Terraqo`;
-  const summary = profile.summary || workspace.description || "Perfil empresarial conectado a Terraqo para centralizar operaciones, oportunidades, proyectos, equipo y evidencia comercial.";
-  const heroSummary = summary.length > 230 ? `${summary.slice(0, 227).trimEnd()}…` : summary;
   const services = normalizeList(profile.services, [
     "Operación comercial: compras, cotizaciones y seguimiento del cliente en un solo workspace.",
     "Gestión de proyectos: planificación, ejecución, documentos y responsables conectados.",
@@ -180,13 +139,6 @@ export default async function PublicCompanyProfilePage({ params }: PageProps) {
     "Información protegida por permisos y contexto de empresa.",
     "Red de profesionales y equipo interno vinculados a operaciones reales.",
     "Evidencia viva para proyectos, servicios y solicitudes."
-  ]);
-  const sectors = normalizeList(profile.sectors, [
-    "Infraestructura",
-    "Construcción",
-    "Industria",
-    "Servicios técnicos",
-    "Operaciones B2B"
   ]);
   const domainHref = workspace.domain ? `https://${workspace.domain.replace(/^https?:\/\//i, "")}` : null;
   const coverage = profile.coverage || [workspace.locationCity, workspace.region, workspace.country].filter(Boolean).join(", ") || "Cobertura por confirmar";
@@ -328,187 +280,4 @@ function ProjectPreview({ project, color }: { project: PublicProjectPreview; col
       <div className="p-4"><h3 className="line-clamp-1 text-sm font-black">{project.title}</h3><p className="mt-2 text-[11px] text-[#6b7b77]">{project.location || "Ubicación por confirmar"}</p><span className="mt-3 inline-block text-[10px] font-black" style={{ color }}>{status}</span></div>
     </Link>
   );
-}
-
-function Header({ name, logoUrl, visualIdentity }: { name: string; logoUrl?: string | null; visualIdentity: VisualIdentity }) {
-  return (
-    <header className="border-b border-[#d6e0eb] bg-[#f3f3f3]/92 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-5 px-5 py-5">
-        <Link href="/" className="flex items-center gap-3">
-          <span className="grid h-11 w-11 place-items-center overflow-hidden rounded-lg bg-white p-1" style={{ border: `1px solid ${visualIdentity.primaryColor}55` }}>
-            <TerraqoLogo src={logoUrl} variant="mark" alt={logoUrl ? name : "Terraqo"} className="h-full w-full" />
-          </span>
-          <strong className="font-display text-xl font-black">{name}</strong>
-        </Link>
-        <nav className="hidden items-center gap-8 text-sm font-bold text-[#0e1a26] md:flex">
-          <a href="#servicios">Servicios</a>
-          <a href="#sectores">Sectores</a>
-          <a href="#diferenciales">Diferenciales</a>
-          <a href="#contacto">Contacto</a>
-        </nav>
-        <Link href="/cuenta" className="hidden h-10 items-center rounded-md px-4 text-sm font-black text-white md:inline-flex" style={{ backgroundColor: visualIdentity.primaryColor }}>Solicitar acceso</Link>
-      </div>
-    </header>
-  );
-}
-
-function BrandMark({ name, logoUrl, visualIdentity }: { name: string; logoUrl?: string | null; visualIdentity: VisualIdentity }) {
-  return (
-    <div className="grid h-28 w-28 shrink-0 place-items-center rounded-[22px] p-4 shadow-[0_30px_80px_-45px_rgba(14,26,38,0.65)]" style={{ background: `linear-gradient(135deg, ${visualIdentity.primaryColor}, #0e1a26)` }}>
-      <TerraqoLogo src={logoUrl} variant="mark" alt={logoUrl ? name : "Terraqo"} className="h-full w-full" imageClassName="rounded-[14px]" />
-    </div>
-  );
-}
-
-function InlineTrust({ icon: Icon, label, color }: { icon: typeof MapPin; label: string; color: string }) {
-  return <span className="inline-flex items-center gap-2"><Icon className="h-4 w-4" style={{ color }} /> {label}</span>;
-}
-
-function CoverageChip({ icon: Icon, label }: { icon?: typeof MapPin; label: string }) {
-  return (
-    <span className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-white/14 bg-white/8 px-3 py-2 text-xs font-bold text-white/76 backdrop-blur-xl">
-      {Icon ? <Icon className="h-3.5 w-3.5 shrink-0" /> : null}<span className="truncate">{label}</span>
-    </span>
-  );
-}
-
-function CapabilityItem({ icon: Icon, title, detail, color }: { icon: typeof MapPin; title: string; detail: string; color: string }) {
-  return (
-    <article className="flex min-h-32 items-start gap-4 border-b border-white/10 px-5 py-6 sm:border-r lg:border-b-0 lg:last:border-r-0">
-      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-white/14 bg-white/8" style={{ color }}><Icon className="h-5 w-5" /></span>
-      <div><h2 className="font-display text-sm font-black leading-5 text-white">{title}</h2><p className="mt-2 text-xs leading-5 text-white/52">{detail}</p></div>
-    </article>
-  );
-}
-
-function HeroMetric({ value, label, color }: { value: string | number; label: string; color: string }) {
-  return (
-    <div className="min-w-0 px-2 py-2 text-center sm:border-r sm:border-white/10 sm:last:border-r-0">
-      <strong className="block font-display text-2xl font-black leading-none" style={{ color }}>{value}</strong>
-      <span className="mt-1 block truncate text-[10px] font-bold uppercase tracking-[0.08em] text-white/68">{label}</span>
-    </div>
-  );
-}
-
-function VisualOperationCard({ name, heroImageUrl, visualIdentity, projects, jobs, professionals }: { name: string; heroImageUrl?: string; visualIdentity: VisualIdentity; projects: number; jobs: number; professionals: number }) {
-  return (
-    <aside className="overflow-hidden rounded-[26px] border border-[#d8e0ec] bg-[#0e1a26] shadow-[0_32px_90px_-52px_rgba(3,52,59,0.7)]">
-      <div className="relative h-64 overflow-hidden bg-[#e8eef5]" style={patternStyle(visualIdentity.heroPattern, visualIdentity.primaryColor, visualIdentity.accentColor)}>
-        {heroImageUrl ? (
-          <>
-            <Image src={heroImageUrl} alt={`Operación de ${name}`} fill sizes="(min-width: 1024px) 420px, 100vw" className="object-cover" unoptimized />
-            <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,23,34,0.04),rgba(6,23,34,0.22)_46%,rgba(6,23,34,0.9))]" />
-          </>
-        ) : (
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_25%,rgba(255,255,255,0.9),transparent_0_18%,rgba(255,255,255,0)_34%),linear-gradient(135deg,rgba(255,255,255,0.75),rgba(255,255,255,0.08))]" />
-        )}
-        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#0e1a26] to-transparent" />
-      </div>
-      <div className="p-6 text-white">
-        <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: visualIdentity.accentColor }}>Operación viva ·</p>
-        <div className="mt-5 grid gap-3">
-          <DarkMetric icon={FolderKanban} value={projects} label="Proyectos registrados" visualIdentity={visualIdentity} />
-          <DarkMetric icon={Target} value={jobs} label="Oportunidades abiertas" visualIdentity={visualIdentity} />
-          <DarkMetric icon={UsersRound} value={professionals} label="Profesionales vinculados" visualIdentity={visualIdentity} />
-        </div>
-      </div>
-    </aside>
-  );
-}
-
-function DarkMetric({ icon: Icon, value, label, visualIdentity }: { icon: typeof FolderKanban; value: number; label: string; visualIdentity: VisualIdentity }) {
-  return (
-    <div className="flex items-center gap-4 rounded-2xl border border-white/8 bg-white/8 p-4">
-      <span className="grid h-12 w-12 place-items-center rounded-xl" style={{ backgroundColor: `${visualIdentity.primaryColor}55`, color: visualIdentity.accentColor }}><Icon className="h-5 w-5" /></span>
-      <div><strong className="block font-display text-3xl">{value}</strong><span className="text-sm text-white/62">{label}</span></div>
-    </div>
-  );
-}
-
-function MetricStrip({ icon: Icon, value, label, color }: { icon: typeof CalendarDays; value: string | number; label: string; color: string }) {
-  return (
-    <div className="flex items-center gap-4 px-6 py-5 md:border-r md:border-[#d8e0ec]">
-      <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#eff8f6]" style={{ color }}><Icon className="h-5 w-5" /></span>
-      <div><strong className="block font-display text-2xl font-black">{value}</strong><span className="text-sm text-[#516b72]">{label}</span></div>
-    </div>
-  );
-}
-
-function ServicesPanel({ items, color }: { items: string[]; color: string }) {
-  return (
-    <section id="servicios" className="rounded-[24px] border border-[#d8e0ec] bg-white p-7 shadow-[0_28px_90px_-60px_rgba(3,52,59,0.45)]">
-      <h2 className="font-display text-3xl font-black">Servicios principales</h2>
-      <div className="mt-7 space-y-1">
-        {items.map((item, index) => {
-          const service = serviceParts(item);
-          return (
-            <article key={`${item}-${index}`} className="group grid grid-cols-[44px_minmax(0,1fr)_24px] gap-4 border-b border-[#e1ece9] py-4 last:border-b-0">
-              <span className="grid h-8 w-8 place-items-center rounded-md text-xs font-black text-white" style={{ backgroundColor: color }}>{String(index + 1).padStart(2, "0")}</span>
-              <div>
-                <h3 className="font-black text-[#112d36]">{service.title}</h3>
-                {service.description ? <p className="mt-1 text-sm leading-6 text-[#4d6871]">{service.description}</p> : null}
-              </div>
-              <ChevronRight className="mt-1 h-4 w-4 text-[#7c9298] transition-transform group-hover:translate-x-1" />
-            </article>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-function DifferentiatorsPanel({ items, color }: { items: string[]; color: string }) {
-  const icons = [ShieldCheck, Target, UsersRound, BadgeCheck, Layers3, Sparkles];
-  return (
-    <section id="diferenciales" className="rounded-[24px] border border-[#d8e0ec] bg-white p-7 shadow-[0_28px_90px_-60px_rgba(3,52,59,0.45)]">
-      <h2 className="font-display text-3xl font-black">Diferenciales</h2>
-      <div className="mt-6 grid gap-3">
-        {items.map((item, index) => {
-          const Icon = icons[index % icons.length];
-          const parts = serviceParts(item);
-          return (
-            <article key={`${item}-${index}`} className="flex gap-4 rounded-2xl bg-[#f3f8f7] p-4">
-              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-white shadow-sm" style={{ color }}><Icon className="h-5 w-5" /></span>
-              <div>
-                <h3 className="font-black text-[#17343d]">{parts.title}</h3>
-                {parts.description ? <p className="mt-1 text-sm leading-6 text-[#536d75]">{parts.description}</p> : null}
-              </div>
-            </article>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-function SectorsPanel({ items, color }: { items: string[]; color: string }) {
-  return (
-    <section id="sectores" className="rounded-[24px] border border-[#d8e0ec] bg-white p-7 shadow-[0_28px_90px_-60px_rgba(3,52,59,0.45)]">
-      <div className="flex items-center justify-between gap-4">
-        <h2 className="font-display text-3xl font-black">Sectores</h2>
-        <Factory className="h-5 w-5" style={{ color }} />
-      </div>
-      <div className="mt-5 flex flex-wrap gap-2">
-        {items.map((item) => <span key={item} className="rounded-full border px-3 py-2 text-sm font-bold text-[#294852]" style={{ borderColor: `${color}35`, backgroundColor: `${color}0f` }}>{item}</span>)}
-      </div>
-    </section>
-  );
-}
-
-function ContactPanel({ coverage, email, phone, domain, domainHref, color }: { coverage: string; email?: string; phone?: string; domain?: string | null; domainHref?: string | null; color: string }) {
-  return (
-    <section id="contacto" className="rounded-[24px] border border-[#d8e0ec] bg-white p-7 shadow-[0_28px_90px_-60px_rgba(3,52,59,0.45)]">
-      <h2 className="font-display text-3xl font-black">Contacto</h2>
-      <div className="mt-6 space-y-4 text-sm font-semibold text-[#4b6870]">
-        <ContactRow icon={MapPin} color={color}>{coverage}</ContactRow>
-        {email ? <ContactRow icon={Mail} color={color}>{email}</ContactRow> : null}
-        {phone ? <ContactRow icon={Phone} color={color}>{phone}</ContactRow> : null}
-        {domainHref ? <ContactRow icon={Globe2} color={color}><Link href={domainHref} target="_blank">{domain}</Link></ContactRow> : null}
-      </div>
-    </section>
-  );
-}
-
-function ContactRow({ icon: Icon, color, children }: { icon: typeof Mail; color: string; children: React.ReactNode }) {
-  return <p className="flex items-start gap-3"><Icon className="mt-0.5 h-4 w-4 shrink-0" style={{ color }} /><span>{children}</span></p>;
 }

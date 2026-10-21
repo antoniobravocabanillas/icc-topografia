@@ -27,6 +27,12 @@ import {
   uploadWorklogPhoto,
   validateWorklogPhotos,
 } from "@/lib/terraqo/worklog-photo-upload";
+import {
+  deleteWorklogLocalDraft,
+  loadWorklogLocalDraft,
+  saveWorklogLocalDraft,
+  type WorklogDraftFields,
+} from "@/lib/terraqo/worklog-local-draft";
 
 type WorkspaceOption = {
   id: string;
@@ -52,13 +58,25 @@ type CapturedLocation = {
 };
 
 export function WorklogComposer({
+  draftOwnerKey,
   workspaces,
   previousWorklogs,
 }: {
+  draftOwnerKey: string;
   workspaces: WorkspaceOption[];
   previousWorklogs: PreviousWorklogOption[];
 }) {
   const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
+  const draftStorageKey = `professional:${draftOwnerKey}:worklog`;
+  const draftConsentKey = `terraqo:draft-consent:${draftOwnerKey}`;
+  const operationStorageKey = `terraqo:worklog-operation:${draftOwnerKey}`;
+  const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [draftReady, setDraftReady] = useState(false);
+  const [draftRenderKey, setDraftRenderKey] = useState(0);
+  const [draftEnabled, setDraftEnabled] = useState(false);
+  const [draftStatus, setDraftStatus] = useState("Borrador local desactivado.");
+  const [restoredFields, setRestoredFields] = useState<WorklogDraftFields | null>(null);
   const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id || "");
   const [projectId, setProjectId] = useState("");
   const [previousWorklogId, setPreviousWorklogId] = useState("");
@@ -66,10 +84,12 @@ export function WorklogComposer({
   const [submitting, setSubmitting] = useState(false);
   const busy = useRef(false);
   const savedWorklogId = useRef<string | null>(null);
+  const operationKey = useRef<string | null>(null);
   const pendingPhotos = useRef<File[]>([]);
   const [saved, setSaved] = useState(false);
   const [message, setMessage] = useState("");
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
+  const photoFilesRef = useRef<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
   const [locating, setLocating] = useState(false);
   const [location, setLocation] = useState<CapturedLocation | null>(null);
@@ -78,6 +98,130 @@ export function WorklogComposer({
   const locationLabelRef = useRef("");
   const [locationStatus, setLocationStatus] = useState(
     "La ubicación se capturará automáticamente al publicar.",
+  );
+
+  const fieldsFromForm = useCallback((): WorklogDraftFields | null => {
+    const form = formRef.current;
+    if (!form) return null;
+    const data = new FormData(form);
+    return {
+      workspaceId: String(data.get("workspaceId") || ""),
+      projectId: String(data.get("projectId") || ""),
+      previousWorklogId: String(data.get("previousWorklogId") || ""),
+      title: String(data.get("title") || ""),
+      summary: String(data.get("summary") || ""),
+      outcome: String(data.get("outcome") || ""),
+      contributionRole: String(data.get("contributionRole") || ""),
+      responsibilities: String(data.get("responsibilities") || ""),
+      methods: String(data.get("methods") || ""),
+      tools: String(data.get("tools") || ""),
+      type: String(data.get("type") || "FIELD_UPDATE"),
+      visibility: String(data.get("visibility") || "PRIVATE"),
+      skills: String(data.get("skills") || ""),
+      evidenceUrls: String(data.get("evidenceUrls") || ""),
+      locationLabel: locationLabelRef.current,
+      includeAutomaticLocation,
+    };
+  }, [includeAutomaticLocation]);
+
+  const persistDraft = useCallback(async (options?: {
+    photos?: File[];
+    serverWorklogId?: string | null;
+  }) => {
+    const fields = fieldsFromForm();
+    if (!draftEnabled || !fields) return;
+    setDraftStatus("Guardando en este dispositivo…");
+    try {
+      const updatedAt = await saveWorklogLocalDraft({
+        key: draftStorageKey,
+        fields,
+        photos: options?.photos || photoFilesRef.current,
+        serverWorklogId:
+          options?.serverWorklogId === undefined
+            ? savedWorklogId.current
+            : options.serverWorklogId,
+        operationKey: operationKey.current,
+      });
+      setDraftStatus(
+        `Guardado en este dispositivo · ${new Intl.DateTimeFormat("es-PE", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }).format(new Date(updatedAt))}`,
+      );
+    } catch {
+      setDraftStatus("No se pudo guardar localmente. Mantén esta página abierta o vuelve a intentarlo.");
+    }
+  }, [draftEnabled, draftStorageKey, fieldsFromForm]);
+
+  const scheduleDraft = useCallback(() => {
+    if (!draftEnabled || !draftReady) return;
+    if (draftTimer.current) clearTimeout(draftTimer.current);
+    draftTimer.current = setTimeout(() => void persistDraft(), 450);
+  }, [draftEnabled, draftReady, persistDraft]);
+
+  useEffect(() => {
+    let active = true;
+    operationKey.current = window.sessionStorage.getItem(operationStorageKey);
+    const consent = window.localStorage.getItem(draftConsentKey) === "1";
+    setDraftEnabled(consent);
+    if (!consent) {
+      setDraftReady(true);
+      return () => {
+        active = false;
+      };
+    }
+    setDraftStatus("Buscando un borrador guardado…");
+    void loadWorklogLocalDraft(draftStorageKey)
+      .then((draft) => {
+        if (!active) return;
+        if (!draft) {
+          setDraftStatus("Borrador local activo. Los cambios se guardarán automáticamente.");
+          return;
+        }
+        setRestoredFields(draft.fields);
+        setWorkspaceId(draft.fields.workspaceId);
+        setProjectId(draft.fields.projectId);
+        setPreviousWorklogId(draft.fields.previousWorklogId);
+        setLocationLabel(draft.fields.locationLabel);
+        locationLabelRef.current = draft.fields.locationLabel;
+        setIncludeAutomaticLocation(draft.fields.includeAutomaticLocation);
+        setPhotoFiles(draft.photos);
+        photoFilesRef.current = draft.photos;
+        pendingPhotos.current = draft.photos;
+        if (draft.serverWorklogId) {
+          savedWorklogId.current = draft.serverWorklogId;
+          setSaved(true);
+          setMessage("La bitácora ya estaba guardada. Reanuda las fotos pendientes sin crear otro registro.");
+        }
+        operationKey.current = draft.operationKey || crypto.randomUUID();
+        setDraftRenderKey((current) => current + 1);
+        setDraftStatus("Borrador recuperado de este dispositivo.");
+      })
+      .catch(() => {
+        if (active) setDraftStatus("No pudimos leer el borrador local. Puedes continuar y volver a activarlo.");
+      })
+      .finally(() => {
+        if (active) setDraftReady(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [draftConsentKey, draftStorageKey, operationStorageKey]);
+
+  useEffect(() => {
+    photoFilesRef.current = photoFiles;
+    scheduleDraft();
+  }, [photoFiles, scheduleDraft]);
+
+  useEffect(() => {
+    if (draftEnabled && draftReady) scheduleDraft();
+  }, [draftEnabled, draftReady, scheduleDraft]);
+
+  useEffect(
+    () => () => {
+      if (draftTimer.current) clearTimeout(draftTimer.current);
+    },
+    [],
   );
   const projects = useMemo(
     () => workspaces.find((item) => item.id === workspaceId)?.projects || [],
@@ -103,14 +247,14 @@ export function WorklogComposer({
   }, [photoFiles]);
 
   useEffect(() => {
-    if (!saved && !submitting) return;
+    if (!saved && !submitting && !draftStatus.startsWith("Guardando")) return;
     const warn = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = "";
     };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [saved, submitting]);
+  }, [draftStatus, saved, submitting]);
 
   function selectPhotos(event: ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(event.target.files || []);
@@ -253,9 +397,16 @@ export function WorklogComposer({
         }
         pendingPhotos.current = prepared;
         setMessage("Guardando la bitácora…");
+        const requestKey =
+          operationKey.current ||
+          (operationKey.current = crypto.randomUUID());
+        window.sessionStorage.setItem(operationStorageKey, requestKey);
         const response = await fetch("/api/terraqo/worklog", {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: {
+            "content-type": "application/json",
+            "Idempotency-Key": requestKey,
+          },
           body: JSON.stringify({
             workspaceId: String(data.get("workspaceId") || "") || undefined,
             projectId: String(data.get("projectId") || "") || undefined,
@@ -264,6 +415,20 @@ export function WorklogComposer({
             title: String(data.get("title") || ""),
             summary: String(data.get("summary") || ""),
             outcome: String(data.get("outcome") || "") || undefined,
+            contributionRole:
+              String(data.get("contributionRole") || "") || undefined,
+            responsibilities: String(data.get("responsibilities") || "")
+              .split(/[\r\n,]+/)
+              .map((item) => item.trim())
+              .filter(Boolean),
+            methods: String(data.get("methods") || "")
+              .split(/[\r\n,]+/)
+              .map((item) => item.trim())
+              .filter(Boolean),
+            tools: String(data.get("tools") || "")
+              .split(/[\r\n,]+/)
+              .map((item) => item.trim())
+              .filter(Boolean),
             type: String(data.get("type") || "FIELD_UPDATE"),
             visibility: String(data.get("visibility") || "PRIVATE"),
             skills: String(data.get("skills") || "")
@@ -290,6 +455,7 @@ export function WorklogComposer({
           );
         savedWorklogId.current = payload.data.id;
         setSaved(true);
+        await persistDraft({ photos: prepared, serverWorklogId: payload.data.id });
       }
       const id = savedWorklogId.current!;
       while (pendingPhotos.current.length) {
@@ -298,6 +464,7 @@ export function WorklogComposer({
         );
         await uploadWorklogPhoto(id, pendingPhotos.current[0]);
         pendingPhotos.current.shift();
+        await persistDraft({ photos: pendingPhotos.current, serverWorklogId: id });
       }
 
       savedWorklogId.current = null;
@@ -312,6 +479,13 @@ export function WorklogComposer({
       setLocationLabel("");
       locationLabelRef.current = "";
       setLocationStatus("La ubicación se capturará automáticamente al publicar.");
+      if (draftEnabled) {
+        await deleteWorklogLocalDraft(draftStorageKey).catch(() => undefined);
+      window.sessionStorage.removeItem(operationStorageKey);
+      operationKey.current = null;
+        setRestoredFields(null);
+        setDraftStatus("Publicado y retirado del almacenamiento local.");
+      }
       setMessage(
         "Bitacora registrada. Tu trabajo ya suma evidencia a tu perfil.",
       );
@@ -333,10 +507,16 @@ export function WorklogComposer({
 
   return (
     <form
+      ref={formRef}
       onSubmit={submit}
+      onChangeCapture={scheduleDraft}
       className="min-w-0 rounded-2xl border bg-white p-4 shadow-technical sm:rounded-lg sm:p-6"
     >
-      <fieldset disabled={submitting || saved} className="min-w-0">
+      <fieldset
+        key={draftRenderKey}
+        disabled={submitting || saved}
+        className="min-w-0"
+      >
         <div className="flex items-start gap-3">
           <span className="grid h-10 w-10 place-items-center rounded-md bg-primary/10 text-primary">
             <NotebookPen className="h-5 w-5" />
@@ -431,6 +611,7 @@ export function WorklogComposer({
               name="title"
               className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm"
               placeholder="Ej. Control de ejes completado en torre B"
+              defaultValue={restoredFields?.title || ""}
               required
               minLength={4}
               maxLength={180}
@@ -443,6 +624,7 @@ export function WorklogComposer({
               purpose="worklog"
               className="min-h-32"
               placeholder="Describe el trabajo, la decisión técnica y el contexto necesario para entenderlo."
+              defaultValue={restoredFields?.summary || ""}
               required
               minLength={20}
               maxLength={2400}
@@ -455,15 +637,57 @@ export function WorklogComposer({
               purpose="worklog"
               className="min-h-20"
               placeholder="Ej. Se liberaron los frentes sin observaciones y se entregó el reporte de control."
+              defaultValue={restoredFields?.outcome || ""}
               required
               minLength={10}
               maxLength={800}
             />
           </div>
+          <label className="grid gap-2 text-sm font-semibold md:col-span-2">
+            Tu aporte en este trabajo <span className="font-normal text-muted-foreground">(opcional)</span>
+            <input
+              name="contributionRole"
+              className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm"
+              placeholder="Ej. Responsable del control geométrico"
+              defaultValue={restoredFields?.contributionRole || ""}
+              maxLength={180}
+            />
+          </label>
+          <label className="grid gap-2 text-sm font-semibold md:col-span-2">
+            Responsabilidades <span className="font-normal text-muted-foreground">(una por línea o separadas por coma)</span>
+            <textarea
+              name="responsibilities"
+              className="min-h-24 rounded-xl border bg-background px-3 py-3 text-base sm:rounded-md sm:text-sm"
+              placeholder="Replanteo de ejes\nControl de tolerancias"
+              defaultValue={restoredFields?.responsibilities || ""}
+              maxLength={1200}
+            />
+          </label>
+          <label className="grid gap-2 text-sm font-semibold">
+            Métodos aplicados
+            <textarea
+              name="methods"
+              className="min-h-24 rounded-xl border bg-background px-3 py-3 text-base sm:rounded-md sm:text-sm"
+              placeholder="Poligonal cerrada, nivelación geométrica"
+              defaultValue={restoredFields?.methods || ""}
+              maxLength={800}
+            />
+          </label>
+          <label className="grid gap-2 text-sm font-semibold">
+            Herramientas y equipos
+            <textarea
+              name="tools"
+              className="min-h-24 rounded-xl border bg-background px-3 py-3 text-base sm:rounded-md sm:text-sm"
+              placeholder="Estación total, nivel automático, AutoCAD"
+              defaultValue={restoredFields?.tools || ""}
+              maxLength={800}
+            />
+          </label>
           <label className="grid gap-2 text-sm font-semibold">
             Tipo de evidencia
             <select
               name="type"
+              defaultValue={restoredFields?.type || "FIELD_UPDATE"}
               className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm"
             >
               <option value="FIELD_UPDATE">Avance de trabajo</option>
@@ -478,7 +702,7 @@ export function WorklogComposer({
             <select
               name="visibility"
               className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm"
-              defaultValue="PRIVATE"
+              defaultValue={restoredFields?.visibility || "PRIVATE"}
             >
               <option value="PRIVATE">Solo yo</option>
               <option value="WORKSPACE">Empresa vinculada</option>
@@ -492,6 +716,7 @@ export function WorklogComposer({
               name="skills"
               className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm"
               placeholder="Topografia, GNSS, AutoCAD"
+              defaultValue={restoredFields?.skills || ""}
             />
           </label>
           <div className="flex min-h-11 items-center gap-3 rounded-md border bg-[#f2f8f7] px-3 text-sm text-[#35485b]">
@@ -572,6 +797,7 @@ export function WorklogComposer({
             </span>
             <textarea
               name="evidenceUrls"
+              defaultValue={restoredFields?.evidenceUrls || ""}
               className="min-h-24 min-w-0 rounded-xl border bg-background p-3 text-base sm:rounded-md sm:text-sm"
               placeholder="https://..."
             />
@@ -633,6 +859,37 @@ export function WorklogComposer({
           <p className="mt-3 text-xs leading-5 text-[#607083]">
             Los TQ permanecen 7 días en espera. Duplicados, evidencia falsa o
             validaciones coordinadas no generan reputación.
+          </p>
+        </div>
+        <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50/70 p-4">
+          <label className="flex min-h-11 items-start gap-3 text-sm font-semibold text-slate-800">
+            <input
+              type="checkbox"
+              checked={draftEnabled}
+              onChange={(event) => {
+                const enabled = event.target.checked;
+                setDraftEnabled(enabled);
+                if (enabled) {
+                  window.localStorage.setItem(draftConsentKey, "1");
+                  setDraftStatus("Activando guardado local…");
+                  setTimeout(() => void persistDraft(), 0);
+                } else {
+                  window.localStorage.removeItem(draftConsentKey);
+                  void deleteWorklogLocalDraft(draftStorageKey).catch(() => undefined);
+                  setDraftStatus("Borrador local desactivado y eliminado de este dispositivo.");
+                }
+              }}
+              className="mt-1 h-5 w-5 accent-primary"
+            />
+            <span>
+              Guardar un borrador en este dispositivo
+              <small className="mt-1 block font-normal leading-5 text-slate-600">
+                Conserva texto y fotos para recuperarlos tras perder conexión o cerrar la página. No lo actives en un equipo compartido.
+              </small>
+            </span>
+          </label>
+          <p className="mt-2 text-xs font-medium text-slate-600" role="status" aria-live="polite">
+            {draftReady ? draftStatus : "Preparando almacenamiento local…"}
           </p>
         </div>
       </fieldset>

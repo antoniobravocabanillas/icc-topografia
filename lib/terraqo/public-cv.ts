@@ -99,8 +99,10 @@ export const publicCvProfileInclude = {
         take: 12
       }
     },
-    orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
-    take: 80
+    orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
+    // One extra row lets the server expose an opaque continuation cursor
+    // without downloading the complete public history into the document.
+    take: 81
   }
 } satisfies Prisma.TerraqoProfessionalProfileInclude;
 

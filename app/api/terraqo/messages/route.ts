@@ -48,6 +48,7 @@ export async function POST(request: Request) {
           userId: session.user.id,
           conversationId: String(body.conversationId || ""),
           body: String(body.body || ""),
+          operationKey: String(body.operationKey || ""),
         }),
       );
     return fail("Accion no valida.", 400);

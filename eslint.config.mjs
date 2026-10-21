@@ -8,7 +8,15 @@ const compat = new FlatCompat({ baseDirectory: __dirname });
 
 const eslintConfig = [
   {
-    ignores: [".next/**", ".netlify/**", "node_modules/**", "next-env.d.ts"]
+    ignores: [
+      ".next/**",
+      ".netlify/**",
+      ".playwright-cli/**",
+      "node_modules/**",
+      "output/**",
+      "tmp/**",
+      "next-env.d.ts"
+    ]
   },
   ...compat.extends("next/core-web-vitals", "next/typescript")
 ];

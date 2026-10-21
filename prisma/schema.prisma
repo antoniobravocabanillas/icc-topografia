@@ -437,6 +437,67 @@ enum TerraqoConversationParticipantRole {
   @@schema("icc")
 }
 
+enum TerraqoConversationRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+  BLOCKED
+
+  @@schema("icc")
+}
+
+enum TerraqoConversationContextKind {
+  NEED
+  EVALUATION
+  EVIDENCE
+  PROPOSAL
+  CLOSURE
+
+  @@schema("icc")
+}
+
+enum TerraqoCollaborationStatus {
+  PROPOSAL_PENDING
+  ACCEPTED
+  IN_PROGRESS
+  CLOSURE_PROPOSED
+  CHANGES_REQUESTED
+  CLOSED
+  CANCELLED
+
+  @@schema("icc")
+}
+
+enum TerraqoCollaborationProposalStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CHANGES_REQUESTED
+  WITHDRAWN
+  SUPERSEDED
+
+  @@schema("icc")
+}
+
+enum TerraqoCollaborationAcceptanceParty {
+  WORKSPACE
+  PROFESSIONAL
+
+  @@schema("icc")
+}
+
+enum TerraqoClosureRevisionStatus {
+  DRAFT
+  SUBMITTED
+  CHANGES_REQUESTED
+  ACCEPTED
+  DECLINED
+  SUPERSEDED
+
+  @@schema("icc")
+}
+
 enum TerraqoTeamStatus {
   ACTIVE
   ARCHIVED
@@ -515,6 +576,151 @@ enum TerraqoWorklogType {
   PROBLEM_SOLVED
   LEARNING
   MILESTONE
+
+  @@schema("icc")
+}
+
+enum TerraqoWorklogLifecycle {
+  DRAFT
+  READY
+  PUBLISHED
+  ARCHIVED
+
+  @@schema("icc")
+}
+
+enum TerraqoWorkCaseLifecycle {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+
+  @@schema("icc")
+}
+
+enum TerraqoWorkCaseRelationshipStatus {
+  SUGGESTED
+  CONFIRMED
+  DISMISSED
+
+  @@schema("icc")
+}
+
+enum TerraqoWorkCasePhase {
+  PREPARATION
+  EXECUTION
+  RESULT
+
+  @@schema("icc")
+}
+
+enum TerraqoShareCollectionLifecycle {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+
+  @@schema("icc")
+}
+
+enum TerraqoAccessGrantLifecycle {
+  ACTIVE
+  EXPIRED
+  REVOKED
+
+  @@schema("icc")
+}
+
+enum TerraqoEndorsementStatus {
+  DRAFT
+  PENDING
+  IN_REVIEW
+  PARTIAL
+  CHANGES_REQUESTED
+  DECLINED
+  CONFIRMED
+  EXPIRED
+  CANCELLED
+  REVOKED
+
+  @@schema("icc")
+}
+
+enum TerraqoWorkNeedLifecycle {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+
+  @@schema("icc")
+}
+
+enum TerraqoNeedRequirementPriority {
+  REQUIRED
+  DESIRED
+
+  @@schema("icc")
+}
+
+enum TerraqoEvaluationDossierLifecycle {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+
+  @@schema("icc")
+}
+
+enum TerraqoEvaluationSourceAccessKind {
+  PUBLIC_CV
+  PUBLIC_SELECTION
+  PRIVATE_GRANT
+
+  @@schema("icc")
+}
+
+enum TerraqoEvaluationClaimState {
+  DOCUMENTED
+  DECLARED
+  ENDORSED
+  CONFIRMED
+  UNKNOWN
+
+  @@schema("icc")
+}
+
+enum TerraqoEvaluationAnalysisStatus {
+  NOT_REQUESTED
+  PROCESSING
+  READY
+  FAILED
+  INSUFFICIENT
+  SOURCE_REVOKED
+
+  @@schema("icc")
+}
+
+enum TerraqoAnalysisJobStatus {
+  QUEUED
+  PROCESSING
+  RETRY_WAIT
+  READY
+  INSUFFICIENT
+  FAILED
+  CANCELLED
+  SOURCE_REVOKED
+
+  @@schema("icc")
+}
+
+enum TerraqoAnalysisClaimKind {
+  EXPLICIT_DATA
+  DECLARATION_SUMMARY
+  PROPOSED_INTERPRETATION
+
+  @@schema("icc")
+}
+
+enum TerraqoEvaluationQuestionLifecycle {
+  DRAFT
+  USED
+  ARCHIVED
 
   @@schema("icc")
 }
@@ -775,64 +981,93 @@ enum TerraqoFileCategory {
 }
 
 model User {
-  nativeWorklogOperations     TerraqoNativeWorklogOperation[] @relation("NativeWorklogOperationActor")
-  billingAccounts             TerraqoBillingAccount[]
-  id                          String                            @id @default(cuid())
-  name                        String?
-  email                       String                            @unique
-  emailVerified               DateTime?
-  image                       String?
-  passwordHash                String?
-  lastSeenAt                  DateTime?
-  onlineUntil                 DateTime?
-  identityType                String?
-  identityNumber              String?
-  identityKey                 String?                           @unique
-  role                        Role                              @default(CUSTOMER)
-  accounts                    Account[]
-  sessions                    Session[]
-  orders                      Order[]
-  addresses                   Address[]
-  favorites                   Favorite[]
-  assignedChats               ChatConversation[]
-  ticketMessages              TicketMessage[]
-  internalMessages            InternalChatMessage[]
-  notifications               Notification[]
-  activityLogs                ActivityLog[]
-  staffProfiles               StaffProfile[]
-  clientProfiles              Client[]
-  clientAccounts              ClientAccount[]
-  terraqoMemberships          TerraqoWorkspaceMember[]
-  ownedTerraqoWorkspaces      TerraqoWorkspace[]                @relation("TerraqoWorkspaceOwner")
-  terraqoProfessionalProfile  TerraqoProfessionalProfile?
-  terraqoForumPosts           TerraqoForumPost[]
-  terraqoForumReplies         TerraqoForumReply[]
-  terraqoApplications         TerraqoProjectApplication[]
-  terraqoWorklogs             TerraqoWorklogEntry[]             @relation("TerraqoWorklogAuthor")
-  terraqoWorklogComments      TerraqoWorklogComment[]
-  terraqoWorklogReactions     TerraqoWorklogReaction[]
-  terraqoConversationsCreated TerraqoConversation[]             @relation("TerraqoConversationCreator")
-  terraqoConversationMembers  TerraqoConversationParticipant[]
-  terraqoDirectMessages       TerraqoDirectMessage[]            @relation("TerraqoDirectMessageSender")
-  terraqoMeetingsCreated      TerraqoMeeting[]                  @relation("TerraqoMeetingCreator")
-  terraqoMeetingParticipants  TerraqoMeetingParticipant[]
-  terraqoTeamsOwned           TerraqoTeam[]                     @relation("TerraqoTeamOwner")
-  terraqoTeamMemberships      TerraqoTeamMember[]               @relation("TerraqoTeamMemberUser")
-  terraqoTeamInvitationsSent  TerraqoTeamMember[]               @relation("TerraqoTeamMemberInviter")
-  terraqoPrivateNotes         TerraqoPrivateNote[]
-  terraqoWorkspaceFiles       TerraqoWorkspaceFile[]
-  terraqoPasskeys             TerraqoWebAuthnCredential[]
-  terraqoWebAuthnChallenges   TerraqoWebAuthnChallenge[]
-  terraqoValidationRequests   TerraqoWorklogValidation[]        @relation("TerraqoValidationRequester")
-  terraqoValidationsAssigned  TerraqoWorklogValidation[]        @relation("TerraqoValidationSupervisor")
-  terraqoAttendanceEvents     TerraqoAttendanceEvent[]
-  terraqoAttendanceLocations  TerraqoAttendanceLocationSample[]
-  terraqoBuilderAccount       TerraqoBuilderAccount?
-  terraqoBuilderContributions TerraqoBuilderContribution[]
-  terraqoFriendshipsRequested TerraqoFriendship[]               @relation("TerraqoFriendshipRequester")
-  terraqoFriendshipsReceived  TerraqoFriendship[]               @relation("TerraqoFriendshipRecipient")
-  createdAt                   DateTime                          @default(now())
-  updatedAt                   DateTime                          @updatedAt
+  nativeWorklogOperations             TerraqoNativeWorklogOperation[]   @relation("NativeWorklogOperationActor")
+  billingAccounts                     TerraqoBillingAccount[]
+  id                                  String                            @id @default(cuid())
+  name                                String?
+  email                               String                            @unique
+  emailVerified                       DateTime?
+  image                               String?
+  passwordHash                        String?
+  lastSeenAt                          DateTime?
+  onlineUntil                         DateTime?
+  identityType                        String?
+  identityNumber                      String?
+  identityKey                         String?                           @unique
+  role                                Role                              @default(CUSTOMER)
+  accounts                            Account[]
+  sessions                            Session[]
+  orders                              Order[]
+  addresses                           Address[]
+  favorites                           Favorite[]
+  assignedChats                       ChatConversation[]
+  ticketMessages                      TicketMessage[]
+  internalMessages                    InternalChatMessage[]
+  notifications                       Notification[]
+  activityLogs                        ActivityLog[]
+  staffProfiles                       StaffProfile[]
+  clientProfiles                      Client[]
+  clientAccounts                      ClientAccount[]
+  terraqoMemberships                  TerraqoWorkspaceMember[]
+  ownedTerraqoWorkspaces              TerraqoWorkspace[]                @relation("TerraqoWorkspaceOwner")
+  terraqoProfessionalProfile          TerraqoProfessionalProfile?
+  terraqoForumPosts                   TerraqoForumPost[]
+  terraqoForumReplies                 TerraqoForumReply[]
+  terraqoApplications                 TerraqoProjectApplication[]
+  terraqoWorklogs                     TerraqoWorklogEntry[]             @relation("TerraqoWorklogAuthor")
+  terraqoWorklogCreateOps             TerraqoWorklogCreateOperation[]   @relation("TerraqoWorklogCreateOperationActor")
+  terraqoWorklogRevisions             TerraqoWorklogRevision[]          @relation("TerraqoWorklogRevisionCreator")
+  terraqoWorkCasesCreated             TerraqoWorkCase[]                 @relation("TerraqoWorkCaseCreator")
+  terraqoWorkCaseConfirmations        TerraqoWorkCaseRecord[]           @relation("TerraqoWorkCaseRecordConfirmer")
+  terraqoShareCollections             TerraqoShareCollection[]          @relation("TerraqoShareCollectionCreator")
+  terraqoGrantsIssued                 TerraqoAccessGrant[]              @relation("TerraqoAccessGrantIssuer")
+  terraqoGrantsReceived               TerraqoAccessGrant[]              @relation("TerraqoAccessGrantSubject")
+  terraqoEndorsementsRequested        TerraqoEndorsementRequest[]       @relation("TerraqoEndorsementRequester")
+  terraqoEndorsementsAssigned         TerraqoEndorsementRequest[]       @relation("TerraqoEndorsementReviewer")
+  terraqoEndorsementDecisions         TerraqoEndorsementDecision[]      @relation("TerraqoEndorsementDecisionReviewer")
+  terraqoWorkNeedsCreated             TerraqoWorkNeed[]                 @relation("TerraqoWorkNeedCreator")
+  terraqoWorkNeedRevisions            TerraqoWorkNeedRevision[]         @relation("TerraqoWorkNeedRevisionCreator")
+  terraqoEvaluationDossiers           TerraqoEvaluationDossier[]        @relation("TerraqoEvaluationDossierCreator")
+  terraqoEvaluationSources            TerraqoEvaluationSource[]         @relation("TerraqoEvaluationSourceCreator")
+  terraqoEvaluationAssessments        TerraqoEvaluationAssessment[]     @relation("TerraqoEvaluationAssessmentCreator")
+  terraqoEvaluationNotes              TerraqoEvaluationNote[]           @relation("TerraqoEvaluationNoteCreator")
+  terraqoEvaluationQuestions          TerraqoEvaluationQuestion[]       @relation("TerraqoEvaluationQuestionCreator")
+  terraqoAnalysisJobs                 TerraqoAnalysisJob[]              @relation("TerraqoAnalysisJobCreator")
+  terraqoConversationRequestsSent     TerraqoConversationRequest[]      @relation("TerraqoConversationRequestRequester")
+  terraqoConversationRequestsReceived TerraqoConversationRequest[]      @relation("TerraqoConversationRequestRecipient")
+  terraqoConversationContexts         TerraqoConversationContext[]      @relation("TerraqoConversationContextCreator")
+  terraqoMessageOperations            TerraqoMessageOperation[]         @relation("TerraqoMessageOperationActor")
+  terraqoCollaborationsProfessional   TerraqoCollaboration[]            @relation("TerraqoCollaborationProfessional")
+  terraqoCollaborationProposals       TerraqoCollaborationProposal[]    @relation("TerraqoCollaborationProposalCreator")
+  terraqoCollaborationDecisions       TerraqoCollaborationProposal[]    @relation("TerraqoCollaborationProposalDecision")
+  terraqoCollaborationAcceptances     TerraqoCollaborationAcceptance[]  @relation("TerraqoCollaborationAcceptanceActor")
+  terraqoClosureRevisionsCreated      TerraqoClosureRevision[]          @relation("TerraqoClosureRevisionCreator")
+  terraqoClosureDecisions             TerraqoClosureRevision[]          @relation("TerraqoClosureRevisionDecision")
+  terraqoCertificatesIssued           TerraqoCollaborationCertificate[] @relation("TerraqoCollaborationCertificateIssuer")
+  terraqoWorklogComments              TerraqoWorklogComment[]
+  terraqoWorklogReactions             TerraqoWorklogReaction[]
+  terraqoConversationsCreated         TerraqoConversation[]             @relation("TerraqoConversationCreator")
+  terraqoConversationMembers          TerraqoConversationParticipant[]
+  terraqoDirectMessages               TerraqoDirectMessage[]            @relation("TerraqoDirectMessageSender")
+  terraqoMeetingsCreated              TerraqoMeeting[]                  @relation("TerraqoMeetingCreator")
+  terraqoMeetingParticipants          TerraqoMeetingParticipant[]
+  terraqoTeamsOwned                   TerraqoTeam[]                     @relation("TerraqoTeamOwner")
+  terraqoTeamMemberships              TerraqoTeamMember[]               @relation("TerraqoTeamMemberUser")
+  terraqoTeamInvitationsSent          TerraqoTeamMember[]               @relation("TerraqoTeamMemberInviter")
+  terraqoPrivateNotes                 TerraqoPrivateNote[]
+  terraqoWorkspaceFiles               TerraqoWorkspaceFile[]
+  terraqoPasskeys                     TerraqoWebAuthnCredential[]
+  terraqoWebAuthnChallenges           TerraqoWebAuthnChallenge[]
+  terraqoValidationRequests           TerraqoWorklogValidation[]        @relation("TerraqoValidationRequester")
+  terraqoValidationsAssigned          TerraqoWorklogValidation[]        @relation("TerraqoValidationSupervisor")
+  terraqoAttendanceEvents             TerraqoAttendanceEvent[]
+  terraqoAttendanceLocations          TerraqoAttendanceLocationSample[]
+  terraqoBuilderAccount               TerraqoBuilderAccount?
+  terraqoBuilderContributions         TerraqoBuilderContribution[]
+  terraqoFriendshipsRequested         TerraqoFriendship[]               @relation("TerraqoFriendshipRequester")
+  terraqoFriendshipsReceived          TerraqoFriendship[]               @relation("TerraqoFriendshipRecipient")
+  createdAt                           DateTime                          @default(now())
+  updatedAt                           DateTime                          @updatedAt
 
   @@index([onlineUntil])
   @@schema("icc")
@@ -882,28 +1117,28 @@ model TerraqoBuilderAccount {
 }
 
 model TerraqoBuilderContribution {
-  id              String                           @id @default(cuid())
-  userId          String
-  user            User                             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspaceId     String?
-  type            TerraqoBuilderContributionType
-  status          TerraqoBuilderContributionStatus @default(RECEIVED)
-  title           String
-  detail          String
-  sourceKey       String?                          @unique
-  requestedPoints Int                              @default(0)
-  approvedPoints  Int                              @default(0)
-  availableAt     DateTime?
-  releasedAt      DateTime?
-  riskScore       Int                              @default(0)
-  reviewerId      String?
-  reviewNote      String?
-  reviewedAt      DateTime?
-  implementedAt   DateTime?
-  ledgerEntries   TerraqoBuilderLedger[]
+  id                   String                              @id @default(cuid())
+  userId               String
+  user                 User                                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId          String?
+  type                 TerraqoBuilderContributionType
+  status               TerraqoBuilderContributionStatus    @default(RECEIVED)
+  title                String
+  detail               String
+  sourceKey            String?                             @unique
+  requestedPoints      Int                                 @default(0)
+  approvedPoints       Int                                 @default(0)
+  availableAt          DateTime?
+  releasedAt           DateTime?
+  riskScore            Int                                 @default(0)
+  reviewerId           String?
+  reviewNote           String?
+  reviewedAt           DateTime?
+  implementedAt        DateTime?
+  ledgerEntries        TerraqoBuilderLedger[]
   nativeFirstDecisions TerraqoNativeWorklogFirstDecision[]
-  createdAt       DateTime                         @default(now())
-  updatedAt       DateTime                         @updatedAt
+  createdAt            DateTime                            @default(now())
+  updatedAt            DateTime                            @updatedAt
 
   @@unique([id, userId], map: "NativeWorklogFirst_contribution_actor_key")
   @@index([userId, status, createdAt])
@@ -1984,6 +2219,7 @@ model Project {
   terraqoExperiences       TerraqoProfessionalExperience[]
   terraqoJobPosts          TerraqoJobPost[]
   terraqoWorklogs          TerraqoWorklogEntry[]
+  terraqoWorkCases         TerraqoWorkCase[]
   terraqoConversations     TerraqoConversation[]
   terraqoMeetings          TerraqoMeeting[]
   terraqoTeams             TerraqoTeam[]
@@ -2249,7 +2485,7 @@ model ActivityLog {
 }
 
 model TerraqoWorkspace {
-  nativeWorklogOperations   TerraqoNativeWorklogOperation[]
+  nativeWorklogOperations  TerraqoNativeWorklogOperation[]
   billingAccounts          TerraqoBillingAccount[]
   id                       String                            @id @default(cuid())
   name                     String
@@ -2314,6 +2550,13 @@ model TerraqoWorkspace {
   professionalExperiences  TerraqoProfessionalExperience[]
   forumChannels            TerraqoForumChannel[]
   worklogs                 TerraqoWorklogEntry[]
+  workCases                TerraqoWorkCase[]
+  endorsementRequests      TerraqoEndorsementRequest[]
+  workNeeds                TerraqoWorkNeed[]
+  evaluationDossiers       TerraqoEvaluationDossier[]
+  analysisJobs             TerraqoAnalysisJob[]
+  conversationRequests     TerraqoConversationRequest[]
+  collaborations           TerraqoCollaboration[]
   directConversations      TerraqoConversation[]
   meetings                 TerraqoMeeting[]
   teams                    TerraqoTeam[]
@@ -2337,24 +2580,27 @@ model TerraqoWorkspace {
 }
 
 model TerraqoConversation {
-  id            String                           @id @default(cuid())
-  type          TerraqoConversationType          @default(DIRECT)
-  title         String?
-  directKey     String?                          @unique
-  workspaceId   String?
-  workspace     TerraqoWorkspace?                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  projectId     String?
-  project       Project?                         @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  createdById   String
-  createdBy     User                             @relation("TerraqoConversationCreator", fields: [createdById], references: [id], onDelete: Cascade)
-  participants  TerraqoConversationParticipant[]
-  messages      TerraqoDirectMessage[]
-  meetings      TerraqoMeeting[]
-  team          TerraqoTeam?
-  lastMessageAt DateTime?
-  archivedAt    DateTime?
-  createdAt     DateTime                         @default(now())
-  updatedAt     DateTime                         @updatedAt
+  id             String                           @id @default(cuid())
+  type           TerraqoConversationType          @default(DIRECT)
+  title          String?
+  directKey      String?                          @unique
+  workspaceId    String?
+  workspace      TerraqoWorkspace?                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projectId      String?
+  project        Project?                         @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdById    String
+  createdBy      User                             @relation("TerraqoConversationCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  participants   TerraqoConversationParticipant[]
+  messages       TerraqoDirectMessage[]
+  requests       TerraqoConversationRequest[]
+  contexts       TerraqoConversationContext[]
+  collaborations TerraqoCollaboration[]
+  meetings       TerraqoMeeting[]
+  team           TerraqoTeam?
+  lastMessageAt  DateTime?
+  archivedAt     DateTime?
+  createdAt      DateTime                         @default(now())
+  updatedAt      DateTime                         @updatedAt
 
   @@index([workspaceId, updatedAt])
   @@index([projectId])
@@ -2432,12 +2678,235 @@ model TerraqoDirectMessage {
   body            String
   attachmentKeys  String[]                   @default([]) @map("attachments")
   attachmentItems TerraqoMessageAttachment[]
+  operation       TerraqoMessageOperation?
   editedAt        DateTime?
   deletedAt       DateTime?
   createdAt       DateTime                   @default(now())
 
   @@index([conversationId, createdAt])
   @@index([senderId, createdAt])
+  @@schema("icc")
+}
+
+model TerraqoMessageOperation {
+  id           String               @id @default(cuid())
+  actorId      String
+  actor        User                 @relation("TerraqoMessageOperationActor", fields: [actorId], references: [id], onDelete: Restrict)
+  operationKey String
+  fingerprint  String
+  messageId    String               @unique
+  message      TerraqoDirectMessage @relation(fields: [messageId], references: [id], onDelete: Restrict)
+  createdAt    DateTime             @default(now())
+
+  @@unique([actorId, operationKey])
+  @@index([actorId, createdAt])
+  @@schema("icc")
+}
+
+model TerraqoConversationRequest {
+  id                   String                           @id @default(cuid())
+  requestKey           String
+  workspaceId          String
+  workspace            TerraqoWorkspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  dossierId            String?
+  dossier              TerraqoEvaluationDossier?        @relation(fields: [dossierId], references: [id], onDelete: SetNull)
+  requesterId          String
+  requester            User                             @relation("TerraqoConversationRequestRequester", fields: [requesterId], references: [id], onDelete: Restrict)
+  recipientId          String
+  recipient            User                             @relation("TerraqoConversationRequestRecipient", fields: [recipientId], references: [id], onDelete: Restrict)
+  note                 String?
+  status               TerraqoConversationRequestStatus @default(PENDING)
+  version              Int                              @default(1)
+  conversationId       String?
+  conversation         TerraqoConversation?             @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  respondedAt          DateTime?
+  blockedAt            DateTime?
+  reportedAt           DateTime?
+  reportReason         String?
+  operationKey         String
+  operationFingerprint String
+  createdAt            DateTime                         @default(now())
+  updatedAt            DateTime                         @updatedAt
+
+  @@unique([requesterId, operationKey])
+  @@index([recipientId, status, createdAt])
+  @@index([workspaceId, status, createdAt])
+  @@index([requestKey, status])
+  @@schema("icc")
+}
+
+model TerraqoConversationContext {
+  id             String                         @id @default(cuid())
+  conversationId String
+  conversation   TerraqoConversation            @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  kind           TerraqoConversationContextKind
+  referenceId    String
+  labelSnapshot  String?
+  createdById    String
+  createdBy      User                           @relation("TerraqoConversationContextCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt      DateTime                       @default(now())
+
+  @@unique([conversationId, kind, referenceId])
+  @@index([referenceId, kind])
+  @@schema("icc")
+}
+
+model TerraqoCollaboration {
+  id                 String                         @id @default(cuid())
+  workspaceId        String
+  workspace          TerraqoWorkspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  conversationId     String
+  conversation       TerraqoConversation            @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+  professionalUserId String
+  professional       User                           @relation("TerraqoCollaborationProfessional", fields: [professionalUserId], references: [id], onDelete: Restrict)
+  status             TerraqoCollaborationStatus     @default(PROPOSAL_PENDING)
+  version            Int                            @default(1)
+  acceptedRevisionNo Int?
+  acceptedAt         DateTime?
+  cancelledAt        DateTime?
+  cancellationReason String?
+  proposals          TerraqoCollaborationProposal[]
+  closure            TerraqoCollaborationClosure?
+  createdAt          DateTime                       @default(now())
+  updatedAt          DateTime                       @updatedAt
+
+  @@unique([workspaceId, conversationId, professionalUserId])
+  @@index([professionalUserId, status, updatedAt])
+  @@index([workspaceId, status, updatedAt])
+  @@schema("icc")
+}
+
+model TerraqoCollaborationProposal {
+  id                   String                             @id @default(cuid())
+  collaborationId      String
+  collaboration        TerraqoCollaboration               @relation(fields: [collaborationId], references: [id], onDelete: Cascade)
+  revisionNo           Int
+  scope                String
+  roleTitle            String
+  deliverables         String[]                           @default([])
+  startsOn             DateTime?
+  endsOn               DateTime?
+  conditions           String?
+  status               TerraqoCollaborationProposalStatus @default(PENDING)
+  createdById          String
+  createdBy            User                               @relation("TerraqoCollaborationProposalCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  decidedById          String?
+  decidedBy            User?                              @relation("TerraqoCollaborationProposalDecision", fields: [decidedById], references: [id], onDelete: SetNull)
+  decisionComment      String?
+  decisionOperationKey String?
+  decisionFingerprint  String?
+  operationKey         String
+  operationFingerprint String
+  submittedAt          DateTime                           @default(now())
+  decidedAt            DateTime?
+  acceptances          TerraqoCollaborationAcceptance[]
+  createdAt            DateTime                           @default(now())
+
+  @@unique([collaborationId, revisionNo])
+  @@unique([createdById, operationKey])
+  @@index([collaborationId, status, createdAt])
+  @@schema("icc")
+}
+
+model TerraqoCollaborationAcceptance {
+  id         String                              @id @default(cuid())
+  proposalId String
+  proposal   TerraqoCollaborationProposal        @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  party      TerraqoCollaborationAcceptanceParty
+  actorId    String
+  actor      User                                @relation("TerraqoCollaborationAcceptanceActor", fields: [actorId], references: [id], onDelete: Restrict)
+  acceptedAt DateTime                            @default(now())
+
+  @@unique([proposalId, party])
+  @@index([actorId, acceptedAt])
+  @@schema("icc")
+}
+
+model TerraqoCollaborationClosure {
+  id                String                           @id @default(cuid())
+  collaborationId   String                           @unique
+  collaboration     TerraqoCollaboration             @relation(fields: [collaborationId], references: [id], onDelete: Cascade)
+  version           Int                              @default(1)
+  currentRevisionId String?                          @unique
+  currentRevision   TerraqoClosureRevision?          @relation("TerraqoCurrentClosureRevision", fields: [currentRevisionId], references: [id], onDelete: SetNull)
+  revisions         TerraqoClosureRevision[]         @relation("TerraqoClosureRevisions")
+  certificate       TerraqoCollaborationCertificate?
+  createdAt         DateTime                         @default(now())
+  updatedAt         DateTime                         @updatedAt
+
+  @@schema("icc")
+}
+
+model TerraqoClosureRevision {
+  id                   String                           @id @default(cuid())
+  closureId            String
+  closure              TerraqoCollaborationClosure      @relation("TerraqoClosureRevisions", fields: [closureId], references: [id], onDelete: Cascade)
+  currentFor           TerraqoCollaborationClosure?     @relation("TerraqoCurrentClosureRevision")
+  revisionNo           Int
+  contribution         String
+  deliverables         String[]                         @default([])
+  result               String
+  authorizedExcerpt    String?
+  status               TerraqoClosureRevisionStatus     @default(DRAFT)
+  createdById          String
+  createdBy            User                             @relation("TerraqoClosureRevisionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  decidedById          String?
+  decidedBy            User?                            @relation("TerraqoClosureRevisionDecision", fields: [decidedById], references: [id], onDelete: SetNull)
+  decisionComment      String?
+  decisionOperationKey String?
+  decisionFingerprint  String?
+  operationKey         String
+  operationFingerprint String
+  submitOperationKey   String?
+  submitFingerprint    String?
+  submittedAt          DateTime?
+  decidedAt            DateTime?
+  references           TerraqoClosureReference[]
+  certificate          TerraqoCollaborationCertificate?
+  createdAt            DateTime                         @default(now())
+
+  @@unique([closureId, revisionNo])
+  @@unique([createdById, operationKey])
+  @@index([closureId, status, createdAt])
+  @@schema("icc")
+}
+
+model TerraqoClosureReference {
+  id                String                 @id @default(cuid())
+  closureRevisionId String
+  closureRevision   TerraqoClosureRevision @relation(fields: [closureRevisionId], references: [id], onDelete: Cascade)
+  worklogRevisionId String
+  worklogRevision   TerraqoWorklogRevision @relation(fields: [worklogRevisionId], references: [id], onDelete: Restrict)
+  accessSnapshot    Json
+  createdAt         DateTime               @default(now())
+
+  @@unique([closureRevisionId, worklogRevisionId])
+  @@index([worklogRevisionId])
+  @@schema("icc")
+}
+
+model TerraqoCollaborationCertificate {
+  id                 String                      @id @default(cuid())
+  closureId          String                      @unique
+  closure            TerraqoCollaborationClosure @relation(fields: [closureId], references: [id], onDelete: Restrict)
+  closureRevisionId  String                      @unique
+  closureRevision    TerraqoClosureRevision      @relation(fields: [closureRevisionId], references: [id], onDelete: Restrict)
+  workspaceName      String
+  professionalName   String
+  roleTitle          String
+  scope              String
+  proposalRevisionNo Int
+  closureRevisionNo  Int
+  contribution       String
+  deliverables       String[]                    @default([])
+  result             String
+  authorizedExcerpt  String?
+  privateByDefault   Boolean                     @default(true)
+  issuedById         String
+  issuedBy           User                        @relation("TerraqoCollaborationCertificateIssuer", fields: [issuedById], references: [id], onDelete: Restrict)
+  issuedAt           DateTime                    @default(now())
+
+  @@index([issuedById, issuedAt])
   @@schema("icc")
 }
 
@@ -2667,7 +3136,7 @@ model TerraqoWorkspaceMember {
 }
 
 model TerraqoProfessionalProfile {
-  nativeWorklogOperations     TerraqoNativeWorklogOperation[]
+  nativeWorklogOperations    TerraqoNativeWorklogOperation[]
   id                         String                            @id @default(cuid())
   userId                     String                            @unique
   user                       User                              @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -2720,6 +3189,10 @@ model TerraqoProfessionalProfile {
   cvImports                  TerraqoCvImport[]
   publicationOperations      TerraqoCvPublicationOperation[]
   worklogs                   TerraqoWorklogEntry[]
+  workCases                  TerraqoWorkCase[]
+  shareCollections           TerraqoShareCollection[]
+  endorsementRequests        TerraqoEndorsementRequest[]
+  evaluationDossiers         TerraqoEvaluationDossier[]
   attendanceEvents           TerraqoAttendanceEvent[]
   createdAt                  DateTime                          @default(now())
   updatedAt                  DateTime                          @updatedAt
@@ -3018,16 +3491,16 @@ model TerraqoProfessionalEducation {
 // Restrict parent removal while private files, receipts or attempts exist.
 // Recovery must retain its owner/education lock even after a failed upload.
 model TerraqoEducationEvidence {
-  id           String                       @id @default(cuid())
+  id           String                             @id @default(cuid())
   educationId  String
-  education    TerraqoProfessionalEducation @relation(fields: [educationId], references: [id], onDelete: Restrict)
-  storageKey   String                       @unique
+  education    TerraqoProfessionalEducation       @relation(fields: [educationId], references: [id], onDelete: Restrict)
+  storageKey   String                             @unique
   fileName     String
   contentType  String
   size         Int
   uploadedById String
   operation    TerraqoEducationEvidenceOperation?
-  createdAt    DateTime                     @default(now())
+  createdAt    DateTime                           @default(now())
 
   @@index([educationId, createdAt])
   @@index([uploadedById])
@@ -3035,20 +3508,20 @@ model TerraqoEducationEvidence {
 }
 
 model TerraqoEducationEvidenceOperation {
-  id              String                       @id
+  id              String                               @id
   educationId     String
-  education       TerraqoProfessionalEducation @relation(fields: [educationId], references: [id], onDelete: Restrict)
+  education       TerraqoProfessionalEducation         @relation(fields: [educationId], references: [id], onDelete: Restrict)
   actorId         String
   operationKey    String
   fingerprint     String
-  evidenceId      String?                      @unique
-  evidence        TerraqoEducationEvidence?    @relation(fields: [evidenceId], references: [id], onDelete: SetNull)
+  evidenceId      String?                              @unique
+  evidence        TerraqoEducationEvidence?            @relation(fields: [evidenceId], references: [id], onDelete: SetNull)
   fileName        String
   contentType     String
   size            Int
   originalVersion DateTime
   resultVersion   DateTime
-  createdAt       DateTime                     @default(now())
+  createdAt       DateTime                             @default(now())
   withdrawals     TerraqoEducationEvidenceWithdrawal[]
 
   @@unique([educationId, operationKey])
@@ -3059,22 +3532,22 @@ model TerraqoEducationEvidenceOperation {
 // One immutable blob key per physical attempt, independently of the receipt.
 // Reservation and transition to RESERVED must commit in the same transaction.
 model TerraqoEducationEvidenceAttempt {
-  id            String                       @id @default(cuid())
-  educationId   String
-  education     TerraqoProfessionalEducation @relation(fields: [educationId], references: [id], onDelete: Restrict)
-  actorId       String
-  operationKey  String
-  fingerprint   String
+  id              String                              @id @default(cuid())
+  educationId     String
+  education       TerraqoProfessionalEducation        @relation(fields: [educationId], references: [id], onDelete: Restrict)
+  actorId         String
+  operationKey    String
+  fingerprint     String
   originalVersion DateTime
-  storageKey    String                       @unique
-  size          Int
-  reservedUnits Int                          @default(0)
-  state         String                       @default("PREPARED")
-  attempts      Int                          @default(0)
-  nextAttemptAt DateTime?
-  createdAt     DateTime                     @default(now())
-  updatedAt     DateTime                     @updatedAt
-  withdrawal    TerraqoEducationEvidenceWithdrawal?
+  storageKey      String                              @unique
+  size            Int
+  reservedUnits   Int                                 @default(0)
+  state           String                              @default("PREPARED")
+  attempts        Int                                 @default(0)
+  nextAttemptAt   DateTime?
+  createdAt       DateTime                            @default(now())
+  updatedAt       DateTime                            @updatedAt
+  withdrawal      TerraqoEducationEvidenceWithdrawal?
 
   @@index([educationId, createdAt])
   @@index([state, nextAttemptAt])
@@ -3084,20 +3557,20 @@ model TerraqoEducationEvidenceAttempt {
 // Independent withdrawal history. The deleted file ID is immutable data,
 // while RESTRICT links preserve the upload receipt and physical tombstone.
 model TerraqoEducationEvidenceWithdrawal {
-  id                String                       @id
+  id                String                            @id
   educationId       String
-  education         TerraqoProfessionalEducation @relation(fields: [educationId], references: [id], onDelete: Restrict)
+  education         TerraqoProfessionalEducation      @relation(fields: [educationId], references: [id], onDelete: Restrict)
   actorId           String
   operationKey      String
   fingerprint       String
   targetEvidenceId  String
   uploadOperationId String
   uploadOperation   TerraqoEducationEvidenceOperation @relation(fields: [uploadOperationId], references: [id], onDelete: Restrict)
-  attemptId         String                       @unique(map: "EducationWithdrawal_attempt_key")
-  attempt           TerraqoEducationEvidenceAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  attemptId         String                            @unique(map: "EducationWithdrawal_attempt_key")
+  attempt           TerraqoEducationEvidenceAttempt   @relation(fields: [attemptId], references: [id], onDelete: Restrict)
   originalVersion   DateTime
   resultVersion     DateTime
-  createdAt         DateTime                     @default(now())
+  createdAt         DateTime                          @default(now())
 
   @@unique([educationId, operationKey], map: "EducationWithdrawal_education_operation_key")
   @@index([educationId, createdAt], map: "EducationWithdrawal_education_created_idx")
@@ -3107,54 +3580,553 @@ model TerraqoEducationEvidenceWithdrawal {
 
 model TerraqoWorklogEntry {
   nativeCreationOperation TerraqoNativeWorklogOperation?
-  id                     String                     @id @default(cuid())
-  professionalProfileId  String
-  professionalProfile    TerraqoProfessionalProfile @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
-  authorId               String
-  author                 User                       @relation("TerraqoWorklogAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  workspaceId            String?
-  workspace              TerraqoWorkspace?          @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
-  projectId              String?
-  project                Project?                   @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  previousWorklogId      String?                    @unique
-  previousWorklog        TerraqoWorklogEntry?       @relation("TerraqoWorklogContinuity", fields: [previousWorklogId], references: [id], onDelete: SetNull)
-  nextWorklog            TerraqoWorklogEntry?       @relation("TerraqoWorklogContinuity")
-  title                  String
-  summary                String
-  outcome                String?
-  type                   TerraqoWorklogType         @default(FIELD_UPDATE)
-  evidenceStatus         TerraqoEvidenceStatus      @default(DECLARED)
-  qualityScore           Int                        @default(0)
-  trustScoreAwarded      Int                        @default(0)
-  tqPointsAwarded        Int                        @default(0)
-  contentFingerprint     String?
-  moderationStatus       String                     @default("DECLARED")
-  moderationNote         String?
-  visibility             TerraqoVisibility          @default(PRIVATE)
-  skills                 String[]                   @default([])
-  evidenceUrls           String[]                   @default([])
-  locationLabel          String?
-  latitude               Float?
-  longitude              Float?
-  locationAccuracyMeters Float?
-  locationCapturedAt     DateTime?
-  occurredAt             DateTime                   @default(now())
-  comments               TerraqoWorklogComment[]
-  reactions              TerraqoWorklogReaction[]
-  media                  TerraqoWorklogMedia[]
-  validations            TerraqoWorklogValidation[]
-  createdAt              DateTime                   @default(now())
-  updatedAt              DateTime                   @updatedAt
-  deletedAt              DateTime?
+  webCreationOperation    TerraqoWorklogCreateOperation?
+  id                      String                         @id @default(cuid())
+  professionalProfileId   String
+  professionalProfile     TerraqoProfessionalProfile     @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
+  authorId                String
+  author                  User                           @relation("TerraqoWorklogAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  workspaceId             String?
+  workspace               TerraqoWorkspace?              @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  projectId               String?
+  project                 Project?                       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  previousWorklogId       String?                        @unique
+  previousWorklog         TerraqoWorklogEntry?           @relation("TerraqoWorklogContinuity", fields: [previousWorklogId], references: [id], onDelete: SetNull)
+  nextWorklog             TerraqoWorklogEntry?           @relation("TerraqoWorklogContinuity")
+  title                   String
+  summary                 String
+  outcome                 String?
+  lifecycle               TerraqoWorklogLifecycle        @default(PUBLISHED)
+  version                 Int                            @default(1)
+  currentRevisionId       String?                        @unique
+  currentRevision         TerraqoWorklogRevision?        @relation("TerraqoWorklogCurrentRevision", fields: [currentRevisionId], references: [id], onDelete: SetNull)
+  revisions               TerraqoWorklogRevision[]       @relation("TerraqoWorklogRevisions")
+  workCaseLinks           TerraqoWorkCaseRecord[]
+  type                    TerraqoWorklogType             @default(FIELD_UPDATE)
+  evidenceStatus          TerraqoEvidenceStatus          @default(DECLARED)
+  qualityScore            Int                            @default(0)
+  trustScoreAwarded       Int                            @default(0)
+  tqPointsAwarded         Int                            @default(0)
+  contentFingerprint      String?
+  moderationStatus        String                         @default("DECLARED")
+  moderationNote          String?
+  visibility              TerraqoVisibility              @default(PRIVATE)
+  skills                  String[]                       @default([])
+  evidenceUrls            String[]                       @default([])
+  locationLabel           String?
+  latitude                Float?
+  longitude               Float?
+  locationAccuracyMeters  Float?
+  locationCapturedAt      DateTime?
+  occurredAt              DateTime                       @default(now())
+  comments                TerraqoWorklogComment[]
+  reactions               TerraqoWorklogReaction[]
+  media                   TerraqoWorklogMedia[]
+  validations             TerraqoWorklogValidation[]
+  createdAt               DateTime                       @default(now())
+  updatedAt               DateTime                       @updatedAt
+  deletedAt               DateTime?
+  searchVector            Unsupported("tsvector")?       @map("searchVector")
 
   @@index([professionalProfileId, occurredAt])
+  @@index([professionalProfileId, occurredAt(sort: Desc), id(sort: Desc)], map: "Worklog_profile_occurred_id_desc_idx")
   @@index([workspaceId, visibility, occurredAt])
   @@index([projectId])
   @@index([previousWorklogId])
   @@index([evidenceStatus])
+  @@index([professionalProfileId, lifecycle, updatedAt(sort: Desc)], map: "Worklog_profile_lifecycle_updated_idx")
   @@index([moderationStatus, createdAt])
   @@index([contentFingerprint])
   @@index([deletedAt])
+  @@schema("icc")
+}
+
+model TerraqoWorklogCreateOperation {
+  id           String              @id @default(cuid())
+  actorId      String
+  actor        User                @relation("TerraqoWorklogCreateOperationActor", fields: [actorId], references: [id], onDelete: Restrict)
+  operationKey String
+  fingerprint  String
+  worklogId    String              @unique
+  worklog      TerraqoWorklogEntry @relation(fields: [worklogId], references: [id], onDelete: Restrict)
+  createdAt    DateTime            @default(now())
+
+  @@unique([actorId, operationKey])
+  @@index([actorId, createdAt])
+  @@schema("icc")
+}
+
+model TerraqoWorklogRevision {
+  id                  String                       @id @default(cuid())
+  worklogId           String
+  worklog             TerraqoWorklogEntry          @relation("TerraqoWorklogRevisions", fields: [worklogId], references: [id], onDelete: Cascade)
+  currentFor          TerraqoWorklogEntry?         @relation("TerraqoWorklogCurrentRevision")
+  revisionNo          Int
+  title               String
+  summary             String
+  outcome             String?
+  contributionRole    String?
+  responsibilities    String[]                     @default([])
+  methods             String[]                     @default([])
+  tools               String[]                     @default([])
+  sourceMetadata      Json?
+  contentHash         String
+  createdById         String
+  createdBy           User                         @relation("TerraqoWorklogRevisionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt           DateTime                     @default(now())
+  shareItems          TerraqoShareCollectionItem[]
+  endorsementRequests TerraqoEndorsementRequest[]
+  evaluationSources   TerraqoEvaluationSource[]
+  analysisSources     TerraqoAnalysisJobSource[]
+  closureReferences   TerraqoClosureReference[]
+
+  @@unique([worklogId, revisionNo])
+  @@index([worklogId, createdAt])
+  @@index([createdById, createdAt])
+  @@schema("icc")
+}
+
+model TerraqoShareCollection {
+  id                    String                          @id @default(cuid())
+  professionalProfileId String
+  professionalProfile   TerraqoProfessionalProfile      @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
+  title                 String
+  description           String?
+  lifecycle             TerraqoShareCollectionLifecycle @default(DRAFT)
+  version               Int                             @default(1)
+  createdById           String
+  createdBy             User                            @relation("TerraqoShareCollectionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  operationKey          String
+  operationFingerprint  String
+  items                 TerraqoShareCollectionItem[]
+  grants                TerraqoAccessGrant[]
+  publicProjection      TerraqoPublicProjection?
+  createdAt             DateTime                        @default(now())
+  updatedAt             DateTime                        @updatedAt
+  archivedAt            DateTime?
+
+  @@unique([createdById, operationKey])
+  @@index([professionalProfileId, lifecycle, updatedAt])
+  @@schema("icc")
+}
+
+model TerraqoShareCollectionItem {
+  id            String                 @id @default(cuid())
+  collectionId  String
+  collection    TerraqoShareCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  revisionId    String
+  revision      TerraqoWorklogRevision @relation(fields: [revisionId], references: [id], onDelete: Restrict)
+  allowedFields String[]               @default([])
+  includeMedia  Boolean                @default(false)
+  mediaIds      String[]               @default([])
+  sortOrder     Int                    @default(0)
+  createdAt     DateTime               @default(now())
+
+  @@unique([collectionId, revisionId])
+  @@index([revisionId])
+  @@schema("icc")
+}
+
+model TerraqoAccessGrant {
+  id                   String                      @id @default(cuid())
+  collectionId         String
+  collection           TerraqoShareCollection      @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  subjectUserId        String?
+  subjectUser          User?                       @relation("TerraqoAccessGrantSubject", fields: [subjectUserId], references: [id], onDelete: SetNull)
+  inviteEmail          String?
+  tokenHash            String?                     @unique
+  scopes               String[]                    @default([])
+  lifecycle            TerraqoAccessGrantLifecycle @default(ACTIVE)
+  expiresAt            DateTime
+  revokedAt            DateTime?
+  revokedReason        String?
+  issuedById           String
+  issuedBy             User                        @relation("TerraqoAccessGrantIssuer", fields: [issuedById], references: [id], onDelete: Restrict)
+  operationKey         String
+  operationFingerprint String
+  createdAt            DateTime                    @default(now())
+  updatedAt            DateTime                    @updatedAt
+
+  @@unique([issuedById, operationKey])
+  @@index([collectionId, lifecycle, expiresAt])
+  @@index([subjectUserId, lifecycle, expiresAt])
+  @@index([inviteEmail, lifecycle, expiresAt])
+  @@schema("icc")
+}
+
+model TerraqoPublicProjection {
+  id            String                 @id @default(cuid())
+  collectionId  String                 @unique
+  collection    TerraqoShareCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  slug          String                 @unique
+  policyVersion String
+  publishedAt   DateTime               @default(now())
+  revokedAt     DateTime?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  @@index([revokedAt, publishedAt])
+  @@schema("icc")
+}
+
+model TerraqoEndorsementRequest {
+  id                    String                       @id @default(cuid())
+  revisionId            String
+  revision              TerraqoWorklogRevision       @relation(fields: [revisionId], references: [id], onDelete: Restrict)
+  professionalProfileId String
+  professionalProfile   TerraqoProfessionalProfile   @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
+  requesterId           String
+  requester             User                         @relation("TerraqoEndorsementRequester", fields: [requesterId], references: [id], onDelete: Restrict)
+  reviewerUserId        String?
+  reviewerUser          User?                        @relation("TerraqoEndorsementReviewer", fields: [reviewerUserId], references: [id], onDelete: SetNull)
+  reviewerEmail         String?
+  organizationId        String?
+  organization          TerraqoWorkspace?            @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  relationshipLabel     String
+  requestedScope        String[]                     @default([])
+  revisionHash          String
+  status                TerraqoEndorsementStatus     @default(DRAFT)
+  version               Int                          @default(1)
+  operationKey          String
+  operationFingerprint  String
+  expiresAt             DateTime
+  sentAt                DateTime?
+  cancelledAt           DateTime?
+  revokedAt             DateTime?
+  decisions             TerraqoEndorsementDecision[]
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+
+  @@unique([requesterId, operationKey])
+  @@index([reviewerUserId, status, createdAt])
+  @@index([reviewerEmail, status, createdAt])
+  @@index([revisionId, status])
+  @@index([organizationId, status, createdAt])
+  @@schema("icc")
+}
+
+model TerraqoEndorsementDecision {
+  id                   String                    @id @default(cuid())
+  requestId            String
+  request              TerraqoEndorsementRequest @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  reviewerId           String
+  reviewer             User                      @relation("TerraqoEndorsementDecisionReviewer", fields: [reviewerId], references: [id], onDelete: Restrict)
+  responses            Json
+  summaryComment       String?
+  revisionHash         String
+  authoritySnapshot    Json?
+  operationKey         String
+  operationFingerprint String
+  decidedAt            DateTime                  @default(now())
+
+  @@unique([requestId, operationKey])
+  @@index([requestId, decidedAt])
+  @@index([reviewerId, decidedAt])
+  @@schema("icc")
+}
+
+model TerraqoWorkNeed {
+  id                   String                    @id @default(cuid())
+  workspaceId          String
+  workspace            TerraqoWorkspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lifecycle            TerraqoWorkNeedLifecycle  @default(DRAFT)
+  version              Int                       @default(1)
+  currentRevisionId    String?                   @unique
+  currentRevision      TerraqoWorkNeedRevision?  @relation("TerraqoWorkNeedCurrentRevision", fields: [currentRevisionId], references: [id], onDelete: SetNull)
+  revisions            TerraqoWorkNeedRevision[] @relation("TerraqoWorkNeedRevisions")
+  createdById          String
+  createdBy            User                      @relation("TerraqoWorkNeedCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  operationKey         String
+  operationFingerprint String
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+  archivedAt           DateTime?
+
+  @@unique([createdById, operationKey])
+  @@index([workspaceId, lifecycle, updatedAt])
+  @@schema("icc")
+}
+
+model TerraqoWorkNeedRevision {
+  id                   String                     @id @default(cuid())
+  needId               String
+  need                 TerraqoWorkNeed            @relation("TerraqoWorkNeedRevisions", fields: [needId], references: [id], onDelete: Cascade)
+  currentFor           TerraqoWorkNeed?           @relation("TerraqoWorkNeedCurrentRevision")
+  revisionNo           Int
+  title                String
+  problem              String
+  activities           String[]                   @default([])
+  context              String?
+  locationLabel        String?
+  availableFrom        DateTime?
+  availableUntil       DateTime?
+  requiredTools        String[]                   @default([])
+  endorsementNeeded    Boolean                    @default(false)
+  contentHash          String
+  createdById          String
+  createdBy            User                       @relation("TerraqoWorkNeedRevisionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  operationKey         String
+  operationFingerprint String
+  requirements         TerraqoNeedRequirement[]
+  dossiers             TerraqoEvaluationDossier[]
+  createdAt            DateTime                   @default(now())
+
+  @@unique([needId, revisionNo])
+  @@unique([createdById, operationKey])
+  @@index([needId, createdAt])
+  @@schema("icc")
+}
+
+model TerraqoNeedRequirement {
+  id          String                         @id @default(cuid())
+  revisionId  String
+  revision    TerraqoWorkNeedRevision        @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  label       String
+  priority    TerraqoNeedRequirementPriority
+  sortOrder   Int                            @default(0)
+  createdAt   DateTime                       @default(now())
+  assessments TerraqoEvaluationAssessment[]
+
+  @@index([revisionId, priority, sortOrder])
+  @@schema("icc")
+}
+
+model TerraqoEvaluationDossier {
+  id                    String                            @id @default(cuid())
+  workspaceId           String
+  workspace             TerraqoWorkspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  needRevisionId        String
+  needRevision          TerraqoWorkNeedRevision           @relation(fields: [needRevisionId], references: [id], onDelete: Restrict)
+  professionalProfileId String
+  professionalProfile   TerraqoProfessionalProfile        @relation(fields: [professionalProfileId], references: [id], onDelete: Restrict)
+  lifecycle             TerraqoEvaluationDossierLifecycle @default(DRAFT)
+  privateSummary        String?
+  analysisStatus        TerraqoEvaluationAnalysisStatus   @default(NOT_REQUESTED)
+  analysisFailureCode   String?
+  analysisUpdatedAt     DateTime?
+  version               Int                               @default(1)
+  createdById           String
+  createdBy             User                              @relation("TerraqoEvaluationDossierCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  operationKey          String
+  operationFingerprint  String
+  sources               TerraqoEvaluationSource[]
+  assessments           TerraqoEvaluationAssessment[]
+  notes                 TerraqoEvaluationNote[]
+  questions             TerraqoEvaluationQuestion[]
+  conversationRequests  TerraqoConversationRequest[]
+  analysisJobs          TerraqoAnalysisJob[]
+  createdAt             DateTime                          @default(now())
+  updatedAt             DateTime                          @updatedAt
+  archivedAt            DateTime?
+
+  @@unique([workspaceId, needRevisionId, professionalProfileId])
+  @@unique([createdById, operationKey])
+  @@index([workspaceId, lifecycle, updatedAt])
+  @@schema("icc")
+}
+
+model TerraqoEvaluationSource {
+  id                String                              @id @default(cuid())
+  dossierId         String
+  dossier           TerraqoEvaluationDossier            @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+  worklogRevisionId String
+  worklogRevision   TerraqoWorklogRevision              @relation(fields: [worklogRevisionId], references: [id], onDelete: Restrict)
+  accessKind        TerraqoEvaluationSourceAccessKind
+  accessReferenceId String?
+  accessSnapshot    Json
+  addedById         String
+  addedBy           User                                @relation("TerraqoEvaluationSourceCreator", fields: [addedById], references: [id], onDelete: Restrict)
+  createdAt         DateTime                            @default(now())
+  assessmentLinks   TerraqoEvaluationAssessmentSource[]
+  analysisSources   TerraqoAnalysisJobSource[]
+
+  @@unique([dossierId, worklogRevisionId])
+  @@index([worklogRevisionId, accessKind])
+  @@schema("icc")
+}
+
+model TerraqoAnalysisJob {
+  id                   String                     @id @default(cuid())
+  workspaceId          String
+  workspace            TerraqoWorkspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  dossierId            String
+  dossier              TerraqoEvaluationDossier   @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+  purpose              String
+  status               TerraqoAnalysisJobStatus   @default(QUEUED)
+  policyVersion        String
+  promptVersion        String
+  provider             String?
+  model                String?
+  sourceSetHash        String
+  cacheKey             String
+  claims               Json?
+  missing              Json?
+  attemptCount         Int                        @default(0)
+  maxAttempts          Int                        @default(2)
+  inputTokens          Int?
+  outputTokens         Int?
+  estimatedCostMicros  BigInt?
+  latencyMs            Int?
+  failureCode          String?
+  nextAttemptAt        DateTime?
+  cancelRequestedAt    DateTime?
+  startedAt            DateTime?
+  completedAt          DateTime?
+  createdById          String
+  createdBy            User                       @relation("TerraqoAnalysisJobCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  operationKey         String
+  operationFingerprint String
+  sources              TerraqoAnalysisJobSource[]
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+
+  @@unique([createdById, operationKey])
+  @@index([workspaceId, status, createdAt])
+  @@index([createdById, cacheKey, status, createdAt])
+  @@index([status, nextAttemptAt])
+  @@schema("icc")
+}
+
+model TerraqoAnalysisJobSource {
+  id                 String                            @id @default(cuid())
+  jobId              String
+  job                TerraqoAnalysisJob                @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  evaluationSourceId String
+  evaluationSource   TerraqoEvaluationSource           @relation(fields: [evaluationSourceId], references: [id], onDelete: Restrict)
+  worklogRevisionId  String
+  worklogRevision    TerraqoWorklogRevision            @relation(fields: [worklogRevisionId], references: [id], onDelete: Restrict)
+  contentHash        String
+  accessKind         TerraqoEvaluationSourceAccessKind
+  accessReferenceId  String?
+  createdAt          DateTime                          @default(now())
+
+  @@unique([jobId, evaluationSourceId])
+  @@index([evaluationSourceId])
+  @@index([worklogRevisionId])
+  @@schema("icc")
+}
+
+model TerraqoEvaluationAssessment {
+  id                   String                              @id @default(cuid())
+  dossierId            String
+  dossier              TerraqoEvaluationDossier            @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+  requirementId        String?
+  requirement          TerraqoNeedRequirement?             @relation(fields: [requirementId], references: [id], onDelete: SetNull)
+  criterionKey         String
+  criterionLabel       String
+  claimState           TerraqoEvaluationClaimState
+  rationale            String?
+  revisionNo           Int
+  current              Boolean                             @default(true)
+  supersedesId         String?                             @unique
+  supersedes           TerraqoEvaluationAssessment?        @relation("TerraqoEvaluationAssessmentHistory", fields: [supersedesId], references: [id], onDelete: SetNull)
+  supersededBy         TerraqoEvaluationAssessment?        @relation("TerraqoEvaluationAssessmentHistory")
+  createdById          String
+  createdBy            User                                @relation("TerraqoEvaluationAssessmentCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  operationKey         String
+  operationFingerprint String
+  sourceLinks          TerraqoEvaluationAssessmentSource[]
+  createdAt            DateTime                            @default(now())
+
+  @@unique([dossierId, criterionKey, revisionNo])
+  @@unique([createdById, operationKey])
+  @@index([dossierId, current, createdAt])
+  @@index([requirementId])
+  @@schema("icc")
+}
+
+model TerraqoEvaluationAssessmentSource {
+  id           String                      @id @default(cuid())
+  assessmentId String
+  assessment   TerraqoEvaluationAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  sourceId     String
+  source       TerraqoEvaluationSource     @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  createdAt    DateTime                    @default(now())
+
+  @@unique([assessmentId, sourceId])
+  @@index([sourceId])
+  @@schema("icc")
+}
+
+model TerraqoEvaluationNote {
+  id                   String                   @id @default(cuid())
+  dossierId            String
+  dossier              TerraqoEvaluationDossier @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+  body                 String
+  createdById          String
+  createdBy            User                     @relation("TerraqoEvaluationNoteCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  operationKey         String
+  operationFingerprint String
+  createdAt            DateTime                 @default(now())
+
+  @@unique([createdById, operationKey])
+  @@index([dossierId, createdAt])
+  @@schema("icc")
+}
+
+model TerraqoEvaluationQuestion {
+  id                   String                             @id @default(cuid())
+  dossierId            String
+  dossier              TerraqoEvaluationDossier           @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+  text                 String
+  lifecycle            TerraqoEvaluationQuestionLifecycle @default(DRAFT)
+  revisionNo           Int                                @default(1)
+  current              Boolean                            @default(true)
+  supersedesId         String?                            @unique
+  supersedes           TerraqoEvaluationQuestion?         @relation("TerraqoEvaluationQuestionHistory", fields: [supersedesId], references: [id], onDelete: SetNull)
+  supersededBy         TerraqoEvaluationQuestion?         @relation("TerraqoEvaluationQuestionHistory")
+  createdById          String
+  createdBy            User                               @relation("TerraqoEvaluationQuestionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  operationKey         String
+  operationFingerprint String
+  createdAt            DateTime                           @default(now())
+
+  @@unique([createdById, operationKey])
+  @@index([dossierId, current, createdAt])
+  @@schema("icc")
+}
+
+model TerraqoWorkCase {
+  id                    String                     @id @default(cuid())
+  professionalProfileId String
+  professionalProfile   TerraqoProfessionalProfile @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
+  workspaceId           String?
+  workspace             TerraqoWorkspace?          @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  projectId             String?
+  project               Project?                   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  title                 String
+  description           String?
+  lifecycle             TerraqoWorkCaseLifecycle   @default(DRAFT)
+  version               Int                        @default(1)
+  createdById           String
+  createdBy             User                       @relation("TerraqoWorkCaseCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  records               TerraqoWorkCaseRecord[]
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+  archivedAt            DateTime?
+
+  @@index([professionalProfileId, lifecycle, updatedAt])
+  @@index([workspaceId, lifecycle, updatedAt])
+  @@index([projectId])
+  @@schema("icc")
+}
+
+model TerraqoWorkCaseRecord {
+  id                 String                            @id @default(cuid())
+  workCaseId         String
+  workCase           TerraqoWorkCase                   @relation(fields: [workCaseId], references: [id], onDelete: Cascade)
+  worklogId          String                            @unique
+  worklog            TerraqoWorklogEntry               @relation(fields: [worklogId], references: [id], onDelete: Cascade)
+  phase              TerraqoWorkCasePhase?
+  relationshipStatus TerraqoWorkCaseRelationshipStatus @default(SUGGESTED)
+  confirmedById      String?
+  confirmedBy        User?                             @relation("TerraqoWorkCaseRecordConfirmer", fields: [confirmedById], references: [id], onDelete: SetNull)
+  confirmedAt        DateTime?
+  createdAt          DateTime                          @default(now())
+  updatedAt          DateTime                          @updatedAt
+
+  @@index([workCaseId, relationshipStatus, createdAt])
+  @@index([confirmedById])
   @@schema("icc")
 }
 
@@ -3596,22 +4568,22 @@ model TerraqoForumReply {
 }
 
 model TerraqoNativeWorklogOperation {
-  id                     String                          @id
+  id                     String                              @id
   actorId                String
-  actor                  User                            @relation("NativeWorklogOperationActor", fields: [actorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  actor                  User                                @relation("NativeWorklogOperationActor", fields: [actorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   workspaceId            String
-  workspace              TerraqoWorkspace                @relation(fields: [workspaceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  workspace              TerraqoWorkspace                    @relation(fields: [workspaceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   professionalProfileId  String
-  professionalProfile    TerraqoProfessionalProfile      @relation(fields: [professionalProfileId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  professionalProfile    TerraqoProfessionalProfile          @relation(fields: [professionalProfileId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   operationKey           String
   fingerprint            String
-  targetWorklogId        String                          @unique(map: "NativeWorklogOperation_target_key")
-  worklogId              String?                         @unique(map: "NativeWorklogOperation_worklog_key")
-  worklog                TerraqoWorklogEntry?            @relation(fields: [worklogId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  targetWorklogId        String                              @unique(map: "NativeWorklogOperation_target_key")
+  worklogId              String?                             @unique(map: "NativeWorklogOperation_worklog_key")
+  worklog                TerraqoWorklogEntry?                @relation(fields: [worklogId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   originalProjectId      String?
-  originalProjectVersion DateTime?                       @db.Timestamp(3)
-  resultVersion          DateTime                        @db.Timestamp(3)
-  createdAt              DateTime                        @default(now()) @db.Timestamp(3)
+  originalProjectVersion DateTime?                           @db.Timestamp(3)
+  resultVersion          DateTime                            @db.Timestamp(3)
+  createdAt              DateTime                            @default(now()) @db.Timestamp(3)
   accounting             TerraqoNativeWorklogAccounting?
   // Composite relation is a Prisma collection; Decision.operationId PK permits at most one row.
   decisions              TerraqoNativeWorklogDecision[]
@@ -3641,16 +4613,16 @@ model TerraqoNativeWorklogAccounting {
 }
 
 model TerraqoNativeWorklogDecision {
-  operationId         String                       @id
+  operationId         String                        @id
   policyVersion       String
   fingerprint         String
-  createdAt           DateTime                     @db.Timestamp(3)
+  createdAt           DateTime                      @db.Timestamp(3)
   operation           TerraqoNativeWorklogOperation @relation(fields: [operationId, createdAt, fingerprint], references: [id, createdAt, fingerprint], onDelete: Restrict, onUpdate: Restrict, map: "NativeWorklogDecision_receipt_fk")
-  dayStart            DateTime                     @db.Timestamp(3)
-  dayEndExclusive     DateTime                     @db.Timestamp(3)
-  trustStartInclusive DateTime                     @db.Timestamp(3)
-  trustEndInclusive   DateTime                     @db.Timestamp(3)
-  availableAt         DateTime                     @db.Timestamp(3)
+  dayStart            DateTime                      @db.Timestamp(3)
+  dayEndExclusive     DateTime                      @db.Timestamp(3)
+  trustStartInclusive DateTime                      @db.Timestamp(3)
+  trustEndInclusive   DateTime                      @db.Timestamp(3)
+  availableAt         DateTime                      @db.Timestamp(3)
   priorDuplicates     Int
   rewardedInDay       Int
   trustedInWindow     Int
@@ -3667,18 +4639,18 @@ model TerraqoNativeWorklogDecision {
 }
 
 model TerraqoNativeWorklogAuthority {
-  operationId           String                       @id
+  operationId           String                        @id
   actorId               String
   workspaceId           String
   professionalProfileId String
-  createdAt             DateTime                     @db.Timestamp(3)
+  createdAt             DateTime                      @db.Timestamp(3)
   fingerprint           String
   policyVersion         String
   grantHash             String
-  tokenIssuedAt         DateTime                     @db.Timestamp(3)
-  tokenExpiresAt        DateTime                     @db.Timestamp(3)
-  grantExpiresAt        DateTime                     @db.Timestamp(3)
-  paidThrough           DateTime?                    @db.Timestamp(3)
+  tokenIssuedAt         DateTime                      @db.Timestamp(3)
+  tokenExpiresAt        DateTime                      @db.Timestamp(3)
+  grantExpiresAt        DateTime                      @db.Timestamp(3)
+  paidThrough           DateTime?                     @db.Timestamp(3)
   role                  String
   modules               String[]
   operation             TerraqoNativeWorklogOperation @relation(fields: [operationId, actorId, workspaceId, professionalProfileId, createdAt, fingerprint], references: [id, actorId, workspaceId, professionalProfileId, createdAt, fingerprint], onDelete: Restrict, onUpdate: Restrict, map: "NativeWorklogAuthority_receipt_fk")
@@ -3687,19 +4659,19 @@ model TerraqoNativeWorklogAuthority {
 }
 
 model TerraqoNativeWorklogFirstDecision {
-  operationId           String @id
+  operationId           String                        @id
   actorId               String
   workspaceId           String
   professionalProfileId String
-  createdAt             DateTime @db.Timestamp(3)
+  createdAt             DateTime                      @db.Timestamp(3)
   fingerprint           String
   policyVersion         String
   disposition           String
   contributionId        String?
   priorReceipts         Int
   priorEntries          Int
-  operation TerraqoNativeWorklogOperation @relation(fields: [operationId, actorId, workspaceId, professionalProfileId, createdAt, fingerprint], references: [id, actorId, workspaceId, professionalProfileId, createdAt, fingerprint], onDelete: Restrict, onUpdate: Restrict, map: "NativeWorklogFirstDecision_receipt_fk")
-  contribution TerraqoBuilderContribution? @relation(fields: [contributionId, actorId], references: [id, userId], onDelete: Restrict, onUpdate: Restrict, map: "NativeWorklogFirstDecision_contribution_fk")
+  operation             TerraqoNativeWorklogOperation @relation(fields: [operationId, actorId, workspaceId, professionalProfileId, createdAt, fingerprint], references: [id, actorId, workspaceId, professionalProfileId, createdAt, fingerprint], onDelete: Restrict, onUpdate: Restrict, map: "NativeWorklogFirstDecision_receipt_fk")
+  contribution          TerraqoBuilderContribution?   @relation(fields: [contributionId, actorId], references: [id, userId], onDelete: Restrict, onUpdate: Restrict, map: "NativeWorklogFirstDecision_contribution_fk")
 
   @@schema("icc")
 }

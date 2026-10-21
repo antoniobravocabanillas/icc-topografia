@@ -221,6 +221,7 @@ export function ProfessionalDocumentUploader({ identityStatus, identityNote, doc
             <div className="flex items-center justify-between gap-4 border-b px-5 py-4"><div className="min-w-0"><p className="text-xs font-bold uppercase text-primary">{labels[preview.type]}</p><p className="truncate font-semibold">{preview.fileName}</p></div><button type="button" onClick={() => setPreview(null)} className="grid h-10 w-10 shrink-0 place-items-center rounded-md border" aria-label="Cerrar vista previa"><X className="h-5 w-5" /></button></div>
             <div className="min-h-0 flex-1 bg-slate-100 p-3">
               {preview.contentType.startsWith("image/") ? (
+                // eslint-disable-next-line @next/next/no-img-element -- Protected document previews must be requested directly with the active browser session.
                 <img
                   src={`/api/terraqo/professional-documents/${preview.id}?inline=1`}
                   alt={preview.fileName}

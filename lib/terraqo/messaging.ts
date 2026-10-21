@@ -1,3 +1,5 @@
+import { createHash, randomUUID } from "node:crypto";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { areFriends, friendshipList } from "@/lib/terraqo/friendships";
 
@@ -52,7 +54,58 @@ const conversationInclude = {
   },
   project: { select: { id: true, title: true } },
   workspace: { select: { id: true, name: true, slug: true } },
+  contexts: {
+    orderBy: { createdAt: "asc" as const },
+    select: { id: true, kind: true, referenceId: true, labelSnapshot: true, createdAt: true },
+  },
 };
+
+export function messageOperationFingerprint(
+  conversationId: string,
+  body: string,
+) {
+  return createHash("sha256")
+    .update(JSON.stringify({ conversationId, body: body.trim() }))
+    .digest("hex");
+}
+
+export function projectConversationContext<
+  T extends {
+    id: string;
+    kind: string;
+    referenceId: string;
+    labelSnapshot: string | null;
+    createdAt: Date;
+  },
+>(context: T, canViewProtectedContext: boolean) {
+  if (canViewProtectedContext)
+    return {
+      ...context,
+      labelSnapshot: context.labelSnapshot || "Contexto profesional",
+      protected: false as const,
+    };
+  return {
+    id: context.id,
+    kind: context.kind,
+    referenceId: null,
+    labelSnapshot: "Contexto profesional protegido",
+    createdAt: context.createdAt,
+    protected: true as const,
+  };
+}
+
+export function conversationWorkspaceScope(
+  allowedWorkspaceIds: Iterable<string>,
+  selectedWorkspaceId?: string,
+) {
+  if (selectedWorkspaceId) return { workspaceId: selectedWorkspaceId };
+  return {
+    OR: [
+      { workspaceId: null },
+      { workspaceId: { in: [...allowedWorkspaceIds] } },
+    ],
+  };
+}
 
 export async function getMessagingWorkspaces(userId: string) {
   const user = await prisma.user.findUnique({
@@ -95,14 +148,7 @@ export async function getConversationHub(
         where: {
           ...participantWhere,
           archivedAt: null,
-          ...(workspaceId
-            ? { workspaceId }
-            : {
-                OR: [
-                  { workspaceId: null },
-                  { workspaceId: { in: [...allowedWorkspaceIds] } },
-                ],
-              }),
+          ...conversationWorkspaceScope(allowedWorkspaceIds, workspaceId),
         },
         include: conversationInclude,
         orderBy: [{ lastMessageAt: "desc" }, { updatedAt: "desc" }],
@@ -186,9 +232,18 @@ export async function getConversationHub(
     new Map([...workspaceRecipients, ...friendRecipients]).values(),
   );
 
+  const safeConversations = conversations.map((conversation) => ({
+    ...conversation,
+    contexts: conversation.contexts.map((context) =>
+      projectConversationContext(
+        context,
+        allowedWorkspaceIds.has(conversation.workspaceId || ""),
+      ),
+    ),
+  }));
   const selected =
-    conversations.find((conversation) => conversation.id === selectedId) ||
-    conversations[0] ||
+    safeConversations.find((conversation) => conversation.id === selectedId) ||
+    safeConversations[0] ||
     null;
   if (selected && markSelectedRead) {
     await prisma.terraqoConversationParticipant.updateMany({
@@ -198,7 +253,7 @@ export async function getConversationHub(
   }
 
   return {
-    conversations,
+    conversations: safeConversations,
     selected,
     recipients,
     workspaces,
@@ -335,12 +390,20 @@ export async function sendMessage(input: {
   userId: string;
   conversationId: string;
   body: string;
+  operationKey?: string;
 }) {
   const body = input.body.trim();
   if (!body || body.length > 4000)
     throw new TerraqoMessagingError(
       "El mensaje debe tener entre 1 y 4000 caracteres.",
     );
+  const operationKey = input.operationKey || randomUUID();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(operationKey))
+    throw new TerraqoMessagingError("La solicitud no incluye una clave de reintento válida.", 400);
+  const operationFingerprint = messageOperationFingerprint(
+    input.conversationId,
+    body,
+  );
 
   const participant = await prisma.terraqoConversationParticipant.findFirst({
     where: {
@@ -379,24 +442,78 @@ export async function sendMessage(input: {
       403,
     );
 
-  return prisma.$transaction(async (tx) => {
-    const message = await tx.terraqoDirectMessage.create({
-      data: {
-        conversationId: input.conversationId,
-        senderId: input.userId,
-        body,
-      },
+  const readReplay = async () => {
+    const replay = await prisma.terraqoMessageOperation.findUnique({
+      where: { actorId_operationKey: { actorId: input.userId, operationKey } },
+      include: { message: true },
     });
-    await tx.terraqoConversation.update({
-      where: { id: input.conversationId },
-      data: { lastMessageAt: message.createdAt },
-    });
-    await tx.terraqoConversationParticipant.update({
-      where: { id: participant.id },
-      data: { lastReadAt: message.createdAt },
-    });
-    return message;
-  });
+    if (!replay) return null;
+    if (
+      replay.fingerprint !== operationFingerprint ||
+      replay.message.conversationId !== input.conversationId
+    )
+      throw new TerraqoMessagingError(
+        "La clave de reintento ya fue usada con otro mensaje.",
+        409,
+      );
+    return replay.message;
+  };
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const replay = await tx.terraqoMessageOperation.findUnique({
+        where: { actorId_operationKey: { actorId: input.userId, operationKey } },
+        include: { message: true },
+      });
+      if (replay) {
+        if (
+          replay.fingerprint !== operationFingerprint ||
+          replay.message.conversationId !== input.conversationId
+        )
+          throw new TerraqoMessagingError(
+            "La clave de reintento ya fue usada con otro mensaje.",
+            409,
+          );
+        return replay.message;
+      }
+      await tx.$queryRaw(
+        Prisma.sql`SELECT id FROM icc."TerraqoConversation" WHERE id=${input.conversationId} FOR UPDATE`,
+      );
+      const message = await tx.terraqoDirectMessage.create({
+        data: {
+          conversationId: input.conversationId,
+          senderId: input.userId,
+          body,
+        },
+      });
+      await tx.terraqoMessageOperation.create({
+        data: {
+          actorId: input.userId,
+          operationKey,
+          fingerprint: operationFingerprint,
+          messageId: message.id,
+        },
+      });
+      await tx.terraqoConversation.update({
+        where: { id: input.conversationId },
+        data: { lastMessageAt: message.createdAt },
+      });
+      await tx.terraqoConversationParticipant.update({
+        where: { id: participant.id },
+        data: { lastReadAt: message.createdAt },
+      });
+      return message;
+    }, { isolationLevel: "Serializable" });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      (error.code === "P2002" || error.code === "P2034")
+    ) {
+      const replay = await readReplay();
+      if (replay) return replay;
+    }
+    throw error;
+  }
 }
 
 export type ConversationHubData = Awaited<

@@ -3,10 +3,11 @@
 import { startAuthentication } from "@simplewebauthn/browser";
 import { ArrowRight, BriefcaseBusiness, Clock3, LocateFixed, LogOut, MapPin, Navigation, WifiOff, X } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useAttendanceLocationTracker } from "@/components/portal/use-attendance-location-tracker";
+import { fieldVerificationRetryDelay, isRetryableFieldVerificationStatus } from "@/lib/client/field-verification-recovery";
 import {
   formatElapsed,
   formatTime,
@@ -28,29 +29,56 @@ function currentPosition() {
   });
 }
 
-export function AttendanceStatusControl({ endpoint }: { endpoint: string }) {
+export function AttendanceStatusControl({ endpoint, userId }: { endpoint: string; userId: string }) {
   const [status, setStatus] = useState<VerificationStatus | null>(null);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [now, setNow] = useState(() => Date.now());
+  const retryTimerRef = useRef<number | null>(null);
+  const consecutiveFailuresRef = useRef(0);
 
   const load = useCallback(async () => {
+    if (retryTimerRef.current !== null) {
+      window.clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
     try {
       const next = await requestFieldVerification<VerificationStatus>(endpoint, {
         action: "status",
       });
       setStatus(next);
-    } catch {
-      setStatus(null);
+      consecutiveFailuresRef.current = 0;
+    } catch (error) {
+      const statusCode = error && typeof error === "object" && "status" in error ? Number(error.status) : 0;
+      if (!isRetryableFieldVerificationStatus(statusCode)) {
+        setStatus(null);
+        return;
+      }
+      const delay = fieldVerificationRetryDelay(consecutiveFailuresRef.current);
+      consecutiveFailuresRef.current += 1;
+      retryTimerRef.current = window.setTimeout(() => {
+        retryTimerRef.current = null;
+        void load();
+      }, delay);
     }
   }, [endpoint]);
 
   useEffect(() => {
     void load();
     const reload = () => void load();
+    const visible = () => {
+      if (document.visibilityState === "visible") void load();
+    };
     window.addEventListener("terraqo:attendance-updated", reload);
-    return () => window.removeEventListener("terraqo:attendance-updated", reload);
+    window.addEventListener("online", reload);
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      window.removeEventListener("terraqo:attendance-updated", reload);
+      window.removeEventListener("online", reload);
+      document.removeEventListener("visibilitychange", visible);
+      if (retryTimerRef.current !== null) window.clearTimeout(retryTimerRef.current);
+    };
   }, [load]);
 
   useEffect(() => {
@@ -69,7 +97,7 @@ export function AttendanceStatusControl({ endpoint }: { endpoint: string }) {
   }, [status?.latestAttendance?.id, status?.latestAttendance?.type]);
 
   const active = status?.latestAttendance?.type === "CHECK_IN" ? status.latestAttendance : null;
-  const tracker = useAttendanceLocationTracker({ endpoint, attendanceId: active?.id || null });
+  const tracker = useAttendanceLocationTracker({ endpoint, attendanceId: active?.id || null, userId });
   const project = useMemo(
     () => status?.projects.find((item) => item.id === active?.projectId),
     [active?.projectId, status?.projects],
@@ -193,18 +221,22 @@ export function AttendanceStatusControl({ endpoint }: { endpoint: string }) {
               <div className="rounded-xl border border-[#dce5ed] p-3"><dt className="text-xs text-[#748596]">Ubicación</dt><dd className="mt-1 flex items-center gap-1.5 font-bold text-[#0e1a26]"><MapPin className="h-4 w-4 text-[#1768b0]" />{active.context === "PERSONAL_FIELD" ? "Capturada en cada marca" : project?.location || "Proyecto verificado"}</dd></div>
             </dl>
 
-            <div className={`mt-4 rounded-xl border px-3 py-3 ${tracker.state === "offline" ? "border-[#efd39e] bg-[#fff8ea]" : tracker.state === "blocked" || tracker.state === "error" ? "border-[#efc4c4] bg-[#fff4f4]" : "border-[#bde4d8] bg-[#effaf7]"}`}>
+            <div className={`mt-4 rounded-xl border px-3 py-3 ${tracker.state === "offline" || tracker.state === "standby" || tracker.state === "remote" ? "border-[#efd39e] bg-[#fff8ea]" : tracker.state === "blocked" || tracker.state === "error" ? "border-[#efc4c4] bg-[#fff4f4]" : "border-[#bde4d8] bg-[#effaf7]"}`}>
               <div className="flex items-start gap-2.5">
                 {tracker.state === "offline" ? <WifiOff className="mt-0.5 h-4 w-4 shrink-0 text-[#a8670d]" aria-hidden="true" /> : <Navigation className="mt-0.5 h-4 w-4 shrink-0 text-[#087b70]" aria-hidden="true" />}
                 <div>
                   <p className="text-sm font-bold text-[#0e1a26]">
-                    {tracker.state === "blocked" ? "Ubicación desactivada" : tracker.state === "error" ? "Seguimiento interrumpido" : tracker.state === "offline" ? "Recorrido guardándose sin conexión" : "Seguimiento de jornada activo"}
+                    {tracker.state === "blocked" ? "Ubicación desactivada" : tracker.state === "error" ? "Seguimiento interrumpido" : tracker.state === "remote" ? "Recorrido vinculado a otro navegador" : tracker.state === "standby" ? "Seguimiento activo en otra pestaña" : tracker.state === "offline" ? "Recorrido guardándose sin conexión" : "Seguimiento de jornada activo"}
                   </p>
                   <p className="mt-1 text-xs leading-5 text-[#607083]">
                     {tracker.state === "blocked"
                       ? "Activa el permiso de ubicación para registrar el recorrido laboral."
                       : tracker.state === "error"
                         ? "Mantén esta pantalla abierta y revisa el permiso de ubicación del navegador."
+                        : tracker.state === "remote"
+                          ? "El navegador que marcó la entrada conserva el recorrido. Aquí todavía puedes marcar la salida cuando corresponda."
+                        : tracker.state === "standby"
+                          ? "Esta vista tomará el seguimiento automáticamente si la otra pestaña se cierra o deja de responder."
                         : tracker.state === "offline"
                           ? `${tracker.pendingCount} punto(s) pendientes. Se sincronizarán automáticamente al recuperar internet.`
                           : `Captura privada durante la jornada · ${tracker.syncedCount} punto(s) sincronizados${tracker.pendingCount ? ` · ${tracker.pendingCount} pendientes` : ""}.`}

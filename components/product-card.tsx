@@ -55,6 +55,7 @@ export function ProductCard({ product, className }: ProductCardProps) {
             fill
             sizes="(min-width: 1280px) 360px, (min-width: 768px) 45vw, 90vw"
             className="object-contain p-5 transition duration-700 group-hover:scale-[1.04]"
+            unoptimized
           />
         </Link>
       </div>

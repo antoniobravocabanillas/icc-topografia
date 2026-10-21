@@ -1,13 +1,19 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { prisma } from "../lib/prisma";
-import { createRevocablePortalToken, createWorkspacePortalToken } from "../lib/server/workspace-portal-session";
+
+let prisma: (typeof import("../lib/prisma"))["prisma"];
 
 let stage = "configuration";
 async function main() {
   assert.equal(process.env.TERRAQO_MUTATING_TESTS, "icc-topografia:20616116313");
   assert.equal(process.env.TEST_PORTAL_URL, "https://api.terraqoglobal.com");
   assert.ok(process.env.AUTH_SECRET);
+  const [prismaModule, sessionModule] = await Promise.all([
+    import("../lib/prisma"),
+    import("../lib/server/workspace-portal-session"),
+  ]);
+  prisma = prismaModule.prisma;
+  const { createRevocablePortalToken, createWorkspacePortalToken } = sessionModule;
   const workspace = await prisma.terraqoWorkspace.findFirstOrThrow({ where: { slug: "icc-topografia", active: true, deletedAt: null,
     companies: { some: { document: "20616116313", deletedAt: null } } }, select: { id: true } });
   const actors: string[] = [], bearers: string[] = [], identities: { sub: string; workspaceId: string; workspaceSlug: string; role: "PROFESSIONAL" }[] = [];
@@ -39,11 +45,19 @@ async function main() {
     assert.equal(await prisma.terraqoNativeWorklogOperation.count({ where: { actorId: { in: actors } } }), 0);
     stage = "concurrent-create";
     const replies = await Promise.all([call("POST"), call("POST")]);
+    console.log(JSON.stringify({ stage, http_statuses: replies.map(reply => reply.status),
+      own_receipts: await prisma.terraqoNativeWorklogOperation.count({ where: { actorId: actors[0] } }),
+      own_audits: await prisma.activityLog.count({ where: { actorId: actors[0], entityType: "NativeWorklog" } }),
+      cache_controls: replies.map(reply => reply.headers.get("cache-control")),
+      nosniff: replies.map(reply => reply.headers.get("x-content-type-options")) }));
+    stage = "response-headers";
     for (const reply of replies) {
       assert.equal(reply.status, 200, `Own HTTPS status ${reply.status}`);
-      assert.equal(reply.headers.get("cache-control"), "private, no-store");
+      const cache = (reply.headers.get("cache-control") ?? "").split(",").map(value => value.trim().toLowerCase());
+      assert.ok(cache.includes("private") && cache.includes("no-store"));
       assert.equal(reply.headers.get("x-content-type-options"), "nosniff");
     }
+    stage = "concurrent-receipts";
     const first = await replies[0].json(); assert.deepEqual(await replies[1].json(), first);
     assert.equal(first.data.receipt.outcome, "CREATED");
     assert.equal(first.data.receipt.operationKey, key);
@@ -90,4 +104,4 @@ main().catch((error: unknown) => {
   const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "unknown";
   console.error(JSON.stringify({ outcome: "failed", stage, category: /^(?:P[0-9]{4}|ERR_ASSERTION)$/.test(code) ? code : "unknown" }));
   process.exitCode = 1;
-}).finally(() => prisma.$disconnect());
+}).finally(() => prisma?.$disconnect());

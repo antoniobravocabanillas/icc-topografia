@@ -9,10 +9,11 @@ import {
 import type { Prisma, TerraqoAttendanceContext, TerraqoAttendanceType, TerraqoMemberRole, TerraqoWebAuthnPurpose } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { assertLegacyWorklogs } from "@/lib/server/native-worklog-legacy-guard";
+import { attendanceLocationOwnership } from "@/lib/terraqo/attendance-location-ownership";
 import type { AttendanceRequestFingerprint } from "@/lib/terraqo/request-fingerprint";
 import { awardAutomatedBuilderContribution, consumeBuilderValidationCredit, syncWorklogReputation } from "@/lib/terraqo/builders";
 import { activeCompensation, calculateJornada } from "@/lib/terraqo/jornada";
-import { compatibleWebAuthnRpIds, type WebAuthnContext } from "@/lib/terraqo/webauthn-context";
+import { compatibleWebAuthnRpIds, selectCompatibleWebAuthnRpId, type WebAuthnContext } from "@/lib/terraqo/webauthn-context";
 
 const SUPERVISOR_ROLES: TerraqoMemberRole[] = ["OWNER", "ADMIN", "MANAGER"];
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
@@ -274,9 +275,8 @@ async function createAuthenticationChallenge(input: {
     where: { userId: input.userId, rpId: { in: compatibleWebAuthnRpIds(input.context.rpId) } },
   });
   if (!credentials.length) throw new FieldVerificationError("Activa primero la validacion segura de este dispositivo.", 409, { code: "PASSKEY_REQUIRED" });
-  const effectiveRpId = credentials.some((credential) => credential.rpId === input.context.rpId)
-    ? input.context.rpId
-    : credentials[0].rpId;
+  const effectiveRpId = selectCompatibleWebAuthnRpId(input.context.rpId, credentials.map((credential) => credential.rpId));
+  if (!effectiveRpId) throw new FieldVerificationError("Activa primero la validacion segura de este dispositivo.", 409, { code: "PASSKEY_REQUIRED" });
   const effectiveCredentials = credentials.filter((credential) => credential.rpId === effectiveRpId);
   const options = await generateAuthenticationOptions({
     rpID: effectiveRpId,
@@ -592,7 +592,7 @@ export async function syncAttendanceLocationSamples(input: {
     select: { id: true, capturedAt: true, context: true, projectId: true, userAgentFingerprint: true },
   });
   if (!entry) throw new FieldVerificationError("La jornada no existe o no te pertenece.", 404);
-  if (entry.userAgentFingerprint && input.fingerprint.userAgentFingerprint && entry.userAgentFingerprint !== input.fingerprint.userAgentFingerprint) {
+  if (attendanceLocationOwnership(entry.userAgentFingerprint, input.fingerprint.userAgentFingerprint) === "FOREIGN") {
     throw new FieldVerificationError("El recorrido se sincroniza desde el navegador que marcó la entrada. Puedes marcar la salida desde este dispositivo.", 409, { code: "LOCATION_TRACKER_OWNED_BY_ANOTHER_BROWSER" });
   }
 

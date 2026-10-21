@@ -100,6 +100,8 @@ export default async function PortalLayout({
             ? `/api/terraqo/field-verification?workspaceId=${membership.workspace.id}`
             : null
         }
+        scopedSharingEnabled={process.env.TERRAQO_SCOPED_SHARING_V1 === "true"}
+        scopedEndorsementsEnabled={process.env.TERRAQO_SCOPED_ENDORSEMENTS_V1 === "true"}
       >
         {children}
       </PortalShell>

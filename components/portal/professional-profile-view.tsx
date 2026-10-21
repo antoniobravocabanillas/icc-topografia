@@ -686,6 +686,7 @@ function WorklogRow({
         className={`absolute left-[88px] top-6 h-2.5 w-2.5 rounded-full ring-4 ring-white sm:left-[112px] ${worklog.verified ? "bg-emerald-500" : "bg-[#4374ba]"}`}
       />
       {worklog.mediaIds[0] ? (
+        // eslint-disable-next-line @next/next/no-img-element -- Private evidence is streamed by an authenticated API and must not pass through the public image optimizer.
         <img
           src={`/api/terraqo/worklog/evidence/${worklog.mediaIds[0]}`}
           alt=""
@@ -753,6 +754,7 @@ function WorklogModal({
         </header>
         {worklog.mediaIds.length ? (
           <div className="relative bg-slate-950">
+            {/* eslint-disable-next-line @next/next/no-img-element -- Private evidence is streamed by an authenticated API and must not pass through the public image optimizer. */}
             <img
               src={`/api/terraqo/worklog/evidence/${worklog.mediaIds[media]}`}
               alt={`Evidencia ${media + 1}`}

@@ -12,6 +12,10 @@ import { canViewWorklog } from "@/lib/terraqo/worklog";
 import { syncWorklogReputation } from "@/lib/terraqo/builders";
 import { BillingError } from "@/lib/terraqo/billing/provider";
 import { assertLegacyWorklogs, NativeWorklogLegacyGuardError } from "./native-worklog-legacy-guard";
+import {
+  sanitizeWorklogEvidenceImage,
+  WorklogMediaSecurityError,
+} from "./worklog-media-security";
 
 export const MAX_WORKLOG_EVIDENCE_FILES = 6;
 
@@ -71,10 +75,23 @@ export async function uploadWorklogEvidence(
     const candidates = await Promise.all(
       photos.map(async (file) => {
         const bytes = await file.arrayBuffer();
+        const sourceSha256 = createHash("sha256")
+          .update(Buffer.from(bytes))
+          .digest("hex");
+        const sanitized = await sanitizeWorklogEvidenceImage({
+          bytes,
+          claimedContentType: file.type,
+          fileName: file.name,
+        });
         return {
           file,
-          bytes,
-          sha256: createHash("sha256").update(Buffer.from(bytes)).digest("hex"),
+          bytes: sanitized.bytes,
+          safeFileName: sanitized.fileName,
+          safeContentType: sanitized.contentType,
+          sourceFormat: sanitized.sourceFormat,
+          width: sanitized.width,
+          height: sanitized.height,
+          sha256: sourceSha256,
         };
       }),
     );
@@ -136,19 +153,31 @@ export async function uploadWorklogEvidence(
     try {
       for (const [index, preparedPhoto] of prepared.entries()) {
         const photo = preparedPhoto.file;
-        const storageKey = createWorklogEvidenceKey(worklog.id, photo.name);
+        const storageKey = createWorklogEvidenceKey(
+          worklog.id,
+          preparedPhoto.safeFileName,
+        );
         const sortOrder = worklog._count.media + index;
-        await store.set(storageKey, preparedPhoto.bytes, {
+        await store.set(
+          storageKey,
+          Uint8Array.from(preparedPhoto.bytes).buffer,
+          {
           metadata: {
-            contentType: photo.type,
+            contentType: preparedPhoto.safeContentType,
             originalName: photo.name,
-            size: photo.size,
+            sourceSize: photo.size,
+            size: preparedPhoto.bytes.byteLength,
+            sourceFormat: preparedPhoto.sourceFormat,
+            width: preparedPhoto.width,
+            height: preparedPhoto.height,
+            sanitized: true,
             worklogId: worklog.id,
             workspaceId: worklog.workspaceId,
             uploadedBy: userId,
             uploadedAt: new Date().toISOString(),
           },
-        });
+        },
+        );
         stored.push({
           file: photo,
           storageKey,
@@ -186,9 +215,9 @@ export async function uploadWorklogEvidence(
                 data: {
                   worklogId: worklog.id,
                   storageKey: item.storageKey,
-                  fileName: item.file.name,
-                  contentType: item.file.type,
-                  size: item.file.size,
+                  fileName: prepared[index].safeFileName,
+                  contentType: prepared[index].safeContentType,
+                  size: prepared[index].bytes.byteLength,
                   sha256: item.sha256,
                   sortOrder: count + index,
                 },
@@ -248,6 +277,8 @@ export async function uploadWorklogEvidence(
       throw error;
     }
   } catch (error) {
+    if (error instanceof WorklogMediaSecurityError)
+      return fail(error.message, 422);
     if (error instanceof BillingError) return handleApiError(error);
     if (error instanceof NativeWorklogLegacyGuardError) return fail(error.message, error.status);
     console.error("worklog-evidence: upload failed", { worklogId, error });

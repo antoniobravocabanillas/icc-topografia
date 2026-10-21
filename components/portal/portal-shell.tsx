@@ -29,6 +29,8 @@ import {
   MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
+  Share2,
+  BadgeCheck,
 } from "lucide-react";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
@@ -54,6 +56,8 @@ type PortalShellProps = {
   visualIdentity: WorkspaceVisualIdentity;
   currentUserId: string;
   fieldVerificationEndpoint?: string | null;
+  scopedSharingEnabled?: boolean;
+  scopedEndorsementsEnabled?: boolean;
 };
 
 type PortalNavItem = {
@@ -220,10 +224,25 @@ export function PortalShell({
   visualIdentity,
   currentUserId,
   fieldVerificationEndpoint,
+  scopedSharingEnabled = false,
+  scopedEndorsementsEnabled = false,
 }: PortalShellProps) {
   const pathname = usePathname();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const items = portalType === "professional" ? professionalItems : clientItems;
+  const items = portalType === "professional"
+    ? professionalItems.flatMap((item) => {
+        if (item.href !== "/portal/bitacora") return [item];
+        return [
+          item,
+          ...(scopedSharingEnabled
+            ? [{ href: "/portal/selecciones", label: "Selecciones", icon: Share2, group: "Trabajo" as const }]
+            : []),
+          ...(scopedEndorsementsEnabled
+            ? [{ href: "/portal/respaldos", label: "Respaldos", icon: BadgeCheck, group: "Identidad" as const }]
+            : []),
+        ];
+      })
+    : clientItems;
   const portalLabel =
     portalType === "professional"
       ? "Workspace personal"
@@ -345,7 +364,7 @@ export function PortalShell({
 
           <div className="ml-auto flex items-center gap-2 sm:gap-3 md:ml-0">
             {portalType === "professional" && fieldVerificationEndpoint ? (
-              <AttendanceStatusControl endpoint={fieldVerificationEndpoint} />
+              <AttendanceStatusControl endpoint={fieldVerificationEndpoint} userId={currentUserId} />
             ) : null}
             <PortalRealtimeAlerts
               currentUserId={currentUserId}

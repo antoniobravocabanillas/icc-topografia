@@ -1,9 +1,17 @@
-import { PrismaClient } from "@prisma/client";
-import { createForumPost, createForumReply, getForumChannelForUser, TerraqoForumError } from "../lib/terraqo/forums";
-
-const prisma = new PrismaClient();
+import { confirmedLocalDisposableDatabaseUrl } from "./lib/confirmed-local-disposable-database";
 
 async function main() {
+  process.env.DATABASE_URL = confirmedLocalDisposableDatabaseUrl({
+    value: process.env.ISOLATION_TEST_DATABASE_URL,
+    expected: process.env.ISOLATION_TEST_EXPECTED_DATABASE,
+    valueVariable: "ISOLATION_TEST_DATABASE_URL",
+    expectedVariable: "ISOLATION_TEST_EXPECTED_DATABASE",
+  });
+  const [{ prisma }, { createForumPost, createForumReply, getForumChannelForUser, TerraqoForumError }] = await Promise.all([
+    import("../lib/prisma"),
+    import("../lib/terraqo/forums"),
+  ]);
+  try {
   const [professional, workspace] = await Promise.all([
     prisma.user.findUnique({ where: { email: "demo.profesional@terraqo.com" }, select: { id: true } }),
     prisma.terraqoWorkspace.findFirst({
@@ -63,6 +71,9 @@ async function main() {
     await prisma.terraqoForumChannel.delete({ where: { id: channel.id } }).catch(() => undefined);
     await prisma.user.delete({ where: { id: outsider.id } }).catch(() => undefined);
   }
+  } finally {
+    await prisma.$disconnect();
+  }
 }
 
-main().then(() => prisma.$disconnect()).catch(async (error) => { console.error(error); await prisma.$disconnect(); process.exit(1); });
+main().catch((error) => { console.error(error); process.exit(1); });

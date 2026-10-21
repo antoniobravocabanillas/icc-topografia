@@ -4,7 +4,8 @@ import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { existsSync, writeFileSync } from "node:fs";
 import bcrypt from "bcryptjs";
-import { prisma } from "../lib/prisma";
+
+let prisma: (typeof import("../lib/prisma"))["prisma"];
 
 const adb = join(process.env.LOCALAPPDATA!, "Android/Sdk/platform-tools/adb.exe");
 const adbEnvironment = Object.fromEntries(["PATH", "SystemRoot", "WINDIR", "USERPROFILE", "LOCALAPPDATA", "TEMP", "TMP"].filter(key => process.env[key]).map(key => [key, process.env[key]!])) as NodeJS.ProcessEnv;
@@ -49,6 +50,7 @@ async function fill(serial: string, index: number, value: string, observedInputs
 }
 async function main() {
   assert.equal(process.env.TERRAQO_MUTATING_TESTS, "icc-topografia:20616116313", "Explicit ICC test scope is required.");
+  ({ prisma } = await import("../lib/prisma"));
   const workspace = await prisma.terraqoWorkspace.findFirst({ where: { slug: "icc-topografia", active: true, deletedAt: null,
     companies: { some: { document: "20616116313", deletedAt: null } } }, select: { id: true } });
   assert.ok(workspace);
@@ -177,4 +179,4 @@ main().catch((error: unknown) => { console.error(`Native stage: ${stage}`);
   const safeReason = diagnostic.message === "Android accessibility root unavailable." ? "accessibility_unavailable" : diagnostic.code ?? "control_unavailable";
   console.error(error instanceof assert.AssertionError ? error.message : `Native validation failed (${safeReason}; ${diagnostic.name}; exit=${diagnostic.status}; signal=${diagnostic.signal}); credential diagnostics suppressed.`);
   process.exitCode = 1;
-}).finally(async () => prisma.$disconnect());
+}).finally(async () => prisma?.$disconnect());

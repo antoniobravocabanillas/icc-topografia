@@ -1,4 +1,7 @@
 import { ConversationHub } from "@/components/terraqo/conversation-hub";
+import { ConversationRequestsPanel } from "@/components/terraqo/conversation-requests-panel";
+import { CollaborationPanel } from "@/components/terraqo/collaboration-panel";
+import { ClosurePanel } from "@/components/terraqo/closure-panel";
 import type { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
@@ -21,6 +24,18 @@ export default async function WorkspaceMessagesPage({ searchParams }: { searchPa
       orderBy: { updatedAt: "desc" }
     }) : []
   ]);
+  const collaborationConversations = data.conversations
+    .filter((conversation) => conversation.contexts.length > 0)
+    .map((conversation) => {
+      const professional = conversation.participants.find(
+        (participant) => participant.userId !== session.user.id,
+      )?.user;
+      return {
+        id: conversation.id,
+        label: conversation.contexts.map((context) => context.labelSnapshot).join(" · "),
+        professionalName: professional?.name || professional?.email || "Profesional",
+      };
+    });
 
   return (
     <div className="space-y-6">
@@ -29,6 +44,19 @@ export default async function WorkspaceMessagesPage({ searchParams }: { searchPa
         <h1 className="mt-2 font-display text-3xl font-bold">Mensajeria del workspace</h1>
         <p className="mt-2 text-muted-foreground">Conecta al equipo de {workspace?.name || "la empresa"} con profesionales autorizados sin mezclar conversaciones de otros clientes.</p>
       </header>
+      {process.env.TERRAQO_CONTEXTUAL_MESSAGING_V1 === "true" ? (
+        <ConversationRequestsPanel basePath="/admin/terraqo/mensajes" />
+      ) : null}
+      {process.env.TERRAQO_COLLABORATION_V1 === "true" ? (
+        <CollaborationPanel
+          mode="workspace"
+          basePath="/admin/terraqo/mensajes"
+          conversations={collaborationConversations}
+        />
+      ) : null}
+      {process.env.TERRAQO_CLOSURE_V1 === "true" ? (
+        <ClosurePanel mode="workspace" />
+      ) : null}
       <ConversationHub data={data} currentUserId={session.user.id} basePath="/admin/terraqo/mensajes" compactIntro projects={projects} />
     </div>
   );
