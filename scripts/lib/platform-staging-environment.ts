@@ -23,6 +23,9 @@ const productionHosts = new Set([
 export type PlatformStagingTarget = {
   databaseHost: string;
   databaseName: string;
+  databaseProvider: "postgresql" | "supabase";
+  resourceName?: string;
+  supabaseProjectRef?: string;
   applicationHost: string;
   authHost: string;
   remoteDatabase: boolean;
@@ -48,6 +51,37 @@ function validateSecret(value: string, name: string) {
   assert.doesNotMatch(value, /replace|change|example|placeholder/i, `${name} no puede ser un marcador.`);
 }
 
+function validateIsolatedResourceName(value: string, name: string) {
+  assert.match(value, /(?:staging|stage|gate|test|sandbox|preview)/i, `${name} debe declarar su naturaleza aislada.`);
+  assert.doesNotMatch(value, /(?:^|[\s_-])(?:prod|production|live)(?:$|[\s_-])/i, `${name} parece productivo.`);
+}
+
+function validateSupabaseTarget(
+  environment: PlatformStagingEnvironment,
+  parsedDatabase: URL,
+  databaseName: string,
+) {
+  const resourceName = required(environment, "PLATFORM_STAGING_RESOURCE_NAME");
+  validateIsolatedResourceName(resourceName, "PLATFORM_STAGING_RESOURCE_NAME");
+
+  const projectRef = required(environment, "PLATFORM_STAGING_SUPABASE_PROJECT_REF").toLowerCase();
+  assert.match(projectRef, /^[a-z0-9]{20}$/, "PLATFORM_STAGING_SUPABASE_PROJECT_REF no tiene un formato valido.");
+  assert.equal(databaseName, "postgres", "Una base administrada por Supabase debe usar la base postgres del proyecto aislado.");
+
+  const hostname = parsedDatabase.hostname.toLowerCase();
+  const username = decodeURIComponent(parsedDatabase.username).toLowerCase();
+  const directHost = `db.${projectRef}.supabase.co`;
+  const directConnection = hostname === directHost && username === "postgres";
+  const pooledConnection = hostname.endsWith(".pooler.supabase.com") && username === `postgres.${projectRef}`;
+
+  assert.ok(
+    directConnection || pooledConnection,
+    "La URL no pertenece al PLATFORM_STAGING_SUPABASE_PROJECT_REF confirmado.",
+  );
+
+  return { projectRef, resourceName };
+}
+
 export function validatePlatformStagingEnvironment(
   environment: PlatformStagingEnvironment,
 ): PlatformStagingTarget {
@@ -64,8 +98,19 @@ export function validatePlatformStagingEnvironment(
 
   const databaseName = decodeURIComponent(parsedDatabase.pathname.replace(/^\//, ""));
   assert.equal(databaseName, expectedDatabase, "La URL y B5_GATE_EXPECTED_DATABASE no coinciden.");
-  assert.match(databaseName, /(?:staging|stage|gate|test|sandbox|preview)/i, "El nombre de la base debe declarar su naturaleza aislada.");
-  assert.doesNotMatch(databaseName, /(?:^|[_-])(?:prod|production|live)(?:$|[_-])/i, "El nombre de la base parece productivo.");
+  const configuredProvider = environment.PLATFORM_STAGING_DATABASE_PROVIDER?.trim() || "postgresql";
+  assert.match(
+    configuredProvider,
+    /^(?:postgresql|supabase)$/,
+    "PLATFORM_STAGING_DATABASE_PROVIDER debe ser postgresql o supabase.",
+  );
+  const databaseProvider = configuredProvider as PlatformStagingTarget["databaseProvider"];
+  const supabaseTarget = databaseProvider === "supabase"
+    ? validateSupabaseTarget(environment, parsedDatabase, databaseName)
+    : undefined;
+  if (!supabaseTarget) {
+    validateIsolatedResourceName(databaseName, "El nombre de la base");
+  }
   assert.doesNotMatch(parsedDatabase.hostname, /(?:^|\.)(?:prod|production|live)(?:\.|$)/i, "El host de base parece productivo.");
   assert.ok(parsedDatabase.password.length > 0, "La URL de staging debe usar una credencial dedicada.");
   assert.doesNotMatch(parsedDatabase.password, /password|change|example/i, "La credencial de base no puede ser un marcador.");
@@ -100,6 +145,9 @@ export function validatePlatformStagingEnvironment(
   return {
     databaseHost: parsedDatabase.hostname,
     databaseName,
+    databaseProvider,
+    resourceName: supabaseTarget?.resourceName,
+    supabaseProjectRef: supabaseTarget?.projectRef,
     applicationHost: applicationUrl.hostname,
     authHost: authUrl.hostname,
     remoteDatabase,

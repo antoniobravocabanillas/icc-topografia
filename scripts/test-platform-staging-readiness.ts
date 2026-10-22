@@ -20,7 +20,28 @@ for (const flag of platformFlags) safeEnvironment[flag] = "false";
 
 const target = validatePlatformStagingEnvironment(safeEnvironment);
 assert.equal(target.databaseName, "terraqo_staging_gate");
+assert.equal(target.databaseProvider, "postgresql");
 assert.equal(target.remoteDatabase, true);
+
+const supabaseRef = "abcdefghijklmnopqrst";
+const supabaseEnvironment = {
+  ...safeEnvironment,
+  PLATFORM_STAGING_DATABASE_PROVIDER: "supabase",
+  PLATFORM_STAGING_RESOURCE_NAME: "Terraqo Platform Staging",
+  PLATFORM_STAGING_SUPABASE_PROJECT_REF: supabaseRef,
+  B5_GATE_DATABASE_URL: `postgresql://postgres:unique-stage-credential@db.${supabaseRef}.supabase.co:5432/postgres`,
+  B5_GATE_EXPECTED_DATABASE: "postgres",
+};
+const supabaseTarget = validatePlatformStagingEnvironment(supabaseEnvironment);
+assert.equal(supabaseTarget.databaseProvider, "supabase");
+assert.equal(supabaseTarget.resourceName, "Terraqo Platform Staging");
+assert.equal(supabaseTarget.supabaseProjectRef, supabaseRef);
+
+const poolerTarget = validatePlatformStagingEnvironment({
+  ...supabaseEnvironment,
+  B5_GATE_DATABASE_URL: `postgresql://postgres.${supabaseRef}:unique-stage-credential@aws-0-sa-east-1.pooler.supabase.com:6543/postgres`,
+});
+assert.equal(poolerTarget.supabaseProjectRef, supabaseRef);
 
 function rejects(change: Record<string, string | undefined>, expected: RegExp) {
   assert.throws(
@@ -30,6 +51,7 @@ function rejects(change: Record<string, string | undefined>, expected: RegExp) {
 }
 
 rejects({ PLATFORM_STAGING_CONFIRM: "production" }, /PLATFORM_STAGING_CONFIRM=staging/);
+rejects({ PLATFORM_STAGING_DATABASE_PROVIDER: "supabse" }, /debe ser postgresql o supabase/);
 rejects({ B5_GATE_EXPECTED_DATABASE: "terraqo_other_gate" }, /no coinciden/);
 rejects({
   B5_GATE_DATABASE_URL: "postgresql://user:unique-stage-credential@db.preview.internal:5432/terraqo_prod",
@@ -41,4 +63,23 @@ rejects({ TERRAQO_WORK_CASES_V1: "true" }, /TERRAQO_WORK_CASES_V1 debe iniciar e
 rejects({ TERRAQO_B5_PILOT_WORKSPACE_IDS: "workspace-real" }, /cohorte piloto debe iniciar vacía/);
 rejects({ EVIDENCE_ANALYSIS_DISPATCH_SECRET: safeEnvironment.AUTH_SECRET }, /deben ser independientes/);
 
-console.log("Platform staging readiness contract: OK (fail-closed target, flags, cohort and secrets)." );
+function rejectsSupabase(change: Record<string, string | undefined>, expected: RegExp) {
+  assert.throws(
+    () => validatePlatformStagingEnvironment({ ...supabaseEnvironment, ...change }),
+    expected,
+  );
+}
+
+rejectsSupabase({ PLATFORM_STAGING_RESOURCE_NAME: "Terraqo Production" }, /naturaleza aislada|productivo/);
+rejectsSupabase({ PLATFORM_STAGING_SUPABASE_PROJECT_REF: "short" }, /formato valido/);
+rejectsSupabase({
+  PLATFORM_STAGING_SUPABASE_PROJECT_REF: "zyxwvutsrqponmlkjihg",
+}, /PROJECT_REF confirmado/i);
+rejectsSupabase({
+  B5_GATE_DATABASE_URL: "postgresql://postgres:unique-stage-credential@db.preview.internal:5432/postgres",
+}, /PROJECT_REF confirmado/i);
+rejectsSupabase({
+  B5_GATE_DATABASE_URL: `postgresql://postgres.wrongwrongwrongwrongw:unique-stage-credential@aws-0-sa-east-1.pooler.supabase.com:6543/postgres`,
+}, /PROJECT_REF confirmado/i);
+
+console.log("Platform staging readiness contract: OK (fail-closed PostgreSQL/Supabase target, flags, cohort and secrets)." );

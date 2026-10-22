@@ -10,12 +10,29 @@ cero hallazgos reportables en el snapshot revisado. La liberacion continua en
 1. El arbol de trabajo sigue siendo mutable y mezcla cambios de producto,
    pruebas, documentacion y artefactos locales. El scan sellado conserva el
    digest exacto revisado, pero no reemplaza un candidato Git inmutable.
-2. Aun no existe evidencia actual de staging para migraciones, drift, recorrido
-   multiusuario, rollback, observabilidad externa y accesibilidad sobre
-   dispositivos fisicos.
+2. El destino Supabase exclusivo de staging ya esta identificado y saludable,
+   pero aun no existe evidencia de baseline restaurado, migraciones, drift,
+   recorrido multiusuario, rollback, observabilidad externa ni accesibilidad
+   sobre dispositivos fisicos.
 
 Este documento prepara la liberacion, pero no autoriza aplicar migraciones,
 activar flags, desplegar, ejecutar cobros ni usar datos de clientes.
+
+## Destino de staging reservado
+
+- Proveedor: Supabase, proyecto administrado independiente.
+- Organizacion: `Vrilla SAC`.
+- Nombre confirmado: `Terraqo Platform Staging`.
+- Project ref: `mghdpciewbsowjrjwmwk`.
+- Region: Sao Paulo (`sa-east-1`).
+- Base administrada: `postgres`, PostgreSQL 17.11.
+- Estado comprobado: `ACTIVE_HEALTHY`, sin migraciones ni tablas publicas.
+- Coste cotizado al crear: USD 0 mensual.
+- Advisors iniciales de seguridad y rendimiento: sin avisos.
+
+La identidad no secreta y las comprobaciones realizadas se registran en
+`docs/work-documented/platform-staging-target-2026-10-21.md`. No se guardaron
+credenciales, no se restauro un baseline y no se aplico DDL.
 
 ## Estado del candidato
 
@@ -134,6 +151,12 @@ Reglas:
 - Conexion y autenticacion: `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL`.
 - Confirmacion operativa previa: `PLATFORM_STAGING_CONFIRM=staging` y, para un
   host remoto identificado, `PLATFORM_STAGING_ALLOW_REMOTE=true`.
+- Para un proyecto Supabase dedicado: `PLATFORM_STAGING_DATABASE_PROVIDER=supabase`,
+  `PLATFORM_STAGING_RESOURCE_NAME` con el nombre de staging confirmado y
+  `PLATFORM_STAGING_SUPABASE_PROJECT_REF` con la referencia exacta. La base
+  administrada se llama `postgres`; el preflight valida el aislamiento mediante
+  la referencia incluida en el host directo o en el usuario del pooler y rechaza
+  cualquier discrepancia antes de abrir una conexion.
 - URLs publicas/canonicas: `NEXT_PUBLIC_SITE_URL` y las URLs Terraqo que use el
   entorno segun `.env.example`.
 - Almacenamiento y correo: credenciales del proveedor de blobs, `RESEND_API_KEY`,
@@ -180,6 +203,9 @@ Mantener inicialmente apagado:
   remota confirmada, `B5_GATE_ALLOW_REMOTE_READONLY`.
 - `PLATFORM_STAGING_CONFIRM` y `PLATFORM_STAGING_ALLOW_REMOTE`; ejecutar
   `npm run check:platform-staging` antes de cualquier conexion.
+- En Supabase, `B5_GATE_EXPECTED_DATABASE=postgres` solo es valido junto con el
+  proveedor, nombre de recurso y project ref confirmados. No reutilizar el
+  proyecto `Terraqo` ni inferir que un proyecto inactivo equivale a staging.
 - `B1_BENCHMARK_DATABASE_URL`, `B1_BENCHMARK_CONFIRM_DATABASE` y el opt-in
   remoto del benchmark.
 
@@ -268,7 +294,8 @@ este release.
 
 ### Fase B - staging aislado
 
-1. Registrar host, nombre de DB, propietario y confirmacion de no produccion.
+1. [Completado] Registrar host, nombre de DB, propietario y confirmacion de no
+   produccion.
 2. Restaurar una copia anonimizada del baseline y ensayar su restauracion.
 3. Configurar variables con todos los flags apagados, proveedor `off` y cohorte
    vacia.
