@@ -62,7 +62,9 @@ resoluciones historicas, siete migraciones B1-B5 y drift aprobado. `public`
 continua sin tablas y todas las tablas de `icc`, salvo el ledger Prisma, tienen
 cero filas. El login migrador quedo deshabilitado.
 
-El rol runtime autentico, pero el primer ciclo de grants no dejo ACL efectivos
-sobre `icc`; por seguridad no se publico esa credencial. El sitio Netlify
-aislado conserva una `DATABASE_URL` inalcanzable que hace fallar cerrado hasta
-resolver y verificar los permisos DML sin DDL.
+El primer ciclo de grants runtime no dejo ACL efectivos porque los objetos son
+propiedad del migrador. Se corrigio ejecutando los grants como ese propietario:
+el runtime tiene `USAGE` y DML sobre `icc`, no tiene `CREATE` sobre esquema o
+base, y fue verificado por conexion directa IPv6 y por Supavisor transaction.
+Netlify staging recibio esa `DATABASE_URL` como secreto; el migrador permanece
+`NOLOGIN`.

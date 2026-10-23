@@ -10,10 +10,10 @@ cero hallazgos reportables en el snapshot revisado. La liberacion continua en
 1. El arbol de trabajo sigue siendo mutable y mezcla cambios de producto,
    pruebas, documentacion y artefactos locales. El scan sellado conserva el
    digest exacto revisado, pero no reemplaza un candidato Git inmutable.
-2. El destino Supabase exclusivo de staging ya esta migrado y sin drift no
-   documentado, pero falta cerrar el rol runtime, desplegar la revision
-   candidata y ejecutar recorrido multiusuario, rollback, observabilidad
-   externa y accesibilidad sobre dispositivos fisicos.
+2. El destino Supabase exclusivo de staging ya esta migrado, sin drift no
+   documentado y con runtime sin DDL; falta desplegar la revision candidata y
+   ejecutar recorrido multiusuario, rollback, observabilidad externa y
+   accesibilidad sobre dispositivos fisicos.
 
 Este documento prepara la liberacion, pero no autoriza aplicar migraciones,
 activar flags, desplegar, ejecutar cobros ni usar datos de clientes.
@@ -304,10 +304,9 @@ este release.
 2. [Completado] Baseline pre-B1 sin filas y ensayo desechable aprobados: ledger
    43:43:0, objetos B1-B5, GIN, cero filas, drift esperado y limpieza.
 3. Configurar variables con todos los flags apagados, proveedor `off` y cohorte
-   vacia. [Parcial] El sitio Netlify aislado y sus variables no secretas,
-   secretos Auth/dispatcher y kill switches OAuth/correo ya existen; faltan la
-   conexion DB de runtime verificada y el despliegue. Una URL inalcanzable evita
-   que un despliegue accidental use una base heredada.
+   vacia. [Completado] El sitio Netlify aislado tiene variables no secretas,
+   secretos Auth/dispatcher, kill switches OAuth/correo y conexion runtime DML
+   sin DDL verificada. Todavia no existe despliegue.
 4. [Completado] Aplicar baseline, resolver 36 migraciones historicas y desplegar
    las siete migraciones B1-B5 en orden.
 5. [Completado] `npm run check:b5-schema-drift`: solo los dos artefactos

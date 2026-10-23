@@ -108,8 +108,9 @@ aplicacion. Esta evidencia no autoriza despliegue. Estado del gate:
    vacia y URLs HTTPS exclusivas de staging.
 4. [Completado] Baseline, 36 resoluciones historicas y siete migraciones B1-B5.
 5. [Completado] Ledger, objetos, GIN, cero filas y drift remoto.
-6. [Bloqueado] Otorgar y verificar ACL DML sin DDL al rol runtime. El rol y el
-   migrador estan `NOLOGIN`; Netlify apunta temporalmente a una URL inalcanzable.
+6. [Completado] Rol runtime con `USAGE` y DML sobre `icc`, sin `CREATE`, probado
+   por conexion directa y transaction pooler. `DATABASE_URL` esta guardada como
+   secreto solo en Netlify staging; el migrador permanece `NOLOGIN`.
 7. Pendiente: despliegue de la revision candidata y E2E sintetico.
 
 No se reutiliza el proyecto `Terraqo`; su nombre no declara staging y pertenece
