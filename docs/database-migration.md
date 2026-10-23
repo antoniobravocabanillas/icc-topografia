@@ -1,23 +1,61 @@
 # Preparación de migración a Supabase
 
-Destino elegido: Terraqo `tmlpiacfbvljfphejxmi`. Producción sigue en Prisma Postgres 17.2 mediante Accelerate. Preparación verificada el 6 de octubre de 2026, Lima; no hubo cambios de runtime ni de la conexión publicada.
+Destino exclusivo: `Terraqo Platform Staging`, project ref
+`mghdpciewbsowjrjwmwk`, organizacion `Vrilla SAC`, Sao Paulo (`sa-east-1`),
+base `postgres`, PostgreSQL 17.11. El proyecto historico `Terraqo`
+(`tmlpiacfbvljfphejxmi`) no declara aislamiento y no se usa para este rollout.
+Produccion sigue en Prisma Postgres mediante Accelerate; no hubo cambios de
+runtime, datos ni conexion publicada.
 
 `scripts/inventory-database-migration.py` resuelve DATABASE_URL de Netlify en memoria y lo compara con la conexión directa de `.env`. La comparación normaliza el search_path para los defaults enum. Verificó 1.412 columnas, el catálogo de objetos y la huella de empresas coincidentes; no imprime filas ni identificadores de usuarios.
 
 `scripts/rehearse-database-migration.py` usa un snapshot exportado de solo lectura para el dump y las huellas SHA-256, valida TLS con hostname/cadena de confianza, cifra con AES-256-GCM y protege la clave mediante DPAPI. PostgreSQL 18.4 está instalado en `C:\Program Files\PostgreSQL\18\bin`. El ensayo local privado tiene contraseña SCRAM aleatoria; se detiene al finalizar. Sus clientes reciben contraseñas mediante el entorno, nunca argumentos.
 
-Resultado: 112 tablas, 1.459 filas, 480 índices, 350 restricciones; hashes y definiciones coincidentes, incluyendo nulabilidad, defaults, enumeraciones y secuencia. PostgreSQL 18 registra NOT NULL en pg_constraint; el conteo comparado excluye esa categoría y verifica nulabilidad por separado. [Referencia oficial](https://www.postgresql.org/docs/18/catalog-pg-constraint.html).
+El respaldo privado de octubre contiene datos reales y queda excluido de
+staging. No debe restaurarse, copiarse ni transformarse para este gate. El
+baseline actual se reconstruye solo desde el datamodel pre-B1 y por tanto no
+contiene filas, PII ni bytes de Netlify Blobs.
 
-Respaldo verificado: `C:\Users\Binv\.terraqo-private\migration-20261007T010858Z`. El manifest y el archivo cifrado están fuera de Git, con ACL restringida al usuario y SYSTEM. SHA-256 recuperado: `855d8a6ca4dc405de05efdfc53ea26e370fc410326bfe3ab401da9487f05e849`. DPAPI está ligado al usuario/equipo; falta verificar una copia recuperable fuera del equipo antes del corte.
+El respaldo historico permanece cifrado y fuera de Git como evidencia de
+recuperacion del origen; no es una fuente autorizada para staging.
 
 ```powershell
-python scripts/inventory-database-migration.py > tmp/migration-inventory.json
-python scripts/rehearse-database-migration.py
-python scripts/inspect-migration-archive.py C:\Users\Binv\.terraqo-private\migration-20261007T010858Z
+$env:PLATFORM_STAGING_BASELINE_CONFIRM='generate-pre-b1-baseline'
+npm run prepare:platform-staging-baseline
 ```
 
-El destino Supabase 17.11 sigue vacío. El MCP operativo no entrega una contraseña PostgreSQL para pg_restore. Configurar la conexión exacta de **Connect → Session pooler** como `SUPABASE_MIGRATION_DATABASE_URL` en `.env.local` ignorado, sin modificar aún DATABASE_URL. Nunca ponerla en Git, Flutter, NEXT_PUBLIC ni chat. Si hay que cambiar una contraseña desconocida, el propietario completa esa operación en el panel.
+El comando de ensayo automatizado no se incorpora al candidato hasta sustituir
+el lifecycle de `pg_ctl` en Windows y aprobar ledger, objetos, GIN, cero filas,
+drift y limpieza en una sola ejecucion reproducible.
 
-Antes del corte: restauración y comparación en Supabase 17, permisos privados de icc, rol de backend sin DDL, RLS compatible con las identidades actuales Auth.js, respaldo de archivos externos Netlify Blobs, pruebas reales desde Netlify, recuperación/revocación de sesiones y prueba de copia fuera del equipo. Un respaldo SQL no incluye los bytes de Netlify Blobs. La pausa de escrituras, el dump final y la reversión deben evitar pérdida de nuevas transacciones; no activar dos bases de escritura.
+El destino Supabase 17.11 sigue vacio. Una credencial de migracion debe ser
+temporal, exclusiva de staging y custodiada fuera de Git, Flutter, variables
+`NEXT_PUBLIC_*`, logs y chat. Para migraciones se usa conexion directa o
+Supavisor en modo session sobre puerto 5432; transaction pooling no es el
+canal de migracion. `DATABASE_URL` de produccion no se modifica.
 
-El primer ensayo tuvo un problema de pipes heredados al arrancar PostgreSQL; el helper ya usa salida desacoplada para el daemon. El clúster vacío de aquel intento está detenido en la carpeta privada y su archivo se convirtió a formato cifrado. Los ensayos completos posteriores detuvieron y limpiaron sus clústeres.
+En una base vacia, el flujo reproducible es:
+
+1. aplicar `output/platform-staging-baseline/pre-b1-baseline.sql` en una sola
+   transaccion;
+2. registrar mediante `prisma migrate resolve --applied` las 36 migraciones
+   historicas cuyos objetos ya representa ese baseline exacto;
+3. ejecutar `prisma migrate deploy` para las siete migraciones B1-B5;
+4. exigir 43 entradas completas y sin `rolled_back_at`, indice GIN valido,
+   cero filas de aplicacion y el gate de drift documentado.
+
+`migrate resolve` se permite unicamente para esta inicializacion aislada y
+checksummed. No se fabrican filas manuales en `_prisma_migrations`, no se usa
+`db push` y no se resuelve ninguna migracion B1-B5.
+
+Antes de cualquier despliegue: permisos privados de `icc`, mantener `icc`
+fuera de los esquemas expuestos por Supabase Data API, rol de runtime sin DDL,
+pruebas reales desde un entorno Netlify de staging, recuperacion/revocacion de
+sesiones y validacion de blobs sinteticos. No activar dos bases de escritura.
+
+Estado del ensayo del 22 de octubre de 2026: el baseline se genero dos veces con
+el mismo hash. Tres ciclos del arnes desechable encontraron problemas de ciclo
+de vida del proceso PostgreSQL en Windows (handles heredados y bloqueo del log
+durante la limpieza). Los clústeres quedaron detenidos y sin credenciales
+persistentes utilizables, pero no se obtuvo un reporte final verificable. El
+gate remoto sigue en HOLD y Supabase staging no fue modificado.

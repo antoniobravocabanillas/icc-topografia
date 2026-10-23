@@ -135,8 +135,11 @@ Reglas:
   ambigua, produccion ni una rama Accelerate compartida.
 - El baseline anterior a B1 debe existir. Este historial no inicializa Terraqo
   desde una base vacia.
-- Usar `prisma migrate deploy`; no `db push`, `migrate reset`, DDL manual ni
-  marcado manual de migraciones.
+- En una base vacia, aplicar el baseline pre-B1 checksummed y registrar sus 36
+  migraciones historicas con `prisma migrate resolve --applied`; no insertar
+  manualmente en `_prisma_migrations`.
+- Aplicar las siete migraciones B1-B5 solo con `prisma migrate deploy`; no
+  resolverlas, usar `db push` ni `migrate reset`.
 - Registrar por migracion: nombre, checksum, hora, operador, duracion y
   resultado.
 - Detener ante cualquier FK, indice, conteo o drift inesperado.
@@ -296,7 +299,10 @@ este release.
 
 1. [Completado] Registrar host, nombre de DB, propietario y confirmacion de no
    produccion.
-2. Restaurar una copia anonimizada del baseline y ensayar su restauracion.
+2. [En progreso/HOLD] Generar el baseline pre-B1 sin filas y cerrar su ensayo
+   desechable. La generacion es reproducible; falta evidencia final del ledger,
+   objetos, GIN, cero filas y drift por un bloqueo de limpieza de PostgreSQL en
+   Windows tras tres ciclos.
 3. Configurar variables con todos los flags apagados, proveedor `off` y cohorte
    vacia.
 4. Aplicar las siete migraciones en orden durante la ventana acordada.

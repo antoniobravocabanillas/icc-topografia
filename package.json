@@ -13,6 +13,8 @@
     "check:encoding": "tsx scripts/check-encoding.ts",
     "check:release-candidate": "tsx scripts/check-release-candidate-hygiene.ts",
     "check:platform-staging": "tsx scripts/check-platform-staging-readiness.ts",
+    "check:source-migration-ledger": "tsx scripts/check-source-migration-ledger.ts",
+    "prepare:platform-staging-baseline": "tsx scripts/prepare-platform-staging-baseline.ts",
     "audit:inventory": "tsx scripts/audit-interface-inventory.ts",
     "typecheck": "tsc --noEmit",
     "test:worklog-isolation": "tsx scripts/test-worklog-isolation.ts",
