@@ -10,10 +10,10 @@ cero hallazgos reportables en el snapshot revisado. La liberacion continua en
 1. El arbol de trabajo sigue siendo mutable y mezcla cambios de producto,
    pruebas, documentacion y artefactos locales. El scan sellado conserva el
    digest exacto revisado, pero no reemplaza un candidato Git inmutable.
-2. El destino Supabase exclusivo de staging ya esta identificado y saludable,
-   pero aun no existe evidencia de baseline restaurado, migraciones, drift,
-   recorrido multiusuario, rollback, observabilidad externa ni accesibilidad
-   sobre dispositivos fisicos.
+2. El destino Supabase exclusivo de staging ya esta migrado y sin drift no
+   documentado, pero falta cerrar el rol runtime, desplegar la revision
+   candidata y ejecutar recorrido multiusuario, rollback, observabilidad
+   externa y accesibilidad sobre dispositivos fisicos.
 
 Este documento prepara la liberacion, pero no autoriza aplicar migraciones,
 activar flags, desplegar, ejecutar cobros ni usar datos de clientes.
@@ -26,13 +26,15 @@ activar flags, desplegar, ejecutar cobros ni usar datos de clientes.
 - Project ref: `mghdpciewbsowjrjwmwk`.
 - Region: Sao Paulo (`sa-east-1`).
 - Base administrada: `postgres`, PostgreSQL 17.11.
-- Estado comprobado: `ACTIVE_HEALTHY`, sin migraciones ni tablas publicas.
+- Estado comprobado: `ACTIVE_HEALTHY`, ledger Prisma `43:43:0`, sin tablas en
+  `public` y sin filas de aplicacion en `icc`.
 - Coste cotizado al crear: USD 0 mensual.
 - Advisors iniciales de seguridad y rendimiento: sin avisos.
 
 La identidad no secreta y las comprobaciones realizadas se registran en
 `docs/work-documented/platform-staging-target-2026-10-21.md`. No se guardaron
-credenciales, no se restauro un baseline y no se aplico DDL.
+credenciales ni datos reales; el DDL se limito al baseline y las migraciones
+versionadas B1-B5 del candidato.
 
 ## Estado del candidato
 
@@ -304,9 +306,11 @@ este release.
 3. Configurar variables con todos los flags apagados, proveedor `off` y cohorte
    vacia. [Parcial] El sitio Netlify aislado y sus variables no secretas,
    secretos Auth/dispatcher y kill switches OAuth/correo ya existen; faltan la
-   conexion DB de runtime y el despliegue.
-4. Aplicar las siete migraciones en orden durante la ventana acordada.
-5. Ejecutar `npm run check:b5-schema-drift` y exigir solo los dos artefactos
+   conexion DB de runtime verificada y el despliegue. Una URL inalcanzable evita
+   que un despliegue accidental use una base heredada.
+4. [Completado] Aplicar baseline, resolver 36 migraciones historicas y desplegar
+   las siete migraciones B1-B5 en orden.
+5. [Completado] `npm run check:b5-schema-drift`: solo los dos artefactos
    full-text documentados.
 6. Desplegar exactamente la revision candidata con flags apagados.
 7. Ejecutar E2E y capturar request IDs, tiempos, conteos y evidencia visual sin

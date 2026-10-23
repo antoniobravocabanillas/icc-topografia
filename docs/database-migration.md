@@ -27,8 +27,9 @@ npm run prepare:platform-staging-baseline
 $env:PLATFORM_STAGING_REHEARSAL_CONFIRM='rehearse-pre-b1-baseline'
 npm run rehearse:platform-staging-baseline
 
-El destino Supabase 17.11 sigue vacio. Una credencial de migracion debe ser
-temporal, exclusiva de staging y custodiada fuera de Git, Flutter, variables
+El destino Supabase 17.11 fue inicializado sin filas de aplicacion. La credencial
+de migracion fue temporal, exclusiva de staging y quedo revocada al cerrar el
+gate. Nunca se guardo en Git, Flutter, variables
 `NEXT_PUBLIC_*`, logs y chat. Para migraciones se usa conexion directa o
 Supavisor en modo session sobre puerto 5432; transaction pooling no es el
 canal de migracion. `DATABASE_URL` de produccion no se modifica.
@@ -52,8 +53,16 @@ fuera de los esquemas expuestos por Supabase Data API, rol de runtime sin DDL,
 pruebas reales desde un entorno Netlify de staging, recuperacion/revocacion de
 sesiones y validacion de blobs sinteticos. No activar dos bases de escritura.
 
-Estado del ensayo del 23 de octubre de 2026: el runner v2 controla directamente
+Estado del 23 de octubre de 2026: el runner v2 controla directamente
 el proceso PostgreSQL y aprobo en una sola ejecucion 36 resoluciones historicas,
 siete migraciones B1-B5, ledger `43:43:0`, seis objetos clave, GIN valido/listo,
-cero filas y el drift full-text esperado. El cluster se detuvo y limpio. El
-gate remoto seguia en HOLD y Supabase staging no habia sido modificado.
+cero filas y el drift full-text esperado. El mismo flujo se ejecuto luego sobre
+Supabase staging por el Session pooler oficial: baseline atomico, 36
+resoluciones historicas, siete migraciones B1-B5 y drift aprobado. `public`
+continua sin tablas y todas las tablas de `icc`, salvo el ledger Prisma, tienen
+cero filas. El login migrador quedo deshabilitado.
+
+El rol runtime autentico, pero el primer ciclo de grants no dejo ACL efectivos
+sobre `icc`; por seguridad no se publico esa credencial. El sitio Netlify
+aislado conserva una `DATABASE_URL` inalcanzable que hace fallar cerrado hasta
+resolver y verificar los permisos DML sin DDL.

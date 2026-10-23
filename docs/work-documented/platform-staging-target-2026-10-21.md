@@ -25,9 +25,12 @@ Fecha de registro: 21 de octubre de 2026 (America/Lima).
   region y host anteriores.
 - Una consulta SQL de solo lectura confirmo `current_database() = postgres`,
   `current_user = postgres` y PostgreSQL 17.11.
-- El historial de migraciones esta vacio.
+- El ledger Prisma contiene 43 migraciones completas, sin entradas incompletas
+  ni revertidas.
 - El esquema `public` no contiene tablas.
-- Los advisors iniciales de seguridad y rendimiento no reportaron avisos.
+- El Advisor reporta RLS deshabilitado en `icc`; el esquema no concede `USAGE`
+  ni permisos de tabla a `PUBLIC`, `anon`, `authenticated` o `service_role`, y
+  no esta previsto exponerlo al Data API. No se habilito RLS sin politicas.
 - El contrato local reconoce tanto la conexion directa como el transaction
   pooler solo cuando contienen el project ref exacto.
 - Un project ref, proveedor, nombre de recurso o base discordante falla antes
@@ -44,7 +47,11 @@ Fecha de registro: 21 de octubre de 2026 (America/Lima).
   desechable: 43 entradas Prisma completas, siete migraciones B1-B5, seis
   objetos clave, indice GIN valido/listo, cero filas de aplicacion y solo los
   dos artefactos full-text de drift esperados. El cluster se detuvo y limpio.
-- Supabase seguia vacio y sin migraciones al cerrar ese ensayo local.
+- El baseline y las siete migraciones se promovieron despues al destino remoto
+  usando el Session pooler oficial `aws-1-sa-east-1.pooler.supabase.com:5432`.
+- La verificacion remota confirmo ledger `43:43:0`, seis objetos clave, GIN
+  valido/listo, cero filas de aplicacion, `public` sin tablas y solo los dos
+  artefactos full-text de drift esperados.
 
 ## Configuracion no secreta del gate
 
@@ -92,15 +99,18 @@ se habilitaran hasta ejecutar pruebas sinteticas especificas.
 
 ## Estado y siguiente gate
 
-El destino esta reservado e identificado, pero permanece vacio. Esta evidencia
-no autoriza migraciones ni despliegue. Antes de aplicar las siete migraciones
-B1-B5 se debe:
+El destino esta reservado, identificado y migrado, pero permanece sin datos de
+aplicacion. Esta evidencia no autoriza despliegue. Estado del gate:
 
-1. Obtener y custodiar una credencial exclusiva de staging.
+1. [Completado] Credencial migradora exclusiva, rotada y deshabilitada al cierre.
 2. [Completado] Ensayar el baseline y las migraciones en PostgreSQL desechable.
-3. Ejecutar `npm run check:platform-staging` con flags apagados, proveedor IA
-   `off`, cohorte vacia y URLs HTTPS exclusivas de staging.
-4. Registrar respaldo, responsable, ventana, checksums y plan de rollback.
+3. [Completado] Preflight remoto con flags apagados, proveedor IA `off`, cohorte
+   vacia y URLs HTTPS exclusivas de staging.
+4. [Completado] Baseline, 36 resoluciones historicas y siete migraciones B1-B5.
+5. [Completado] Ledger, objetos, GIN, cero filas y drift remoto.
+6. [Bloqueado] Otorgar y verificar ACL DML sin DDL al rol runtime. El rol y el
+   migrador estan `NOLOGIN`; Netlify apunta temporalmente a una URL inalcanzable.
+7. Pendiente: despliegue de la revision candidata y E2E sintetico.
 
 No se reutiliza el proyecto `Terraqo`; su nombre no declara staging y pertenece
 a una superficie distinta.
