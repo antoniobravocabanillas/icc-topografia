@@ -26,6 +26,7 @@ export type PlatformStagingTarget = {
   databaseProvider: "postgresql" | "supabase";
   resourceName?: string;
   supabaseProjectRef?: string;
+  databaseRole?: string;
   applicationHost: string;
   authHost: string;
   remoteDatabase: boolean;
@@ -65,21 +66,23 @@ function validateSupabaseTarget(
   validateIsolatedResourceName(resourceName, "PLATFORM_STAGING_RESOURCE_NAME");
 
   const projectRef = required(environment, "PLATFORM_STAGING_SUPABASE_PROJECT_REF").toLowerCase();
+  const databaseRole = required(environment, "PLATFORM_STAGING_DATABASE_ROLE").toLowerCase();
   assert.match(projectRef, /^[a-z0-9]{20}$/, "PLATFORM_STAGING_SUPABASE_PROJECT_REF no tiene un formato valido.");
+  assert.match(databaseRole, /^[a-z][a-z0-9_]{2,62}$/, "PLATFORM_STAGING_DATABASE_ROLE no tiene un formato valido.");
   assert.equal(databaseName, "postgres", "Una base administrada por Supabase debe usar la base postgres del proyecto aislado.");
 
   const hostname = parsedDatabase.hostname.toLowerCase();
   const username = decodeURIComponent(parsedDatabase.username).toLowerCase();
   const directHost = `db.${projectRef}.supabase.co`;
-  const directConnection = hostname === directHost && username === "postgres";
-  const pooledConnection = hostname.endsWith(".pooler.supabase.com") && username === `postgres.${projectRef}`;
+  const directConnection = hostname === directHost && username === databaseRole;
+  const pooledConnection = hostname.endsWith(".pooler.supabase.com") && username === `${databaseRole}.${projectRef}`;
 
   assert.ok(
     directConnection || pooledConnection,
     "La URL no pertenece al PLATFORM_STAGING_SUPABASE_PROJECT_REF confirmado.",
   );
 
-  return { projectRef, resourceName };
+  return { databaseRole, projectRef, resourceName };
 }
 
 export function validatePlatformStagingEnvironment(
@@ -154,6 +157,7 @@ export function validatePlatformStagingEnvironment(
     databaseProvider,
     resourceName: supabaseTarget?.resourceName,
     supabaseProjectRef: supabaseTarget?.projectRef,
+    databaseRole: supabaseTarget?.databaseRole,
     applicationHost: applicationUrl.hostname,
     authHost: authUrl.hostname,
     remoteDatabase,

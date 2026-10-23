@@ -24,9 +24,8 @@ $env:PLATFORM_STAGING_BASELINE_CONFIRM='generate-pre-b1-baseline'
 npm run prepare:platform-staging-baseline
 ```
 
-El comando de ensayo automatizado no se incorpora al candidato hasta sustituir
-el lifecycle de `pg_ctl` en Windows y aprobar ledger, objetos, GIN, cero filas,
-drift y limpieza en una sola ejecucion reproducible.
+$env:PLATFORM_STAGING_REHEARSAL_CONFIRM='rehearse-pre-b1-baseline'
+npm run rehearse:platform-staging-baseline
 
 El destino Supabase 17.11 sigue vacio. Una credencial de migracion debe ser
 temporal, exclusiva de staging y custodiada fuera de Git, Flutter, variables
@@ -53,9 +52,8 @@ fuera de los esquemas expuestos por Supabase Data API, rol de runtime sin DDL,
 pruebas reales desde un entorno Netlify de staging, recuperacion/revocacion de
 sesiones y validacion de blobs sinteticos. No activar dos bases de escritura.
 
-Estado del ensayo del 22 de octubre de 2026: el baseline se genero dos veces con
-el mismo hash. Tres ciclos del arnes desechable encontraron problemas de ciclo
-de vida del proceso PostgreSQL en Windows (handles heredados y bloqueo del log
-durante la limpieza). Los clústeres quedaron detenidos y sin credenciales
-persistentes utilizables, pero no se obtuvo un reporte final verificable. El
-gate remoto sigue en HOLD y Supabase staging no fue modificado.
+Estado del ensayo del 23 de octubre de 2026: el runner v2 controla directamente
+el proceso PostgreSQL y aprobo en una sola ejecucion 36 resoluciones historicas,
+siete migraciones B1-B5, ledger `43:43:0`, seis objetos clave, GIN valido/listo,
+cero filas y el drift full-text esperado. El cluster se detuvo y limpio. El
+gate remoto seguia en HOLD y Supabase staging no habia sido modificado.

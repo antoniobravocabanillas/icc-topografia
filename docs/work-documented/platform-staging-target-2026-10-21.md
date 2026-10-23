@@ -40,10 +40,11 @@ Fecha de registro: 21 de octubre de 2026 (America/Lima).
   179.376 bytes y tiene SHA-256
   `047440ba921d38f9539821ce3a8ab8930b4f08e6e17a3c9398e796e6ced9c4b5`.
 - El manifiesto separa 36 migraciones historicas y las siete migraciones B1-B5.
-- La promocion remota permanece bloqueada: tres ciclos del arnes local
-  llegaron al cierre de PostgreSQL, pero Windows mantuvo bloqueado el log del
-  clúster temporal e impidio conservar una evidencia final verificable del
-  ledger y del drift. No se aplico SQL en Supabase.
+- El runner v2 con proceso PostgreSQL controlado directamente aprobo el ensayo
+  desechable: 43 entradas Prisma completas, siete migraciones B1-B5, seis
+  objetos clave, indice GIN valido/listo, cero filas de aplicacion y solo los
+  dos artefactos full-text de drift esperados. El cluster se detuvo y limpio.
+- Supabase seguia vacio y sin migraciones al cerrar ese ensayo local.
 
 ## Configuracion no secreta del gate
 
@@ -53,8 +54,13 @@ PLATFORM_STAGING_ALLOW_REMOTE=true
 PLATFORM_STAGING_DATABASE_PROVIDER=supabase
 PLATFORM_STAGING_RESOURCE_NAME="Terraqo Platform Staging"
 PLATFORM_STAGING_SUPABASE_PROJECT_REF=mghdpciewbsowjrjwmwk
+PLATFORM_STAGING_DATABASE_ROLE=terraqo_staging_migrator
 B5_GATE_EXPECTED_DATABASE=postgres
 ```
+
+El rol esperado tambien quedo registrado como variable no secreta en el sitio
+Netlify aislado `terraqo-platform-staging`; el sitio continua sin Git, sin
+deploy y con los flags de producto y proveedores externos apagados.
 
 `B5_GATE_DATABASE_URL`, `AUTH_SECRET` y
 `EVIDENCE_ANALYSIS_DISPATCH_SECRET` son secretos operativos. Deben generarse y
@@ -91,9 +97,7 @@ no autoriza migraciones ni despliegue. Antes de aplicar las siete migraciones
 B1-B5 se debe:
 
 1. Obtener y custodiar una credencial exclusiva de staging.
-2. Cerrar el ensayo local desechable y conservar evidencia de 43 entradas
-   Prisma completas, seis objetos clave B1-B5, indice GIN valido, cero filas de
-   aplicacion y solo los dos artefactos full-text de drift esperados.
+2. [Completado] Ensayar el baseline y las migraciones en PostgreSQL desechable.
 3. Ejecutar `npm run check:platform-staging` con flags apagados, proveedor IA
    `off`, cohorte vacia y URLs HTTPS exclusivas de staging.
 4. Registrar respaldo, responsable, ventana, checksums y plan de rollback.

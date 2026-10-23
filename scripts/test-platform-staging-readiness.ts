@@ -31,17 +31,19 @@ const supabaseEnvironment = {
   PLATFORM_STAGING_DATABASE_PROVIDER: "supabase",
   PLATFORM_STAGING_RESOURCE_NAME: "Terraqo Platform Staging",
   PLATFORM_STAGING_SUPABASE_PROJECT_REF: supabaseRef,
-  B5_GATE_DATABASE_URL: `postgresql://postgres:unique-stage-credential@db.${supabaseRef}.supabase.co:5432/postgres`,
+  PLATFORM_STAGING_DATABASE_ROLE: "terraqo_staging_migrator",
+  B5_GATE_DATABASE_URL: `postgresql://terraqo_staging_migrator:unique-stage-credential@db.${supabaseRef}.supabase.co:5432/postgres`,
   B5_GATE_EXPECTED_DATABASE: "postgres",
 };
 const supabaseTarget = validatePlatformStagingEnvironment(supabaseEnvironment);
 assert.equal(supabaseTarget.databaseProvider, "supabase");
 assert.equal(supabaseTarget.resourceName, "Terraqo Platform Staging");
 assert.equal(supabaseTarget.supabaseProjectRef, supabaseRef);
+assert.equal(supabaseTarget.databaseRole, "terraqo_staging_migrator");
 
 const poolerTarget = validatePlatformStagingEnvironment({
   ...supabaseEnvironment,
-  B5_GATE_DATABASE_URL: `postgresql://postgres.${supabaseRef}:unique-stage-credential@aws-0-sa-east-1.pooler.supabase.com:6543/postgres`,
+  B5_GATE_DATABASE_URL: `postgresql://terraqo_staging_migrator.${supabaseRef}:unique-stage-credential@aws-0-sa-east-1.pooler.supabase.com:5432/postgres`,
 });
 assert.equal(poolerTarget.supabaseProjectRef, supabaseRef);
 
@@ -76,14 +78,18 @@ function rejectsSupabase(change: Record<string, string | undefined>, expected: R
 
 rejectsSupabase({ PLATFORM_STAGING_RESOURCE_NAME: "Terraqo Production" }, /naturaleza aislada|productivo/);
 rejectsSupabase({ PLATFORM_STAGING_SUPABASE_PROJECT_REF: "short" }, /formato valido/);
+rejectsSupabase({ PLATFORM_STAGING_DATABASE_ROLE: "Postgres-Admin" }, /DATABASE_ROLE no tiene un formato valido/);
 rejectsSupabase({
   PLATFORM_STAGING_SUPABASE_PROJECT_REF: "zyxwvutsrqponmlkjihg",
 }, /PROJECT_REF confirmado/i);
 rejectsSupabase({
-  B5_GATE_DATABASE_URL: "postgresql://postgres:unique-stage-credential@db.preview.internal:5432/postgres",
+  B5_GATE_DATABASE_URL: "postgresql://terraqo_staging_migrator:unique-stage-credential@db.preview.internal:5432/postgres",
 }, /PROJECT_REF confirmado/i);
 rejectsSupabase({
-  B5_GATE_DATABASE_URL: `postgresql://postgres.wrongwrongwrongwrongw:unique-stage-credential@aws-0-sa-east-1.pooler.supabase.com:6543/postgres`,
+  B5_GATE_DATABASE_URL: `postgresql://terraqo_staging_migrator.wrongwrongwrongwrongw:unique-stage-credential@aws-0-sa-east-1.pooler.supabase.com:5432/postgres`,
+}, /PROJECT_REF confirmado/i);
+rejectsSupabase({
+  B5_GATE_DATABASE_URL: `postgresql://postgres.${supabaseRef}:unique-stage-credential@aws-0-sa-east-1.pooler.supabase.com:5432/postgres`,
 }, /PROJECT_REF confirmado/i);
 
 console.log("Platform staging readiness contract: OK (fail-closed PostgreSQL/Supabase target, flags, cohort and secrets)." );

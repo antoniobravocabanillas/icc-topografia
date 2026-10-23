@@ -299,10 +299,8 @@ este release.
 
 1. [Completado] Registrar host, nombre de DB, propietario y confirmacion de no
    produccion.
-2. [En progreso/HOLD] Generar el baseline pre-B1 sin filas y cerrar su ensayo
-   desechable. La generacion es reproducible; falta evidencia final del ledger,
-   objetos, GIN, cero filas y drift por un bloqueo de limpieza de PostgreSQL en
-   Windows tras tres ciclos.
+2. [Completado] Baseline pre-B1 sin filas y ensayo desechable aprobados: ledger
+   43:43:0, objetos B1-B5, GIN, cero filas, drift esperado y limpieza.
 3. Configurar variables con todos los flags apagados, proveedor `off` y cohorte
    vacia. [Parcial] El sitio Netlify aislado y sus variables no secretas,
    secretos Auth/dispatcher y kill switches OAuth/correo ya existen; faltan la
