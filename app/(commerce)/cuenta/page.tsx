@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { createMetadata } from "@/lib/seo";
 import { terraqoDomains } from "@/lib/terraqo-domains";
 import { billingContinuation } from "@/lib/terraqo/billing/continuation";
+import { resolveOAuthProviderAvailability } from "@/lib/server/oauth-provider-policy";
 
 export const metadata = createMetadata({ title: "Accede a Terraqo", description: "Inicia sesión como profesional o empresa y continúa tu operación en Terraqo.", path: "/cuenta" });
 
@@ -35,6 +36,7 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
     : null;
   const brandName = workspace?.brandName || workspace?.name || "Terraqo";
   const isWorkspacePortal = Boolean(workspace);
+  const socialProviders = resolveOAuthProviderAvailability();
 
   return (
     <section className="tq-auth-surface tq-auth-surface--editorial relative isolate min-h-dvh overflow-hidden bg-[#07101a] text-white">
@@ -80,11 +82,7 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
           <AccountAccessPanel
             loginTitle={isWorkspacePortal ? `Bienvenido a ${brandName}` : undefined}
             loginDescription={isWorkspacePortal ? "Usa tus credenciales Terraqo para ingresar al espacio asignado." : undefined}
-            socialProviders={{
-              google: Boolean(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET),
-              apple: Boolean(process.env.AUTH_APPLE_ID && process.env.AUTH_APPLE_SECRET),
-              microsoft: Boolean(process.env.AUTH_MICROSOFT_ENTRA_ID_ID && process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET),
-            }}
+            socialProviders={socialProviders}
           />
         </div>
       </div>

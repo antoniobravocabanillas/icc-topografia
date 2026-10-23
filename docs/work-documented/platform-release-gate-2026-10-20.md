@@ -304,7 +304,9 @@ este release.
    objetos, GIN, cero filas y drift por un bloqueo de limpieza de PostgreSQL en
    Windows tras tres ciclos.
 3. Configurar variables con todos los flags apagados, proveedor `off` y cohorte
-   vacia.
+   vacia. [Parcial] El sitio Netlify aislado y sus variables no secretas,
+   secretos Auth/dispatcher y kill switches OAuth/correo ya existen; faltan la
+   conexion DB de runtime y el despliegue.
 4. Aplicar las siete migraciones en orden durante la ventana acordada.
 5. Ejecutar `npm run check:b5-schema-drift` y exigir solo los dos artefactos
    full-text documentados.

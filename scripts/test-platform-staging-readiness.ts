@@ -12,6 +12,8 @@ const safeEnvironment: Record<string, string | undefined> = {
   NEXT_PUBLIC_SITE_URL: "https://preview-terraqo.example.net",
   AUTH_URL: "https://preview-terraqo.example.net",
   TERRAQO_EVIDENCE_ANALYSIS_PROVIDER: "off",
+  TERRAQO_OAUTH_ENABLED: "false",
+  TERRAQO_TRANSACTIONAL_EMAIL_ENABLED: "false",
   TERRAQO_B5_PILOT_WORKSPACE_IDS: "",
   AUTH_SECRET: "stage-auth-secret-00000000000000000001",
   EVIDENCE_ANALYSIS_DISPATCH_SECRET: "stage-dispatch-secret-000000000000001",
@@ -60,6 +62,8 @@ rejects({
 rejects({ PLATFORM_STAGING_ALLOW_REMOTE: "false" }, /PLATFORM_STAGING_ALLOW_REMOTE=true/);
 rejects({ NEXT_PUBLIC_SITE_URL: "https://portal.terraqoglobal.com", AUTH_URL: "https://portal.terraqoglobal.com" }, /producción/);
 rejects({ TERRAQO_WORK_CASES_V1: "true" }, /TERRAQO_WORK_CASES_V1 debe iniciar en false/);
+rejects({ TERRAQO_OAUTH_ENABLED: "true" }, /OAuth debe iniciar deshabilitado/);
+rejects({ TERRAQO_TRANSACTIONAL_EMAIL_ENABLED: "true" }, /correo transaccional debe iniciar deshabilitado/);
 rejects({ TERRAQO_B5_PILOT_WORKSPACE_IDS: "workspace-real" }, /cohorte piloto debe iniciar vacía/);
 rejects({ EVIDENCE_ANALYSIS_DISPATCH_SECRET: safeEnvironment.AUTH_SECRET }, /deben ser independientes/);
 

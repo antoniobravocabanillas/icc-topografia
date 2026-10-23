@@ -9,6 +9,7 @@ import { z } from "zod";
 import {currentWebSessionRole} from "@/lib/server/web-session-role";
 import { prisma } from "@/lib/prisma";
 import { createWebCvSessionGrant, revokeWebCvSessionGrant } from "@/lib/server/web-cv-session-grant";
+import { resolveOAuthProviderAvailability } from "@/lib/server/oauth-provider-policy";
 
 const credentialsSchema = z.object({ email: z.string().trim().toLowerCase().email(), password: z.string().optional(), passkeyToken: z.string().optional() });
 
@@ -16,10 +17,11 @@ class EmailNotVerifiedError extends CredentialsSignin {
   code = "email_not_verified";
 }
 
+const oauthAvailability = resolveOAuthProviderAvailability();
 const socialProviders = [
-  ...(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET ? [Google] : []),
-  ...(process.env.AUTH_APPLE_ID && process.env.AUTH_APPLE_SECRET ? [Apple] : []),
-  ...(process.env.AUTH_MICROSOFT_ENTRA_ID_ID && process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET ? [MicrosoftEntraID] : []),
+  ...(oauthAvailability.google ? [Google] : []),
+  ...(oauthAvailability.apple ? [Apple] : []),
+  ...(oauthAvailability.microsoft ? [MicrosoftEntraID] : []),
 ];
 
 export const { handlers, signIn, signOut, auth } = NextAuth({

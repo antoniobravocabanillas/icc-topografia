@@ -61,6 +61,29 @@ B5_GATE_EXPECTED_DATABASE=postgres
 guardarse en el contexto de staging; no pertenecen a este documento, Git, logs
 ni mensajes.
 
+## Aplicacion Netlify aislada
+
+El 22 de octubre de 2026 se creo, sin despliegue ni enlace al checkout, el sitio
+Netlify `terraqo-platform-staging`:
+
+- Site ID: `6b8c43fb-6083-450a-9b85-46a820fb6358`.
+- URL reservada: `https://terraqo-platform-staging.netlify.app`.
+- Plan observado: Free (`nf_team_dev`).
+- Sin dominio personalizado, repositorio, CI ni deploy publicado por este gate.
+- El checkout local permanece enlazado al sitio productivo historico; los
+  comandos de staging deben incluir siempre el Site ID explicito.
+
+Se configuraron la identidad no secreta de Supabase, URLs del sitio y los nueve
+flags B1-B5 en `false`. El proveedor de analisis esta `off`, el proveedor IA
+legacy en `none` y se generaron secretos exclusivos para Auth.js y el dispatcher
+en el contexto `production` del sitio de staging.
+
+Netlify hereda variables compartidas del equipo. Por eso staging exige
+`TERRAQO_OAUTH_ENABLED=false` y
+`TERRAQO_TRANSACTIONAL_EMAIL_ENABLED=false`: ambos controles se aplican en el
+servidor y prevalecen aunque existan credenciales OAuth o Resend heredadas. No
+se habilitaran hasta ejecutar pruebas sinteticas especificas.
+
 ## Estado y siguiente gate
 
 El destino esta reservado e identificado, pero permanece vacio. Esta evidencia

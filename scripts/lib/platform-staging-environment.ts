@@ -132,6 +132,12 @@ export function validatePlatformStagingEnvironment(
     assert.equal(environment[flag], "false", `${flag} debe iniciar en false.`);
   }
   assert.equal(environment.TERRAQO_EVIDENCE_ANALYSIS_PROVIDER, "off", "El proveedor IA debe iniciar en off.");
+  assert.equal(environment.TERRAQO_OAUTH_ENABLED, "false", "OAuth debe iniciar deshabilitado en staging.");
+  assert.equal(
+    environment.TERRAQO_TRANSACTIONAL_EMAIL_ENABLED,
+    "false",
+    "El correo transaccional debe iniciar deshabilitado en staging.",
+  );
   assert.equal(environment.TERRAQO_B5_PILOT_WORKSPACE_IDS ?? "", "", "La cohorte piloto debe iniciar vacía.");
 
   validateSecret(required(environment, "AUTH_SECRET"), "AUTH_SECRET");

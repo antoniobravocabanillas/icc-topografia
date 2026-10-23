@@ -14,7 +14,14 @@ function senderAddress() {
   return configured.includes("<") ? configured : `Terraqo <${configured}>`;
 }
 
+export function transactionalEmailEnabled() {
+  return process.env.TERRAQO_TRANSACTIONAL_EMAIL_ENABLED?.trim().toLowerCase() !== "false";
+}
+
 export async function sendTransactionalEmail(input: TransactionalEmailInput) {
+  if (!transactionalEmailEnabled()) {
+    return { delivered: false as const, reason: "disabled" as const };
+  }
   const apiKey = process.env.RESEND_API_KEY;
   const from = senderAddress();
   if (!apiKey || !from) return { delivered: false as const, reason: "missing_provider" as const };

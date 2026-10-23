@@ -10,6 +10,7 @@ const contractScripts = [
   "test:attendance-policy",
   "test:attendance-bootstrap",
   "test:auth-secure-proxy",
+  "test:oauth-provider-policy",
   "test:image-origin-policy",
   "test:portal-journeys",
   "test:field-verification-recovery",
