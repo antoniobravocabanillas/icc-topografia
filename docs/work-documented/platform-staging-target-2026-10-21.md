@@ -88,12 +88,19 @@ Netlify `terraqo-platform-staging`:
 - Revision desplegada vigente: `4313f2d`.
 - Deploy vigente tras rotar secretos y agregar el gate HTTP autenticado:
   `6ade1221ccadb571feeebdfe` (revision `6583ec9`).
+- Deploy de cohorte B1-B2 validado:
+  `6ade14b5864af4857af4b077` (revision `016c182`).
 - URL validada: `https://terraqo-platform-staging.netlify.app`.
 
 Se configuraron la identidad no secreta de Supabase, URLs del sitio y los nueve
-flags B1-B5 en `false`. El proveedor de analisis esta `off`, el proveedor IA
-legacy en `none` y se generaron secretos exclusivos para Auth.js y el dispatcher
-en el contexto `production` del sitio de staging.
+flags B1-B5. La cohorte vigente habilita exclusivamente
+`TERRAQO_WORKLOG_FTS_V1` y `TERRAQO_WORK_CASES_V1`; los siete flags B3-B5
+permanecen en `false`. El preflight exige que todo flag activo aparezca en
+`PLATFORM_STAGING_ENABLED_FLAGS` y que
+`PLATFORM_STAGING_ACTIVATION_CONFIRM=cohort`, por lo que una activacion heredada
+o accidental falla antes del deploy. El proveedor de analisis esta `off`, el
+proveedor IA legacy en `none` y se generaron secretos exclusivos para Auth.js y
+el dispatcher en el contexto `production` del sitio de staging.
 
 Netlify hereda variables compartidas del equipo. Por eso staging exige
 `TERRAQO_OAUTH_ENABLED=false` y
@@ -115,7 +122,9 @@ aplicacion. Esta evidencia no autoriza despliegue. Estado del gate:
 6. [Completado] Rol runtime con `USAGE` y DML sobre `icc`, sin `CREATE`, probado
    por conexion directa y transaction pooler. `DATABASE_URL` esta guardada como
    secreto solo en Netlify staging; el migrador permanece `NOLOGIN`.
-7. Pendiente: despliegue de la revision candidata y E2E sintetico.
+7. [Completado B1-B2] Revision candidata desplegada y E2E sintetico autenticado.
+8. Pendiente: activar y validar B3-B5 por cohortes, observar rollback y cerrar
+   los gates humanos/externos.
 
 No se reutiliza el proyecto `Terraqo`; su nombre no declara staging y pertenece
 a una superficie distinta.
@@ -166,6 +175,11 @@ los restaura en `finally`.
   cruzada rechazada. El primer ciclo detecto una FK restrictiva en la limpieza;
   se corrigio el orden y la repeticion termino con cero usuarios, bitacoras,
   WorkCases y workspaces.
+- Gate visual B1/B2 en navegador real: `/portal/bitacora` mostro
+  `Continuidad del trabajo`, compositor, archivo, calendario y filtros. La
+  captura reproducible quedo en
+  `output/playwright/platform-staging-b1-b2.png`; el runner confirma la UI y
+  limpia todos los fixtures al finalizar.
 
 El E2E HTTP autenticado B3-B5, accesibilidad fisica, dispatcher HTTPS,
 rollback observado y firmas siguen pendientes; por ello el release permanece

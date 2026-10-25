@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
+import { mkdir } from "node:fs/promises";
 import bcrypt from "bcryptjs";
 import { chromium, type BrowserContext } from "playwright";
 import { validatePlatformStagingEnvironment } from "./lib/platform-staging-environment";
@@ -146,6 +147,13 @@ async function main() {
     );
     assert.equal(foreignMutation.status(), 404);
 
+    const ownerPage = await ownerContext.newPage();
+    await ownerPage.goto(new URL("/portal/bitacora", origin).toString(), { waitUntil: "networkidle" });
+    await ownerPage.getByText("Continuidad del trabajo", { exact: true }).first().waitFor({ timeout: 60_000 });
+    await mkdir("output/playwright", { recursive: true });
+    await ownerPage.screenshot({ path: "output/playwright/platform-staging-b1-b2.png", fullPage: true });
+    await ownerPage.close();
+
     console.log(JSON.stringify({
       outcome: "passed",
       authenticatedUsers: 2,
@@ -154,6 +162,7 @@ async function main() {
       duplicateRejected: true,
       crossUserReadIsolated: true,
       crossUserMutationRejected: true,
+      workCaseUiVisible: true,
     }));
   } finally {
     await Promise.all(contexts.map((context) => context.close().catch(() => undefined)));

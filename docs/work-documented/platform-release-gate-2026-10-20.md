@@ -11,9 +11,9 @@ cero hallazgos reportables en el snapshot revisado. La liberacion continua en
    pruebas, documentacion y artefactos locales. El scan sellado conserva el
    digest exacto revisado, pero no reemplaza un candidato Git inmutable.
 2. El destino Supabase exclusivo de staging ya esta migrado, sin drift no
-   documentado y con runtime sin DDL. La revision candidata fue desplegada con
-   flags apagados y aprobo el smoke E2E anonimo; faltan el recorrido
-   multiusuario B1-B5, rollback, observabilidad externa y accesibilidad sobre
+   documentado y con runtime sin DDL. La revision candidata fue desplegada y la
+   cohorte B1-B2 aprobo recorrido autenticado, aislamiento y revision visual;
+   faltan B3-B5, rollback, observabilidad externa y accesibilidad sobre
    dispositivos fisicos.
 
 Este documento prepara la liberacion, pero no autoriza aplicar migraciones,
@@ -116,8 +116,8 @@ registrar la aprobacion producto/seguridad de ADR-007.
 
 | Bloque | Alcance local | Migracion | Flags principales | Gate local | Pendiente externo |
 | --- | --- | --- | --- | --- | --- |
-| B1 | Archivo escalable, permalink, DTO por audiencia, cursor, calendario y full-text | `20261016113000_worklog_archive_cursor_index`, `20261016143000_worklog_full_text_search` | `TERRAQO_WORKLOG_FTS_V1` | Cerrado; benchmark local hasta 100.000 registros | Copia anonimizada comparable, benchmark de staging, ruta autenticada y lector de pantalla real |
-| B2 | Medios seguros, borrador recuperable, revisiones, contribucion y WorkCase | `20261016183000_worklog_revisions_work_cases` | `TERRAQO_WORK_CASES_V1` | Cerrado | Migracion, recorrido manual de carga/reintento/conflicto y rollback con flags |
+| B1 | Archivo escalable, permalink, DTO por audiencia, cursor, calendario y full-text | `20261016113000_worklog_archive_cursor_index`, `20261016143000_worklog_full_text_search` | `TERRAQO_WORKLOG_FTS_V1` | Cerrado; benchmark local hasta 100.000 registros; HTTP/UI staging aprobado | Benchmark con volumen comparable y lector de pantalla real |
+| B2 | Medios seguros, borrador recuperable, revisiones, contribucion y WorkCase | `20261016183000_worklog_revisions_work_cases` | `TERRAQO_WORK_CASES_V1` | Cerrado; aislamiento HTTP y UI staging aprobados | Carga/reintento de medios en dispositivo fisico y rollback con flags |
 | B3 | Selecciones, grants, proyeccion revocable, snapshot de medios y respaldo acotado | `20261017120000_scoped_sharing_endorsements`, `20261020143000_share_item_media_snapshot` | `TERRAQO_SCOPED_SHARING_V1`, `TERRAQO_SCOPED_ENDORSEMENTS_V1` | Cerrado | Dos identidades y dos workspaces; revocacion de lectura, medio y respaldo |
 | B4 | Necesidad, dossier, mensajeria contextual, colaboracion y cierre | `20261017230000_discovery_needs` | `TERRAQO_DISCOVERY_NEEDS_V1`, `TERRAQO_CONTEXTUAL_MESSAGING_V1`, `TERRAQO_COLLABORATION_V1`, `TERRAQO_CLOSURE_V1` | Cerrado; navegador real local a 320 px y zoom 200 % | Recorrido de dos partes en staging, aislamiento, concurrencia, sustitucion de versiones y constancia privada |
 | B5 | Analisis con fuentes, recuperacion/observabilidad y piloto por entitlement | `20261018153000_evidence_analysis_jobs` | `TERRAQO_EVIDENCE_ANALYSIS_V1`, `TERRAQO_B5_PILOT_WORKSPACE_IDS` | Cerrado localmente; DB disposable, Ollama local, multiusuario y browser gate documentados | Dispatcher HTTPS, observabilidad externa, cohorte de staging, limites definitivos y rollback observado |
