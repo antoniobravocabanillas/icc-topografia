@@ -62,6 +62,7 @@
     "test:b5-multiuser-gate": "node --conditions=react-server --import tsx scripts/test-b5-multiuser-gate.ts",
     "test:b5-ollama-provider-gate": "node --conditions=react-server --import tsx scripts/test-b5-ollama-provider-gate.ts",
     "test:b5-browser-accessibility": "node --conditions=react-server --import tsx scripts/test-b5-browser-accessibility.ts",
+    "test:platform-staging-http": "node --conditions=react-server --import tsx scripts/test-platform-staging-http.ts",
     "benchmark:worklog-fts": "tsx scripts/benchmark-worklog-full-text.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
