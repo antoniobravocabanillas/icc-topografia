@@ -162,7 +162,13 @@ async function main() {
       await prisma.verificationToken.deleteMany({
         where: { identifier: { in: userIds.map((id) => `web-cv-session:${id}`) } },
       });
-      if (userIds.length) await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+      if (userIds.length) {
+        // TerraqoWorkCase conserva createdById con FK restrictiva. Elimina
+        // primero los agregados sinteticos y despues sus autores.
+        await prisma.terraqoWorkCase.deleteMany({ where: { createdById: { in: userIds } } });
+        await prisma.terraqoWorklogEntry.deleteMany({ where: { authorId: { in: userIds } } });
+        await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+      }
       assert.equal(await prisma.user.count({ where: { id: { in: userIds } } }), 0);
       assert.equal(await prisma.terraqoWorkspace.count(), 0);
       assert.equal(await prisma.terraqoWorklogEntry.count(), 0);

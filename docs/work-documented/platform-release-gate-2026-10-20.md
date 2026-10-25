@@ -320,8 +320,10 @@ este release.
    aislamiento de enlaces, OAuth apagado, contratos 401/404 y evidencia visual
    desktop/movil. El gate B5 directo sobre PostgreSQL remoto aprobo dos
    identidades/workspaces, piloto/control, replay concurrente, limite,
-   downgrade, flags y limpieza total. Pendiente la matriz HTTP autenticada
-   B1-B5, request IDs, rollback y observabilidad.
+   downgrade, flags y limpieza total. El gate HTTP B1/B2 aprobo login real con
+   dos identidades, anonimo 401, WorkCase, duplicado 409, aislamiento de lectura
+   y mutacion cruzada 404, con limpieza total. Pendiente la matriz HTTP B3-B5,
+   request IDs, rollback y observabilidad.
 
 ### Fase C - activacion por cohortes
 

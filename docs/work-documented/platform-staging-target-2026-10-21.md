@@ -86,6 +86,8 @@ Netlify `terraqo-platform-staging`:
 - Deploy aislado inicial validado: `6add4b1827c97b3b16ae86a4`.
 - Deploy vigente tras endurecer replay concurrente: `6add4e394d17c7cb1c4722b6`.
 - Revision desplegada vigente: `4313f2d`.
+- Deploy vigente tras rotar secretos y agregar el gate HTTP autenticado:
+  `6ade1221ccadb571feeebdfe` (revision `6583ec9`).
 - URL validada: `https://terraqo-platform-staging.netlify.app`.
 
 Se configuraron la identidad no secreta de Supabase, URLs del sitio y los nueve
@@ -159,7 +161,12 @@ los restaura en `finally`.
   replay idempotente y reintento acotado; la repeticion aprobo sin duplicados.
 - Limpieza posterior comprobada: cero usuarios, workspaces, necesidades y
   suscripciones en staging.
+- Gate HTTP B1/B2 con dos sesiones reales de Credentials: anonimo rechazado,
+  WorkCase creado, bitacora duplicada rechazada, lista ajena vacia y mutacion
+  cruzada rechazada. El primer ciclo detecto una FK restrictiva en la limpieza;
+  se corrigio el orden y la repeticion termino con cero usuarios, bitacoras,
+  WorkCases y workspaces.
 
-El E2E HTTP autenticado completo B1-B5, accesibilidad fisica, dispatcher HTTPS,
+El E2E HTTP autenticado B3-B5, accesibilidad fisica, dispatcher HTTPS,
 rollback observado y firmas siguen pendientes; por ello el release permanece
 en HOLD.
