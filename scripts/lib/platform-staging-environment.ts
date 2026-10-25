@@ -30,6 +30,7 @@ export type PlatformStagingTarget = {
   applicationHost: string;
   authHost: string;
   remoteDatabase: boolean;
+  enabledFlags: string[];
 };
 
 export type PlatformStagingEnvironment = Record<string, string | undefined>;
@@ -131,8 +132,24 @@ export function validatePlatformStagingEnvironment(
   const authUrl = parseHttpsUrl(required(environment, "AUTH_URL"), "AUTH_URL");
   assert.equal(authUrl.hostname, applicationUrl.hostname, "AUTH_URL y NEXT_PUBLIC_SITE_URL deben pertenecer al mismo host de staging.");
 
+  const enabledFlags = (environment.PLATFORM_STAGING_ENABLED_FLAGS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  assert.equal(new Set(enabledFlags).size, enabledFlags.length, "PLATFORM_STAGING_ENABLED_FLAGS contiene duplicados.");
+  for (const flag of enabledFlags) {
+    assert.ok(platformFlags.includes(flag as (typeof platformFlags)[number]), `Flag no autorizado para staging: ${flag}.`);
+  }
+  if (enabledFlags.length) {
+    assert.equal(
+      environment.PLATFORM_STAGING_ACTIVATION_CONFIRM,
+      "cohort",
+      "Activar flags exige PLATFORM_STAGING_ACTIVATION_CONFIRM=cohort.",
+    );
+  }
   for (const flag of platformFlags) {
-    assert.equal(environment[flag], "false", `${flag} debe iniciar en false.`);
+    const expected = enabledFlags.includes(flag) ? "true" : "false";
+    assert.equal(environment[flag], expected, `${flag} debe ser ${expected} para esta cohorte.`);
   }
   assert.equal(environment.TERRAQO_EVIDENCE_ANALYSIS_PROVIDER, "off", "El proveedor IA debe iniciar en off.");
   assert.equal(environment.TERRAQO_OAUTH_ENABLED, "false", "OAuth debe iniciar deshabilitado en staging.");
@@ -161,5 +178,6 @@ export function validatePlatformStagingEnvironment(
     applicationHost: applicationUrl.hostname,
     authHost: authUrl.hostname,
     remoteDatabase,
+    enabledFlags,
   };
 }

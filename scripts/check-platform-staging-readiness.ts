@@ -5,7 +5,7 @@ try {
   const resource = target.resourceName ? `; resource=${target.resourceName}` : "";
   const projectRef = target.supabaseProjectRef ? `; projectRef=${target.supabaseProjectRef}` : "";
   console.log(
-    `Platform staging preflight: OK (provider=${target.databaseProvider}; app=${target.applicationHost}; db=${target.databaseHost}/${target.databaseName}; remote=${target.remoteDatabase}${resource}${projectRef}).`,
+    `Platform staging preflight: OK (provider=${target.databaseProvider}; app=${target.applicationHost}; db=${target.databaseHost}/${target.databaseName}; remote=${target.remoteDatabase}; enabledFlags=${target.enabledFlags.join(",") || "none"}${resource}${projectRef}).`,
   );
   console.log("No se abrio ninguna conexion ni se imprimieron credenciales.");
 } catch (error) {

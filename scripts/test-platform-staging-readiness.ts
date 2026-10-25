@@ -24,6 +24,7 @@ const target = validatePlatformStagingEnvironment(safeEnvironment);
 assert.equal(target.databaseName, "terraqo_staging_gate");
 assert.equal(target.databaseProvider, "postgresql");
 assert.equal(target.remoteDatabase, true);
+assert.deepEqual(target.enabledFlags, []);
 
 const supabaseRef = "abcdefghijklmnopqrst";
 const supabaseEnvironment = {
@@ -63,7 +64,17 @@ rejects({
 }, /naturaleza aislada|productivo/);
 rejects({ PLATFORM_STAGING_ALLOW_REMOTE: "false" }, /PLATFORM_STAGING_ALLOW_REMOTE=true/);
 rejects({ NEXT_PUBLIC_SITE_URL: "https://portal.terraqoglobal.com", AUTH_URL: "https://portal.terraqoglobal.com" }, /producción/);
-rejects({ TERRAQO_WORK_CASES_V1: "true" }, /TERRAQO_WORK_CASES_V1 debe iniciar en false/);
+rejects({ TERRAQO_WORK_CASES_V1: "true" }, /TERRAQO_WORK_CASES_V1 debe ser false/);
+rejects({ PLATFORM_STAGING_ENABLED_FLAGS: "UNKNOWN_FLAG", PLATFORM_STAGING_ACTIVATION_CONFIRM: "cohort" }, /Flag no autorizado/);
+rejects({ PLATFORM_STAGING_ENABLED_FLAGS: "TERRAQO_WORK_CASES_V1", TERRAQO_WORK_CASES_V1: "true" }, /ACTIVATION_CONFIRM=cohort/);
+const activated = validatePlatformStagingEnvironment({
+  ...safeEnvironment,
+  PLATFORM_STAGING_ENABLED_FLAGS: "TERRAQO_WORKLOG_FTS_V1,TERRAQO_WORK_CASES_V1",
+  PLATFORM_STAGING_ACTIVATION_CONFIRM: "cohort",
+  TERRAQO_WORKLOG_FTS_V1: "true",
+  TERRAQO_WORK_CASES_V1: "true",
+});
+assert.deepEqual(activated.enabledFlags, ["TERRAQO_WORKLOG_FTS_V1", "TERRAQO_WORK_CASES_V1"]);
 rejects({ TERRAQO_OAUTH_ENABLED: "true" }, /OAuth debe iniciar deshabilitado/);
 rejects({ TERRAQO_TRANSACTIONAL_EMAIL_ENABLED: "true" }, /correo transaccional debe iniciar deshabilitado/);
 rejects({ TERRAQO_B5_PILOT_WORKSPACE_IDS: "workspace-real" }, /cohorte piloto debe iniciar vacía/);
