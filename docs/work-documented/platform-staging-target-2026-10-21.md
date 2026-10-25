@@ -61,13 +61,13 @@ PLATFORM_STAGING_ALLOW_REMOTE=true
 PLATFORM_STAGING_DATABASE_PROVIDER=supabase
 PLATFORM_STAGING_RESOURCE_NAME="Terraqo Platform Staging"
 PLATFORM_STAGING_SUPABASE_PROJECT_REF=mghdpciewbsowjrjwmwk
-PLATFORM_STAGING_DATABASE_ROLE=terraqo_staging_migrator
+PLATFORM_STAGING_DATABASE_ROLE=terraqo_staging_runtime
 B5_GATE_EXPECTED_DATABASE=postgres
 ```
 
-El rol esperado tambien quedo registrado como variable no secreta en el sitio
-Netlify aislado `terraqo-platform-staging`; el sitio continua sin Git, sin
-deploy y con los flags de producto y proveedores externos apagados.
+El rol runtime tambien quedo registrado como variable no secreta en el sitio
+Netlify aislado `terraqo-platform-staging`; conserva DML sobre `icc` sin DDL y
+los flags de producto y proveedores externos permanecen apagados.
 
 `B5_GATE_DATABASE_URL`, `AUTH_SECRET` y
 `EVIDENCE_ANALYSIS_DISPATCH_SECRET` son secretos operativos. Deben generarse y
@@ -76,15 +76,16 @@ ni mensajes.
 
 ## Aplicacion Netlify aislada
 
-El 22 de octubre de 2026 se creo, sin despliegue ni enlace al checkout, el sitio
+El 22 de octubre de 2026 se creo el sitio aislado
 Netlify `terraqo-platform-staging`:
 
 - Site ID: `6b8c43fb-6083-450a-9b85-46a820fb6358`.
 - URL reservada: `https://terraqo-platform-staging.netlify.app`.
 - Plan observado: Free (`nf_team_dev`).
-- Sin dominio personalizado, repositorio, CI ni deploy publicado por este gate.
-- El checkout local permanece enlazado al sitio productivo historico; los
-  comandos de staging deben incluir siempre el Site ID explicito.
+- Sin dominio personalizado, repositorio ni CI.
+- Deploy aislado validado el 24 de octubre de 2026: `6add4b1827c97b3b16ae86a4`.
+- Revision desplegada: `2e2a1e58241eb5062ee924c4dfca64af35285d88`.
+- URL validada: `https://terraqo-platform-staging.netlify.app`.
 
 Se configuraron la identidad no secreta de Supabase, URLs del sitio y los nueve
 flags B1-B5 en `false`. El proveedor de analisis esta `off`, el proveedor IA
@@ -115,3 +116,43 @@ aplicacion. Esta evidencia no autoriza despliegue. Estado del gate:
 
 No se reutiliza el proyecto `Terraqo`; su nombre no declara staging y pertenece
 a una superficie distinta.
+
+## Incidente de configuracion evitado
+
+Netlify CLI resolvia el build con el sitio enlazado localmente y daba prioridad
+a `.env` y `.env.local` del checkout sobre la configuracion remota. Dos builds
+preliminares de staging heredaron URLs y acceso de produccion, por lo que se
+descartaron como evidencia. No se desplego esa configuracion en produccion ni se
+modificaron filas productivas.
+
+Antes del candidato valido se corrigieron las variables del sitio productivo
+que habian sido alteradas durante la preparacion, se retiraron todas las claves
+exclusivas de staging y se verificaron su host Prisma, URLs y ausencia de flags
+B1-B5. Produccion no fue redesplegada.
+
+El procedimiento reproducible queda en `scripts/deploy-platform-staging.ps1`.
+Falla si el Site ID no es el esperado, si el checkout no esta enlazado al sitio
+aislado, si Git esta sucio o si el preflight rechaza variables. Durante el build
+aparta los dos archivos `.env` locales en rutas exactas dentro del repositorio y
+los restaura en `finally`.
+
+## Evidencia del despliegue aislado
+
+- Preflight: proveedor Supabase, project ref y rol runtime exactos, URLs HTTPS
+  exclusivas de staging, nueve flags apagados, OAuth/correo apagados y proveedor
+  de analisis `off`.
+- Conteo previo por rol runtime: cero usuarios y cero bitacoras.
+- HTTP: `/api/health`, `/`, `/cuenta` y `/red` respondieron `200`;
+  `/api/v1/entitlements` respondio `401`; recursos B1-B5 inexistentes
+  respondieron `404` sin filtrar datos.
+- Auth.js expuso solo `credentials`; OAuth no quedo habilitado por herencia.
+- Navegador real: home sin movimientos publicos, `/red` con cero perfiles,
+  ningun enlace HTTP a produccion o localhost y cero errores de consola en la
+  red publica.
+- Revision visual: desktop completo y cuenta movil a 390 x 844. El unico warning
+  observado fue un preload CSS no consumido inmediatamente; no afecta datos,
+  navegacion ni autenticacion.
+
+El E2E sintetico multiusuario B1-B5, accesibilidad fisica, dispatcher HTTPS,
+rollback observado y firmas siguen pendientes; por ello el release permanece
+en HOLD.

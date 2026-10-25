@@ -11,9 +11,10 @@ cero hallazgos reportables en el snapshot revisado. La liberacion continua en
    pruebas, documentacion y artefactos locales. El scan sellado conserva el
    digest exacto revisado, pero no reemplaza un candidato Git inmutable.
 2. El destino Supabase exclusivo de staging ya esta migrado, sin drift no
-   documentado y con runtime sin DDL; falta desplegar la revision candidata y
-   ejecutar recorrido multiusuario, rollback, observabilidad externa y
-   accesibilidad sobre dispositivos fisicos.
+   documentado y con runtime sin DDL. La revision candidata fue desplegada con
+   flags apagados y aprobo el smoke E2E anonimo; faltan el recorrido
+   multiusuario B1-B5, rollback, observabilidad externa y accesibilidad sobre
+   dispositivos fisicos.
 
 Este documento prepara la liberacion, pero no autoriza aplicar migraciones,
 activar flags, desplegar, ejecutar cobros ni usar datos de clientes.
@@ -311,9 +312,13 @@ este release.
    las siete migraciones B1-B5 en orden.
 5. [Completado] `npm run check:b5-schema-drift`: solo los dos artefactos
    full-text documentados.
-6. Desplegar exactamente la revision candidata con flags apagados.
-7. Ejecutar E2E y capturar request IDs, tiempos, conteos y evidencia visual sin
-   datos reales.
+6. [Completado] Desplegar exactamente la revision candidata con flags apagados.
+   Revision `2e2a1e58241eb5062ee924c4dfca64af35285d88`, deploy
+   `6add4b1827c97b3b16ae86a4` en el sitio aislado.
+7. [Parcial] Smoke E2E anonimo aprobado: salud, home, cuenta, red vacia,
+   aislamiento de enlaces, OAuth apagado, contratos 401/404 y evidencia visual
+   desktop/movil. Pendiente la matriz sintetica autenticada B1-B5, request IDs,
+   concurrencia, rollback y observabilidad.
 
 ### Fase C - activacion por cohortes
 
