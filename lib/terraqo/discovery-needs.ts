@@ -181,44 +181,70 @@ export async function createWorkspaceNeed(input: {
   monthlyLimit?: number;
 }) {
   const operationFingerprint = fingerprint(input.payload);
-  return prisma.$transaction(async (tx) => {
-    await tx.$queryRaw(Prisma.sql`SELECT id FROM icc."TerraqoWorkspace" WHERE id=${input.workspaceId} FOR UPDATE`);
-    const existing = await tx.terraqoWorkNeed.findUnique({
+  const replay = async () => {
+    const existing = await prisma.terraqoWorkNeed.findUnique({
       where: { createdById_operationKey: { createdById: input.userId, operationKey: input.operationKey } },
       include: needInclude,
     });
-    if (existing) {
-      if (!isWorkspaceReplay(existing, {
-        workspaceId: input.workspaceId,
-        operationFingerprint,
-      }))
-        throw new DiscoveryNeedsError("La clave de reintento ya fue usada con otra necesidad.", 409);
-      return existing;
+    if (!existing) return null;
+    if (!isWorkspaceReplay(existing, { workspaceId: input.workspaceId, operationFingerprint }))
+      throw new DiscoveryNeedsError("La clave de reintento ya fue usada con otra necesidad.", 409);
+    return existing;
+  };
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw(Prisma.sql`SELECT id FROM icc."TerraqoWorkspace" WHERE id=${input.workspaceId} FOR UPDATE`);
+        const existing = await tx.terraqoWorkNeed.findUnique({
+          where: { createdById_operationKey: { createdById: input.userId, operationKey: input.operationKey } },
+          include: needInclude,
+        });
+        if (existing) {
+          if (!isWorkspaceReplay(existing, { workspaceId: input.workspaceId, operationFingerprint }))
+            throw new DiscoveryNeedsError("La clave de reintento ya fue usada con otra necesidad.", 409);
+          return existing;
+        }
+        if (input.monthlyLimit) {
+          const now = new Date();
+          const since = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+          const used = await tx.terraqoWorkNeed.count({ where: { workspaceId: input.workspaceId, createdAt: { gte: since } } });
+          if (used >= input.monthlyLimit) throw new DiscoveryNeedsError("Alcanzaste el límite operativo del piloto. El historial permanece disponible.", 429);
+        }
+        const need = await tx.terraqoWorkNeed.create({
+          data: {
+            workspaceId: input.workspaceId,
+            createdById: input.userId,
+            operationKey: input.operationKey,
+            operationFingerprint,
+            revisions: { create: revisionData(input.payload, input.userId, 1, input.operationKey) },
+          },
+          include: { revisions: { select: { id: true, revisionNo: true } } },
+        });
+        const revision = need.revisions.find((item) => item.revisionNo === 1);
+        if (!revision) throw new DiscoveryNeedsError("No se pudo fijar la primera versión.", 500);
+        return tx.terraqoWorkNeed.update({
+          where: { id: need.id },
+          data: { currentRevisionId: revision.id },
+          include: needInclude,
+        });
+      }, { isolationLevel: "Serializable" });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        (error.code === "P2002" || error.code === "P2034")
+      ) {
+        const existing = await replay();
+        if (existing) return existing;
+        if (error.code === "P2034" && attempt < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 25 * (attempt + 1)));
+          continue;
+        }
+      }
+      throw error;
     }
-    if (input.monthlyLimit) {
-      const now = new Date();
-      const since = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-      const used = await tx.terraqoWorkNeed.count({ where: { workspaceId: input.workspaceId, createdAt: { gte: since } } });
-      if (used >= input.monthlyLimit) throw new DiscoveryNeedsError("Alcanzaste el límite operativo del piloto. El historial permanece disponible.", 429);
-    }
-    const need = await tx.terraqoWorkNeed.create({
-      data: {
-        workspaceId: input.workspaceId,
-        createdById: input.userId,
-        operationKey: input.operationKey,
-        operationFingerprint,
-        revisions: { create: revisionData(input.payload, input.userId, 1, input.operationKey) },
-      },
-      include: { revisions: { select: { id: true, revisionNo: true } } },
-    });
-    const revision = need.revisions.find((item) => item.revisionNo === 1);
-    if (!revision) throw new DiscoveryNeedsError("No se pudo fijar la primera versión.", 500);
-    return tx.terraqoWorkNeed.update({
-      where: { id: need.id },
-      data: { currentRevisionId: revision.id },
-      include: needInclude,
-    });
-  }, { isolationLevel: "Serializable" });
+  }
+  throw new DiscoveryNeedsError("No se pudo completar la operación concurrente.", 503);
 }
 
 export async function reviseWorkspaceNeed(input: {

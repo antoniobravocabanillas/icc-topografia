@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { validatePlatformStagingEnvironment } from "./lib/platform-staging-environment";
 
 function confirmedGateUrl() {
   const value = process.env.B5_GATE_DATABASE_URL?.trim();
@@ -8,14 +9,35 @@ function confirmedGateUrl() {
   assert.ok(expected, "Define B5_GATE_EXPECTED_DATABASE para confirmar el destino.");
   const parsed = new URL(value);
   assert.match(parsed.protocol, /^postgres(?:ql)?:$/, "El fixture B5 solo admite PostgreSQL.");
-  assert.ok(["127.0.0.1", "localhost", "::1"].includes(parsed.hostname), "El fixture mutante B5 solo puede ejecutarse contra localhost.");
   assert.equal(decodeURIComponent(parsed.pathname.replace(/^\//, "")), expected, "La base no coincide con B5_GATE_EXPECTED_DATABASE.");
-  assert.match(expected, /(?:gate|test|staging|disposable)/i, "El nombre de la base debe declarar que es aislada.");
-  return value;
+  const local = ["127.0.0.1", "localhost", "::1"].includes(parsed.hostname);
+  // El gate dispara dos transacciones en el mismo proceso para comprobar el
+  // replay concurrente. Reserva dos conexiones solo para este runner; la
+  // aplicacion desplegada conserva su limite serverless independiente.
+  parsed.searchParams.set("connection_limit", "2");
+  parsed.searchParams.set("pool_timeout", "30");
+  const gateUrl = parsed.toString();
+  if (local) {
+    assert.match(expected, /(?:gate|test|staging|disposable)/i, "El nombre de la base debe declarar que es aislada.");
+    return { remote: false, value: gateUrl };
+  }
+
+  assert.equal(
+    process.env.TERRAQO_STAGING_MUTATING_TESTS,
+    "mghdpciewbsowjrjwmwk:b5-synthetic-fixtures",
+    "El gate remoto exige consentimiento exacto para fixtures sinteticos de Terraqo Platform Staging.",
+  );
+  const target = validatePlatformStagingEnvironment(process.env);
+  assert.equal(target.databaseProvider, "supabase");
+  assert.equal(target.supabaseProjectRef, "mghdpciewbsowjrjwmwk");
+  assert.equal(target.databaseRole, "terraqo_staging_runtime");
+  assert.equal(target.databaseName, "postgres");
+  return { remote: true, value: gateUrl };
 }
 
 async function main() {
-  process.env.DATABASE_URL = confirmedGateUrl();
+  const target = confirmedGateUrl();
+  process.env.DATABASE_URL = target.value;
   process.env.TERRAQO_DISCOVERY_NEEDS_V1 = "true";
   process.env.TERRAQO_COLLABORATION_V1 = "true";
   process.env.TERRAQO_CLOSURE_V1 = "true";
@@ -36,6 +58,18 @@ async function main() {
   const createdUserIds: string[] = [];
 
   try {
+    if (target.remote) {
+      const [existingUsers, existingWorkspaces] = await Promise.all([
+        prisma.user.count(),
+        prisma.terraqoWorkspace.count(),
+      ]);
+      assert.deepEqual(
+        { existingUsers, existingWorkspaces },
+        { existingUsers: 0, existingWorkspaces: 0 },
+        "El staging remoto dejo de estar vacio; se rechaza el fixture para no tocar datos preexistentes.",
+      );
+    }
+
     const [ownerA, ownerB] = await Promise.all(emails.map((email, index) => prisma.user.create({
       data: { name: `B5 synthetic owner ${index + 1}`, email, emailVerified: new Date(), role: "CUSTOMER" },
       select: { id: true },
@@ -145,6 +179,15 @@ async function main() {
   } finally {
     if (createdWorkspaceIds.length) await prisma.terraqoWorkspace.deleteMany({ where: { id: { in: createdWorkspaceIds } } });
     if (createdUserIds.length) await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
+    assert.equal(await prisma.terraqoWorkspace.count({ where: { id: { in: createdWorkspaceIds } } }), 0);
+    assert.equal(await prisma.user.count({ where: { id: { in: createdUserIds } } }), 0);
+    if (target.remote) {
+      const [remainingUsers, remainingWorkspaces] = await Promise.all([
+        prisma.user.count(),
+        prisma.terraqoWorkspace.count(),
+      ]);
+      assert.deepEqual({ remainingUsers, remainingWorkspaces }, { remainingUsers: 0, remainingWorkspaces: 0 });
+    }
     await prisma.$disconnect();
   }
 }

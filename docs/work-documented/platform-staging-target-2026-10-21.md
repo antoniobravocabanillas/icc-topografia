@@ -152,7 +152,13 @@ los restaura en `finally`.
 - Revision visual: desktop completo y cuenta movil a 390 x 844. El unico warning
   observado fue un preload CSS no consumido inmediatamente; no afecta datos,
   navegacion ni autenticacion.
+- Gate B5 remoto con fixtures sinteticos: dos usuarios y dos workspaces,
+  piloto/control, replay concurrente, limite mensual, downgrade y flags. Un
+  conflicto serializable `P2034` detectado por PostgreSQL remoto se corrigio con
+  replay idempotente y reintento acotado; la repeticion aprobo sin duplicados.
+- Limpieza posterior comprobada: cero usuarios, workspaces, necesidades y
+  suscripciones en staging.
 
-El E2E sintetico multiusuario B1-B5, accesibilidad fisica, dispatcher HTTPS,
+El E2E HTTP autenticado completo B1-B5, accesibilidad fisica, dispatcher HTTPS,
 rollback observado y firmas siguen pendientes; por ello el release permanece
 en HOLD.

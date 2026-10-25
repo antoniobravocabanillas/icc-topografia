@@ -317,8 +317,10 @@ este release.
    `6add4b1827c97b3b16ae86a4` en el sitio aislado.
 7. [Parcial] Smoke E2E anonimo aprobado: salud, home, cuenta, red vacia,
    aislamiento de enlaces, OAuth apagado, contratos 401/404 y evidencia visual
-   desktop/movil. Pendiente la matriz sintetica autenticada B1-B5, request IDs,
-   concurrencia, rollback y observabilidad.
+   desktop/movil. El gate B5 directo sobre PostgreSQL remoto aprobo dos
+   identidades/workspaces, piloto/control, replay concurrente, limite,
+   downgrade, flags y limpieza total. Pendiente la matriz HTTP autenticada
+   B1-B5, request IDs, rollback y observabilidad.
 
 ### Fase C - activacion por cohortes
 
