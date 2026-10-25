@@ -163,102 +163,117 @@ export async function decideEndorsementRequest(input: {
   payload: z.infer<typeof terraqoEndorsementDecisionSchema>;
 }) {
   const operationFingerprint = hashOperation(input.payload);
-  return prisma.$transaction(async (tx) => {
-    const current = await tx.terraqoEndorsementRequest.findFirst({
-      where: {
-        id: input.requestId,
-        status: { in: ["PENDING", "IN_REVIEW"] },
-        OR: [
-          { reviewerUserId: input.userId },
-          { reviewerUserId: null, reviewerEmail: input.userEmail.toLowerCase() },
-        ],
-      },
-      select: {
-        id: true,
-        version: true,
-        requestedScope: true,
-        revisionHash: true,
-        expiresAt: true,
-        organizationId: true,
-      },
-    });
-    if (!current) throw new ScopedEndorsementError("Solicitud no disponible.", 404);
-    await tx.$queryRaw(Prisma.sql`SELECT id FROM icc."TerraqoEndorsementRequest" WHERE id=${current.id} FOR UPDATE`);
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        // La identidad se valida sin filtrar por estado. Esto permite resolver
+        // un replay idempotente incluso si el primer intento ya dejó la
+        // solicitud en un estado terminal.
+        const current = await tx.terraqoEndorsementRequest.findFirst({
+          where: {
+            id: input.requestId,
+            OR: [
+              { reviewerUserId: input.userId },
+              { reviewerUserId: null, reviewerEmail: input.userEmail.toLowerCase() },
+            ],
+          },
+          select: {
+            id: true,
+            requestedScope: true,
+            revisionHash: true,
+            organizationId: true,
+          },
+        });
+        if (!current) throw new ScopedEndorsementError("Solicitud no disponible.", 404);
+        await tx.$queryRaw(Prisma.sql`SELECT id FROM icc."TerraqoEndorsementRequest" WHERE id=${current.id} FOR UPDATE`);
 
-    const priorDecision = await tx.terraqoEndorsementDecision.findUnique({
-      where: { requestId_operationKey: { requestId: current.id, operationKey: input.operationKey } },
-      include: { request: { include: requestInclude } },
-    });
-    if (priorDecision) {
-      if (priorDecision.operationFingerprint !== operationFingerprint)
-        throw new ScopedEndorsementError("La clave de reintento ya fue usada con otra decisión.", 409);
-      return priorDecision.request;
+        const priorDecision = await tx.terraqoEndorsementDecision.findUnique({
+          where: { requestId_operationKey: { requestId: current.id, operationKey: input.operationKey } },
+          include: { request: { include: requestInclude } },
+        });
+        if (priorDecision) {
+          if (priorDecision.operationFingerprint !== operationFingerprint)
+            throw new ScopedEndorsementError("La clave de reintento ya fue usada con otra decisión.", 409);
+          return priorDecision.request;
+        }
+
+        const locked = await tx.terraqoEndorsementRequest.findUnique({
+          where: { id: current.id },
+          select: { version: true, status: true, expiresAt: true },
+        });
+        if (!locked || locked.version !== input.payload.expectedVersion)
+          throw new ScopedEndorsementError("La solicitud cambió en otra sesión. Revisa la versión actual.", 409);
+        if (!(["PENDING", "IN_REVIEW"] as string[]).includes(locked.status))
+          throw new ScopedEndorsementError("La solicitud ya fue resuelta.", 409);
+        if (locked.expiresAt.getTime() <= Date.now())
+          throw new ScopedEndorsementError("La solicitud caducó y ya no admite decisiones.", 410);
+
+        const responseFields = input.payload.responses.map((response) => response.field);
+        const responseFieldSet = new Set<string>(responseFields);
+        if (
+          responseFields.length !== current.requestedScope.length ||
+          current.requestedScope.some((field) => !responseFieldSet.has(field))
+        )
+          throw new ScopedEndorsementError("Responde exactamente los aspectos solicitados.", 422);
+
+        let authoritySnapshot: Prisma.InputJsonValue = { kind: "PERSONAL" };
+        if (current.organizationId) {
+          const membership = await tx.terraqoWorkspaceMember.findFirst({
+            where: {
+              workspaceId: current.organizationId,
+              userId: input.userId,
+              active: true,
+              role: { in: ORGANIZATION_REVIEWER_ROLES },
+            },
+            select: { workspaceId: true, role: true, title: true, updatedAt: true },
+          });
+          if (!membership)
+            throw new ScopedEndorsementError("Tu autoridad empresarial ya no está vigente.", 403);
+          authoritySnapshot = {
+            kind: "ORGANIZATION",
+            workspaceId: membership.workspaceId,
+            role: membership.role,
+            title: membership.title,
+            observedAt: new Date().toISOString(),
+            membershipUpdatedAt: membership.updatedAt.toISOString(),
+          };
+        }
+
+        const nextStatus = deriveEndorsementStatus(
+          input.payload.responses.map((response) => response.decision),
+        );
+
+        await tx.terraqoEndorsementDecision.create({
+          data: {
+            requestId: current.id,
+            reviewerId: input.userId,
+            responses: input.payload.responses,
+            summaryComment: input.payload.summaryComment,
+            revisionHash: current.revisionHash,
+            authoritySnapshot,
+            operationKey: input.operationKey,
+            operationFingerprint,
+          },
+        });
+        return tx.terraqoEndorsementRequest.update({
+          where: { id: current.id },
+          data: { status: nextStatus, version: { increment: 1 } },
+          include: requestInclude,
+        });
+      }, { isolationLevel: "Serializable" });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        (error.code === "P2002" || error.code === "P2034") &&
+        attempt < 2
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 25 * (attempt + 1)));
+        continue;
+      }
+      throw error;
     }
-
-    const locked = await tx.terraqoEndorsementRequest.findUnique({
-      where: { id: current.id },
-      select: { version: true, status: true, expiresAt: true },
-    });
-    if (!locked || locked.version !== input.payload.expectedVersion)
-      throw new ScopedEndorsementError("La solicitud cambió en otra sesión. Revisa la versión actual.", 409);
-    if (!(["PENDING", "IN_REVIEW"] as string[]).includes(locked.status))
-      throw new ScopedEndorsementError("La solicitud ya fue resuelta.", 409);
-    if (locked.expiresAt.getTime() <= Date.now())
-      throw new ScopedEndorsementError("La solicitud caducó y ya no admite decisiones.", 410);
-
-    const responseFields = input.payload.responses.map((response) => response.field);
-    const responseFieldSet = new Set<string>(responseFields);
-    if (
-      responseFields.length !== current.requestedScope.length ||
-      current.requestedScope.some((field) => !responseFieldSet.has(field))
-    )
-      throw new ScopedEndorsementError("Responde exactamente los aspectos solicitados.", 422);
-
-    let authoritySnapshot: Prisma.InputJsonValue = { kind: "PERSONAL" };
-    if (current.organizationId) {
-      const membership = await tx.terraqoWorkspaceMember.findFirst({
-        where: {
-          workspaceId: current.organizationId,
-          userId: input.userId,
-          active: true,
-          role: { in: ORGANIZATION_REVIEWER_ROLES },
-        },
-        select: { workspaceId: true, role: true, title: true, updatedAt: true },
-      });
-      if (!membership)
-        throw new ScopedEndorsementError("Tu autoridad empresarial ya no está vigente.", 403);
-      authoritySnapshot = {
-        kind: "ORGANIZATION",
-        workspaceId: membership.workspaceId,
-        role: membership.role,
-        title: membership.title,
-        observedAt: new Date().toISOString(),
-        membershipUpdatedAt: membership.updatedAt.toISOString(),
-      };
-    }
-
-    const nextStatus = deriveEndorsementStatus(
-      input.payload.responses.map((response) => response.decision),
-    );
-
-    await tx.terraqoEndorsementDecision.create({
-      data: {
-        requestId: current.id,
-        reviewerId: input.userId,
-        responses: input.payload.responses,
-        summaryComment: input.payload.summaryComment,
-        revisionHash: current.revisionHash,
-        authoritySnapshot,
-        operationKey: input.operationKey,
-        operationFingerprint,
-      },
-    });
-    return tx.terraqoEndorsementRequest.update({
-      where: { id: current.id },
-      data: { status: nextStatus, version: { increment: 1 } },
-      include: requestInclude,
-    });
-  }, { isolationLevel: "Serializable" });
+  }
+  throw new ScopedEndorsementError("No se pudo completar la decisión concurrente.", 503);
 }
 
 export async function sendEndorsementRequest(input: {
