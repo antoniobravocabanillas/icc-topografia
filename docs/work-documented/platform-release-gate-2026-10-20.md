@@ -313,8 +313,9 @@ este release.
 5. [Completado] `npm run check:b5-schema-drift`: solo los dos artefactos
    full-text documentados.
 6. [Completado] Desplegar exactamente la revision candidata con flags apagados.
-   Revision `2e2a1e58241eb5062ee924c4dfca64af35285d88`, deploy
-   `6add4b1827c97b3b16ae86a4` en el sitio aislado.
+   Revision vigente `4313f2d`, deploy `6add4e394d17c7cb1c4722b6` en el sitio
+   aislado. El deploy inicial `6add4b1827c97b3b16ae86a4` queda como evidencia
+   anterior al endurecimiento del replay concurrente.
 7. [Parcial] Smoke E2E anonimo aprobado: salud, home, cuenta, red vacia,
    aislamiento de enlaces, OAuth apagado, contratos 401/404 y evidencia visual
    desktop/movil. El gate B5 directo sobre PostgreSQL remoto aprobo dos

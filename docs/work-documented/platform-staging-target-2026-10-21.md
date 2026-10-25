@@ -83,8 +83,9 @@ Netlify `terraqo-platform-staging`:
 - URL reservada: `https://terraqo-platform-staging.netlify.app`.
 - Plan observado: Free (`nf_team_dev`).
 - Sin dominio personalizado, repositorio ni CI.
-- Deploy aislado validado el 24 de octubre de 2026: `6add4b1827c97b3b16ae86a4`.
-- Revision desplegada: `2e2a1e58241eb5062ee924c4dfca64af35285d88`.
+- Deploy aislado inicial validado: `6add4b1827c97b3b16ae86a4`.
+- Deploy vigente tras endurecer replay concurrente: `6add4e394d17c7cb1c4722b6`.
+- Revision desplegada vigente: `4313f2d`.
 - URL validada: `https://terraqo-platform-staging.netlify.app`.
 
 Se configuraron la identidad no secreta de Supabase, URLs del sitio y los nueve
