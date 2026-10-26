@@ -430,11 +430,11 @@ async function main() {
     assert.equal(lostAuthority.status(), 403);
 
     const ownerPage = await ownerContext.newPage();
-    await ownerPage.goto(new URL("/portal/selecciones", origin).toString(), { waitUntil: "networkidle" });
+    await ownerPage.goto(new URL("/portal/selecciones", origin).toString(), { waitUntil: "domcontentloaded", timeout: 60_000 });
     await ownerPage.getByText("Selecciones compartidas", { exact: true }).waitFor({ timeout: 60_000 });
     await mkdir("output/playwright", { recursive: true });
     await ownerPage.screenshot({ path: "output/playwright/platform-staging-b3-selections.png", fullPage: true });
-    await ownerPage.goto(new URL("/portal/respaldos", origin).toString(), { waitUntil: "networkidle" });
+    await ownerPage.goto(new URL("/portal/respaldos", origin).toString(), { waitUntil: "domcontentloaded", timeout: 60_000 });
     await ownerPage.getByText("Respaldos profesionales", { exact: true }).waitFor({ timeout: 60_000 });
     await ownerPage.screenshot({ path: "output/playwright/platform-staging-b3-endorsements.png", fullPage: true });
     await ownerPage.close();

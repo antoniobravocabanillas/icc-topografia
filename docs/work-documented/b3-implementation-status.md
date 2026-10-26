@@ -49,8 +49,11 @@ La implementación local de B3 está completa en código y permanece retenida pa
 - `TERRAQO_SCOPED_ENDORSEMENTS_V1=false` por defecto.
 - Las rutas UI/API fallan cerradas con ambos flags apagados.
 - La navegación solo muestra cada módulo cuando su flag está activo.
-- La migración `20261017120000_scoped_sharing_endorsements` es expand-only y **no fue aplicada**.
-- No habilitar flags antes de aplicar B1/B2/B3 en orden sobre staging y completar el recorrido manual.
+- Las migraciones `20261017120000_scoped_sharing_endorsements` y
+  `20261020143000_share_item_media_snapshot` fueron aplicadas en el Supabase
+  exclusivo `Terraqo Platform Staging`; no se aplicaron en producción.
+- Los flags B3 están activos solo en la cohorte Netlify aislada y protegidos por
+  el allowlist fail-closed del preflight.
 
 ## Evidencia local
 
@@ -65,21 +68,30 @@ La implementación local de B3 está completa en código y permanece retenida pa
 - `npm run build`: aprobado; solo conserva warnings preexistentes fuera de B3.
 - `git diff --check` focalizado: sin errores; solo avisos LF/CRLF de Windows.
 
+## Evidencia remota de staging
+
+- Tres identidades y dos workspaces sinteticos.
+- Replay idempotente y colision de fingerprint.
+- Lectura privada por identidad, caducidad y revocacion inmediata.
+- Proyeccion publica por campos y revocacion inmediata.
+- Publicacion empresarial rechazada antes de S24.
+- Respaldo parcial, conflicto concurrente estable `200/409` y revalidacion de
+  autoridad empresarial.
+- UI real validada en Selecciones y Respaldos.
+- Limpieza total de fixtures comprobada al finalizar.
+
 ## Gates externos pendientes
 
-1. Aplicar migraciones B1, B2 y B3 en orden sobre una base de staging anonimizada y respaldada.
-2. Crear selección privada, conceder acceso a una segunda cuenta y comprobar que otra identidad recibe `404`.
-3. Probar vencimiento y revocación durante una sesión abierta; la siguiente lectura de JSON y medios debe fallar.
-4. Publicar una selección personal, validar campos/medios y revocarla; el enlace y cada URL de medio deben dejar de responder.
-5. Confirmar que material asociado a empresa no puede publicarse antes de S24.
-6. Crear borrador de respaldo, enviarlo, responder desde el revisor y provocar un conflicto `409` desde una segunda sesión.
-7. Retirar el rol empresarial antes de decidir; el respaldo empresarial debe fallar cerrado.
-8. Ejecutar revisión de teclado, lector de pantalla, móvil estrecho y lenguaje legal/privacidad con usuarios reales de prueba.
+1. Probar descarga y revocacion de un medio WEBP real desde un dispositivo
+   fisico, sin reutilizar datos de clientes.
+2. Ejecutar revision de teclado, lector de pantalla, movil estrecho y lenguaje
+   legal/privacidad con usuarios reales de prueba.
+3. Observar el rollback por flags despues de cerrar B4-B5.
 
 ## Estado
 
 - **Implementación local:** COMPLETA.
 - **Validación automatizada local:** APROBADA.
-- **Migración remota:** NO EJECUTADA.
-- **Recorrido multiusuario en staging:** PENDIENTE.
+- **Migración remota:** APLICADA EN STAGING EXCLUSIVO.
+- **Recorrido multiusuario en staging:** APROBADO.
 - **Release:** HOLD hasta completar los gates externos.
