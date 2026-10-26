@@ -180,7 +180,9 @@ async function main() {
     ]);
 
     assert.equal((await anonymous.request.get(new URL("/api/v1/work-needs", origin).toString())).status(), 401);
-    assert.equal((await outsiderContext.request.get(new URL("/api/v1/work-needs", origin).toString())).status(), 403);
+    const isolatedNeedsResponse = await outsiderContext.request.get(new URL("/api/v1/work-needs", origin).toString());
+    assert.equal(isolatedNeedsResponse.status(), 200, await isolatedNeedsResponse.text());
+    assert.deepEqual(await jsonData<unknown[]>(isolatedNeedsResponse), []);
 
     const invalidNeed = await companyContext.request.post(new URL("/api/v1/work-needs", origin).toString(), {
       headers: { "Idempotency-Key": randomUUID() },
@@ -279,7 +281,7 @@ async function main() {
         },
       },
     );
-    assert.equal(reviseResponse.status(), 200, await reviseResponse.text());
+    assert.equal(reviseResponse.status(), 201, await reviseResponse.text());
     collaboration = await jsonData<typeof collaboration>(reviseResponse);
     assert.equal(collaboration.proposals[0]?.revisionNo, 2);
 
