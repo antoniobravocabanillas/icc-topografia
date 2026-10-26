@@ -391,7 +391,11 @@ async function main() {
         { headers: { "Idempotency-Key": randomUUID() }, data: decisionPayload },
       ),
     ]);
-    assert.deepEqual([decisionA.status(), decisionB.status()].sort((a, b) => a - b), [200, 409]);
+    const decisionStatuses = [decisionA.status(), decisionB.status()].sort((a, b) => a - b);
+    if (decisionStatuses[0] !== 200 || decisionStatuses[1] !== 409) {
+      const responseBodies = await Promise.all([decisionA.text(), decisionB.text()]);
+      assert.fail(`La decision concurrente devolvio ${decisionStatuses.join("/")}: ${responseBodies.join(" | ")}`);
+    }
     const decisionWinner = decisionA.status() === 200 ? decisionA : decisionB;
     assert.equal((await jsonData<{ status: string }>(decisionWinner)).status, "PARTIAL");
 

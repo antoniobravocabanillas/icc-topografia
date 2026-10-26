@@ -47,6 +47,17 @@ function hashOperation(value: unknown) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
+function isRetryableDecisionConflict(error: unknown) {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
+  if (error.code === "P2002" || error.code === "P2034") return true;
+  if (error.code !== "P2010") return false;
+  const metadata = error.meta as { code?: unknown; message?: unknown } | undefined;
+  return metadata?.code === "40001" || (
+    typeof metadata?.message === "string" &&
+    /could not serialize access/i.test(metadata.message)
+  );
+}
+
 async function professionalProfile(userId: string) {
   const profile = await prisma.terraqoProfessionalProfile.findUnique({
     where: { userId },
@@ -262,11 +273,7 @@ export async function decideEndorsementRequest(input: {
         });
       }, { isolationLevel: "Serializable" });
     } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        (error.code === "P2002" || error.code === "P2034") &&
-        attempt < 2
-      ) {
+      if (isRetryableDecisionConflict(error) && attempt < 2) {
         await new Promise((resolve) => setTimeout(resolve, 25 * (attempt + 1)));
         continue;
       }
