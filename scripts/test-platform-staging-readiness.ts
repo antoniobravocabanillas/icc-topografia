@@ -25,6 +25,7 @@ assert.equal(target.databaseName, "terraqo_staging_gate");
 assert.equal(target.databaseProvider, "postgresql");
 assert.equal(target.remoteDatabase, true);
 assert.deepEqual(target.enabledFlags, []);
+assert.deepEqual(target.pilotWorkspaceIds, []);
 
 const supabaseRef = "abcdefghijklmnopqrst";
 const supabaseEnvironment = {
@@ -77,7 +78,19 @@ const activated = validatePlatformStagingEnvironment({
 assert.deepEqual(activated.enabledFlags, ["TERRAQO_WORKLOG_FTS_V1", "TERRAQO_WORK_CASES_V1"]);
 rejects({ TERRAQO_OAUTH_ENABLED: "true" }, /OAuth debe iniciar deshabilitado/);
 rejects({ TERRAQO_TRANSACTIONAL_EMAIL_ENABLED: "true" }, /correo transaccional debe iniciar deshabilitado/);
-rejects({ TERRAQO_B5_PILOT_WORKSPACE_IDS: "workspace-real" }, /cohorte piloto debe iniciar vacía/);
+rejects({ TERRAQO_B5_PILOT_WORKSPACE_IDS: "workspace-real" }, /coincidir exactamente/);
+rejects({
+  TERRAQO_B5_PILOT_WORKSPACE_IDS: "cm00000000000000000000001",
+  PLATFORM_STAGING_PILOT_WORKSPACE_IDS: "workspace-real",
+  PLATFORM_STAGING_ACTIVATION_CONFIRM: "cohort",
+}, /Workspace piloto invalido/);
+const pilotActivated = validatePlatformStagingEnvironment({
+  ...safeEnvironment,
+  TERRAQO_B5_PILOT_WORKSPACE_IDS: "cm00000000000000000000001",
+  PLATFORM_STAGING_PILOT_WORKSPACE_IDS: "cm00000000000000000000001",
+  PLATFORM_STAGING_ACTIVATION_CONFIRM: "cohort",
+});
+assert.deepEqual(pilotActivated.pilotWorkspaceIds, ["cm00000000000000000000001"]);
 rejects({ EVIDENCE_ANALYSIS_DISPATCH_SECRET: safeEnvironment.AUTH_SECRET }, /deben ser independientes/);
 
 function rejectsSupabase(change: Record<string, string | undefined>, expected: RegExp) {

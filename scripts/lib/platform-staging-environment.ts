@@ -31,6 +31,7 @@ export type PlatformStagingTarget = {
   authHost: string;
   remoteDatabase: boolean;
   enabledFlags: string[];
+  pilotWorkspaceIds: string[];
 };
 
 export type PlatformStagingEnvironment = Record<string, string | undefined>;
@@ -140,7 +141,24 @@ export function validatePlatformStagingEnvironment(
   for (const flag of enabledFlags) {
     assert.ok(platformFlags.includes(flag as (typeof platformFlags)[number]), `Flag no autorizado para staging: ${flag}.`);
   }
-  if (enabledFlags.length) {
+  const pilotWorkspaceIds = (environment.PLATFORM_STAGING_PILOT_WORKSPACE_IDS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  assert.equal(new Set(pilotWorkspaceIds).size, pilotWorkspaceIds.length, "PLATFORM_STAGING_PILOT_WORKSPACE_IDS contiene duplicados.");
+  for (const workspaceId of pilotWorkspaceIds) {
+    assert.match(workspaceId, /^c[a-z0-9]{24}$/, `Workspace piloto invalido: ${workspaceId}.`);
+  }
+  const configuredPilotWorkspaceIds = (environment.TERRAQO_B5_PILOT_WORKSPACE_IDS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  assert.deepEqual(
+    configuredPilotWorkspaceIds,
+    pilotWorkspaceIds,
+    "TERRAQO_B5_PILOT_WORKSPACE_IDS debe coincidir exactamente con el allowlist de staging.",
+  );
+  if (enabledFlags.length || pilotWorkspaceIds.length) {
     assert.equal(
       environment.PLATFORM_STAGING_ACTIVATION_CONFIRM,
       "cohort",
@@ -158,8 +176,6 @@ export function validatePlatformStagingEnvironment(
     "false",
     "El correo transaccional debe iniciar deshabilitado en staging.",
   );
-  assert.equal(environment.TERRAQO_B5_PILOT_WORKSPACE_IDS ?? "", "", "La cohorte piloto debe iniciar vacía.");
-
   validateSecret(required(environment, "AUTH_SECRET"), "AUTH_SECRET");
   validateSecret(required(environment, "EVIDENCE_ANALYSIS_DISPATCH_SECRET"), "EVIDENCE_ANALYSIS_DISPATCH_SECRET");
   assert.notEqual(
@@ -179,5 +195,6 @@ export function validatePlatformStagingEnvironment(
     authHost: authUrl.hostname,
     remoteDatabase,
     enabledFlags,
+    pilotWorkspaceIds,
   };
 }
