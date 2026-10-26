@@ -317,47 +317,30 @@ async function main() {
       { headers: { "Idempotency-Key": randomUUID() }, data: { expectedRevisionNo: closure.currentRevision.revisionNo } },
     );
     assert.equal(submitResponse.status(), 200, await submitResponse.text());
-    const closureDecisionKey = randomUUID();
-    const closureDecisionPayload = { action: "ACCEPT" as const, expectedRevisionNo: closure.currentRevision.revisionNo };
     const closureDecision = await professionalContext.request.post(
       new URL(`/api/v1/closures/${closure.id}/decision`, origin).toString(),
-      { headers: { "Idempotency-Key": closureDecisionKey }, data: closureDecisionPayload },
+      {
+        headers: { "Idempotency-Key": randomUUID() },
+        data: { action: "ACCEPT", expectedRevisionNo: closure.currentRevision.revisionNo },
+      },
     );
-    if (closureDecision.status() === 500) {
-      try {
-        const { decideClosure } = await import("../lib/terraqo/closure");
-        await decideClosure({
-          userId: professional.id,
-          closureId: closure.id,
-          operationKey: closureDecisionKey,
-          payload: closureDecisionPayload,
-        });
-      } catch (error) {
-        const diagnostic = error && typeof error === "object"
-          ? JSON.stringify({
-              name: "name" in error ? error.name : undefined,
-              code: "code" in error ? error.code : undefined,
-              meta: "meta" in error ? error.meta : undefined,
-              message: "message" in error ? error.message : undefined,
-            })
-          : String(error);
-        assert.fail(`La decision HTTP devolvio 500 y la ejecucion directa fallo: ${diagnostic}`);
-      }
-      assert.fail(`La decision HTTP devolvio 500 aunque la misma operacion directa fue valida: ${await closureDecision.text()}`);
-    }
     assert.equal(closureDecision.status(), 200, await closureDecision.text());
     const certificate = await prisma.terraqoCollaborationCertificate.findUnique({ where: { closureId: closure.id } });
     assert.ok(certificate?.privateByDefault, "La constancia B4 debe permanecer privada por defecto.");
 
     const adminPage = await companyContext.newPage();
     await adminPage.goto(new URL("/admin/necesidades", origin).toString(), { waitUntil: "domcontentloaded", timeout: 60_000 });
-    await adminPage.getByText("Necesidades y evaluación privada", { exact: true }).waitFor({ timeout: 60_000 });
+    await adminPage.getByRole("heading", { level: 1, name: "De una necesidad real a evidencia explicable" }).waitFor({ timeout: 60_000 });
+    await adminPage.getByText(needPayload.title, { exact: true }).waitFor({ timeout: 60_000 });
     await mkdir("output/playwright", { recursive: true });
     await adminPage.screenshot({ path: "output/playwright/platform-staging-b4-needs.png", fullPage: true });
     await adminPage.close();
     const professionalPage = await professionalContext.newPage();
     await professionalPage.goto(new URL("/portal/mensajes", origin).toString(), { waitUntil: "domcontentloaded", timeout: 60_000 });
     await professionalPage.getByText("Propuestas de colaboración", { exact: true }).waitFor({ timeout: 60_000 });
+    await professionalPage.getByText("Cargando solicitudes...", { exact: true }).waitFor({ state: "hidden", timeout: 60_000 });
+    await professionalPage.getByText("Cargando propuestas...", { exact: true }).waitFor({ state: "hidden", timeout: 60_000 });
+    await professionalPage.getByText("Cargando cierres...", { exact: true }).waitFor({ state: "hidden", timeout: 60_000 });
     await professionalPage.screenshot({ path: "output/playwright/platform-staging-b4-collaboration.png", fullPage: true });
     await professionalPage.close();
 
