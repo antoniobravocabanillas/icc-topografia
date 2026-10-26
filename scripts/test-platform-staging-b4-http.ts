@@ -317,10 +317,34 @@ async function main() {
       { headers: { "Idempotency-Key": randomUUID() }, data: { expectedRevisionNo: closure.currentRevision.revisionNo } },
     );
     assert.equal(submitResponse.status(), 200, await submitResponse.text());
+    const closureDecisionKey = randomUUID();
+    const closureDecisionPayload = { action: "ACCEPT" as const, expectedRevisionNo: closure.currentRevision.revisionNo };
     const closureDecision = await professionalContext.request.post(
       new URL(`/api/v1/closures/${closure.id}/decision`, origin).toString(),
-      { headers: { "Idempotency-Key": randomUUID() }, data: { action: "ACCEPT", expectedRevisionNo: closure.currentRevision.revisionNo } },
+      { headers: { "Idempotency-Key": closureDecisionKey }, data: closureDecisionPayload },
     );
+    if (closureDecision.status() === 500) {
+      try {
+        const { decideClosure } = await import("../lib/terraqo/closure");
+        await decideClosure({
+          userId: professional.id,
+          closureId: closure.id,
+          operationKey: closureDecisionKey,
+          payload: closureDecisionPayload,
+        });
+      } catch (error) {
+        const diagnostic = error && typeof error === "object"
+          ? JSON.stringify({
+              name: "name" in error ? error.name : undefined,
+              code: "code" in error ? error.code : undefined,
+              meta: "meta" in error ? error.meta : undefined,
+              message: "message" in error ? error.message : undefined,
+            })
+          : String(error);
+        assert.fail(`La decision HTTP devolvio 500 y la ejecucion directa fallo: ${diagnostic}`);
+      }
+      assert.fail(`La decision HTTP devolvio 500 aunque la misma operacion directa fue valida: ${await closureDecision.text()}`);
+    }
     assert.equal(closureDecision.status(), 200, await closureDecision.text());
     const certificate = await prisma.terraqoCollaborationCertificate.findUnique({ where: { closureId: closure.id } });
     assert.ok(certificate?.privateByDefault, "La constancia B4 debe permanecer privada por defecto.");

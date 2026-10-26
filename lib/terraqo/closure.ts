@@ -26,6 +26,17 @@ export function closureDecisionState(action: ClosureDecision["action"]) {
   return { revisionStatus: "DECLINED" as const, collaborationStatus: "CHANGES_REQUESTED" as const, emitsCertificate: false };
 }
 
+function isRetryableClosureDecisionConflict(error: unknown) {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
+  if (error.code === "P2002" || error.code === "P2034") return true;
+  if (error.code !== "P2010") return false;
+  const metadata = error.meta as { code?: unknown; message?: unknown } | undefined;
+  return metadata?.code === "40001" || (
+    typeof metadata?.message === "string" &&
+    /could not serialize access/i.test(metadata.message)
+  );
+}
+
 async function assertReferencesStillAuthorized(
   tx: Prisma.TransactionClient,
   closureRevisionId: string,
@@ -293,7 +304,9 @@ export async function decideClosure(input: {
   payload: ClosureDecision;
 }) {
   const decisionFingerprint = closureOperationFingerprint(input.payload);
-  return prisma.$transaction(async (tx) => {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await prisma.$transaction(async (tx) => {
     const closure = await tx.terraqoCollaborationClosure.findFirst({
       where: {
         id: input.closureId,
@@ -403,5 +416,14 @@ export async function decideClosure(input: {
       where: { id: closure.id },
       include: { currentRevision: true, certificate: true },
     });
-  }, { isolationLevel: "Serializable" });
+      }, { isolationLevel: "Serializable" });
+    } catch (error) {
+      if (isRetryableClosureDecisionConflict(error) && attempt < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 25 * (attempt + 1)));
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw new TerraqoMessagingError("No se pudo completar la decisión concurrente del cierre.", 503);
 }
