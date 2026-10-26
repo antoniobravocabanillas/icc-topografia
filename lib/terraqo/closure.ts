@@ -416,7 +416,11 @@ export async function decideClosure(input: {
       where: { id: closure.id },
       include: { currentRevision: true, certificate: true },
     });
-      }, { isolationLevel: "Serializable" });
+      }, {
+        isolationLevel: "Serializable",
+        maxWait: 10_000,
+        timeout: 20_000,
+      });
     } catch (error) {
       if (isRetryableClosureDecisionConflict(error) && attempt < 2) {
         await new Promise((resolve) => setTimeout(resolve, 25 * (attempt + 1)));
