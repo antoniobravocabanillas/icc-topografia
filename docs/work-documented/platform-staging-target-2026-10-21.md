@@ -223,7 +223,15 @@ los restaura en `finally`.
   necesidades y jobs de análisis.
 - El checker de drift ahora corta a los 120 segundos: un transaction pooler no
   puede dejar bloqueado indefinidamente el introspector de Prisma.
+- Gate HTTP B5 de readiness aprobado con dos sesiones y dos workspaces:
+  el piloto conservó B1–B4 activos, el control quedó `PENDING_PILOT`, T18
+  permaneció `DISABLED`, el `POST /api/v1/analysis-jobs` respondió `404`, el
+  análisis automático no se renderizó y la evaluación manual siguió visible.
+- Evidencia visual:
+  `output/playwright/platform-staging-b5-readiness-pilot.png` y
+  `output/playwright/platform-staging-b5-readiness-control.png`.
+- Limpieza HTTP B5 independiente: cero usuarios, workspaces y jobs.
 
-El E2E HTTP autenticado B5, accesibilidad fisica, dispatcher HTTPS,
+El E2E activo de proveedor B5, accesibilidad fisica, dispatcher HTTPS,
 rollback observado y firmas siguen pendientes; por ello el release permanece
 en HOLD.

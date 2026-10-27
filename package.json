@@ -65,6 +65,7 @@
     "test:platform-staging-http": "node --conditions=react-server --import tsx scripts/test-platform-staging-http.ts",
     "test:platform-staging-b3-http": "node --conditions=react-server --import tsx scripts/test-platform-staging-b3-http.ts",
     "test:platform-staging-b4-http": "node --conditions=react-server --import tsx scripts/test-platform-staging-b4-http.ts",
+    "test:platform-staging-b5-readiness": "node --conditions=react-server --import tsx scripts/test-platform-staging-b5-readiness.ts",
     "benchmark:worklog-fts": "tsx scripts/benchmark-worklog-full-text.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",

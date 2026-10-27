@@ -35,6 +35,14 @@ En Supabase, la introspección debe usar el session pooler (puerto `5432`) o la 
 
 El 27 de octubre de 2026 el gate remoto aprobó contra `Terraqo Platform Staging`: solo reportó los dos artefactos full-text esperados. A continuación, el gate sintético multiusuario aprobó piloto/control, replay concurrente, límite, downgrade, flags e historial preservado; la verificación independiente terminó con cero usuarios, workspaces, necesidades y jobs de análisis.
 
+El gate HTTP de readiness se ejecuta antes de habilitar T18:
+
+```powershell
+npm run test:platform-staging-b5-readiness
+```
+
+Exige B1–B4 activos, `TERRAQO_EVIDENCE_ANALYSIS_V1=false`, proveedor `off`, el piloto fijo y consentimiento exacto para fixtures. Autentica piloto y control, valida entitlements, exige `404` en la mutación de análisis, revisa que la UI conserve el flujo manual y limpia todos los datos. No prueba un proveedor ni autoriza activar B5.
+
 En una base disposable local se puede ejecutar además el recorrido sintético multiusuario:
 
 ```powershell

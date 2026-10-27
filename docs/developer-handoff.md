@@ -238,6 +238,7 @@ Requisito declarado: Node `>=22.13.0`; entorno Netlify configurado para Node 22.
 | `npm run test:b5-multiuser-gate` | Fixture mutante, sintético y autocontenido para piloto/control, idempotencia concurrente, límites, downgrade y flags. Solo admite PostgreSQL local con nombre de base explícitamente aislado. |
 | `npm run test:b5-ollama-provider-gate` | Prueba un job T18 real contra Ollama loopback con expediente/fuente sintéticos y limpieza final. Rechaza hosts remotos y no prueba el dispatcher desplegado. |
 | `npm run test:b5-browser-accessibility` | Prueba T13–T17 y T20 en portal y panel empresarial con Next/Auth/API/PostgreSQL reales, en 320 px y zoom 200 %. Incluye recuperación sin recarga, teclado y entitlements visibles. Requiere la base local exacta `terraqo_b5_browser_gate`; rechaza cualquier host o base no desechable. |
+| `npm run test:platform-staging-b5-readiness` | Gate HTTP sintético del despliegue aislado: piloto/control, entitlements, kill switch T18, UI manual y limpieza. Exige consentimiento remoto exacto; no activa ni llama proveedores. |
 | `npm run build` | `prisma generate && next build`; no aplica migraciones. Algunas páginas pueden consultar servicios durante el build. |
 | `npm start` | Ejecuta una compilación previamente construida. |
 | `npm run prisma:migrate` | `prisma migrate dev`: solo desarrollo y con DB confirmada. |
