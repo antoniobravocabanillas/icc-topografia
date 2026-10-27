@@ -31,7 +31,7 @@ async function main() {
     assert.doesNotMatch(sql, /CREATE\s+(?:UNIQUE\s+)?INDEX\s+CONCURRENTLY/i, `${migration} no puede usar CONCURRENTLY dentro de migrate deploy.`);
   }
 
-  const [analysisSql, discoverySql, mediaSnapshotSql, envExample, worker, netlifyConfig, packageJson] = await Promise.all([
+  const [analysisSql, discoverySql, mediaSnapshotSql, envExample, worker, netlifyConfig, packageJson, driftGate] = await Promise.all([
     read("prisma/migrations/20261018153000_evidence_analysis_jobs/migration.sql"),
     read("prisma/migrations/20261017230000_discovery_needs/migration.sql"),
     read("prisma/migrations/20261020143000_share_item_media_snapshot/migration.sql"),
@@ -39,6 +39,7 @@ async function main() {
     read("netlify/functions/evidence-analysis-background.mts"),
     read("netlify.toml"),
     read("package.json"),
+    read("scripts/check-b5-schema-drift.ts"),
   ]);
 
   assert.doesNotMatch(analysisSql, /REFERENCES\s+"public"\."User"/i, "T18 no puede apuntar a public.User.");
@@ -72,6 +73,8 @@ async function main() {
   assert.doesNotMatch(netlifyConfig, /\[functions\."?evidence-analysis-background"?\][\s\S]*?\bmemory\s*=/i, "Netlify no debe asignar memoria personalizada al worker B5.");
   assert.match(packageJson, /"check:b5-rollout"/, "El preflight debe permanecer invocable desde npm.");
   assert.match(packageJson, /"check:b5-schema-drift"/, "El gate de drift B5 debe permanecer invocable desde npm.");
+  assert.match(driftGate, /timeout:\s*120_000/, "El gate de drift debe terminar de forma acotada ante un pooler incompatible.");
+  assert.match(driftGate, /killSignal:\s*"SIGTERM"/, "El gate de drift debe cerrar el introspector al agotar su presupuesto.");
 
   console.log("B5 rollout preflight: OK (solo lectura; no se conectó a ninguna base ni proveedor)." );
 }

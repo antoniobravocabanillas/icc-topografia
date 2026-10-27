@@ -215,6 +215,14 @@ los restaura en `finally`.
   `output/playwright/platform-staging-b4-collaboration.png`.
 - Limpieza B4 comprobada de forma independiente: cero usuarios, workspaces,
   bitácoras, necesidades, dossiers, solicitudes, colaboraciones y constancias.
+- Gate B5 directo repetido el 27 de octubre de 2026: preflight no mutante,
+  drift remoto por session pooler y fixture multiusuario por transaction pooler
+  aprobados. La concurrencia produjo un conflicto serializable esperado y el
+  replay acotado mantuvo una sola operación efectiva.
+- Limpieza B5 comprobada de forma independiente: cero usuarios, workspaces,
+  necesidades y jobs de análisis.
+- El checker de drift ahora corta a los 120 segundos: un transaction pooler no
+  puede dejar bloqueado indefinidamente el introspector de Prisma.
 
 El E2E HTTP autenticado B5, accesibilidad fisica, dispatcher HTTPS,
 rollback observado y firmas siguen pendientes; por ello el release permanece

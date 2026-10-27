@@ -31,6 +31,10 @@ npm run check:b5-schema-drift
 
 El comando no imprime la URL ni modifica la base. En un host remoto exige además `B5_GATE_ALLOW_REMOTE_READONLY=true`. Solo acepta dos diferencias conocidas: el índice GIN `Worklog_search_vector_gin_idx` y la expresión generada de `searchVector`, ambos creados con SQL porque Prisma no los representa en el datamodel. Cualquier otra sentencia bloquea el rollout.
 
+En Supabase, la introspección debe usar el session pooler (puerto `5432`) o la conexión directa autorizada, no el transaction pooler `6543` usado por el runtime serverless. El proceso termina fail-closed después de 120 segundos si Prisma no puede completar el diff.
+
+El 27 de octubre de 2026 el gate remoto aprobó contra `Terraqo Platform Staging`: solo reportó los dos artefactos full-text esperados. A continuación, el gate sintético multiusuario aprobó piloto/control, replay concurrente, límite, downgrade, flags e historial preservado; la verificación independiente terminó con cero usuarios, workspaces, necesidades y jobs de análisis.
+
 En una base disposable local se puede ejecutar además el recorrido sintético multiusuario:
 
 ```powershell

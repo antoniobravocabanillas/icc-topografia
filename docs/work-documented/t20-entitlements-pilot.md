@@ -60,6 +60,8 @@ Los números son topes operativos configurables del piloto, no precios ni promes
 
 `npm run test:b5-multiuser-gate` validó dos workspaces sintéticos, replay concurrente, límite, downgrade, flags e historial preservado sobre PostgreSQL local aislado. Los fixtures se eliminaron al finalizar. La evidencia detallada está en `docs/work-documented/b5-local-database-gate.md`.
 
+El 27 de octubre de 2026 se repitió el mismo gate contra la base exclusiva `Terraqo Platform Staging`, con consentimiento remoto exacto y el rol runtime sin DDL. Aprobó piloto/control, `P2034` concurrente recuperado de forma acotada, límite, downgrade y flags. Una consulta independiente confirmó cero usuarios, workspaces, necesidades y jobs al terminar.
+
 `npm run test:b5-browser-accessibility` confirmó el entitlement T20 en el panel empresarial junto con T13–T17: plan `PROFESSIONAL` visible, evaluación manual disponible cuando el proveedor automático está apagado, recuperación de consultas fallidas sin recargar, navegación por teclado, 320 px y zoom de 200 %. La prueba usó Next/Auth/API/PostgreSQL reales y eliminó todos sus fixtures sintéticos.
 
 ## Gate de staging pendiente

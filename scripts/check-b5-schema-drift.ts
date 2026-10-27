@@ -42,9 +42,12 @@ const result = spawnSync(
     encoding: "utf8",
     env: { ...process.env, DATABASE_URL: gateUrl },
     shell: false,
+    timeout: 120_000,
+    killSignal: "SIGTERM",
   },
 );
 
+assert.equal(result.error, undefined, `Prisma migrate diff no terminó dentro de 120 s: ${result.error?.message || "sin detalle"}`);
 assert.equal(result.status, 0, `Prisma migrate diff falló: ${result.stderr || "sin detalle"}`);
 
 const statements = result.stdout
