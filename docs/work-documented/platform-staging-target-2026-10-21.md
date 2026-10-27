@@ -94,6 +94,10 @@ Netlify `terraqo-platform-staging`:
   `6ade9e2f128c017cba733295` (revision `c8848ec`).
 - Deploy de cohorte B1-B4 validado:
   `6adfe769a843183fbe090819`.
+- Ensayo de rollback B4 con flags apagados:
+  `6ae034aad34c092236a4dea7` (revision candidata `ffe13b5`).
+- Restauracion B1-B4 posterior al rollback:
+  `6ae035a47a8bf812cb457057` (revision candidata `ffe13b5`).
 - URL validada: `https://terraqo-platform-staging.netlify.app`.
 
 Se configuraron la identidad no secreta de Supabase, URLs del sitio y los nueve
@@ -231,6 +235,15 @@ los restaura en `finally`.
   `output/playwright/platform-staging-b5-readiness-pilot.png` y
   `output/playwright/platform-staging-b5-readiness-control.png`.
 - Limpieza HTTP B5 independiente: cero usuarios, workspaces y jobs.
+- Rollback B4 observado el 27 de octubre de 2026: se apagaron discovery,
+  mensajeria contextual, colaboracion y cierre; el preflight acepto unicamente
+  B1-B3 y los cuatro endpoints devolvieron `404`. No se revirtio schema ni se
+  eliminaron estados historicos.
+- Restauracion observada: se repuso la cohorte B1-B4, se desplego el mismo
+  commit inmutable y el gate autenticado completo volvio a aprobar replay,
+  aislamiento, propuesta v2, cierre y constancia privada.
+- Limpieza posterior a la restauracion: cero usuarios, workspaces,
+  necesidades, colaboraciones, constancias y jobs de analisis.
 
 El E2E activo de proveedor B5, accesibilidad fisica, dispatcher HTTPS,
 rollback observado y firmas siguen pendientes; por ello el release permanece

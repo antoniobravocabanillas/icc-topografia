@@ -38,6 +38,7 @@ No habilitar un flag posterior sin los anteriores y sin aplicar primero la migra
 - PostgreSQL remoto expuso un `P2028` por expirar la transacción interactiva de aceptación. Se corrigió con presupuesto explícito de `maxWait=10 s` y `timeout=20 s`; los reintentos continúan limitados a colisión idempotente y serialización, no a `P2028`.
 - Revisión visual aprobada con la propuesta v2 aceptada, dos versiones auditables, cierre v1 aceptado, entregables y constancia privada. Evidencia local: `output/playwright/platform-staging-b4-needs.png` y `output/playwright/platform-staging-b4-collaboration.png`.
 - Limpieza posterior comprobada directamente en Supabase: cero usuarios, workspaces, bitácoras, necesidades, dossiers, solicitudes, colaboraciones y constancias.
+- Rollback por flags aprobado en staging: B4 apagado devolvió `404` en sus superficies sin revertir schema; la restauración del mismo commit volvió a aprobar el gate autenticado completo y terminó con cero fixtures.
 
 ## No ejecutado deliberadamente
 

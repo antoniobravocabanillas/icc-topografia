@@ -119,7 +119,7 @@ registrar la aprobacion producto/seguridad de ADR-007.
 | B1 | Archivo escalable, permalink, DTO por audiencia, cursor, calendario y full-text | `20261016113000_worklog_archive_cursor_index`, `20261016143000_worklog_full_text_search` | `TERRAQO_WORKLOG_FTS_V1` | Cerrado; benchmark local hasta 100.000 registros; HTTP/UI staging aprobado | Benchmark con volumen comparable y lector de pantalla real |
 | B2 | Medios seguros, borrador recuperable, revisiones, contribucion y WorkCase | `20261016183000_worklog_revisions_work_cases` | `TERRAQO_WORK_CASES_V1` | Cerrado; aislamiento HTTP y UI staging aprobados | Carga/reintento de medios en dispositivo fisico y rollback con flags |
 | B3 | Selecciones, grants, proyeccion revocable, snapshot de medios y respaldo acotado | `20261017120000_scoped_sharing_endorsements`, `20261020143000_share_item_media_snapshot` | `TERRAQO_SCOPED_SHARING_V1`, `TERRAQO_SCOPED_ENDORSEMENTS_V1` | Cerrado; HTTP multiusuario, concurrencia y UI staging aprobados | Descarga de medio real en dispositivo fisico y rollback con flags |
-| B4 | Necesidad, dossier, mensajeria contextual, colaboracion y cierre | `20261017230000_discovery_needs` | `TERRAQO_DISCOVERY_NEEDS_V1`, `TERRAQO_CONTEXTUAL_MESSAGING_V1`, `TERRAQO_COLLABORATION_V1`, `TERRAQO_CLOSURE_V1` | Cerrado; HTTP/UI staging con tres identidades, dos workspaces, replay, aislamiento, propuesta v2, cierre y constancia privada | Lector de pantalla, dispositivo fisico y rollback observado |
+| B4 | Necesidad, dossier, mensajeria contextual, colaboracion y cierre | `20261017230000_discovery_needs` | `TERRAQO_DISCOVERY_NEEDS_V1`, `TERRAQO_CONTEXTUAL_MESSAGING_V1`, `TERRAQO_COLLABORATION_V1`, `TERRAQO_CLOSURE_V1` | Cerrado; HTTP/UI staging, rollback por flags y restauracion autenticada aprobados | Lector de pantalla y dispositivo fisico |
 | B5 | Analisis con fuentes, recuperacion/observabilidad y piloto por entitlement | `20261018153000_evidence_analysis_jobs` | `TERRAQO_EVIDENCE_ANALYSIS_V1`, `TERRAQO_B5_PILOT_WORKSPACE_IDS` | Cerrado localmente; DB disposable, Ollama local, multiusuario y browser gate documentados | Dispatcher HTTPS, observabilidad externa, cohorte de staging, limites definitivos y rollback observado |
 
 ## Orden obligatorio de migracion
@@ -335,6 +335,12 @@ este release.
 5. Configurar dispatcher/proveedor manteniendo analisis apagado.
 6. Admitir un unico workspace piloto; nunca `*` en la primera cohorte.
 7. Activar analisis y observar una ventana completa.
+
+El rollback B4 fue ensayado en staging el 27 de octubre de 2026: el despliegue
+`6ae034aad34c092236a4dea7` dejo solo B1-B3 activos y devolvio `404` para
+necesidades, solicitudes, colaboraciones y analisis. El despliegue
+`6ae035a47a8bf812cb457057` restauro B1-B4 sobre el mismo commit `ffe13b5`; el
+gate autenticado completo aprobo nuevamente y la base termino sin fixtures.
 
 ### Fase D - decision de produccion
 
