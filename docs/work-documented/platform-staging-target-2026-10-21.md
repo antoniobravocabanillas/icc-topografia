@@ -92,13 +92,17 @@ Netlify `terraqo-platform-staging`:
   `6ade14b5864af4857af4b077` (revision `016c182`).
 - Deploy de cohorte B1-B3 validado:
   `6ade9e2f128c017cba733295` (revision `c8848ec`).
+- Deploy de cohorte B1-B4 validado:
+  `6adfe769a843183fbe090819`.
 - URL validada: `https://terraqo-platform-staging.netlify.app`.
 
 Se configuraron la identidad no secreta de Supabase, URLs del sitio y los nueve
-flags B1-B5. La cohorte vigente habilita exclusivamente B1-B3:
+flags B1-B5. La cohorte vigente habilita B1-B4:
 `TERRAQO_WORKLOG_FTS_V1`, `TERRAQO_WORK_CASES_V1`,
-`TERRAQO_SCOPED_SHARING_V1` y `TERRAQO_SCOPED_ENDORSEMENTS_V1`; los cinco
-flags B4-B5 permanecen en `false`. El preflight exige que todo flag activo aparezca en
+`TERRAQO_SCOPED_SHARING_V1`, `TERRAQO_SCOPED_ENDORSEMENTS_V1`,
+`TERRAQO_DISCOVERY_NEEDS_V1`, `TERRAQO_CONTEXTUAL_MESSAGING_V1`,
+`TERRAQO_COLLABORATION_V1` y `TERRAQO_CLOSURE_V1`; B5 permanece en `false` y
+su proveedor continúa `off`. El preflight exige que todo flag activo aparezca en
 `PLATFORM_STAGING_ENABLED_FLAGS` y que
 `PLATFORM_STAGING_ACTIVATION_CONFIRM=cohort`, por lo que una activacion heredada
 o accidental falla antes del deploy. El proveedor de analisis esta `off`, el
@@ -128,8 +132,10 @@ aplicacion. Esta evidencia no autoriza despliegue. Estado del gate:
 7. [Completado B1-B2] Revision candidata desplegada y E2E sintetico autenticado.
 8. [Completado B3] Comparticion y respaldos validados con identidades y
    workspaces sinteticos.
-9. Pendiente: activar y validar B4-B5 por cohortes, observar rollback y cerrar
-   los gates humanos/externos.
+9. [Completado B4] Necesidad, dossier, mensajería contextual, propuesta
+   versionada, cierre bilateral y constancia privada validados.
+10. Pendiente: activar y validar B5, observar rollback y cerrar los gates
+    humanos/externos.
 
 No se reutiliza el proyecto `Terraqo`; su nombre no declara staging y pertenece
 a una superficie distinta.
@@ -199,7 +205,17 @@ los restaura en `finally`.
   `output/playwright/platform-staging-b3-endorsements.png`.
 - Limpieza B3 comprobada por el runner: cero usuarios, workspaces, bitacoras,
   selecciones y solicitudes de respaldo al finalizar.
+- Gate HTTP/UI B4 con tres identidades y dos workspaces: necesidad versionada,
+  discovery explicable, dossier privado, contexto protegido, replay,
+  colisión, propuesta v2, versión sustituida rechazada, cierre bilateral y
+  constancia privada. El gate detectó y corrigió un timeout Prisma `P2028` de
+  la transacción remota sin ampliar los reintentos a errores ambiguos.
+- Capturas B4 hidratadas:
+  `output/playwright/platform-staging-b4-needs.png` y
+  `output/playwright/platform-staging-b4-collaboration.png`.
+- Limpieza B4 comprobada de forma independiente: cero usuarios, workspaces,
+  bitácoras, necesidades, dossiers, solicitudes, colaboraciones y constancias.
 
-El E2E HTTP autenticado B4-B5, accesibilidad fisica, dispatcher HTTPS,
+El E2E HTTP autenticado B5, accesibilidad fisica, dispatcher HTTPS,
 rollback observado y firmas siguen pendientes; por ello el release permanece
 en HOLD.

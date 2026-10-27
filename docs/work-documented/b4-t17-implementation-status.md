@@ -2,7 +2,7 @@
 
 ## Estado
 
-Implementación local terminada detrás de `TERRAQO_CLOSURE_V1=false`. No se aplicó la migración, no se habilitaron flags y no se desplegó.
+Implementación y gate autenticado terminados en el entorno exclusivo de staging. `TERRAQO_CLOSURE_V1` permanece apagado por defecto y solo está habilitado dentro de la cohorte B4 de staging; producción no fue modificada.
 
 ## Incluido
 
@@ -42,11 +42,22 @@ Implementación local terminada detrás de `TERRAQO_CLOSURE_V1=false`. No se apl
 - Contratos T13–T16 como regresión.
 - Build de producción completado; solo mostró advertencias preexistentes fuera de T17.
 
-## Pendiente de staging
+## Gate de staging
 
-1. Aplicar la migración expand-only en base aislada.
-2. Habilitar los flags B4 en orden hasta cierre, únicamente en staging.
-3. Guardar borrador y comprobar que el profesional todavía no lo recibe.
-4. Enviar, pedir corrección, crear otra revisión y aceptar la exacta.
-5. Revocar una referencia antes de envío y aceptación; ambas operaciones deben bloquearse.
-6. Verificar que la constancia no aparece públicamente ni permite descargar adjuntos.
+- Deploy aislado validado: `6adfe769a843183fbe090819`.
+- Tres sesiones Credentials y dos workspaces sintéticos; el usuario ajeno conservó una colección vacía.
+- La propuesta v1 sustituida devolvió `409`; la v2 exacta fue aceptada.
+- El cierre v1 fue guardado, enviado y aceptado por el profesional exacto.
+- La constancia fue emitida `privateByDefault=true`, sin publicar fuentes ni adjuntos.
+- La UI profesional mostró propuesta v2 aceptada, historial de dos versiones, cierre y constancia.
+- El runner limpió los fixtures y una consulta independiente confirmó ocho conteos críticos en cero.
+
+## Riesgo corregido
+
+La aceptación remota detectó Prisma `P2028` porque la transacción interactiva excedía el timeout por defecto. El cierre ahora usa `Serializable`, `maxWait: 10_000` y `timeout: 20_000`. `P2028` no se reintenta a ciegas; solo se reintentan colisiones idempotentes y conflictos de serialización acotados.
+
+## Pendiente externo
+
+1. Revocación de una fuente durante análisis B5 y validación `SOURCE_REVOKED`.
+2. Lector de pantalla y dispositivo físico.
+3. Ensayo de rollback por flags y observabilidad de staging.

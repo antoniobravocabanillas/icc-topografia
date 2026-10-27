@@ -337,10 +337,14 @@ async function main() {
     await adminPage.close();
     const professionalPage = await professionalContext.newPage();
     await professionalPage.goto(new URL("/portal/mensajes", origin).toString(), { waitUntil: "domcontentloaded", timeout: 60_000 });
-    await professionalPage.getByText("Propuestas de colaboración", { exact: true }).waitFor({ timeout: 60_000 });
-    await professionalPage.getByText("Cargando solicitudes...", { exact: true }).waitFor({ state: "hidden", timeout: 60_000 });
-    await professionalPage.getByText("Cargando propuestas...", { exact: true }).waitFor({ state: "hidden", timeout: 60_000 });
-    await professionalPage.getByText("Cargando cierres...", { exact: true }).waitFor({ state: "hidden", timeout: 60_000 });
+    const proposalsHeading = professionalPage.getByRole("heading", { level: 2, name: "Propuestas de colaboración" });
+    await proposalsHeading.waitFor({ timeout: 60_000 });
+    const proposalsSection = proposalsHeading.locator("xpath=ancestor::section[1]");
+    const proposalArticle = proposalsSection.locator("article").filter({ hasText: "Especialista de control topografico" });
+    await proposalArticle.waitFor({ timeout: 60_000 });
+    await proposalArticle.getByText("Control topografico, nivelacion y entrega trazable de referencias de infraestructura.", { exact: true }).waitFor({ timeout: 60_000 });
+    await proposalsSection.getByText("Historial de versiones (2)", { exact: true }).waitFor({ timeout: 60_000 });
+    await professionalPage.getByText("Referencias topograficas verificadas.", { exact: true }).waitFor({ timeout: 60_000 });
     await professionalPage.screenshot({ path: "output/playwright/platform-staging-b4-collaboration.png", fullPage: true });
     await professionalPage.close();
 
