@@ -10,6 +10,7 @@ import {currentWebSessionRole} from "@/lib/server/web-session-role";
 import { prisma } from "@/lib/prisma";
 import { createWebCvSessionGrant, revokeWebCvSessionGrant } from "@/lib/server/web-cv-session-grant";
 import { resolveOAuthProviderAvailability } from "@/lib/server/oauth-provider-policy";
+import { canUseTerraqoCredentials } from "@/lib/server/credential-login-policy";
 
 const credentialsSchema = z.object({ email: z.string().trim().toLowerCase().email(), password: z.string().optional(), passkeyToken: z.string().optional() });
 
@@ -57,14 +58,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           const valid = await bcrypt.compare(parsed.data.password, user.passwordHash);
           if (!valid) return null;
         }
-        const pendingEmailVerification = !user.emailVerified && await prisma.verificationToken.findFirst({
-          where: {
-            identifier: `email:${user.email.toLowerCase()}`,
-            expires: { gt: new Date() }
-          },
-          select: { token: true }
-        });
-        if (user.role === "CUSTOMER" && pendingEmailVerification) {
+        if (!canUseTerraqoCredentials(user.emailVerified)) {
           throw new EmailNotVerifiedError();
         }
         return { id: user.id, email: user.email, name: user.name, role: user.role };

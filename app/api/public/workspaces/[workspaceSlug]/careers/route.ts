@@ -16,6 +16,8 @@ import {
 import { resolveCareerFormConfig } from "@/lib/terraqo/career-form-config";
 import { hasWorkspaceModule } from "@/lib/terraqo/workspace-scope";
 import { publicCareerApplicationSchema } from "@/lib/validations/terraqo";
+import { createEmailVerificationLinkToken, sendEmailVerificationLink } from "@/lib/server/email-verification";
+import { REGISTRATION_WINDOW_SECONDS, reserveRegistrationAttempt } from "@/lib/server/registration-limit";
 
 type RouteContext = {
   params: Promise<{ workspaceSlug: string }>;
@@ -131,6 +133,14 @@ export async function POST(request: Request, { params }: RouteContext) {
       });
     }
 
+    if (!await reserveRegistrationAttempt(request, payload.email)) {
+      return fail(
+        "Demasiados intentos de registro. Espera unos minutos antes de volver a intentarlo.",
+        429,
+        { retryAfterSeconds: REGISTRATION_WINDOW_SECONDS },
+      );
+    }
+
     let selectedJob: { id: string; title: string } | null = null;
     if (payload.jobPostId) {
       const marketplaceEnabled = await hasWorkspaceModule("JOB_MARKETPLACE", workspace.id);
@@ -163,6 +173,7 @@ export async function POST(request: Request, { params }: RouteContext) {
         },
         select: { id: true, name: true, email: true }
       });
+      const verification = await createEmailVerificationLinkToken(tx, user.email);
 
       const profile = await tx.terraqoProfessionalProfile.create({
         data: {
@@ -255,7 +266,7 @@ export async function POST(request: Request, { params }: RouteContext) {
         }
       });
 
-      return { user, profileId: profile.id, applicationId: application.id };
+      return { user, profileId: profile.id, applicationId: application.id, verificationCode: verification.code };
     });
 
     let cvDocumentId: string | null = null;
@@ -301,13 +312,22 @@ export async function POST(request: Request, { params }: RouteContext) {
       }
     }
 
+    const emailDelivery = await sendEmailVerificationLink(
+      result.user.email,
+      result.verificationCode,
+      result.user.name,
+    );
+
     return created({
       ...result,
+      verificationCode: undefined,
       cvDocumentId,
       status: "SUBMITTED",
       message: "Cuenta, perfil profesional y postulacion creados correctamente.",
       portalPath: "/cuenta",
-      identityVerificationRequired: true
+      identityVerificationRequired: true,
+      emailVerificationRequired: true,
+      emailDelivery: emailDelivery.delivered ? "sent" : "provider_not_configured"
     });
   } catch (error) {
     return handleApiError(error);

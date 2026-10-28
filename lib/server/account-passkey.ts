@@ -2,8 +2,10 @@ import { randomBytes } from "node:crypto";
 import { generateAuthenticationOptions, generateRegistrationOptions, verifyAuthenticationResponse, verifyRegistrationResponse } from "@simplewebauthn/server";
 import type { AuthenticationResponseJSON, AuthenticatorTransportFuture, RegistrationResponseJSON } from "@simplewebauthn/types";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { publicRequestOrigin } from "@/lib/server/request-origin";
 import { compatibleWebAuthnRpIds, selectCompatibleWebAuthnRpId } from "@/lib/terraqo/webauthn-context";
+import { issueAccountPasskeyLoginToken } from "@/lib/server/account-passkey-login-token";
 
 const TTL = 5 * 60 * 1000;
 
@@ -74,11 +76,16 @@ export async function verifyAccountPasskeyLogin(challengeId: string, response: A
   if (!result.verified || !result.authenticationInfo.userVerified) throw new Error("No pudimos confirmar tu identidad.");
   const token = randomBytes(32).toString("hex");
   const now = new Date();
-  await prisma.$transaction([
-    prisma.terraqoWebAuthnCredential.update({ where: { id: credential.id }, data: { counter: BigInt(result.authenticationInfo.newCounter), lastUsedAt: now } }),
-    prisma.terraqoWebAuthnChallenge.update({ where: { id: challenge.id }, data: { consumedAt: now } }),
-    prisma.verificationToken.deleteMany({ where: { identifier: `passkey-login:${challenge.userId}` } }),
-    prisma.verificationToken.create({ data: { identifier: `passkey-login:${challenge.userId}`, token, expires: new Date(Date.now() + 60 * 1000) } })
-  ]);
+  await prisma.$transaction(async (tx) => {
+    await issueAccountPasskeyLoginToken(tx, {
+      challengeId: challenge.id,
+      userId: challenge.userId,
+      credentialId: credential.id,
+      newCounter: BigInt(result.authenticationInfo.newCounter),
+      token,
+      consumedAt: now,
+      expiresAt: new Date(now.getTime() + 60 * 1000),
+    });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   return { email: challenge.user.email, token };
 }

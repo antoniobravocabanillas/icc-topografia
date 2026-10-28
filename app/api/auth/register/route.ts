@@ -6,6 +6,7 @@ import { createEmailVerificationLinkToken, sendEmailVerificationLink } from "@/l
 import { getSubdivisionName } from "@/lib/locations";
 import { getDefaultModulesForTier } from "@/lib/workspace";
 import { registerSchema } from "@/lib/validations/crm";
+import { REGISTRATION_WINDOW_SECONDS, reserveRegistrationAttempt } from "@/lib/server/registration-limit";
 
 function normalizeIdentityPart(value: string) {
   return value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
@@ -33,6 +34,14 @@ export async function POST(request: Request) {
     const existingIdentity = await prisma.user.findUnique({ where: { identityKey } });
     if (existingIdentity) {
       return fail("Este documento de identidad ya está asociado a una cuenta Terraqo.", 409);
+    }
+
+    if (!await reserveRegistrationAttempt(request, payload.email)) {
+      return fail(
+        "Demasiados intentos de registro. Espera unos minutos antes de volver a intentarlo.",
+        429,
+        { retryAfterSeconds: REGISTRATION_WINDOW_SECONDS },
+      );
     }
 
     const passwordHash = await bcrypt.hash(payload.password, 12);

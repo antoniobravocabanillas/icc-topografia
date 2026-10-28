@@ -34,6 +34,7 @@
     "test:attendance-bootstrap": "tsx scripts/test-attendance-bootstrap.ts",
     "test:auth-secure-proxy": "tsx scripts/test-auth-secure-proxy.ts",
     "test:oauth-provider-policy": "tsx scripts/test-oauth-provider-policy.ts",
+    "test:auth-security-controls": "tsx scripts/test-auth-security-controls.ts",
     "test:image-origin-policy": "tsx scripts/test-image-origin-policy.ts",
     "test:portal-journeys": "tsx scripts/test-portal-journeys.ts",
     "test:field-verification-recovery": "tsx scripts/test-field-verification-recovery.ts",

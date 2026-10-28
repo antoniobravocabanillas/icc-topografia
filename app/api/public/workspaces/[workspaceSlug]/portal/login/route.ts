@@ -5,6 +5,7 @@ import { fail, handleApiError, ok, parseJson } from "@/lib/server/api";
 import { createRevocablePortalToken } from "@/lib/server/workspace-portal-session";
 import { toWorkspacePortalRole } from "@/lib/server/workspace-portal-policy";
 import { reservePortalLoginAttempt, PORTAL_LOGIN_WINDOW_SECONDS } from "@/lib/server/portal-login-limit";
+import { canUseTerraqoCredentials } from "@/lib/server/credential-login-policy";
 
 type RouteContext = { params: Promise<{ workspaceSlug: string }> };
 
@@ -29,6 +30,7 @@ export async function POST(request: Request, { params }: RouteContext) {
         id: true,
         name: true,
         email: true,
+        emailVerified: true,
         passwordHash: true,
         terraqoMemberships: {
           where: { workspaceId: workspace.id, active: true },
@@ -47,6 +49,9 @@ export async function POST(request: Request, { params }: RouteContext) {
     } }, { status: 429, headers: { "Retry-After": String(PORTAL_LOGIN_WINDOW_SECONDS), "Cache-Control": "private, no-store" } });
     if (!await bcrypt.compare(payload.password, user.passwordHash))
       return fail("El correo o la contrasena no son correctos para este portal.", 401);
+    if (!canUseTerraqoCredentials(user.emailVerified)) {
+      return fail("Verifica tu correo antes de ingresar al portal.", 403, { code: "EMAIL_NOT_VERIFIED" });
+    }
 
     const role = toWorkspacePortalRole(membership.role);
     if (!role) return fail("Tu membresia no permite acceder a este portal.", 403);
