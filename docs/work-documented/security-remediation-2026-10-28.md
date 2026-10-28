@@ -46,6 +46,13 @@ El límite global de Server Actions permanece en `50mb`. Reducirlo a `4mb` romp�
 - `npm run build`: aprobado.
 - `npm run test:terraqo-local-contracts`: aprobado; el nuevo contrato queda incorporado al gate consolidado para las siguientes ejecuciones.
 
+## Evidencia remota de staging
+
+- Deploy exclusivo de staging: `6ae2827588750df4a49f8bc4`.
+- URL canónica: `https://terraqo-platform-staging.netlify.app`.
+- Smoke no mutante: `/api/health` 200, `/cuenta` 200 con formulario de acceso, registro inválido 422 y passkey inválida 400.
+- El recorrido autenticado del control de correo queda pendiente: el conector Supabase permitió la lectura agregada, pero rechazó crear la fixture en `icc.User`; la credencial runtime permanece protegida en Netlify y no se extrajo. No se dejaron datos sintéticos.
+
 ## Restricciones vigentes
 
 - Sin despliegue a producción.
