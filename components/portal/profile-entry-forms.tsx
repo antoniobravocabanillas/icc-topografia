@@ -6,6 +6,7 @@ import { SubmitButton } from "@/components/forms/submit-button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { AiWritingTextarea } from "@/components/portal/ai-writing-textarea";
+import { ExperienceEvidenceForm } from "@/components/portal/experience-evidence-form";
 
 type ValidatorOption = {
   id: string;
@@ -35,7 +36,7 @@ export function ExperienceForm({ validators, companies, createExperienceAction }
   const selectedCompany = companies.find((company) => company.id === companyId);
   const manualProject = manualCompany || projectId === "OTHER";
   return (
-    <form action={createExperienceAction} className="grid min-w-0 gap-4">
+    <ExperienceEvidenceForm action={createExperienceAction} className="grid min-w-0 gap-4">
       <label className="grid gap-1.5 text-sm font-semibold">
         Empresa o cliente
         <select name="workspaceId" value={companyId} onChange={(event) => { setCompanyId(event.target.value); setProjectId(""); }} required className="h-12 min-w-0 rounded-xl border border-input bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm">
@@ -80,7 +81,7 @@ export function ExperienceForm({ validators, companies, createExperienceAction }
         <span className="text-xs font-normal text-muted-foreground">Hasta 6 archivos JPG, PNG, WEBP, AVIF o PDF. Máximo 8 MB por archivo.</span>
       </label>
       <SubmitButton pendingText="Registrando..." className="min-h-12 w-full rounded-xl text-base sm:min-h-10 sm:w-auto sm:rounded-md sm:text-sm">Guardar experiencia</SubmitButton>
-    </form>
+    </ExperienceEvidenceForm>
   );
 }
 

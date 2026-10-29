@@ -5,7 +5,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getCountryName, getSubdivisionName } from "@/lib/locations";
 import { monthsBetween, refreshProfessionalGeneratedSummary } from "@/lib/terraqo/profile-summary";
-import { evidenceFilesFromForm, storeExperienceEvidenceFiles, validateExperienceEvidenceFiles } from "@/lib/server/experience-evidence";
+import { attachExperienceEvidenceReceipts, ExperienceEvidenceUploadError, validateExperienceEvidenceReceipts } from "@/lib/server/experience-evidence-upload";
 
 const USERNAME_PATTERN = /^[a-z0-9][a-z0-9._-]{2,29}$/;
 const RESERVED_USERNAMES = new Set([
@@ -98,6 +98,10 @@ function listFromText(formData: FormData, key: string) {
     .map((item) => item.trim())
     .filter(Boolean)
     .slice(0, 12);
+}
+
+function evidenceUploadReceipts(formData: FormData) {
+  return formData.getAll("evidenceUploadReceipt").filter((value): value is string => typeof value === "string" && value.length > 0);
 }
 
 function longText(formData: FormData, key: string, max = 4000) {
@@ -255,8 +259,13 @@ export async function createHistoricalExperienceAction(formData: FormData) {
   if (!title || !companyName || (workspaceInput !== "OTHER" && !selectedWorkspace) || (selectedWorkspace && projectInput !== "OTHER" && !selectedProject)) redirect("/portal/experiencias?status=missing");
 
   const verificationRequested = Boolean(validator.validatorUserId || validator.validatorEmail || validator.validatorName);
-  const evidenceFiles = evidenceFilesFromForm(formData);
-  if (validateExperienceEvidenceFiles(evidenceFiles)) redirect("/portal/experiencias?status=evidence-invalid");
+  const evidenceReceipts = evidenceUploadReceipts(formData);
+  try {
+    await validateExperienceEvidenceReceipts(evidenceReceipts, session.user.id);
+  } catch (error) {
+    if (error instanceof ExperienceEvidenceUploadError) redirect("/portal/experiencias?status=evidence-invalid");
+    throw error;
+  }
   const experience = await prisma.terraqoProfessionalExperience.create({
     data: {
       professionalProfileId: profile.id,
@@ -286,7 +295,12 @@ export async function createHistoricalExperienceAction(formData: FormData) {
         : "Experiencia historica cargada por el profesional. Pendiente de solicitar verificacion."
     }
   });
-  await storeExperienceEvidenceFiles(evidenceFiles, experience.id, session.user.id);
+  try {
+    await attachExperienceEvidenceReceipts(evidenceReceipts, experience.id, session.user.id);
+  } catch (error) {
+    if (error instanceof ExperienceEvidenceUploadError) redirect("/portal/experiencias?status=evidence-invalid");
+    throw error;
+  }
 
   const totalMonths = [...profile.experiences, { startedAt, endedAt, currentlyWorking }].reduce((sum, item) => sum + monthsBetween(item.startedAt, item.currentlyWorking ? null : item.endedAt), 0);
   await prisma.terraqoProfessionalProfile.update({
@@ -326,8 +340,13 @@ export async function updateProfessionalExperienceAction(formData: FormData) {
   const location = normalizeLocation(formData);
   const workspaceIds = profile.user.terraqoMemberships.map((membership) => membership.workspaceId);
   const validator = await resolveValidator(formData, "validatorFallback", workspaceIds);
-  const evidenceFiles = evidenceFilesFromForm(formData);
-  if (validateExperienceEvidenceFiles(evidenceFiles)) redirect("/portal/experiencias?status=evidence-invalid");
+  const evidenceReceipts = evidenceUploadReceipts(formData);
+  try {
+    await validateExperienceEvidenceReceipts(evidenceReceipts, session.user.id, previous.id);
+  } catch (error) {
+    if (error instanceof ExperienceEvidenceUploadError) redirect("/portal/experiencias?status=evidence-invalid");
+    throw error;
+  }
   const visibilityValues = new Set<TerraqoVisibility>(["PRIVATE", "WORKSPACE", "COMMUNITY", "PUBLIC"]);
   const visibilityInput = String(formData.get("visibility") || previous.visibility) as TerraqoVisibility;
   const evidence = listFromText(formData, "evidence");
@@ -366,7 +385,12 @@ export async function updateProfessionalExperienceAction(formData: FormData) {
       await tx.notification.create({ data: { userId: validator.validatorUserId, terraqoWorkspaceId: previous.workspaceId, type: "SYSTEM", title: "Experiencia pendiente de validación", body: `${session.user.name || session.user.email || "Un profesional"} solicita validar ${previous.title}.`, href: "/portal/validaciones" } });
     }
   });
-  await storeExperienceEvidenceFiles(evidenceFiles, previous.id, session.user.id);
+  try {
+    await attachExperienceEvidenceReceipts(evidenceReceipts, previous.id, session.user.id);
+  } catch (error) {
+    if (error instanceof ExperienceEvidenceUploadError) redirect("/portal/experiencias?status=evidence-invalid");
+    throw error;
+  }
   await refreshProfessionalGeneratedSummary(profile.id);
   revalidatePath("/portal");
   revalidatePath("/portal/experiencias");

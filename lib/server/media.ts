@@ -10,7 +10,7 @@ type MediaStore = {
   set: (
     key: string,
     data: ArrayBuffer,
-    options?: { metadata?: MediaMetadata },
+    options?: { metadata?: MediaMetadata; onlyIfNew?: boolean; onlyIfMatch?: string },
   ) => Promise<unknown>;
   getWithMetadata: (
     key: string,
@@ -21,6 +21,7 @@ type MediaStore = {
     etag?: string;
   } | null>;
   delete: (key: string) => Promise<unknown>;
+  getMetadata?: (key: string) => Promise<{ metadata: MediaMetadata; etag?: string } | null>;
 };
 
 class LocalMediaStore implements MediaStore {
@@ -40,10 +41,13 @@ class LocalMediaStore implements MediaStore {
   async set(
     key: string,
     data: ArrayBuffer,
-    options?: { metadata?: MediaMetadata },
+    options?: { metadata?: MediaMetadata; onlyIfNew?: boolean; onlyIfMatch?: string },
   ) {
     const filePath = this.resolveKey(key);
     const metadataPath = `${filePath}.metadata.json`;
+    const current = await this.getMetadata(key);
+    if (options?.onlyIfNew && current) return { modified: false, etag: current.etag };
+    if (options?.onlyIfMatch && current?.etag !== options.onlyIfMatch) return { modified: false, etag: current?.etag };
     const etag = crypto.randomUUID();
     await mkdir(path.dirname(filePath), { recursive: true });
     await Promise.all([
@@ -54,7 +58,7 @@ class LocalMediaStore implements MediaStore {
         "utf8",
       ),
     ]);
-    return { etag };
+    return { etag, modified: true };
   }
 
   async getWithMetadata(key: string, options: { type: "arrayBuffer" }) {
@@ -86,6 +90,16 @@ class LocalMediaStore implements MediaStore {
       rm(filePath, { force: true }),
       rm(`${filePath}.metadata.json`, { force: true }),
     ]);
+  }
+
+  async getMetadata(key: string) {
+    try {
+      const stored = JSON.parse(await readFile(`${this.resolveKey(key)}.metadata.json`, "utf8")) as { metadata?: MediaMetadata; etag?: string };
+      return { metadata: stored.metadata || {}, etag: stored.etag };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+      throw error;
+    }
   }
 
   async getStream(key: string) {
@@ -292,6 +306,16 @@ export function getProfessionalAvatarStore() {
 
 export function getWorklogEvidenceStore() {
   return getMediaStore(WORKLOG_EVIDENCE_STORE);
+}
+
+export function getWorklogEvidenceUploadStore() {
+  const store = process.env.NODE_ENV === "development" && process.env.NETLIFY !== "true"
+    ? new LocalMediaStore(WORKLOG_EVIDENCE_STORE)
+    : getStore({ name: WORKLOG_EVIDENCE_STORE, consistency: "strong" });
+  return store as Omit<MediaStore, "set" | "getMetadata"> & {
+    set: (key: string, data: ArrayBuffer, options?: { metadata?: MediaMetadata; onlyIfNew?: boolean; onlyIfMatch?: string }) => Promise<{ etag?: string; modified?: boolean }>;
+    getMetadata: NonNullable<MediaStore["getMetadata"]>;
+  };
 }
 
 export function getWorkspaceFileStore() {

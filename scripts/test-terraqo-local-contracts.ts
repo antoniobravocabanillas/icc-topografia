@@ -11,6 +11,7 @@ const contractScripts = [
   "test:attendance-bootstrap",
   "test:auth-secure-proxy",
   "test:auth-security-controls",
+  "test:experience-evidence-chunk-upload",
   "test:oauth-provider-policy",
   "test:image-origin-policy",
   "test:portal-journeys",

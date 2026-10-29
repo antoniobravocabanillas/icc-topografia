@@ -24,9 +24,14 @@ Remediación posterior al escaneo sellado `813a5bcb-0810-41fa-aea9-b5016243ebed`
    - Los scopes persistidos son HMAC; no almacenan correo ni IP en claro.
    - En producción solo se confía en `x-nf-client-connection-ip`; la cadena forwarding no se usa como identidad de red si falta la señal del edge de Netlify.
 
-## Hallazgo retenido
-
-El límite global de Server Actions permanece en `50mb`. Reducirlo a `4mb` rompía un contrato real: experiencias profesionales aceptan hasta seis evidencias de 8 MB. La corrección segura requiere mover cargas binarias grandes a Route Handlers dedicados o carga directa firmada, con límite temprano, cuotas, validación MIME y almacenamiento compensable. Este trabajo queda como gate previo a cerrar `availability.server-action-body-limit`; no debe resolverse reduciendo el límite global mientras exista el flujo actual.
+4. **Límite de Server Actions y evidencias profesionales**
+   - El límite global bajó de `50mb` a `4mb`; las evidencias ya no atraviesan Server Actions como binarios.
+   - El cliente divide cada archivo en fragmentos binarios de 3 MB y usa Route Handlers autenticados. El contrato funcional sigue admitiendo hasta seis archivos de 8 MB.
+   - Cada manifiesto y recibo está firmado con HMAC, vinculado al usuario, al upload y a su vencimiento. Los fragmentos son inmutables e idempotentes y se verifican por SHA-256.
+   - Las imágenes se decodifican y regeneran como WEBP; los PDF validan firma y terminador antes de persistirse.
+   - Un presupuesto temporal persistido limita a 64 MB las cargas incompletas por usuario. Conserva el tamaño fuente mientras existan fragmentos, registra la clave final antes de escribirla y recupera huérfanos vencidos sin borrar referencias vivas.
+   - La cuota retenida se carga y el presupuesto temporal se consume en la misma transacción serializable que crea las filas de evidencia. El lock de perfil/experiencia, el piso compartido y la clave única evitan carreras, doble cobro y reutilización entre experiencias.
+   - Los formularios envían únicamente recibos firmados al Server Action; los binarios grandes quedan fuera de ese canal.
 
 ## Compatibilidad y rollout
 
@@ -44,7 +49,9 @@ El límite global de Server Actions permanece en `50mb`. Reducirlo a `4mb` romp�
 - `npm run lint`: aprobado sin warnings.
 - `npm run typecheck`: aprobado.
 - `npm run build`: aprobado.
-- `npm run test:terraqo-local-contracts`: aprobado; el nuevo contrato queda incorporado al gate consolidado para las siguientes ejecuciones.
+- `npm run test:experience-evidence-chunk-upload`: aprobado tres veces consecutivas, incluido cleanup estable en Windows.
+- `node --conditions=react-server --import tsx scripts/test-portal-experience-evidence.ts`: aprobado.
+- `npm run test:terraqo-local-contracts`: aprobado; 35 comprobaciones no mutantes, incluido el nuevo contrato de carga.
 
 ## Evidencia remota de staging
 
@@ -52,6 +59,7 @@ El límite global de Server Actions permanece en `50mb`. Reducirlo a `4mb` romp�
 - URL canónica: `https://terraqo-platform-staging.netlify.app`.
 - Smoke no mutante: `/api/health` 200, `/cuenta` 200 con formulario de acceso, registro inválido 422 y passkey inválida 400.
 - El recorrido autenticado del control de correo queda pendiente: el conector Supabase permitió la lectura agregada, pero rechazó crear la fixture en `icc.User`; la credencial runtime permanece protegida en Netlify y no se extrajo. No se dejaron datos sintéticos.
+- El flujo de carga fragmentada todavía debe desplegarse y ejercitarse en staging con una cuenta profesional aislada antes de promoverse. La compilación local confirma las dos rutas nuevas, pero no sustituye el recorrido autenticado contra Blobs y PostgreSQL de staging.
 
 ## Restricciones vigentes
 

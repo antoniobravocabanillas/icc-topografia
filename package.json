@@ -35,6 +35,7 @@
     "test:auth-secure-proxy": "tsx scripts/test-auth-secure-proxy.ts",
     "test:oauth-provider-policy": "tsx scripts/test-oauth-provider-policy.ts",
     "test:auth-security-controls": "tsx scripts/test-auth-security-controls.ts",
+    "test:experience-evidence-chunk-upload": "node --conditions=react-server --import tsx scripts/test-experience-evidence-chunk-upload.ts",
     "test:image-origin-policy": "tsx scripts/test-image-origin-policy.ts",
     "test:portal-journeys": "tsx scripts/test-portal-journeys.ts",
     "test:field-verification-recovery": "tsx scripts/test-field-verification-recovery.ts",
