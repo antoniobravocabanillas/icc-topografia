@@ -85,6 +85,7 @@ async function main() {
   ]);
   assert.match(nextConfig, /bodySizeLimit:\s*["']4mb["']/);
   assert.doesNotMatch(nextConfig, /bodySizeLimit:\s*["']50mb["']/);
+  assert.match(nextConfig, /sharp-wasm32\/lib\/\*\.wasm/);
   assert.match(createForm, /ExperienceEvidenceForm/);
   assert.match(editForm, /ExperienceEvidenceForm/);
   assert.doesNotMatch(actions, /evidenceFilesFromForm|storeExperienceEvidenceFiles/);
@@ -94,6 +95,7 @@ async function main() {
   assert.match(serverUpload, /personalRetainedStorageUnits\(tx, userId\)/);
   assert.match(serverUpload, /charged\.count !== 1/);
   assert.match(serverUpload, /verificationToken\.deleteMany/);
+  assert.match(serverUpload, /await import\(["']@\/lib\/server\/worklog-media-security["']\)/);
   assert.match(initRoute, /32\s*\*\s*1024/);
   assert.match(initRoute, /application\/json/);
   assert.match(chunkRoute, /application\/octet-stream/);

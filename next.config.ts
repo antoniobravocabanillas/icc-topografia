@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  outputFileTracingIncludes: {"/api/quotes/[id]/pdf": ["./public/fonts/noto-sans/noto-sans.ttf"]},
+  outputFileTracingIncludes: {
+    "/api/quotes/[id]/pdf": ["./public/fonts/noto-sans/noto-sans.ttf"],
+    "/api/terraqo/experience-evidence/uploads": ["./node_modules/@img/sharp-wasm32/lib/*.wasm"],
+  },
   experimental: {
     serverActions: { bodySizeLimit: "4mb" }
   },

@@ -10,7 +10,6 @@ import {
   getWorklogEvidenceUploadStore,
   sanitizeFileName,
 } from "@/lib/server/media";
-import { sanitizeWorklogEvidenceImage, WorklogMediaSecurityError } from "@/lib/server/worklog-media-security";
 
 export const EXPERIENCE_EVIDENCE_CHUNK_SIZE = 3 * 1024 * 1024;
 export const EXPERIENCE_EVIDENCE_UPLOAD_TTL_SECONDS = 20 * 60;
@@ -259,12 +258,16 @@ export async function finalizeExperienceEvidenceUpload(input: { userId: string; 
   if (contentType === "application/pdf") verifyPdf(source);
   else {
     try {
+      // Load the native/WASM decoder only after authentication, ownership and
+      // chunk integrity checks. This keeps init/chunk endpoints independent of
+      // the image runtime and gives the finalization trace an explicit binary.
+      const { sanitizeWorklogEvidenceImage } = await import("@/lib/server/worklog-media-security");
       const sanitized = await sanitizeWorklogEvidenceImage({ bytes: source, claimedContentType: contentType, fileName });
       bytes = sanitized.bytes;
       fileName = sanitized.fileName;
       contentType = sanitized.contentType;
     } catch (error) {
-      if (error instanceof WorklogMediaSecurityError) throw new ExperienceEvidenceUploadError(error.message, 422);
+      if (error instanceof Error && error.name === "WorklogMediaSecurityError") throw new ExperienceEvidenceUploadError(error.message, 422);
       throw error;
     }
   }
