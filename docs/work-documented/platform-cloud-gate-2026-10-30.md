@@ -57,3 +57,27 @@ El sitio anterior sigue publicado mientras no finalice el primer build remoto.
 La configuracion Git de staging estaba vacia; produccion solo admite su rama
 principal como branch deploy. Las ejecuciones remotas y su evidencia se agregan
 al cierre de cada fase. Esto no declara cerrado el lanzamiento.
+
+## B1-B3 aprobado
+
+Candidato `3c230a1d2df1f4cd70cb44996a3d0a461fc5920b`, deploy de staging
+`6ae4e73dbd4d5db6f8e437e0`, build `6ae4e73dbd4d5db6f8e437de`.
+El build completo, escaneo de secretos y verificacion posterior aprobaron.
+B1/B2: 107170 ms; B3: 245415 ms; resultado final del plugin
+`Staging cloud verified PASS: phase=b1-b3`.
+
+B3 comprueba tres identidades, dos workspaces, idempotencia, proyeccion por
+campos, expiracion y revocacion de grants/proyecciones, rechazo de publicacion
+empresarial, conflictos de respaldo y reevaluacion de autoridad empresarial.
+La consulta independiente posterior confirma cero usuarios, workspaces,
+selecciones, grants y solicitudes de respaldo. No hubo migraciones.
+
+El candidato previo `40945dc` habia aprobado B1/B2 pero no llego a B3 por un
+fallo de transporte al consultar el marcador despues del proceso sincronico.
+Los hijos ahora se ejecutan de forma asincrona, manteniendo vivo el event loop.
+Solo el GET idempotente de identidad admite tres intentos de transporte; un
+HTTP erroneo o candidato distinto falla inmediatamente. Las escrituras de
+fixtures no se reintentan. Esto no relaja ninguna asercion funcional.
+
+El transporte cloud resuelve el bloqueo del archivo local ausente: no hace
+falta recuperar ni rotar la contrasena PostgreSQL para estos gates.

@@ -14,7 +14,9 @@ se admite su nombre exacto y se exigen secretos y consentimientos vacios.
 Los 42 controles locales actuales aprobaron. Evidencia, limites y comando
 reproducible: `account-access-gate-2026-10-30.md`.
 
-Sigue faltando `.env.platform-staging.local`. El scan sellado descrito abajo
+El transporte cloud ya permite validar staging sin `.env.platform-staging.local`;
+el detalle y los candidatos remotos estan en `platform-cloud-gate-2026-10-30.md`.
+El scan sellado descrito abajo
 corresponde a `7d22378`, no al nuevo parche de interfaz/herramientas. El build
 de esta comprobacion usa URLs localhost y DB inaccesible; debe reconstruirse
 para staging antes de cualquier despliegue. No cambia el HOLD de publicacion.
@@ -88,10 +90,9 @@ unica: deben coincidir con la fase desplegada y sus prerrequisitos.
 
 ## Bloqueos actuales y orden de cierre
 
-1. Falta el archivo local de staging. Debe contener la URL exclusiva de
-   `terraqo_staging_runtime` y los cuatro secretos operativos de staging
-   definidos en la plantilla. Sus valores no deben pegarse en el chat.
-2. Desplegar el candidato revisado solo al Site ID aislado, repetir B1-B4 y
+1. Transporte resuelto: Netlify ejecuta los gates con los secretos existentes
+   del sitio aislado. B1-B3 aprobaron sobre `3c230a1`, con limpieza independiente.
+2. Completar B4 sobre el candidato revisado solo en el Site ID aislado y
    ejecutar B5 combinado por HTTPS + background worker + PostgreSQL, con
    proveedor y datos sinteticos autorizados. Verificar limpieza y restaurar
    proveedor/cohorte/flags al estado de cierre previsto.
