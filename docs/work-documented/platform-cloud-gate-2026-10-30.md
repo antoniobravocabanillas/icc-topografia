@@ -1,0 +1,59 @@
+# Gate remoto de plataforma con secretos de staging
+
+## Alcance
+
+Transporte alternativo al archivo local ausente: Netlify ejecuta las mismas
+pruebas HTTPS/Playwright/PostgreSQL usando sus secretos existentes. No extrae
+secretos, no cambia contrasenas, no usa Daybreak ni requiere migraciones.
+
+- Sitio exclusivo: `6b8c43fb-6083-450a-9b85-46a820fb6358`.
+- Rama exclusiva: `codex/platform-staging-release`.
+- Supabase: `mghdpciewbsowjrjwmwk`, rol `terraqo_staging_runtime`.
+- La rama `codex/icc-production-preview` sigue siendo productiva: no publicar
+  estos cambios alli hasta cerrar el gate de salida.
+
+## Controles
+
+El plugin local solo actua en el sitio aislado. Antes del build exige contexto
+principal de staging, HEAD igual a COMMIT_REF y al SHA autorizado, consentimiento
+exacto por fase, flags/cohorte previstos y DATABASE_URL igual a la URL validada
+de los fixtures. Rechaza dotenv locales. Genera una identidad publica minima
+(sitio, commit, deploy); antes y despues de cada prueba verifica que el sitio
+publicado corresponda a ese mismo candidato.
+
+Los hijos reciben un entorno con claves permitidas, sin token de despliegue,
+credenciales de pagos, NODE_OPTIONS ni proxies heredados. No se imprime salida
+cruda de pruebas: solo resultado, duracion, ubicaciones de codigo y codigos de
+error conocidos. Los fixtures conservan sus comprobaciones de destino, base
+vacia y limpieza. Un fallo detiene la fase, sin reintento automatico.
+
+`onSuccess` se ejecuta despues de publicar staging. No evita esa publicacion ni
+constituye una aprobacion de produccion. El resultado debe combinarse con un
+readback independiente del ledger, limpieza de fixtures y deploy/commit.
+
+## Fases
+
+1. `b1-b3`: cuatro primeros flags, cohorte vacia, proveedor off. Ejecuta B1/B2
+   y B3 secuencialmente sobre el mismo candidato.
+2. `b4`: ocho flags, workspace sintetico `cm00000000000000000000001`, proveedor
+   off, B5 desactivado. Ejecuta B4 y B5 readiness.
+3. `b5-dispatch`: ocho flags, cohorte vacia, B5 desactivado, proveedor Groq y
+   secreto dedicado/configurado. Ejecuta el fixture acotado de dispatcher.
+
+Controles de build: `PLATFORM_STAGING_CANDIDATE_SHA`,
+`PLATFORM_STAGING_CLOUD_PHASE` y `PLATFORM_STAGING_CLOUD_CONFIRM` con valor
+`mghdpciewbsowjrjwmwk:<fase>:synthetic-only`. Cada fase exige un despliegue
+con su configuracion real; no se simulan flags diferentes solo en el cliente.
+
+## Validacion local
+
+TypeScript, ESLint, contrato del transporte remoto y 43 controles locales
+aprobados. El contrato rechaza sitio/DB/rama/commit ajenos, marcadores servidos
+obsoletos, consentimientos incompletos y filtrado incorrecto de credenciales.
+Se comprobo que el plugin no inicia procesos en produccion.
+
+Readback previo: 43 migraciones completas; cero usuarios, workspaces o jobs.
+El sitio anterior sigue publicado mientras no finalice el primer build remoto.
+La configuracion Git de staging estaba vacia; produccion solo admite su rama
+principal como branch deploy. Las ejecuciones remotas y su evidencia se agregan
+al cierre de cada fase. Esto no declara cerrado el lanzamiento.

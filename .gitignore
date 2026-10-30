@@ -22,3 +22,6 @@ deno.lock
 
 # Local Netlify folder
 .netlify
+
+# Candidate identity generated only by the isolated staging build.
+public/__terraqo_staging_candidate.json

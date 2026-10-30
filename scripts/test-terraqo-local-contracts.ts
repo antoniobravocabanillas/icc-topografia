@@ -7,6 +7,7 @@ const contractScripts = [
   "check:b5-rollout",
   "test:platform-staging-readiness",
   "test:platform-staging-runner",
+  "test:platform-staging-cloud",
   "test:workforce-analytics",
   "test:worklog-journey-linking",
   "test:attendance-policy",

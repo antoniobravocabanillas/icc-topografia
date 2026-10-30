@@ -11,7 +11,7 @@ export const stagingGateScripts = {
   "b5-dispatch": "test-platform-staging-b5-dispatch.ts",
 } as const;
 
-const allowedKeys = new Set([
+export const stagingRunnerKeys = [
   ...platformFlags,
   "PLATFORM_STAGING_CONFIRM", "PLATFORM_STAGING_ALLOW_REMOTE",
   "PLATFORM_STAGING_DATABASE_PROVIDER", "PLATFORM_STAGING_RESOURCE_NAME",
@@ -26,7 +26,8 @@ const allowedKeys = new Set([
   "TERRAQO_OAUTH_ENABLED", "TERRAQO_TRANSACTIONAL_EMAIL_ENABLED",
   "TERRAQO_STAGING_MUTATING_TESTS", "TERRAQO_STAGING_B5_PROVIDER_TESTS",
   "GROQ_API_KEY", "OPENAI_API_KEY", "GROQ_EVIDENCE_ANALYSIS_MODEL",
-]);
+] as const;
+const allowedKeys = new Set<string>(stagingRunnerKeys);
 const osKeys = new Set(["PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "TMPDIR", "HOME", "USERPROFILE", "LOCALAPPDATA", "APPDATA"]);
 const stagingOrigin = "https://terraqo-platform-staging.netlify.app";
 
@@ -35,6 +36,10 @@ export function stagingRunnerEnvironment(source: string, inherited: Record<strin
   // parseEnv preserves $, ${...}, quotes and shell text literally. Never eval,
   // interpolate, expand dotenv variables or fall back to the checkout's .env.
   const values = parseEnv(source);
+  return stagingRunnerEnvironmentFromValues(values, inherited);
+}
+
+export function stagingRunnerEnvironmentFromValues(values: Record<string, string | undefined>, inherited: Record<string, string | undefined>): NodeJS.ProcessEnv {
   for (const name of Object.keys(values)) assert.ok(allowedKeys.has(name), "El archivo contiene una variable no permitida para este runner.");
   const target = validatePlatformStagingEnvironment(values);
   assert.equal(target.databaseProvider, "supabase");
