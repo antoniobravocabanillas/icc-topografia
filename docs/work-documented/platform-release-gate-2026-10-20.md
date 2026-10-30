@@ -313,8 +313,8 @@ este release.
 5. [Completado] `npm run check:b5-schema-drift`: solo los dos artefactos
    full-text documentados.
 6. [Completado] Desplegar exactamente la revision candidata con flags
-   controlados. La revision vigente es `62d3f73`, deploy
-   `6ae42f40f8d72f7d408e28b7` en el sitio aislado, con B1-B4 activos, B5
+   controlados. La revision vigente es `2f75982`, deploy
+   `6ae44a22faa10dea72d3a653` en el sitio aislado, con B1-B4 activos, B5
    apagado y proveedor IA `off`. La revision `0979d71` y su deploy
    `6ae424f68bb42eedf27df92e` conservan la evidencia del flujo remoto de
    archivos. Las revisiones y deploys anteriores se mantienen como historial
@@ -339,6 +339,33 @@ este release.
    Site, Portal, Admin, API y Auth quedaron fijados al mismo host de staging.
    Los redirects no mutantes de verificacion y cambio de correo regresan a ese
    host, mientras OAuth conserva exclusivamente el proveedor `credentials`.
+
+### Corte operativo del 30 de octubre de 2026
+
+- Preparacion tecnica estimada: **97 %**. Este porcentaje mide el candidato y
+  staging; no constituye autorizacion para produccion.
+- `9e2ea15` separa credenciales de schedulers por entorno y rechaza destinos o
+  secretos productivos desde despliegues no productivos antes de realizar I/O.
+- `2f75982` trata facturacion no configurada como un skip autenticado antes de
+  consultar PostgreSQL; los modos `test` y `live` conservan validacion estricta.
+- `npm run test:terraqo-local-contracts`: 39/39 contratos no mutantes.
+- `npm run build`: aprobado, 100 paginas generadas.
+- Ciclo natural de cron observado a las 02:45 America/Lima sobre el deploy
+  `6ae44a22faa10dea72d3a653`: limpieza educativa, background worker,
+  limpieza documental, reclamaciones y conciliacion ejecutaron sin warnings ni
+  errores. El proveedor de cobros permanecio apagado y no se ejecuto ningun
+  cobro.
+- Las dos credenciales operativas de schedulers existen solo en el Site ID de
+  staging, marcadas `isSecret=true`, contexto `production` y scopes
+  `builds/functions/runtime`; `post_processing` esta excluido. La API confirmo
+  cero claves equivalentes en el sitio productivo.
+- No se aplicaron migraciones, no se desplego produccion y no se modificaron
+  clientes reales.
+
+El HOLD permanece por la activacion externa B5 (proveedor, dispatcher HTTPS y
+ventana de observabilidad), la limpieza controlada de la fixture runtime que
+aun requiera escritura acotada, accesibilidad en dispositivo/lector reales y
+las firmas formales de producto, seguridad, operacion y responsable tecnico.
 
 ### Fase C - activacion por cohortes
 

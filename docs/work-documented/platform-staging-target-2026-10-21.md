@@ -106,6 +106,10 @@ Netlify `terraqo-platform-staging`:
   `6ae42d75179ec9a602d9993b` (revision `f8243f3`).
 - Callbacks de verificacion y cambio de correo aislados:
   `6ae42f40f8d72f7d408e28b7` (revision `62d3f73`).
+- Schedulers aislados por deployment y credenciales exclusivas de staging:
+  `6ae4478b49094462c6cdb4a5` (revision `9e2ea15`).
+- Skip seguro de conciliacion con proveedor apagado y cron final limpio:
+  `6ae44a22faa10dea72d3a653` (revision `2f75982`).
 - URL validada: `https://terraqo-platform-staging.netlify.app`.
 
 Se configuraron la identidad no secreta de Supabase, URLs del sitio y los nueve
@@ -258,6 +262,42 @@ los restaura en `finally`.
 - Los redirects de verificacion de correo y cambio de correo apuntan al host
   canonico de staging; los enlaces Profesional y Empresa permanecen en el
   mismo origen y `/api/auth/providers` expone unicamente `credentials`.
+
+## Aislamiento de schedulers y evidencia de cron
+
+El 30 de octubre de 2026 se cerraron dos riesgos operativos adicionales:
+
+- los targets de limpieza, reclamaciones y conciliacion se derivan del
+  deployment actual; una mezcla staging/produccion o un entorno no reconocido
+  falla antes de cualquier request;
+- staging usa credenciales distintas para limpieza documental y conciliacion,
+  mientras produccion conserva sus nombres historicos;
+- las rutas internas y los wrappers resuelven la misma credencial segun el
+  deployment y conservan comparacion constante;
+- facturacion sin `CULQI_MODE` valido responde `status=disabled` antes de abrir
+  PostgreSQL, en lugar de generar un falso incidente cada cinco minutos.
+
+La configuracion final fue verificada por la API Netlify, no por la salida del
+CLI: Site ID staging con exactamente dos variables `isSecret=true`, contexto
+`production`, scopes `builds/functions/runtime` y sin `post_processing`; Site ID
+productivo con cero variables de staging. El CLI `env:set --site` habia usado el
+sitio enlazado localmente y creo temporalmente dos claves con nombre de staging
+en la configuracion productiva. Se detectaron por inventario API, se retiraron
+antes de cualquier deploy productivo y se confirmo nuevamente conteo cero. No
+se cambio codigo, deploy ni datos de produccion durante esa remediacion.
+
+Evidencia del ciclo natural de las 02:45 America/Lima sobre
+`6ae44a22faa10dea72d3a653`:
+
+- `education-evidence-cleanup` encolo el worker sin `JOB_NOT_CONFIGURED`;
+- `education-evidence-cleanup-background` ejecuto sin warning;
+- `professional-document-cleanup` y `complaints-mail` ejecutaron sin warning;
+- `billing-reconcile` ejecuto sin error y omitio trabajo porque el proveedor de
+  cobros permanece deliberadamente apagado.
+
+Los gates locales posteriores aprobaron 39 contratos no mutantes, typecheck,
+lint y build de 100 paginas. El checkout restauro el Site ID productivo, `.env`
+y `.env.local`; no quedaron archivos hold ni cambios sin commit.
 
 El E2E activo de proveedor B5, accesibilidad fisica, dispatcher HTTPS,
 rollback observado y firmas siguen pendientes; por ello el release permanece
