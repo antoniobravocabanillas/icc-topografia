@@ -15,6 +15,7 @@ const contractScripts = [
   "test:oauth-provider-policy",
   "test:image-origin-policy",
   "test:portal-home-scope",
+  "test:request-origin",
   "test:portal-journeys",
   "test:field-verification-recovery",
   "test:attendance-location-queue",

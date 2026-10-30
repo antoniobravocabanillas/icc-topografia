@@ -39,6 +39,7 @@
     "test:image-origin-policy": "tsx scripts/test-image-origin-policy.ts",
     "test:portal-journeys": "tsx scripts/test-portal-journeys.ts",
     "test:portal-home-scope": "tsx scripts/test-portal-home-scope.ts",
+    "test:request-origin": "tsx scripts/test-request-origin.ts",
     "test:field-verification-recovery": "tsx scripts/test-field-verification-recovery.ts",
     "test:attendance-location-queue": "tsx scripts/test-attendance-location-queue.ts",
     "test:attendance-tracker-lease": "tsx scripts/test-attendance-tracker-lease.ts",
