@@ -10,6 +10,7 @@ $repo = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 $statePath = Join-Path $repo ".netlify\state.json"
 $envPath = Join-Path $repo ".env"
 $envLocalPath = Join-Path $repo ".env.local"
+$envExamplePath = Join-Path $repo ".env.example"
 $envHoldPath = Join-Path $repo ".env.codex-staging-hold"
 $envLocalHoldPath = Join-Path $repo ".env.local.codex-staging-hold"
 $preflightVariableNames = @(
@@ -47,9 +48,53 @@ $preflightVariableNames = @(
   "TERRAQO_OAUTH_ENABLED",
   "TERRAQO_TRANSACTIONAL_EMAIL_ENABLED"
 )
-$preflightEnvironment = @{}
-foreach ($name in $preflightVariableNames) {
-  $preflightEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, "Process")
+$runtimeIsolationVariableNames = @(
+  "DATABASE_URL",
+  "DIRECT_URL",
+  "SHADOW_DATABASE_URL",
+  "AI_PROVIDER",
+  "GROQ_API_KEY",
+  "OPENAI_API_KEY",
+  "OLLAMA_BASE_URL"
+)
+
+function Get-DotEnvVariableNames {
+  param([string[]]$Paths)
+
+  $names = @()
+  foreach ($path in $Paths) {
+    if (-not (Test-Path -LiteralPath $path)) {
+      continue
+    }
+
+    foreach ($line in Get-Content -LiteralPath $path) {
+      if ($line -match '^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=') {
+        $names += $Matches[1]
+      }
+    }
+  }
+
+  return @($names | Sort-Object -Unique)
+}
+
+# Netlify necesita su propia credencial para resolver el Site ID, pero ninguna
+# variable de aplicacion del checkout debe alcanzar el proceso de build. La
+# lista se deriva de las plantillas y archivos locales, sin leer ni imprimir
+# valores, para cubrir tambien DATABASE_URL, proveedores IA y futuras claves.
+$netlifyCredentialVariableNames = @("NETLIFY_AUTH_TOKEN")
+$dotenvVariableNames = Get-DotEnvVariableNames -Paths @(
+  $envExamplePath,
+  $envPath,
+  $envLocalPath
+)
+$deploymentVariableNames = @(
+  $preflightVariableNames + $runtimeIsolationVariableNames + $dotenvVariableNames |
+    Where-Object { $_ -notin $netlifyCredentialVariableNames } |
+    Sort-Object -Unique
+)
+$deploymentEnvironment = @{}
+foreach ($name in $deploymentVariableNames) {
+  $deploymentEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, "Process")
 }
 
 if ($SiteId -ne $expectedSiteId) {
@@ -87,7 +132,7 @@ try {
   # El preflight usa confirmaciones y credenciales efimeras del operador. No
   # deben heredarse al build: Netlify debe resolver exclusivamente las variables
   # guardadas en el Site ID aislado.
-  foreach ($name in $preflightVariableNames) {
+  foreach ($name in $deploymentVariableNames) {
     [Environment]::SetEnvironmentVariable($name, $null, "Process")
   }
 
@@ -121,10 +166,10 @@ try {
   }
 }
 finally {
-  foreach ($name in $preflightVariableNames) {
+  foreach ($name in $deploymentVariableNames) {
     [Environment]::SetEnvironmentVariable(
       $name,
-      $preflightEnvironment[$name],
+      $deploymentEnvironment[$name],
       "Process"
     )
   }

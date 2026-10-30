@@ -135,13 +135,48 @@ const deployScript = readFileSync(
   resolve(process.cwd(), "scripts/deploy-platform-staging.ps1"),
   "utf8",
 );
+const envExample = readFileSync(resolve(process.cwd(), ".env.example"), "utf8");
+const declaredApplicationVariables = new Set(
+  [...envExample.matchAll(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/gm)]
+    .map((match) => match[1]),
+);
+for (const name of ["DATABASE_URL", "AI_PROVIDER", "GROQ_API_KEY", "OPENAI_API_KEY"]) {
+  assert.ok(
+    declaredApplicationVariables.has(name),
+    `${name} debe estar en .env.example para que el deploy lo aisle del proceso del operador.`,
+  );
+}
+for (const name of [
+  "DATABASE_URL",
+  "DIRECT_URL",
+  "SHADOW_DATABASE_URL",
+  "AI_PROVIDER",
+  "GROQ_API_KEY",
+  "OPENAI_API_KEY",
+  "OLLAMA_BASE_URL",
+]) {
+  assert.match(
+    deployScript,
+    new RegExp(`"${name}"`),
+    `${name} debe quedar en la lista explicita de aislamiento runtime.`,
+  );
+}
 const clearOperatorEnvironment = deployScript.indexOf(
   '[Environment]::SetEnvironmentVariable($name, $null, "Process")',
 );
 const netlifyDeploy = deployScript.indexOf("npx netlify deploy --build");
 const restoreOperatorEnvironment = deployScript.lastIndexOf(
-  "$preflightEnvironment[$name]",
+  "$deploymentEnvironment[$name]",
 );
+assert.match(deployScript, /function Get-DotEnvVariableNames/);
+assert.match(deployScript, /\$envExamplePath/);
+assert.match(deployScript, /\$deploymentVariableNames/);
+assert.match(
+  deployScript,
+  /\$preflightVariableNames \+ \$runtimeIsolationVariableNames \+ \$dotenvVariableNames/,
+);
+assert.match(deployScript, /\$netlifyCredentialVariableNames = @\("NETLIFY_AUTH_TOKEN"\)/);
+assert.match(deployScript, /Where-Object \{ \$_ -notin \$netlifyCredentialVariableNames \}/);
 assert.ok(clearOperatorEnvironment >= 0, "El deploy debe limpiar las variables efimeras del preflight.");
 assert.ok(netlifyDeploy > clearOperatorEnvironment, "La limpieza del entorno debe ocurrir antes del build Netlify.");
 assert.ok(restoreOperatorEnvironment > netlifyDeploy, "El entorno del operador debe restaurarse despues del deploy.");
