@@ -327,13 +327,18 @@ export async function attachExperienceEvidenceReceipts(tokens: string[], experie
   if (!tokens.length) return [];
   const receipts = await resolveReceipts(tokens, userId);
   for (let attempt = 0; attempt < 3; attempt += 1) {
+    let stage = "transaction-start";
     try {
       const attached = await prisma.$transaction(async (tx) => {
+        stage = "profile-read";
         const profile = await tx.terraqoProfessionalProfile.findUnique({ where: { userId }, select: { id: true, planTier: true } });
         if (!profile) throw new ExperienceEvidenceUploadError("No tienes permiso para adjuntar evidencia a esta experiencia.", 403);
+        stage = "profile-lock";
         await tx.$queryRaw(Prisma.sql`SELECT id FROM icc."TerraqoProfessionalProfile" WHERE id=${profile.id} AND "userId"=${userId} FOR UPDATE`);
+        stage = "experience-lock";
         const owned = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT id FROM icc."TerraqoProfessionalExperience" WHERE id=${experienceId} AND "professionalProfileId"=${profile.id} FOR UPDATE`);
         if (!owned.length) throw new ExperienceEvidenceUploadError("No tienes permiso para adjuntar evidencia a esta experiencia.", 403);
+        stage = "existing-evidence-read";
         const existing = await tx.terraqoExperienceEvidence.findMany({ where: { storageKey: { in: receipts.map((item) => item.storageKey) } }, select: { experienceId: true, storageKey: true, uploadedById: true } });
         if (existing.some((item) => item.experienceId !== experienceId || item.uploadedById !== userId)) throw new ExperienceEvidenceUploadError("Una evidencia ya fue utilizada en otra experiencia.", 409);
         const existingKeys = new Set(existing.map((item) => item.storageKey));
@@ -341,20 +346,25 @@ export async function attachExperienceEvidenceReceipts(tokens: string[], experie
         const count = await tx.terraqoExperienceEvidence.count({ where: { experienceId } });
         if (count + pending.length > MAX_RECEIPTS) throw new ExperienceEvidenceUploadError(`Cada experiencia admite hasta ${MAX_RECEIPTS} evidencias.`, 409);
         if (pending.length) {
+          stage = "billing-read";
           const accounts = await tx.$queryRaw<{ planCode: string; paidThrough: Date | null }[]>(Prisma.sql`SELECT "planCode","paidThrough" FROM icc."TerraqoBillingAccount" WHERE "ownerKey"=${`user:${userId}`} AND mode='live' FOR SHARE`);
           const plan = accounts[0]
             ? getBillingPlan(accounts[0].paidThrough && accounts[0].paidThrough > new Date() ? accounts[0].planCode : "personal-free")
             : BILLING_PLANS.find((candidate) => candidate.audience === "PERSONAL" && candidate.tier === profile.planTier) || getBillingPlan("personal-free");
           if (plan.audience !== "PERSONAL") throw new ExperienceEvidenceUploadError("La capacidad personal requiere revisión.", 409);
+          stage = "storage-floor";
           const floor = await personalRetainedStorageUnits(tx, userId);
           const charge = pending.reduce((sum, item) => sum + Math.ceil(item.size / 1_000_000), 0);
           const bucket = { ownerKey: `user:${userId}`, period: "retained", metric: "storage-mb" };
+          stage = "usage-bucket";
           await tx.terraqoUsageBucket.createMany({ data: [{ ...bucket, used: floor }], skipDuplicates: true });
           await tx.terraqoUsageBucket.updateMany({ where: { ...bucket, used: { lt: floor } }, data: { used: floor } });
           const charged = await tx.terraqoUsageBucket.updateMany({ where: { ...bucket, used: { lte: plan.storageMb - charge } }, data: { used: { increment: charge } } });
           if (charged.count !== 1) throw new ExperienceEvidenceUploadError("La cuota personal de almacenamiento está completa.", 429);
+          stage = "evidence-create";
           await tx.terraqoExperienceEvidence.createMany({ data: pending.map((item) => ({ experienceId, uploadedById: userId, storageKey: item.storageKey, fileName: item.fileName, contentType: item.contentType, size: item.size })), skipDuplicates: true });
         }
+        stage = "pending-budget-lock";
         const identifier = pendingBudgetIdentifier(userId);
         await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${identifier}))`);
         const budgetRows = await tx.verificationToken.findMany({ where: { identifier }, select: { token: true } });
@@ -364,13 +374,22 @@ export async function attachExperienceEvidenceReceipts(tokens: string[], experie
           return parsed && uploadIds.has(parsed.uploadId);
         });
         if (consumed.length) await tx.verificationToken.deleteMany({ where: { token: { in: consumed.map((row) => row.token) } } });
+        stage = "attached-read";
         return tx.terraqoExperienceEvidence.findMany({ where: { storageKey: { in: receipts.map((item) => item.storageKey) }, experienceId }, orderBy: { createdAt: "asc" } });
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      stage = "chunk-cleanup";
       const store = getWorklogEvidenceUploadStore();
       await Promise.all(receipts.flatMap((receipt) => Array.from({ length: receipt.chunks }, (_, index) => store.delete(`${EXPERIENCE_EVIDENCE_PREFIX}/pending/${userPrefix(userId)}/${receipt.uploadId}/chunks/${index}`).catch(() => undefined))));
       return attached;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034" && attempt < 2) continue;
+      console.error("experience-evidence-attach-failed", {
+        stage,
+        attempt: attempt + 1,
+        errorName: error instanceof Error ? error.name : "UnknownError",
+        errorCode: error instanceof Prisma.PrismaClientKnownRequestError ? error.code : undefined,
+        status: error instanceof ExperienceEvidenceUploadError ? error.status : undefined,
+      });
       throw error;
     }
   }

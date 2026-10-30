@@ -298,6 +298,12 @@ export async function createHistoricalExperienceAction(formData: FormData) {
   try {
     await attachExperienceEvidenceReceipts(evidenceReceipts, experience.id, session.user.id);
   } catch (error) {
+    // The file commit is a separate serializable transaction. If it fails,
+    // compensate the preceding profile row so a retry cannot leave a visible
+    // experience without the evidence the user submitted.
+    await prisma.terraqoProfessionalExperience.deleteMany({
+      where: { id: experience.id, professionalProfileId: profile.id, evidenceFiles: { none: {} } }
+    });
     if (error instanceof ExperienceEvidenceUploadError) redirect("/portal/experiencias?status=evidence-invalid");
     throw error;
   }
