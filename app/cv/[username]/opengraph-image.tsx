@@ -1,4 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
 import { prisma } from "@/lib/prisma";
 import { ImageResponse } from "next/og";
 import { notFound } from "next/navigation";

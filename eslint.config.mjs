@@ -18,7 +18,12 @@ const eslintConfig = [
       "next-env.d.ts"
     ]
   },
-  ...compat.extends("next/core-web-vitals", "next/typescript")
+  ...compat.extends("next/core-web-vitals", "next/typescript"),
+  {
+    // ImageResponse renders a PNG, not a browser page with next/image.
+    files: ["app/cv/**/opengraph-image.tsx"],
+    rules: { "@next/next/no-img-element": "off" }
+  }
 ];
 
 export default eslintConfig;
