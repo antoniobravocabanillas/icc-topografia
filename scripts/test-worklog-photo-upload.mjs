@@ -23,7 +23,7 @@ function load(relative, dependencies = {}) {
   return loaded.exports;
 }
 class BillingError extends Error {}
-let rows, blobs, reserved, released, failStore, authorized, txFailure;
+let rows, blobs, reserved, released, failStore, authorized, txFailure, decoded;
 const matches = (row, where) =>
   (!where.worklogId ||
     (typeof where.worklogId === "string"
@@ -61,6 +61,7 @@ const prisma = {
     return callback(prisma);
   },
 };
+const boundedRequestBody = load("../lib/server/bounded-request-body.ts");
 const { uploadWorklogEvidence } = load("../lib/server/worklog-evidence.ts", {
   "@/lib/prisma": { prisma },
   "@/lib/terraqo/billing/storage-quota": {
@@ -99,6 +100,25 @@ const { uploadWorklogEvidence } = load("../lib/server/worklog-evidence.ts", {
   },
   "@/lib/terraqo/worklog": { canViewWorklog: async () => true },
   "@/lib/terraqo/builders": { syncWorklogReputation: async () => {} },
+  "./native-worklog-legacy-guard": {
+    NativeWorklogLegacyGuardError: class NativeWorklogLegacyGuardError extends Error {},
+    assertLegacyWorklogs: async () => {},
+  },
+  "./bounded-request-body": boundedRequestBody,
+  "./worklog-media-security": {
+    WorklogMediaSecurityError: class WorklogMediaSecurityError extends Error {},
+    sanitizeWorklogEvidenceImage: async ({ bytes, claimedContentType, fileName }) => {
+      decoded++;
+      return {
+        bytes: Buffer.from(bytes),
+        fileName,
+        contentType: claimedContentType,
+        sourceFormat: "jpeg",
+        width: 1,
+        height: 1,
+      };
+    },
+  },
 });
 function reset() {
   rows = [];
@@ -106,6 +126,7 @@ function reset() {
   reserved = released = 0;
   failStore = txFailure = false;
   authorized = true;
+  decoded = 0;
 }
 function photo(content = "isolated test photo", type = "image/jpeg") {
   return new File([content], "test.jpg", { type });
@@ -142,6 +163,46 @@ await test("same image twice in a request is stored once", async () => {
     200,
   );
   assert.equal(rows.length, 1);
+});
+await test("raw photo cardinality is rejected before image decoding", async () => {
+  const response = await uploadWorklogEvidence(
+    request(Array.from({ length: 7 }, (_, index) => photo(String(index)))),
+    "owner",
+    "entry",
+  );
+  assert.equal(response.status, 400);
+  assert.equal(decoded, 0);
+  assert.equal(reserved, 0);
+  assert.equal(rows.length, 0);
+});
+await test("remaining worklog quota is enforced before image decoding", async () => {
+  rows.push(...Array.from({ length: 5 }, (_, index) => ({
+    id: `existing-${index}`,
+    worklogId: "entry",
+    sha256: createHash("sha256").update(`existing-${index}`).digest("hex"),
+  })));
+  const response = await uploadWorklogEvidence(
+    request([photo("new-a"), photo("new-b")]),
+    "owner",
+    "entry",
+  );
+  assert.equal(response.status, 400);
+  assert.equal(decoded, 0);
+  assert.equal(reserved, 0);
+  assert.equal(rows.length, 5);
+});
+await test("unknown multipart fields are rejected before image decoding", async () => {
+  const body = new FormData();
+  body.append("photos", photo());
+  body.append("workspaceId", "not-allowed");
+  const response = await uploadWorklogEvidence(
+    new Request("https://test.invalid/evidence", { method: "POST", body }),
+    "owner",
+    "entry",
+  );
+  assert.equal(response.status, 400);
+  assert.equal(decoded, 0);
+  assert.equal(reserved, 0);
 });
 await test("foreign author cannot attach", async () => {
   assert.equal(
@@ -254,4 +315,9 @@ await test("client sends exactly one bounded photo and handles gateway HTML", as
     globalThis.fetch = original;
   }
 });
+const serverSource = readFileSync(new URL("../lib/server/worklog-evidence.ts", import.meta.url), "utf8");
+assert.match(serverSource, /readBoundedRequestBytes/);
+assert.match(serverSource, /MAX_WORKLOG_EVIDENCE_MULTIPART_BYTES/);
+assert.match(serverSource, /name !== ["']photos["']/);
+assert.doesNotMatch(serverSource, /await request\.formData\(\)/);
 console.log(`${passed} isolated regression checks passed.`);

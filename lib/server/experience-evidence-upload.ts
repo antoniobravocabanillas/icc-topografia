@@ -23,6 +23,7 @@ type PendingUploadBudget = {
   size: number;
   chunks: number;
   storageKey?: string;
+  activeWrites?: Array<{ index: number; nonce: string }>;
 };
 
 type UploadClaim = {
@@ -114,6 +115,14 @@ function decodePendingBudget(value: string): PendingUploadBudget | null {
     const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as PendingUploadBudget;
     if (parsed.v !== 1 || !/^[a-f0-9-]{36}$/.test(parsed.uploadId) || !Number.isSafeInteger(parsed.size) || parsed.size < 1 || parsed.size > MAX_EXPERIENCE_EVIDENCE_SIZE || !Number.isSafeInteger(parsed.chunks) || parsed.chunks < 1 || parsed.chunks > 3) return null;
     if (parsed.storageKey && (!parsed.storageKey.startsWith(`${EXPERIENCE_EVIDENCE_PREFIX}/pending/`) || parsed.storageKey.includes("..") || parsed.storageKey.includes("\\"))) return null;
+    if (parsed.activeWrites !== undefined) {
+      if (!Array.isArray(parsed.activeWrites) || parsed.activeWrites.length > parsed.chunks) return null;
+      const indices = new Set<number>();
+      for (const write of parsed.activeWrites) {
+        if (!write || !Number.isSafeInteger(write.index) || write.index < 0 || write.index >= parsed.chunks || !/^[a-f0-9-]{36}$/.test(write.nonce) || indices.has(write.index)) return null;
+        indices.add(write.index);
+      }
+    }
     return parsed;
   } catch {
     return null;
@@ -166,6 +175,8 @@ async function refreshPendingUploadBudget(userId: string, record: PendingUploadB
     const rows = await tx.verificationToken.findMany({ where: { identifier, expires: { gt: new Date() } }, select: { token: true } });
     const previous = rows.find((row) => decodePendingBudget(row.token)?.uploadId === record.uploadId);
     if (!previous) throw new ExperienceEvidenceUploadError("La reserva temporal de esta carga venció.", 409);
+    const decoded = decodePendingBudget(previous.token);
+    if (!decoded || decoded.activeWrites?.length) throw new ExperienceEvidenceUploadError("Hay fragmentos de esta evidencia todavía en escritura. Reintenta en unos segundos.", 409);
     await tx.verificationToken.delete({ where: { token: previous.token } });
     await tx.verificationToken.create({ data: { identifier, token: encodePendingBudget(record), expires } });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
@@ -192,6 +203,96 @@ type UploadBudgetDependencies = {
   refresh: typeof refreshPendingUploadBudget;
 };
 
+async function pendingUploadIsActive(client: Pick<Prisma.TransactionClient, "verificationToken">, userId: string, uploadId: string) {
+  const rows = await client.verificationToken.findMany({
+    where: { identifier: pendingBudgetIdentifier(userId), expires: { gt: new Date() } },
+    select: { token: true },
+  });
+  return rows.some((row) => {
+    const record = decodePendingBudget(row.token);
+    return record?.uploadId === uploadId && !record.storageKey;
+  });
+}
+
+async function assertPendingUploadReservation(userId: string, uploadId: string) {
+  if (!await pendingUploadIsActive(prisma, userId, uploadId))
+    throw new ExperienceEvidenceUploadError("La reserva temporal de esta carga ya fue consumida o venció.", 409);
+}
+
+async function beginPendingUploadWrite(userId: string, uploadId: string, index: number, nonce: string) {
+  const identifier = pendingBudgetIdentifier(userId);
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${identifier}))`);
+    const rows = await tx.verificationToken.findMany({ where: { identifier, expires: { gt: new Date() } }, select: { token: true, expires: true } });
+    const previous = rows.find((row) => decodePendingBudget(row.token)?.uploadId === uploadId);
+    if (!previous) throw new ExperienceEvidenceUploadError("La reserva temporal de esta carga ya fue consumida o venció.", 409);
+    const record = decodePendingBudget(previous.token);
+    if (!record || record.storageKey) throw new ExperienceEvidenceUploadError("La carga ya fue finalizada o requiere revisión.", 409);
+    if (record.activeWrites?.some((write) => write.index === index)) throw new ExperienceEvidenceUploadError("Este fragmento ya se está escribiendo.", 409);
+    await tx.verificationToken.delete({ where: { token: previous.token } });
+    await tx.verificationToken.create({
+      data: {
+        identifier,
+        token: encodePendingBudget({ ...record, activeWrites: [...(record.activeWrites || []), { index, nonce }] }),
+        expires: previous.expires,
+      },
+    });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5_000, timeout: 10_000 });
+}
+
+async function finishPendingUploadWrite(userId: string, uploadId: string, index: number, nonce: string) {
+  const identifier = pendingBudgetIdentifier(userId);
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${identifier}))`);
+    const rows = await tx.verificationToken.findMany({ where: { identifier, expires: { gt: new Date() } }, select: { token: true, expires: true } });
+    const previous = rows.find((row) => decodePendingBudget(row.token)?.uploadId === uploadId);
+    if (!previous) return false;
+    const record = decodePendingBudget(previous.token);
+    if (!record) return false;
+    const activeWrites = record.activeWrites || [];
+    const marker = activeWrites.find((write) => write.index === index);
+    if (!marker) return true;
+    if (marker.nonce !== nonce) throw new ExperienceEvidenceUploadError("La escritura del fragmento perdió su reserva exclusiva.", 409);
+    const remaining = activeWrites.filter((write) => write.nonce !== nonce);
+    await tx.verificationToken.delete({ where: { token: previous.token } });
+    await tx.verificationToken.create({
+      data: {
+        identifier,
+        token: encodePendingBudget({ ...record, activeWrites: remaining.length ? remaining : undefined }),
+        expires: previous.expires,
+      },
+    });
+    return true;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5_000, timeout: 10_000 });
+}
+
+type UploadChunkDependencies = {
+  assertPending: typeof assertPendingUploadReservation;
+  beginWrite: typeof beginPendingUploadWrite;
+  finishWrite: typeof finishPendingUploadWrite;
+  store: ReturnType<typeof getWorklogEvidenceUploadStore>;
+};
+
+function validateExperienceEvidenceChunkClaim(input: { userId: string; uploadId: string; index: number; token: string }) {
+  const claim = open<UploadClaim>(input.token, "experience-evidence-upload");
+  assertUploadClaim(claim, input.userId);
+  if (claim.uploadId !== input.uploadId || !Number.isSafeInteger(input.index) || input.index < 0 || input.index >= claim.chunks)
+    throw new ExperienceEvidenceUploadError("El fragmento no pertenece a esta carga.", 403);
+  const expectedSize = input.index === claim.chunks - 1
+    ? claim.size - input.index * EXPERIENCE_EVIDENCE_CHUNK_SIZE
+    : EXPERIENCE_EVIDENCE_CHUNK_SIZE;
+  return { claim, expectedSize };
+}
+
+export async function authorizeExperienceEvidenceChunk(
+  input: { userId: string; uploadId: string; index: number; token: string },
+  dependencies?: Partial<UploadChunkDependencies>,
+) {
+  const { expectedSize } = validateExperienceEvidenceChunkClaim(input);
+  await (dependencies?.assertPending || assertPendingUploadReservation)(input.userId, input.uploadId);
+  return { expectedSize };
+}
+
 export async function createExperienceEvidenceUpload(input: { userId: string; fileName: unknown; contentType: unknown; size: unknown }, dependencies?: Partial<UploadBudgetDependencies>) {
   const fileName = normalizeFileName(input.fileName);
   const contentType = typeof input.contentType === "string" ? input.contentType : "";
@@ -213,19 +314,46 @@ export async function createExperienceEvidenceUpload(input: { userId: string; fi
   return { uploadId: claim.uploadId, chunkSize: EXPERIENCE_EVIDENCE_CHUNK_SIZE, chunks: claim.chunks, token: seal(claim) };
 }
 
-export async function storeExperienceEvidenceChunk(input: { userId: string; uploadId: string; index: number; token: string; bytes: ArrayBuffer }) {
-  const claim = open<UploadClaim>(input.token, "experience-evidence-upload");
-  assertUploadClaim(claim, input.userId);
-  if (claim.uploadId !== input.uploadId || !Number.isSafeInteger(input.index) || input.index < 0 || input.index >= claim.chunks) throw new ExperienceEvidenceUploadError("El fragmento no pertenece a esta carga.", 403);
-  const expectedSize = input.index === claim.chunks - 1 ? claim.size - input.index * EXPERIENCE_EVIDENCE_CHUNK_SIZE : EXPERIENCE_EVIDENCE_CHUNK_SIZE;
+export async function storeExperienceEvidenceChunk(
+  input: { userId: string; uploadId: string; index: number; token: string; bytes: ArrayBuffer },
+  dependencies?: Partial<UploadChunkDependencies>,
+) {
+  const { claim, expectedSize } = validateExperienceEvidenceChunkClaim(input);
   if (input.bytes.byteLength !== expectedSize) throw new ExperienceEvidenceUploadError("El fragmento tiene un tamaño inesperado.", 422);
   const sha256 = createHash("sha256").update(Buffer.from(input.bytes)).digest("hex");
-  const store = getWorklogEvidenceUploadStore();
+  const store = dependencies?.store || getWorklogEvidenceUploadStore();
   const key = chunkKey(claim, input.index);
-  const result = await store.set(key, input.bytes, { onlyIfNew: true, metadata: { kind: "experience-evidence-chunk", ownerId: input.userId, uploadId: claim.uploadId, index: input.index, size: input.bytes.byteLength, sha256, expiresAt: claim.exp } });
-  if (result.modified === false) {
-    const existing = await store.getMetadata(key);
-    if (existing?.metadata.sha256 !== sha256 || existing.metadata.size !== input.bytes.byteLength || existing.metadata.ownerId !== input.userId) throw new ExperienceEvidenceUploadError("El fragmento ya existe con otro contenido.", 409);
+  const nonce = randomUUID();
+  const beginWrite = dependencies?.beginWrite || beginPendingUploadWrite;
+  const finishWrite = dependencies?.finishWrite || finishPendingUploadWrite;
+  await beginWrite(input.userId, input.uploadId, input.index, nonce);
+  let writeFinished = false;
+  let blobWriteConfirmed = false;
+  try {
+    const result = await store.set(key, input.bytes, { onlyIfNew: true, metadata: { kind: "experience-evidence-chunk", ownerId: input.userId, uploadId: claim.uploadId, index: input.index, size: input.bytes.byteLength, sha256, expiresAt: claim.exp } });
+    blobWriteConfirmed = true;
+    if (result.modified === false) {
+      const existing = await store.getMetadata(key);
+      if (existing?.metadata.sha256 !== sha256 || existing.metadata.size !== input.bytes.byteLength || existing.metadata.ownerId !== input.userId) throw new ExperienceEvidenceUploadError("El fragmento ya existe con otro contenido.", 409);
+    }
+    writeFinished = await finishWrite(input.userId, input.uploadId, input.index, nonce);
+    if (!writeFinished) {
+      await store.delete(key).catch(() => undefined);
+      throw new ExperienceEvidenceUploadError("La reserva temporal de esta carga fue consumida durante la escritura.", 409);
+    }
+  } catch (error) {
+    if (!writeFinished && blobWriteConfirmed) {
+      try {
+        const reservationStillActive = await finishWrite(input.userId, input.uploadId, input.index, nonce);
+        if (!reservationStillActive) await store.delete(key).catch(() => undefined);
+      } catch {
+        // Retain the durable marker when PostgreSQL cannot confirm completion.
+      }
+    }
+    // A transport rejection does not prove that the remote PUT was canceled.
+    // Keep its marker until expiry cleanup so finalize/attach cannot race a
+    // late object commit by treating an uncertain write as complete.
+    throw error;
   }
   return { index: input.index, sha256 };
 }
@@ -369,10 +497,12 @@ export async function attachExperienceEvidenceReceipts(tokens: string[], experie
         await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${identifier}))`);
         const budgetRows = await tx.verificationToken.findMany({ where: { identifier }, select: { token: true } });
         const uploadIds = new Set(receipts.map((receipt) => receipt.uploadId));
-        const consumed = budgetRows.filter((row) => {
-          const parsed = decodePendingBudget(row.token);
-          return parsed && uploadIds.has(parsed.uploadId);
+        const matchingBudgets = budgetRows.flatMap((row) => {
+          const record = decodePendingBudget(row.token);
+          return record && uploadIds.has(record.uploadId) ? [{ row, record }] : [];
         });
+        if (matchingBudgets.some(({ record }) => record.activeWrites?.length)) throw new ExperienceEvidenceUploadError("Una evidencia todavía tiene fragmentos en escritura. Reintenta en unos segundos.", 409);
+        const consumed = matchingBudgets.map(({ row }) => row);
         if (consumed.length) await tx.verificationToken.deleteMany({ where: { token: { in: consumed.map((row) => row.token) } } });
         stage = "attached-read";
         return tx.terraqoExperienceEvidence.findMany({ where: { storageKey: { in: receipts.map((item) => item.storageKey) }, experienceId }, orderBy: { createdAt: "asc" } });

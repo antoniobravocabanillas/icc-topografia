@@ -4,39 +4,63 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { createEmailVerificationToken, sendEmailVerificationCode } from "@/lib/server/email-verification";
 import { getSubdivisionName } from "@/lib/locations";
-import { fail, handleApiError, ok, parseJson } from "@/lib/server/api";
+import { fail, handleApiError, ok } from "@/lib/server/api";
+import { BoundedRequestBodyError, readBoundedJson } from "@/lib/server/bounded-request-body";
 import {
   calculatePublicCheckoutPrice,
+  MAX_PUBLIC_CHECKOUT_ITEMS,
   MAX_PUBLIC_CHECKOUT_QUANTITY,
+  MAX_PUBLIC_CHECKOUT_TOTAL_QUANTITY,
   PublicCheckoutPricingError,
 } from "@/lib/server/public-checkout-pricing";
 
 type RouteContext = { params: Promise<{ workspaceSlug: string }> };
+const MAX_PUBLIC_CHECKOUT_BODY_BYTES = 64 * 1024;
 
 const publicCheckoutSchema = z.object({
-  workspaceSlug: z.string().trim().optional(),
+  workspaceSlug: z.string().trim().max(120).optional(),
   items: z.array(z.object({
-    productId: z.string().trim().min(1),
-    slug: z.string().trim().optional(),
+    productId: z.string().trim().min(1).max(120),
+    slug: z.string().trim().max(160).optional(),
     quantity: z.coerce.number().int().positive().max(MAX_PUBLIC_CHECKOUT_QUANTITY),
-  })).min(1),
-  shippingMethod: z.string().trim().default("standard"),
+  })).min(1).max(MAX_PUBLIC_CHECKOUT_ITEMS).superRefine((items, context) => {
+    const seen = new Set<string>();
+    let totalQuantity = 0;
+    items.forEach((item, index) => {
+      if (seen.has(item.productId)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Cada producto debe aparecer una sola vez en el pedido.",
+          path: [index, "productId"],
+        });
+      }
+      seen.add(item.productId);
+      totalQuantity += item.quantity;
+    });
+    if (!Number.isSafeInteger(totalQuantity) || totalQuantity > MAX_PUBLIC_CHECKOUT_TOTAL_QUANTITY) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `El pedido no puede superar ${MAX_PUBLIC_CHECKOUT_TOTAL_QUANTITY} unidades en total.`,
+      });
+    }
+  }),
+  shippingMethod: z.string().trim().max(40).default("standard"),
   paymentMethod: z.enum(["bank", "card", "delivery"]).default("bank"),
-  customerType: z.string().trim().default("person"),
+  customerType: z.string().trim().max(30).default("person"),
   customer: z.object({
-    customerType: z.string().trim().optional(),
-    name: z.string().trim().min(2),
-    document: z.string().trim().min(6),
-    email: z.string().trim().email().transform((value) => value.toLowerCase()),
-    phone: z.string().trim().min(6),
-    address: z.string().trim().min(5),
-    reference: z.string().trim().optional(),
+    customerType: z.string().trim().max(30).optional(),
+    name: z.string().trim().min(2).max(160),
+    document: z.string().trim().min(6).max(30),
+    email: z.string().trim().email().max(254).transform((value) => value.toLowerCase()),
+    phone: z.string().trim().min(6).max(40),
+    address: z.string().trim().min(5).max(300),
+    reference: z.string().trim().max(300).optional(),
     country: z.string().trim().length(2).default("PE"),
-    subdivision: z.string().trim().optional(),
-    city: z.string().trim().optional(),
-    department: z.string().trim().default("Lima"),
-    province: z.string().trim().default("Lima"),
-    district: z.string().trim().default("Lima"),
+    subdivision: z.string().trim().max(32).optional(),
+    city: z.string().trim().max(120).optional(),
+    department: z.string().trim().max(120).default("Lima"),
+    province: z.string().trim().max(120).default("Lima"),
+    district: z.string().trim().max(120).default("Lima"),
   }),
 });
 
@@ -74,7 +98,9 @@ function portalAccountUrl(workspaceSlug: string) {
 export async function POST(request: Request, { params }: RouteContext) {
   try {
     const { workspaceSlug } = await params;
-    const payload = await parseJson(request, publicCheckoutSchema);
+    const payload = publicCheckoutSchema.parse(
+      await readBoundedJson(request, MAX_PUBLIC_CHECKOUT_BODY_BYTES),
+    );
     const workspace = await prisma.terraqoWorkspace.findFirst({
       where: { slug: workspaceSlug, active: true },
       select: { id: true, slug: true },
@@ -363,6 +389,14 @@ export async function POST(request: Request, { params }: RouteContext) {
       paymentInstructions: paymentInstructions(payload.paymentMethod),
     }, { status: result.reusedOrder ? 200 : 201 });
   } catch (error) {
+    if (error instanceof BoundedRequestBodyError) {
+      return fail(
+        error.code === "BODY_TOO_LARGE"
+          ? "El pedido supera el tamaño permitido."
+          : "El pedido no contiene JSON válido.",
+        error.status,
+      );
+    }
     return handleApiError(error);
   }
 }

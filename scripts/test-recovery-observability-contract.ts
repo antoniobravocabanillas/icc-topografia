@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fail } from "@/lib/server/api";
+import {
+  BoundedRequestBodyError,
+  readBoundedJson,
+} from "@/lib/server/bounded-request-body";
 
 const root = process.cwd();
 
@@ -28,7 +32,24 @@ async function main() {
   const telemetry = await source("app/api/telemetry/client-error/route.ts");
   assert.match(telemetry, /messageFingerprint/);
   assert.match(telemetry, /stackFingerprint/);
+  assert.match(telemetry, /readBoundedJson\(request, 8_192\)/);
+  assert.doesNotMatch(telemetry, /content-length|request\.json\(\)/i);
   assert.doesNotMatch(telemetry, /parsed\.data\.(message|stack|digest)\b/, "El servidor no debe recibir ni registrar texto crudo del error.");
+
+  const lyingBody = new Request("https://example.invalid/telemetry", {
+    method: "POST",
+    headers: { "content-length": "2" },
+    body: JSON.stringify({ value: "x".repeat(8_192) }),
+  });
+  await assert.rejects(
+    readBoundedJson(lyingBody, 8_192),
+    (error: unknown) => error instanceof BoundedRequestBodyError && error.status === 413,
+  );
+  const chunkedBody = new Request("https://example.invalid/telemetry", {
+    method: "POST",
+    body: JSON.stringify({ source: "boundary" }),
+  });
+  assert.deepEqual(await readBoundedJson(chunkedBody, 8_192), { source: "boundary" });
 
   const boundary = await source("components/errors/client-feature-boundary.tsx");
   assert.match(boundary, /crypto\.subtle\.digest/);

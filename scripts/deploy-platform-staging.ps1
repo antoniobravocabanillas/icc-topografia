@@ -13,6 +13,9 @@ $envLocalPath = Join-Path $repo ".env.local"
 $envExamplePath = Join-Path $repo ".env.example"
 $envHoldPath = Join-Path $repo ".env.codex-staging-hold"
 $envLocalHoldPath = Join-Path $repo ".env.local.codex-staging-hold"
+$netlifyCliVersion = "26.0.1"
+$netlifyCliPackagePath = Join-Path $repo "node_modules\netlify-cli\package.json"
+$netlifyCliPath = Join-Path $repo "node_modules\netlify-cli\bin\run.js"
 $preflightVariableNames = @(
   "PLATFORM_STAGING_CONFIRM",
   "PLATFORM_STAGING_ALLOW_REMOTE",
@@ -58,6 +61,25 @@ $runtimeIsolationVariableNames = @(
   "OPENAI_API_KEY",
   "OLLAMA_BASE_URL"
 )
+$buildVariableNames = @(
+  "NEXT_PUBLIC_SITE_URL",
+  "NEXT_PUBLIC_PORTAL_URL",
+  "NEXT_PUBLIC_ADMIN_URL",
+  "NEXT_PUBLIC_API_URL",
+  "TERRAQO_WORKLOG_FTS_V1",
+  "TERRAQO_WORK_CASES_V1",
+  "TERRAQO_SCOPED_SHARING_V1",
+  "TERRAQO_SCOPED_ENDORSEMENTS_V1",
+  "TERRAQO_DISCOVERY_NEEDS_V1",
+  "TERRAQO_CONTEXTUAL_MESSAGING_V1",
+  "TERRAQO_COLLABORATION_V1",
+  "TERRAQO_CLOSURE_V1",
+  "TERRAQO_EVIDENCE_ANALYSIS_V1",
+  "TERRAQO_B5_PILOT_WORKSPACE_IDS",
+  "TERRAQO_EVIDENCE_ANALYSIS_PROVIDER",
+  "TERRAQO_OAUTH_ENABLED",
+  "TERRAQO_TRANSACTIONAL_EMAIL_ENABLED"
+)
 
 function Get-DotEnvVariableNames {
   param([string[]]$Paths)
@@ -97,9 +119,18 @@ $deploymentEnvironment = @{}
 foreach ($name in $deploymentVariableNames) {
   $deploymentEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, "Process")
 }
+$netlifyAuthToken = [Environment]::GetEnvironmentVariable("NETLIFY_AUTH_TOKEN", "Process")
 
 if ($SiteId -ne $expectedSiteId) {
   throw "SiteId no autorizado para este gate de staging."
+}
+
+if ($Message -notmatch '^[A-Za-z0-9 .:_-]{1,120}$') {
+  throw "El mensaje de deploy contiene caracteres no autorizados."
+}
+
+if ([string]::IsNullOrWhiteSpace($netlifyAuthToken)) {
+  throw "NETLIFY_AUTH_TOKEN es obligatorio para el proceso final de deploy."
 }
 
 if (-not (Test-Path -LiteralPath $statePath)) {
@@ -123,6 +154,9 @@ if ((Test-Path -LiteralPath $envHoldPath) -or (Test-Path -LiteralPath $envLocalH
   throw "Existe un archivo hold previo; restaurelo antes de continuar."
 }
 
+# El token queda fuera del proceso de resolucion, preflight y build. Se inyecta
+# solamente en el proceso hijo que ejecuta el deploy final.
+[Environment]::SetEnvironmentVariable("NETLIFY_AUTH_TOKEN", $null, "Process")
 Push-Location $repo
 try {
   npm run check:platform-staging
@@ -136,6 +170,27 @@ try {
   foreach ($name in $deploymentVariableNames) {
     [Environment]::SetEnvironmentVariable($name, $null, "Process")
   }
+  foreach ($name in $buildVariableNames) {
+    if ($deploymentEnvironment.ContainsKey($name)) {
+      [Environment]::SetEnvironmentVariable(
+        $name,
+        $deploymentEnvironment[$name],
+        "Process"
+      )
+    }
+  }
+
+  if (-not (Test-Path -LiteralPath $netlifyCliPackagePath)) {
+    throw "Instale las dependencias: falta netlify-cli local."
+  }
+  $installedNetlifyCliVersion = (Get-Content -LiteralPath $netlifyCliPackagePath -Raw | ConvertFrom-Json).version
+  if ($installedNetlifyCliVersion -ne $netlifyCliVersion) {
+    throw "La version local de netlify-cli no coincide con el gate fijado."
+  }
+  if (-not (Test-Path -LiteralPath $netlifyCliPath)) {
+    throw "No se encontro el ejecutable local fijado de netlify-cli."
+  }
+  $nodePath = (Get-Command node -ErrorAction Stop).Source
 
   $movedEnv = $false
   $movedEnvLocal = $false
@@ -152,8 +207,24 @@ try {
       $movedEnvLocal = $true
     }
 
-    npx netlify deploy --build --prod --site $SiteId --message $Message --json
+    & $nodePath $netlifyCliPath build --offline --context production
     if ($LASTEXITCODE -ne 0) {
+      throw "Netlify no completo el build local aislado de staging."
+    }
+
+    $deployProcessInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $deployProcessInfo.FileName = $nodePath
+    $deployProcessInfo.UseShellExecute = $false
+    $deployProcessInfo.WorkingDirectory = $repo
+    $deployProcessInfo.Arguments = "`"$netlifyCliPath`" deploy --no-build --prod --site $SiteId --message `"$Message`" --json"
+    $deployProcessInfo.EnvironmentVariables["NETLIFY_AUTH_TOKEN"] = $netlifyAuthToken
+    $deployProcess = New-Object System.Diagnostics.Process
+    $deployProcess.StartInfo = $deployProcessInfo
+    if (-not $deployProcess.Start()) {
+      throw "No se pudo iniciar el proceso final de deploy."
+    }
+    $deployProcess.WaitForExit()
+    if ($deployProcess.ExitCode -ne 0) {
       throw "Netlify no completo el deploy de staging."
     }
   }
@@ -174,5 +245,10 @@ finally {
       "Process"
     )
   }
+  [Environment]::SetEnvironmentVariable(
+    "NETLIFY_AUTH_TOKEN",
+    $netlifyAuthToken,
+    "Process"
+  )
   Pop-Location
 }

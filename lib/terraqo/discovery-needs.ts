@@ -3,6 +3,7 @@ import { Prisma, type TerraqoEvaluationSourceAccessKind } from "@prisma/client";
 import type { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { isWorkspaceReplay } from "@/lib/terraqo/idempotency-scope";
+import { constrainAllowedFields, type EvaluationSourceFieldPolicy } from "@/lib/terraqo/evaluation-source-policy";
 import type {
   terraqoEvaluationAssessmentSchema,
   terraqoEvaluationDossierCreateSchema,
@@ -314,6 +315,7 @@ const candidateSelect = {
         select: {
           id: true,
           headline: true,
+          liveCvEnabled: true,
           user: { select: { name: true, image: true } },
         },
       },
@@ -352,7 +354,7 @@ export async function discoverEvidenceForNeed(workspaceId: string, needId: strin
   ]);
   const candidates = await prisma.terraqoWorklogRevision.findMany({
     where: {
-      worklog: { deletedAt: null, lifecycle: "PUBLISHED", currentRevisionId: { not: null } },
+      worklog: { deletedAt: null, lifecycle: "PUBLISHED", currentRevisionId: { not: null }, professionalProfile: { liveCvEnabled: true } },
       currentFor: { isNot: null },
       OR: [
         { worklog: { visibility: "PUBLIC" } },
@@ -426,10 +428,11 @@ async function resolveSourceAccess(tx: Prisma.TransactionClient, actorId: string
     select: {
       id: true,
       contentHash: true,
-      worklog: { select: { id: true, visibility: true, deletedAt: true, lifecycle: true, currentRevisionId: true } },
+      worklog: { select: { id: true, visibility: true, deletedAt: true, lifecycle: true, currentRevisionId: true, professionalProfile: { select: { liveCvEnabled: true } } } },
       shareItems: {
         where: { collection: { lifecycle: { not: "ARCHIVED" } } },
         select: {
+          allowedFields: true,
           collection: {
             select: {
               publicProjection: { select: { id: true, revokedAt: true } },
@@ -448,19 +451,23 @@ async function resolveSourceAccess(tx: Prisma.TransactionClient, actorId: string
     throw new DiscoveryNeedsError("La evidencia seleccionada ya no está vigente.", 409);
   let accessKind: TerraqoEvaluationSourceAccessKind | null = null;
   let accessReferenceId: string | null = null;
-  if (revision.worklog.visibility === "PUBLIC") {
+  let allowedFields: EvaluationSourceFieldPolicy = null;
+  const privateItem = revision.shareItems.find((item) => item.collection.grants.length > 0);
+  const publicItem = revision.shareItems.find((item) => item.collection.publicProjection && !item.collection.publicProjection.revokedAt);
+  if (revision.worklog.visibility === "PUBLIC" && revision.worklog.professionalProfile.liveCvEnabled) {
     accessKind = "PUBLIC_CV";
     accessReferenceId = revision.worklog.id;
-  } else {
-    const publicProjection = revision.shareItems.map((item) => item.collection.publicProjection).find((item) => item && !item.revokedAt);
-    const privateGrant = revision.shareItems.flatMap((item) => item.collection.grants)[0];
-    if (publicProjection) {
-      accessKind = "PUBLIC_SELECTION";
-      accessReferenceId = publicProjection.id;
-    } else if (privateGrant) {
-      accessKind = "PRIVATE_GRANT";
-      accessReferenceId = privateGrant.id;
-    }
+  } else if (privateItem?.collection.grants[0]) {
+    // A direct grant remains valid even when the professional withdraws their
+    // public CV. Never let an ineligible public path mask the actor's private
+    // authorization.
+    accessKind = "PRIVATE_GRANT";
+    accessReferenceId = privateItem.collection.grants[0].id;
+    allowedFields = privateItem.allowedFields;
+  } else if (publicItem?.collection.publicProjection && revision.worklog.professionalProfile.liveCvEnabled) {
+    accessKind = "PUBLIC_SELECTION";
+    accessReferenceId = publicItem.collection.publicProjection.id;
+    allowedFields = publicItem.allowedFields;
   }
   if (!accessKind || !accessReferenceId) throw new DiscoveryNeedsError("No existe autorización vigente para esta evidencia.", 403);
   return {
@@ -472,6 +479,7 @@ async function resolveSourceAccess(tx: Prisma.TransactionClient, actorId: string
       revisionHash: revision.contentHash,
       accessKind,
       accessReferenceId,
+      allowedFields,
     },
   };
 }
@@ -538,32 +546,36 @@ export async function createEvaluationDossier(input: {
 async function evaluationSourceIsAccessible(
   tx: Prisma.TransactionClient,
   actorId: string,
-  source: { accessKind: TerraqoEvaluationSourceAccessKind; accessReferenceId: string | null; worklogRevisionId: string },
+  source: { accessKind: TerraqoEvaluationSourceAccessKind; accessReferenceId: string | null; worklogRevisionId: string; accessSnapshot: Prisma.JsonValue },
 ) {
   if (source.accessKind === "PUBLIC_CV") {
-    return Boolean(await tx.terraqoWorklogRevision.findFirst({
-      where: { id: source.worklogRevisionId, currentFor: { visibility: "PUBLIC", deletedAt: null, lifecycle: "PUBLISHED" } },
+    const revision = await tx.terraqoWorklogRevision.findFirst({
+      where: { id: source.worklogRevisionId, currentFor: { visibility: "PUBLIC", deletedAt: null, lifecycle: "PUBLISHED", professionalProfile: { liveCvEnabled: true } } },
       select: { id: true },
-    }));
+    });
+    return revision ? { allowedFields: constrainAllowedFields(null, source.accessSnapshot) } : null;
   }
   if (source.accessKind === "PUBLIC_SELECTION") {
-    return Boolean(await tx.terraqoShareCollectionItem.findFirst({
+    const item = await tx.terraqoShareCollectionItem.findFirst({
       where: {
         revisionId: source.worklogRevisionId,
+        revision: { worklog: { professionalProfile: { liveCvEnabled: true } } },
         collection: { lifecycle: { not: "ARCHIVED" }, publicProjection: { id: source.accessReferenceId ?? "", revokedAt: null } },
       },
-      select: { id: true },
-    }));
+      select: { allowedFields: true },
+    });
+    return item ? { allowedFields: constrainAllowedFields(item.allowedFields, source.accessSnapshot) } : null;
   }
-  return Boolean(await tx.terraqoShareCollectionItem.findFirst({
+  const item = await tx.terraqoShareCollectionItem.findFirst({
     where: {
       revisionId: source.worklogRevisionId,
       collection: {
         grants: { some: { id: source.accessReferenceId ?? "", subjectUserId: actorId, lifecycle: "ACTIVE", expiresAt: { gt: new Date() }, scopes: { has: "VIEW_COLLECTION" } } },
       },
     },
-    select: { id: true },
-  }));
+    select: { allowedFields: true },
+  });
+  return item ? { allowedFields: constrainAllowedFields(item.allowedFields, source.accessSnapshot) } : null;
 }
 
 export async function listEvaluationDossiers(input: { userId: string; workspaceId: string }) {
@@ -600,15 +612,27 @@ export async function listEvaluationDossiers(input: { userId: string; workspaceI
     });
 
     return Promise.all(dossiers.map(async (dossier) => {
-      const accessibility = new Map<string, boolean>();
+      const accessibility = new Map<string, { allowedFields: EvaluationSourceFieldPolicy } | null>();
       await Promise.all(dossier.sources.map(async (source) => {
         accessibility.set(source.id, await evaluationSourceIsAccessible(tx, input.userId, source));
       }));
       const sources = dossier.sources
         .filter((source) => accessibility.get(source.id))
-        .map((source) => ({ ...source, accessState: "ACTIVE" as const }));
+        .map((source) => {
+          const policy = accessibility.get(source.id)!;
+          const titleAllowed = policy.allowedFields === null || policy.allowedFields.includes("title");
+          return {
+            ...source,
+            accessState: "ACTIVE" as const,
+            worklogRevision: {
+              id: source.worklogRevision.id,
+              contentHash: source.worklogRevision.contentHash,
+              ...(titleAllowed ? { title: source.worklogRevision.title } : {}),
+            },
+          };
+        });
       const assessments = dossier.assessments.map((assessment) => {
-        const activeSourceIds = assessment.sourceLinks.map((link) => link.sourceId).filter((sourceId) => accessibility.get(sourceId));
+        const activeSourceIds = assessment.sourceLinks.map((link) => link.sourceId).filter((sourceId) => Boolean(accessibility.get(sourceId)));
         return {
           ...assessment,
           sourceIds: activeSourceIds,
@@ -669,7 +693,7 @@ export async function saveEvaluationAssessment(input: {
     const sourceIds = [...new Set(input.payload.sourceIds)];
     const sources = sourceIds.length ? await tx.terraqoEvaluationSource.findMany({
       where: { id: { in: sourceIds }, dossierId: dossier.id },
-      select: { id: true, accessKind: true, accessReferenceId: true, worklogRevisionId: true },
+      select: { id: true, accessKind: true, accessReferenceId: true, worklogRevisionId: true, accessSnapshot: true },
     }) : [];
     if (sources.length !== sourceIds.length) throw new DiscoveryNeedsError("Alguna fuente no pertenece al expediente.", 422);
     const accessChecks = await Promise.all(sources.map((source) => evaluationSourceIsAccessible(tx, input.userId, source)));

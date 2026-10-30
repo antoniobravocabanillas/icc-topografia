@@ -6,8 +6,9 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { emitTerraqoOperationalEvent } from "@/lib/server/terraqo-observability";
 import { workspaceAdminMemberRoles } from "@/lib/terraqo/workspace-roles";
+import { constrainAllowedFields } from "@/lib/terraqo/evaluation-source-policy";
 
-export const EVIDENCE_ANALYSIS_POLICY_VERSION = "terraqo-evidence-analysis-policy-v1";
+export const EVIDENCE_ANALYSIS_POLICY_VERSION = "terraqo-evidence-analysis-policy-v2";
 export const EVIDENCE_ANALYSIS_PROMPT_VERSION = "terraqo-evidence-analysis-prompt-v1";
 
 const sourceFieldSchema = z.enum([
@@ -177,6 +178,7 @@ export function buildEvidenceAnalysisCacheKey(input: {
   dossierId: string;
   purpose: EvidenceAnalysisPurpose;
   policyVersion: string;
+  sourceProjectionHash: string;
   sources: Array<{ revisionId: string; contentHash: string; accessKind: string; accessReferenceId: string | null }>;
 }) {
   return sha256({
@@ -185,6 +187,7 @@ export function buildEvidenceAnalysisCacheKey(input: {
     dossierId: input.dossierId,
     purpose: input.purpose,
     policyVersion: input.policyVersion,
+    sourceProjectionHash: input.sourceProjectionHash,
     sources: [...input.sources].sort((left, right) => left.revisionId.localeCompare(right.revisionId)),
   });
 }
@@ -351,6 +354,7 @@ type JobSourceRecord = {
   contentHash: string;
   accessKind: TerraqoEvaluationSourceAccessKind;
   accessReferenceId: string | null;
+  accessSnapshot: Prisma.JsonValue;
 };
 
 async function authorizedSourceProjection(actorId: string, source: JobSourceRecord): Promise<EvidenceAnalysisSource | null> {
@@ -364,7 +368,13 @@ async function authorizedSourceProjection(actorId: string, source: JobSourceReco
     responsibilities: true,
     methods: true,
     tools: true,
-    worklog: { select: { occurredAt: true, locationLabel: true } },
+    worklog: {
+      select: {
+        occurredAt: true,
+        locationLabel: true,
+        professionalProfile: { select: { liveCvEnabled: true } },
+      },
+    },
   } satisfies Prisma.TerraqoWorklogRevisionSelect;
 
   const revision = await prisma.terraqoWorklogRevision.findFirst({
@@ -378,6 +388,10 @@ async function authorizedSourceProjection(actorId: string, source: JobSourceReco
   if (!revision) return null;
 
   let allowedFields: Array<z.infer<typeof sourceFieldSchema>> = [...sourceFieldSchema.options];
+  if (
+    (source.accessKind === "PUBLIC_CV" || source.accessKind === "PUBLIC_SELECTION") &&
+    !revision.worklog.professionalProfile.liveCvEnabled
+  ) return null;
   if (source.accessKind === "PUBLIC_CV") {
     const publicRevision = await prisma.terraqoWorklogRevision.findFirst({
       where: { id: revision.id, currentFor: { visibility: "PUBLIC", lifecycle: "PUBLISHED", deletedAt: null } },
@@ -397,6 +411,9 @@ async function authorizedSourceProjection(actorId: string, source: JobSourceReco
     if (!item) return null;
     allowedFields = item.allowedFields.filter((field): field is z.infer<typeof sourceFieldSchema> => sourceFieldSchema.safeParse(field).success);
   }
+
+  allowedFields = (constrainAllowedFields(allowedFields, source.accessSnapshot) ?? [...sourceFieldSchema.options])
+    .filter((field): field is z.infer<typeof sourceFieldSchema> => sourceFieldSchema.safeParse(field).success);
 
   const values: Record<z.infer<typeof sourceFieldSchema>, string | string[] | null> = {
     title: revision.title,
@@ -422,8 +439,22 @@ async function loadAuthorizedSources(actorId: string, sources: JobSourceRecord[]
   return projections.filter((source): source is EvidenceAnalysisSource => Boolean(source));
 }
 
+function sourceProjectionHash(sources: EvidenceAnalysisSource[]) {
+  return sha256(
+    sources
+      .map((source) => ({
+        sourceId: source.sourceId,
+        revisionId: source.revisionId,
+        contentHash: source.contentHash,
+        accessKind: source.accessKind,
+        fields: source.fields,
+      }))
+      .sort((left, right) => left.sourceId.localeCompare(right.sourceId)),
+  );
+}
+
 function publicJob<T extends {
-  id: string; dossierId: string; purpose: string; status: string; policyVersion: string; promptVersion: string;
+  id: string; dossierId: string; purpose: string; status: string; policyVersion: string; promptVersion: string; sourceSetHash: string;
   provider: string | null; model: string | null; claims: Prisma.JsonValue | null; missing: Prisma.JsonValue | null;
   attemptCount: number; maxAttempts: number; inputTokens: number | null; outputTokens: number | null;
   estimatedCostMicros: bigint | null; latencyMs: number | null; failureCode: string | null;
@@ -528,12 +559,14 @@ export async function queueEvidenceAnalysisJob(input: {
       contentHash: source.worklogRevision.contentHash,
       accessKind: source.accessKind,
       accessReferenceId: source.accessReferenceId,
+      accessSnapshot: source.accessSnapshot,
     }));
     const authorized = await Promise.all(sourceRecords.map((source) => authorizedSourceProjection(input.actorId, source)));
     if (authorized.some((source) => !source)) throw new EvidenceAnalysisError("SOURCE_REVOKED", "Alguna fuente fue retirada o perdió autorización.", 409);
+    const authorizedSources = authorized.filter((source): source is EvidenceAnalysisSource => Boolean(source));
 
-    const sourceSetHash = sha256(sourceRecords.map((source) => ({ revisionId: source.worklogRevisionId, contentHash: source.contentHash })).sort((a, b) => a.revisionId.localeCompare(b.revisionId)));
-    const cacheKey = buildEvidenceAnalysisCacheKey({ actorId: input.actorId, workspaceId: input.workspaceId, dossierId: dossier.id, purpose: input.payload.purpose, policyVersion: EVIDENCE_ANALYSIS_POLICY_VERSION, sources: sourceRecords.map((source) => ({ revisionId: source.worklogRevisionId, contentHash: source.contentHash, accessKind: source.accessKind, accessReferenceId: source.accessReferenceId })) });
+    const sourceSetHash = sourceProjectionHash(authorizedSources);
+    const cacheKey = buildEvidenceAnalysisCacheKey({ actorId: input.actorId, workspaceId: input.workspaceId, dossierId: dossier.id, purpose: input.payload.purpose, policyVersion: EVIDENCE_ANALYSIS_POLICY_VERSION, sourceProjectionHash: sourceSetHash, sources: sourceRecords.map((source) => ({ revisionId: source.worklogRevisionId, contentHash: source.contentHash, accessKind: source.accessKind, accessReferenceId: source.accessReferenceId })) });
     const cached = await tx.terraqoAnalysisJob.findFirst({
       where: { createdById: input.actorId, cacheKey, status: { in: ["READY", "INSUFFICIENT"] } },
       orderBy: { completedAt: "desc" },
@@ -607,7 +640,7 @@ async function runAnalysisAttempt(jobId: string) {
   const job = await prisma.terraqoAnalysisJob.findUnique({
     where: { id: jobId },
     include: {
-      sources: true,
+      sources: { include: { evaluationSource: { select: { accessSnapshot: true } } } },
       dossier: { select: { lifecycle: true, needRevision: { select: { title: true, problem: true, requirements: { select: { label: true, priority: true }, orderBy: { sortOrder: "asc" } } } } } },
     },
   });
@@ -620,8 +653,16 @@ async function runAnalysisAttempt(jobId: string) {
     emitTerraqoOperationalEvent("analysis_source_revoked", { jobId: job.id, workspaceId: job.workspaceId, dossierId: job.dossierId, status: "SOURCE_REVOKED", failureCode: "SCOPE_REVOKED" });
     return false;
   }
-  const sources = await loadAuthorizedSources(job.createdById, job.sources);
-  if (sources.length !== job.sources.length) {
+  const runtimeSources = job.sources.map((source) => ({
+    evaluationSourceId: source.evaluationSourceId,
+    worklogRevisionId: source.worklogRevisionId,
+    contentHash: source.contentHash,
+    accessKind: source.accessKind,
+    accessReferenceId: source.accessReferenceId,
+    accessSnapshot: source.evaluationSource.accessSnapshot,
+  }));
+  const sources = await loadAuthorizedSources(job.createdById, runtimeSources);
+  if (sources.length !== job.sources.length || sourceProjectionHash(sources) !== job.sourceSetHash) {
     await prisma.$transaction([
       prisma.terraqoAnalysisJob.update({ where: { id: job.id }, data: { status: "SOURCE_REVOKED", claims: Prisma.DbNull, missing: Prisma.DbNull, failureCode: "SOURCE_REVOKED", completedAt: new Date() } }),
       prisma.terraqoEvaluationDossier.update({ where: { id: job.dossierId }, data: { analysisStatus: "SOURCE_REVOKED", analysisFailureCode: "SOURCE_REVOKED", analysisUpdatedAt: new Date() } }),
@@ -647,8 +688,8 @@ async function runAnalysisAttempt(jobId: string) {
     emitTerraqoOperationalEvent("analysis_cancelled", { jobId: job.id, workspaceId: job.workspaceId, dossierId: job.dossierId, status: "CANCELLED", attemptCount: job.attemptCount });
     return false;
   }
-  const reauthorized = await loadAuthorizedSources(job.createdById, job.sources);
-  if (reauthorized.length !== sources.length) {
+  const reauthorized = await loadAuthorizedSources(job.createdById, runtimeSources);
+  if (reauthorized.length !== sources.length || sourceProjectionHash(reauthorized) !== job.sourceSetHash) {
     await prisma.$transaction([
       prisma.terraqoAnalysisJob.update({ where: { id: job.id }, data: { status: "SOURCE_REVOKED", claims: Prisma.DbNull, missing: Prisma.DbNull, failureCode: "SOURCE_REVOKED", completedAt: new Date() } }),
       prisma.terraqoEvaluationDossier.update({ where: { id: job.dossierId }, data: { analysisStatus: "SOURCE_REVOKED", analysisFailureCode: "SOURCE_REVOKED", analysisUpdatedAt: new Date() } }),
@@ -738,11 +779,26 @@ export async function processEvidenceAnalysisJob(jobId: string) {
 }
 
 export async function getEvidenceAnalysisJob(input: { actorId: string; workspaceId: string; jobId: string }) {
-  const job = await prisma.terraqoAnalysisJob.findFirst({ where: { id: input.jobId, workspaceId: input.workspaceId }, include: { sources: true } });
+  const job = await prisma.terraqoAnalysisJob.findFirst({
+    where: { id: input.jobId, workspaceId: input.workspaceId },
+    include: {
+      sources: {
+        include: { evaluationSource: { select: { accessSnapshot: true } } },
+      },
+    },
+  });
   if (!job) throw new EvidenceAnalysisError("JOB_NOT_FOUND", "Análisis no disponible.", 404);
   if (job.status === "SOURCE_REVOKED") return publicJob(job, []);
-  const creatorSources = await loadAuthorizedSources(job.createdById, job.sources);
-  if (creatorSources.length !== job.sources.length) {
+  const sourceRecords = job.sources.map((source) => ({
+    evaluationSourceId: source.evaluationSourceId,
+    worklogRevisionId: source.worklogRevisionId,
+    contentHash: source.contentHash,
+    accessKind: source.accessKind,
+    accessReferenceId: source.accessReferenceId,
+    accessSnapshot: source.evaluationSource.accessSnapshot,
+  }));
+  const creatorSources = await loadAuthorizedSources(job.createdById, sourceRecords);
+  if (creatorSources.length !== job.sources.length || sourceProjectionHash(creatorSources) !== job.sourceSetHash) {
     await prisma.$transaction([
       prisma.terraqoAnalysisJob.update({ where: { id: job.id }, data: { status: "SOURCE_REVOKED", claims: Prisma.DbNull, missing: Prisma.DbNull, failureCode: "SOURCE_REVOKED", completedAt: new Date() } }),
       prisma.terraqoEvaluationDossier.update({ where: { id: job.dossierId }, data: { analysisStatus: "SOURCE_REVOKED", analysisFailureCode: "SOURCE_REVOKED", analysisUpdatedAt: new Date() } }),
@@ -750,8 +806,12 @@ export async function getEvidenceAnalysisJob(input: { actorId: string; workspace
     const revoked = await prisma.terraqoAnalysisJob.findUniqueOrThrow({ where: { id: job.id } });
     return publicJob(revoked, []);
   }
-  const viewerSources = input.actorId === job.createdById ? creatorSources : await loadAuthorizedSources(input.actorId, job.sources);
-  if (viewerSources.length !== job.sources.length) throw new EvidenceAnalysisError("JOB_NOT_FOUND", "Análisis no disponible.", 404);
+  const viewerSources = input.actorId === job.createdById ? creatorSources : await loadAuthorizedSources(input.actorId, sourceRecords);
+  // Claims were generated from the creator's exact field projection. A second
+  // administrator may read them only when their current projection is identical;
+  // access to the same revisions alone could otherwise expose wider fields.
+  if (viewerSources.length !== job.sources.length || sourceProjectionHash(viewerSources) !== job.sourceSetHash)
+    throw new EvidenceAnalysisError("JOB_NOT_FOUND", "Análisis no disponible.", 404);
   return publicJob(job, viewerSources);
 }
 

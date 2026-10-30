@@ -9,6 +9,8 @@ import {
 import type { Prisma, TerraqoAttendanceContext, TerraqoAttendanceType, TerraqoMemberRole, TerraqoWebAuthnPurpose } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { assertLegacyWorklogs } from "@/lib/server/native-worklog-legacy-guard";
+import { advanceWebAuthnCredentialCounter } from "@/lib/server/webauthn-credential-counter";
+import { persistWebAuthnRegistration } from "@/lib/server/webauthn-credential-registration";
 import { attendanceLocationOwnership } from "@/lib/terraqo/attendance-location-ownership";
 import type { AttendanceRequestFingerprint } from "@/lib/terraqo/request-fingerprint";
 import { awardAutomatedBuilderContribution, consumeBuilderValidationCredit, syncWorklogReputation } from "@/lib/terraqo/builders";
@@ -237,18 +239,13 @@ export async function verifyPasskeyRegistration(input: {
   }
   const info = verification.registrationInfo;
   const credentialId = Buffer.from(info.credentialID).toString("base64url");
-  await prisma.$transaction([
-    prisma.terraqoWebAuthnCredential.upsert({
-      where: { credentialId_rpId: { credentialId, rpId: challenge.rpId } },
-      update: {
-        userId: input.userId,
-        publicKey: Buffer.from(info.credentialPublicKey),
-        counter: BigInt(info.counter),
-        transports: input.response.response.transports || [],
-        deviceName: input.deviceName || "Dispositivo seguro",
-        backedUp: info.credentialBackedUp
-      },
-      create: {
+  const registeredAt = new Date();
+  await prisma.$transaction(async (tx) => {
+    const registration = await persistWebAuthnRegistration(tx, {
+      challengeId: challenge.id,
+      workspaceId: input.workspaceId,
+      registeredAt,
+      credential: {
         userId: input.userId,
         credentialId,
         publicKey: Buffer.from(info.credentialPublicKey),
@@ -258,9 +255,10 @@ export async function verifyPasskeyRegistration(input: {
         deviceName: input.deviceName || "Dispositivo seguro",
         backedUp: info.credentialBackedUp
       }
-    }),
-    prisma.terraqoWebAuthnChallenge.update({ where: { id: challenge.id }, data: { consumedAt: new Date() } })
-  ]);
+    });
+    if (registration !== "REGISTERED")
+      throw new FieldVerificationError(registration === "CHALLENGE_CONSUMED" ? "La solicitud de registro ya fue utilizada." : "La credencial ya está vinculada con otros datos.", 409);
+  });
   return { verified: true, credentialId };
 }
 
@@ -327,11 +325,11 @@ async function verifyAuthentication(input: {
   if (!verification.verified || !verification.authenticationInfo.userVerified) {
     throw new FieldVerificationError("La identidad del usuario no pudo verificarse.", 403);
   }
-  await prisma.terraqoWebAuthnCredential.update({
-    where: { id: credential.id },
-    data: { counter: BigInt(verification.authenticationInfo.newCounter), lastUsedAt: new Date() }
-  });
-  return { challenge, credential };
+  return {
+    challenge,
+    credential,
+    newCounter: BigInt(verification.authenticationInfo.newCounter),
+  };
 }
 
 function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -433,7 +431,7 @@ export async function createAttendanceOptions(input: {
 }
 
 export async function verifyAttendance(input: { userId: string; workspaceId: string; challengeId: string; response: AuthenticationResponseJSON; fingerprint: AttendanceRequestFingerprint }) {
-  const { challenge, credential } = await verifyAuthentication({ ...input, purpose: "ATTENDANCE" });
+  const { challenge, credential, newCounter } = await verifyAuthentication({ ...input, purpose: "ATTENDANCE" });
   const payload = challenge.payload as unknown as LocationPayload & { projectId: string | null; distanceMeters: number | null; geofenceRadiusMeters: number | null; geofencePolicy: "FIXED_RADIUS" | "LOCATION_ONLY" | null; networkFingerprint: string | null; userAgentFingerprint: string | null };
   if (!challenge.workspaceId || !payload?.context) throw new FieldVerificationError("La solicitud de asistencia esta incompleta.", 422);
   const assignment = payload.context === "PROJECT" && payload.projectId
@@ -457,6 +455,13 @@ export async function verifyAttendance(input: { userId: string; workspaceId: str
     });
     if (consumed.count !== 1) {
       throw new FieldVerificationError("Esta solicitud de asistencia ya fue utilizada.", 409, { code: "ATTENDANCE_REPLAY" });
+    }
+    if (!await advanceWebAuthnCredentialCounter(tx, {
+      credentialId: credential.id,
+      newCounter,
+      usedAt: capturedAt,
+    })) {
+      throw new FieldVerificationError("La credencial fue utilizada por una solicitud más reciente.", 409, { code: "PASSKEY_COUNTER_STALE" });
     }
 
     const latest = await tx.terraqoAttendanceEvent.findFirst({
@@ -724,7 +729,7 @@ export async function createWorklogValidationOptions(input: {
 }
 
 export async function verifyWorklogValidation(input: { userId: string; workspaceId: string; challengeId: string; response: AuthenticationResponseJSON }) {
-  const { challenge, credential } = await verifyAuthentication({ ...input, purpose: "WORKLOG_VALIDATION" });
+  const { challenge, credential, newCounter } = await verifyAuthentication({ ...input, purpose: "WORKLOG_VALIDATION" });
   const payload = challenge.payload as { validationId?: string } | null;
   if (!challenge.workspaceId || !payload?.validationId) throw new FieldVerificationError("La solicitud de validacion esta incompleta.", 422);
   const validation = await prisma.terraqoWorklogValidation.findFirst({
@@ -736,15 +741,35 @@ export async function verifyWorklogValidation(input: { userId: string; workspace
   const resolvedAt = new Date();
   await prisma.$transaction(async tx => {
     await assertLegacyWorklogs(tx, [validation.worklogId]);
-    await tx.terraqoWorklogValidation.update({
-      where: { id: validation.id },
+    const consumed = await tx.terraqoWebAuthnChallenge.updateMany({
+      where: {
+        id: challenge.id,
+        userId: input.userId,
+        workspaceId: challenge.workspaceId,
+        purpose: "WORKLOG_VALIDATION",
+        consumedAt: null,
+        expiresAt: { gt: resolvedAt },
+      },
+      data: { consumedAt: resolvedAt },
+    });
+    if (consumed.count !== 1)
+      throw new FieldVerificationError("Esta solicitud de validación ya fue utilizada.", 409);
+    if (!await advanceWebAuthnCredentialCounter(tx, {
+      credentialId: credential.id,
+      newCounter,
+      usedAt: resolvedAt,
+    }))
+      throw new FieldVerificationError("La credencial fue utilizada por una solicitud más reciente.", 409);
+    const approved = await tx.terraqoWorklogValidation.updateMany({
+      where: { id: validation.id, status: "REQUESTED" },
       data: { status: "APPROVED", resolvedAt, credentialId: credential.credentialId }
     });
+    if (approved.count !== 1)
+      throw new FieldVerificationError("La solicitud ya fue resuelta.", 409);
     await tx.terraqoWorklogEntry.update({
       where: { id: validation.worklogId },
       data: { evidenceStatus: "CONFIRMED" }
     });
-    await tx.terraqoWebAuthnChallenge.update({ where: { id: challenge.id }, data: { consumedAt: resolvedAt } });
   });
   try {
     await syncWorklogReputation(validation.worklogId);

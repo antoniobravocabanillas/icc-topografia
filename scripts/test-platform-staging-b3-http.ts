@@ -352,8 +352,8 @@ async function main() {
     assert.equal(reviewerDrafts.status(), 200);
     assert.equal(
       (await jsonData<Array<{ id: string; status: string }>>(reviewerDrafts))
-        .find((item) => item.id === endorsement.id)?.status,
-      "DRAFT",
+        .some((item) => item.id === endorsement.id),
+      false,
     );
 
     const sentResponse = await ownerContext.request.patch(
@@ -363,6 +363,14 @@ async function main() {
     assert.equal(sentResponse.status(), 200, await sentResponse.text());
     const sent = await jsonData<{ status: string; version: number }>(sentResponse);
     assert.equal(sent.status, "PENDING");
+    const reviewerSent = await reviewerContext.request.get(new URL("/api/v1/endorsement-requests", origin).toString());
+    assert.equal(reviewerSent.status(), 200);
+    const visibleEndorsement = (await jsonData<Array<{ id: string; revision: Record<string, unknown> }>>(reviewerSent))
+      .find((item) => item.id === endorsement.id);
+    assert.ok(visibleEndorsement);
+    assert.equal(typeof visibleEndorsement.revision.title, "string");
+    assert.equal(typeof visibleEndorsement.revision.summary, "string");
+    assert.equal("outcome" in visibleEndorsement.revision, false);
 
     const incompleteDecision = await reviewerContext.request.post(
       new URL(`/api/v1/endorsement-requests/${endorsement.id}/decisions`, origin).toString(),

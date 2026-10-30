@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
+import { BoundedRequestBodyError, readBoundedJson } from "@/lib/server/bounded-request-body";
 
 const payloadSchema = z.object({
   source: z.string().trim().max(80),
@@ -13,9 +14,17 @@ const payloadSchema = z.object({
 
 export async function POST(request: Request) {
   const requestId = randomUUID();
-  const contentLength = Number(request.headers.get("content-length") || 0);
-  if (contentLength > 8_192) return NextResponse.json({ error: "Reporte demasiado grande." }, { status: 413, headers: { "x-request-id": requestId } });
-  const parsed = payloadSchema.safeParse(await request.json().catch(() => null));
+  let raw: unknown;
+  try {
+    raw = await readBoundedJson(request, 8_192);
+  } catch (error) {
+    if (error instanceof BoundedRequestBodyError) {
+      const message = error.code === "BODY_TOO_LARGE" ? "Reporte demasiado grande." : "Reporte inválido.";
+      return NextResponse.json({ error: message }, { status: error.status, headers: { "x-request-id": requestId } });
+    }
+    throw error;
+  }
+  const parsed = payloadSchema.safeParse(raw);
   if (!parsed.success) return NextResponse.json({ error: "Reporte inválido." }, { status: 400, headers: { "x-request-id": requestId } });
   const session = await auth().catch(() => null);
   console.error("Terraqo client exception", {

@@ -6,6 +6,7 @@ import { Prisma } from "@prisma/client";
 import { publicRequestOrigin } from "@/lib/server/request-origin";
 import { compatibleWebAuthnRpIds, selectCompatibleWebAuthnRpId } from "@/lib/terraqo/webauthn-context";
 import { issueAccountPasskeyLoginToken } from "@/lib/server/account-passkey-login-token";
+import { persistWebAuthnRegistration } from "@/lib/server/webauthn-credential-registration";
 
 const TTL = 5 * 60 * 1000;
 
@@ -41,14 +42,14 @@ export async function verifyAccountPasskeyRegistration(userId: string, challenge
   if (!result.verified || !result.registrationInfo) throw new Error("El dispositivo no pudo verificarse.");
   const info = result.registrationInfo;
   const credentialId = Buffer.from(info.credentialID).toString("base64url");
-  await prisma.$transaction([
-    prisma.terraqoWebAuthnCredential.upsert({
-      where: { credentialId_rpId: { credentialId, rpId: challenge.rpId } },
-      update: { userId, publicKey: Buffer.from(info.credentialPublicKey), counter: BigInt(info.counter), transports: response.response.transports || [], deviceName: deviceName || "Dispositivo personal", backedUp: info.credentialBackedUp },
-      create: { userId, credentialId, publicKey: Buffer.from(info.credentialPublicKey), counter: BigInt(info.counter), transports: response.response.transports || [], rpId: challenge.rpId, deviceName: deviceName || "Dispositivo personal", backedUp: info.credentialBackedUp }
-    }),
-    prisma.terraqoWebAuthnChallenge.update({ where: { id: challenge.id }, data: { consumedAt: new Date() } })
-  ]);
+  await prisma.$transaction(async (tx) => {
+    const registration = await persistWebAuthnRegistration(tx, {
+      challengeId: challenge.id,
+      registeredAt: new Date(),
+      credential: { userId, credentialId, publicKey: Buffer.from(info.credentialPublicKey), counter: BigInt(info.counter), transports: response.response.transports || [], rpId: challenge.rpId, deviceName: deviceName || "Dispositivo personal", backedUp: info.credentialBackedUp },
+    });
+    if (registration !== "REGISTERED") throw new Error(registration === "CHALLENGE_CONSUMED" ? "La solicitud de registro ya fue utilizada." : "La credencial ya está vinculada con otros datos.");
+  });
   return { verified: true };
 }
 

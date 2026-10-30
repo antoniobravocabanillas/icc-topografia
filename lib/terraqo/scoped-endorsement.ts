@@ -43,6 +43,47 @@ const requestInclude = {
   },
 } satisfies Prisma.TerraqoEndorsementRequestInclude;
 
+type EndorsementRequestRecord = Prisma.TerraqoEndorsementRequestGetPayload<{
+  include: typeof requestInclude;
+}>;
+type EndorsementRevisionRecord = EndorsementRequestRecord["revision"];
+
+/** Reviewers receive only the immutable fields that the requester explicitly
+ * selected. Request metadata is retained for replay/version checks, while
+ * unrelated professional details and workspace context stay private. */
+export function projectEndorsementRevisionForScope(revision: EndorsementRevisionRecord, requestedScope: string[]) {
+  const allowed = new Set(requestedScope);
+  return {
+      id: revision.id,
+      revisionNo: revision.revisionNo,
+      contentHash: revision.contentHash,
+      createdAt: revision.createdAt,
+      ...(allowed.has("title") ? { title: revision.title } : {}),
+      ...(allowed.has("summary") ? { summary: revision.summary } : {}),
+      ...(allowed.has("outcome") ? { outcome: revision.outcome } : {}),
+      ...(allowed.has("contributionRole") ? { contributionRole: revision.contributionRole } : {}),
+      ...(allowed.has("responsibilities") ? { responsibilities: revision.responsibilities } : {}),
+      ...(allowed.has("methods") ? { methods: revision.methods } : {}),
+      ...(allowed.has("tools") ? { tools: revision.tools } : {}),
+      worklog: {
+        id: revision.worklog.id,
+        ...(allowed.has("occurredAt") ? { occurredAt: revision.worklog.occurredAt } : {}),
+        ...(allowed.has("locationLabel") ? { locationLabel: revision.worklog.locationLabel } : {}),
+      },
+  };
+}
+
+function projectReviewerRequest(request: EndorsementRequestRecord) {
+  return {
+    ...request,
+    revision: projectEndorsementRevisionForScope(request.revision, request.requestedScope),
+  };
+}
+
+function projectRequestForViewer(request: EndorsementRequestRecord, userId: string) {
+  return request.requesterId === userId ? request : projectReviewerRequest(request);
+}
+
 function hashOperation(value: unknown) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
@@ -68,17 +109,19 @@ async function professionalProfile(userId: string) {
 }
 
 export async function listEndorsementRequests(userId: string, email: string) {
-  return prisma.terraqoEndorsementRequest.findMany({
+  const normalizedEmail = email.toLowerCase();
+  const requests = await prisma.terraqoEndorsementRequest.findMany({
     where: {
       OR: [
         { requesterId: userId },
-        { reviewerUserId: userId },
-        { reviewerEmail: email.toLowerCase() },
+        { reviewerUserId: userId, status: { not: "DRAFT" }, sentAt: { not: null } },
+        { reviewerUserId: null, reviewerEmail: normalizedEmail, status: { not: "DRAFT" }, sentAt: { not: null } },
       ],
     },
     include: requestInclude,
     orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
   });
+  return requests.map((request) => projectRequestForViewer(request, userId));
 }
 
 export async function createEndorsementRequest(input: {
@@ -183,6 +226,8 @@ export async function decideEndorsementRequest(input: {
         const current = await tx.terraqoEndorsementRequest.findFirst({
           where: {
             id: input.requestId,
+            status: { not: "DRAFT" },
+            sentAt: { not: null },
             OR: [
               { reviewerUserId: input.userId },
               { reviewerUserId: null, reviewerEmail: input.userEmail.toLowerCase() },
@@ -205,7 +250,7 @@ export async function decideEndorsementRequest(input: {
         if (priorDecision) {
           if (priorDecision.operationFingerprint !== operationFingerprint)
             throw new ScopedEndorsementError("La clave de reintento ya fue usada con otra decisión.", 409);
-          return priorDecision.request;
+          return projectReviewerRequest(priorDecision.request);
         }
 
         const locked = await tx.terraqoEndorsementRequest.findUnique({
@@ -266,11 +311,12 @@ export async function decideEndorsementRequest(input: {
             operationFingerprint,
           },
         });
-        return tx.terraqoEndorsementRequest.update({
+        const updated = await tx.terraqoEndorsementRequest.update({
           where: { id: current.id },
           data: { status: nextStatus, version: { increment: 1 } },
           include: requestInclude,
         });
+        return projectReviewerRequest(updated);
       }, { isolationLevel: "Serializable" });
     } catch (error) {
       if (isRetryableDecisionConflict(error) && attempt < 2) {

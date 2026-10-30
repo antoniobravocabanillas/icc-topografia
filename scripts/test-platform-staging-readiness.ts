@@ -191,6 +191,9 @@ const deployScript = readFileSync(
   resolve(process.cwd(), "scripts/deploy-platform-staging.ps1"),
   "utf8",
 );
+const packageJson = JSON.parse(readFileSync(resolve(process.cwd(), "package.json"), "utf8")) as {
+  devDependencies?: Record<string, string>;
+};
 const envExample = readFileSync(resolve(process.cwd(), ".env.example"), "utf8");
 const declaredApplicationVariables = new Set(
   [...envExample.matchAll(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/gm)]
@@ -220,10 +223,16 @@ for (const name of [
 const clearOperatorEnvironment = deployScript.indexOf(
   '[Environment]::SetEnvironmentVariable($name, $null, "Process")',
 );
-const netlifyDeploy = deployScript.indexOf("npx netlify deploy --build");
+const clearNetlifyToken = deployScript.indexOf(
+  '[Environment]::SetEnvironmentVariable("NETLIFY_AUTH_TOKEN", $null, "Process")',
+);
+const netlifyBuild = deployScript.indexOf("build --offline --context production");
+const netlifyDeploy = deployScript.indexOf("deploy --no-build --prod");
+const resolvePinnedCli = deployScript.indexOf("$installedNetlifyCliVersion =");
 const restoreOperatorEnvironment = deployScript.lastIndexOf(
   "$deploymentEnvironment[$name]",
 );
+assert.equal(packageJson.devDependencies?.["netlify-cli"], "26.0.1");
 assert.match(deployScript, /function Get-DotEnvVariableNames/);
 assert.match(deployScript, /\$envExamplePath/);
 assert.match(deployScript, /\$deploymentVariableNames/);
@@ -233,8 +242,17 @@ assert.match(
 );
 assert.match(deployScript, /\$netlifyCredentialVariableNames = @\("NETLIFY_AUTH_TOKEN"\)/);
 assert.match(deployScript, /Where-Object \{ \$_ -notin \$netlifyCredentialVariableNames \}/);
+assert.match(deployScript, /node_modules\\netlify-cli\\bin\\run\.js/);
+assert.match(deployScript, /\$installedNetlifyCliVersion -ne \$netlifyCliVersion/);
 assert.ok(clearOperatorEnvironment >= 0, "El deploy debe limpiar las variables efimeras del preflight.");
-assert.ok(netlifyDeploy > clearOperatorEnvironment, "La limpieza del entorno debe ocurrir antes del build Netlify.");
+assert.ok(clearNetlifyToken >= 0, "El token Netlify debe retirarse del proceso operador.");
+assert.ok(resolvePinnedCli > clearNetlifyToken, "La resolución del CLI fijado debe ocurrir sin NETLIFY_AUTH_TOKEN.");
+assert.ok(netlifyBuild > clearNetlifyToken, "El build debe ejecutarse sin NETLIFY_AUTH_TOKEN.");
+assert.ok(netlifyBuild > clearOperatorEnvironment, "La limpieza del entorno debe ocurrir antes del build Netlify.");
+assert.ok(netlifyDeploy > netlifyBuild, "El deploy sin build debe ejecutarse despues del build aislado.");
+assert.match(deployScript, /\$deployProcessInfo\.EnvironmentVariables\["NETLIFY_AUTH_TOKEN"\] = \$netlifyAuthToken/);
+assert.doesNotMatch(deployScript, /npx\s+netlify/);
+assert.doesNotMatch(deployScript, /deploy\s+--build/);
 assert.ok(restoreOperatorEnvironment > netlifyDeploy, "El entorno del operador debe restaurarse despues del deploy.");
 
 console.log("Platform staging readiness contract: OK (fail-closed target, provider, prerequisites, single cohort and secrets)." );

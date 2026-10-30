@@ -13,11 +13,19 @@ import { syncWorklogReputation } from "@/lib/terraqo/builders";
 import { BillingError } from "@/lib/terraqo/billing/provider";
 import { assertLegacyWorklogs, NativeWorklogLegacyGuardError } from "./native-worklog-legacy-guard";
 import {
+  BoundedRequestBodyError,
+  readBoundedRequestBytes,
+} from "./bounded-request-body";
+import {
   sanitizeWorklogEvidenceImage,
   WorklogMediaSecurityError,
 } from "./worklog-media-security";
 
 export const MAX_WORKLOG_EVIDENCE_FILES = 6;
+export const MAX_WORKLOG_EVIDENCE_SOURCE_BYTES =
+  MAX_WORKLOG_EVIDENCE_FILES * MAX_WORKLOG_EVIDENCE_SIZE;
+export const MAX_WORKLOG_EVIDENCE_MULTIPART_BYTES =
+  MAX_WORKLOG_EVIDENCE_SOURCE_BYTES + 512 * 1024;
 
 function getPhotos(formData: FormData) {
   return formData
@@ -62,39 +70,61 @@ export async function uploadWorklogEvidence(
         403,
       );
 
-    const formData = await request.formData();
+    const contentType = request.headers.get("content-type") || "";
+    if (!contentType.toLowerCase().startsWith("multipart/form-data;") || !/boundary=(?:"[^"]+"|[^;\s]+)/i.test(contentType))
+      return fail("El formulario de evidencia no es válido.", 400);
+    const multipartBytes = await readBoundedRequestBytes(
+      request,
+      MAX_WORKLOG_EVIDENCE_MULTIPART_BYTES,
+    );
+    let formData: FormData;
+    try {
+      formData = await new Request(request.url, {
+        method: "POST",
+        headers: { "content-type": contentType },
+        body: multipartBytes,
+      }).formData();
+    } catch {
+      return fail("El formulario de evidencia no es válido.", 400);
+    }
+    const parts = [...formData.entries()];
+    if (parts.length > MAX_WORKLOG_EVIDENCE_FILES)
+      return fail(
+        `Cada bitácora admite hasta ${MAX_WORKLOG_EVIDENCE_FILES} fotos.`,
+        400,
+      );
+    if (parts.some(([name, value]) => name !== "photos" || !(value instanceof File)))
+      return fail("El formulario contiene campos de evidencia no permitidos.", 400);
     const photos = getPhotos(formData);
     if (!photos.length)
       return fail("Selecciona al menos una foto como evidencia.", 400);
+    // Reject an abusive multipart set before any image is decoded or copied.
+    // The per-file check below remains necessary for a small set containing one
+    // oversized image.
+    if (photos.length > MAX_WORKLOG_EVIDENCE_FILES)
+      return fail(
+        `Cada bitácora admite hasta ${MAX_WORKLOG_EVIDENCE_FILES} fotos.`,
+        400,
+      );
+    const sourceBytes = photos.reduce((total, photo) => total + photo.size, 0);
+    if (
+      !Number.isSafeInteger(sourceBytes) ||
+      sourceBytes > MAX_WORKLOG_EVIDENCE_SOURCE_BYTES
+    )
+      return fail("El conjunto de evidencias supera el tamaño permitido.", 413);
 
     for (const photo of photos) {
       const validationError = validatePhoto(photo);
       if (validationError) return fail(validationError, 400);
     }
 
-    const candidates = await Promise.all(
-      photos.map(async (file) => {
-        const bytes = await file.arrayBuffer();
-        const sourceSha256 = createHash("sha256")
-          .update(Buffer.from(bytes))
-          .digest("hex");
-        const sanitized = await sanitizeWorklogEvidenceImage({
-          bytes,
-          claimedContentType: file.type,
-          fileName: file.name,
-        });
-        return {
-          file,
-          bytes: sanitized.bytes,
-          safeFileName: sanitized.fileName,
-          safeContentType: sanitized.contentType,
-          sourceFormat: sanitized.sourceFormat,
-          width: sanitized.width,
-          height: sanitized.height,
-          sha256: sourceSha256,
-        };
-      }),
-    );
+    const candidates: Array<{ file: File; sha256: string }> = [];
+    for (const file of photos) {
+      const sourceSha256 = createHash("sha256")
+        .update(Buffer.from(await file.arrayBuffer()))
+        .digest("hex");
+      candidates.push({ file, sha256: sourceSha256 });
+    }
     const unique = [
       ...new Map(candidates.map((item) => [item.sha256, item])).values(),
     ];
@@ -112,18 +142,18 @@ export async function uploadWorklogEvidence(
       select: { ...mediaSelect, sha256: true },
     });
     const known = new Set(existing.map((item) => item.sha256));
-    const prepared = unique.filter((item) => !known.has(item.sha256));
-    if (!prepared.length)
+    const pendingCandidates = unique.filter((item) => !known.has(item.sha256));
+    if (!pendingCandidates.length)
       return ok({
         media: existing,
         message: "Las fotos ya están adjuntas a esta bitácora.",
       });
-    if (worklog._count.media + prepared.length > MAX_WORKLOG_EVIDENCE_FILES)
+    if (worklog._count.media + pendingCandidates.length > MAX_WORKLOG_EVIDENCE_FILES)
       return fail(
         `Cada bitácora admite hasta ${MAX_WORKLOG_EVIDENCE_FILES} fotos.`,
         400,
       );
-    const hashes = prepared.map((item) => item.sha256);
+    const hashes = pendingCandidates.map((item) => item.sha256);
     const duplicate = await prisma.terraqoWorklogMedia.findFirst({
       where: {
         worklogId: { not: worklogId },
@@ -137,6 +167,36 @@ export async function uploadWorklogEvidence(
         "Esta evidencia visual ya fue utilizada en otra bitácora. Adjunta una foto original del trabajo.",
         409,
       );
+
+    const prepared: Array<{
+      file: File;
+      bytes: Buffer;
+      safeFileName: string;
+      safeContentType: string;
+      sourceFormat: string;
+      width: number;
+      height: number;
+      sha256: string;
+    }> = [];
+    // Decode only the unique, authorized images that still fit the remaining
+    // worklog quota. Sequential decoding also caps native/WASM peak memory.
+    for (const candidate of pendingCandidates) {
+      const sanitized = await sanitizeWorklogEvidenceImage({
+        bytes: await candidate.file.arrayBuffer(),
+        claimedContentType: candidate.file.type,
+        fileName: candidate.file.name,
+      });
+      prepared.push({
+        file: candidate.file,
+        bytes: sanitized.bytes,
+        safeFileName: sanitized.fileName,
+        safeContentType: sanitized.contentType,
+        sourceFormat: sanitized.sourceFormat,
+        width: sanitized.width,
+        height: sanitized.height,
+        sha256: candidate.sha256,
+      });
+    }
 
     const store = getWorklogEvidenceStore();
     const stored: Array<{
@@ -277,6 +337,14 @@ export async function uploadWorklogEvidence(
       throw error;
     }
   } catch (error) {
+    if (error instanceof BoundedRequestBodyError) {
+      const message = error.status === 413
+        ? "El conjunto de evidencias supera el tamaño permitido."
+        : error.status === 408
+          ? "La carga de evidencias tardó demasiado. Reintenta."
+          : "El formulario de evidencia no es válido.";
+      return fail(message, error.status);
+    }
     if (error instanceof WorklogMediaSecurityError)
       return fail(error.message, 422);
     if (error instanceof BillingError) return handleApiError(error);

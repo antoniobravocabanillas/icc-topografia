@@ -4,7 +4,9 @@ import { resolve } from "node:path";
 import { Prisma } from "@prisma/client";
 import {
   calculatePublicCheckoutPrice,
+  MAX_PUBLIC_CHECKOUT_ITEMS,
   MAX_PUBLIC_CHECKOUT_QUANTITY,
+  MAX_PUBLIC_CHECKOUT_TOTAL_QUANTITY,
   PublicCheckoutPricingError,
 } from "@/lib/server/public-checkout-pricing";
 
@@ -36,6 +38,22 @@ expectPricingError("INVALID_PRICE", [
 expectPricingError("INVALID_QUANTITY", [
   { productId: "unsafe", quantity: MAX_PUBLIC_CHECKOUT_QUANTITY + 1, price: new Prisma.Decimal("1"), currency: "PEN", requiresQuote: false },
 ]);
+expectPricingError("INVALID_CART", []);
+expectPricingError("INVALID_CART", Array.from({ length: MAX_PUBLIC_CHECKOUT_ITEMS + 1 }, (_, index) => ({
+  productId: `p-${index}`,
+  quantity: 1,
+  price: new Prisma.Decimal("1"),
+  currency: "PEN",
+  requiresQuote: false,
+})));
+expectPricingError("DUPLICATE_PRODUCT", [
+  { productId: "duplicate", quantity: 1, price: new Prisma.Decimal("1"), currency: "PEN", requiresQuote: false },
+  { productId: "duplicate", quantity: 2, price: new Prisma.Decimal("1"), currency: "PEN", requiresQuote: false },
+]);
+expectPricingError("INVALID_QUANTITY", [
+  { productId: "aggregate-a", quantity: Math.floor(MAX_PUBLIC_CHECKOUT_TOTAL_QUANTITY / 2) + 1, price: new Prisma.Decimal("1"), currency: "PEN", requiresQuote: false },
+  { productId: "aggregate-b", quantity: Math.floor(MAX_PUBLIC_CHECKOUT_TOTAL_QUANTITY / 2) + 1, price: new Prisma.Decimal("1"), currency: "PEN", requiresQuote: false },
+]);
 expectPricingError("MIXED_CURRENCY", [
   { productId: "pen", quantity: 1, price: new Prisma.Decimal("1"), currency: "PEN", requiresQuote: false },
   { productId: "usd", quantity: 1, price: new Prisma.Decimal("1"), currency: "USD", requiresQuote: false },
@@ -47,5 +65,9 @@ const checkoutRoute = readFileSync(
 );
 assert.doesNotMatch(checkoutRoute, /payload\.totals/, "The route must never trust a browser-provided total.");
 assert.match(checkoutRoute, /calculatePublicCheckoutPrice\(priceInputs\)/, "The route must use canonical server pricing.");
+assert.match(checkoutRoute, /\.max\(MAX_PUBLIC_CHECKOUT_ITEMS\)/, "The route must cap cart rows before querying products.");
+assert.match(checkoutRoute, /MAX_PUBLIC_CHECKOUT_TOTAL_QUANTITY/, "The route must cap aggregate quantity before querying products.");
+assert.match(checkoutRoute, /readBoundedJson\(request, MAX_PUBLIC_CHECKOUT_BODY_BYTES\)/, "The route must bound actual request bytes before parsing the cart.");
+assert.doesNotMatch(checkoutRoute, /parseJson\(request|request\.json\(\)/, "The public checkout must not materialize unbounded JSON.");
 
-console.log("Public checkout server pricing: OK (exact decimals, quote-only rejection and single currency).");
+console.log("Public checkout server pricing: OK (bounded unique cart, exact decimals, quote-only rejection and single currency).");

@@ -194,7 +194,13 @@ export const terraqoEndorsementRequestCreateSchema = z.object({
   reviewerEmail: z.string().trim().email().transform((value) => value.toLowerCase()).optional(),
   organizationId: z.string().cuid().optional(),
   relationshipLabel: z.string().trim().min(3).max(120),
-  requestedScope: z.array(terraqoShareableEvidenceField).min(1),
+  requestedScope: z.array(terraqoShareableEvidenceField).min(1).max(9).superRefine((fields, context) => {
+    const seen = new Set<string>();
+    fields.forEach((field, index) => {
+      if (seen.has(field)) context.addIssue({ code: z.ZodIssueCode.custom, path: [index], message: "Cada aspecto se solicita una sola vez." });
+      seen.add(field);
+    });
+  }),
   expiresAt: z.string().datetime({ offset: true }),
   sendNow: z.boolean().default(false),
 }).superRefine((value, context) => {

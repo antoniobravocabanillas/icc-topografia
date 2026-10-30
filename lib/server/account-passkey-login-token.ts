@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { advanceWebAuthnCredentialCounter } from "@/lib/server/webauthn-credential-counter";
 
 type PasskeyLoginTransaction = Pick<
   Prisma.TransactionClient,
@@ -35,10 +36,15 @@ export async function issueAccountPasskeyLoginToken(
     throw new Error("La solicitud de acceso ya fue utilizada.");
   }
 
-  await tx.terraqoWebAuthnCredential.update({
-    where: { id: input.credentialId },
-    data: { counter: input.newCounter, lastUsedAt: input.consumedAt },
-  });
+  if (!await advanceWebAuthnCredentialCounter(tx, {
+    credentialId: input.credentialId,
+    newCounter: input.newCounter,
+    usedAt: input.consumedAt,
+  })) {
+    // Throwing here rolls back the challenge claim as well. A valid assertion
+    // whose counter lost a race must never overwrite a newer authenticator state.
+    throw new Error("La credencial ya fue utilizada por una solicitud más reciente.");
+  }
   await tx.verificationToken.deleteMany({
     where: { identifier: `passkey-login:${input.userId}` },
   });

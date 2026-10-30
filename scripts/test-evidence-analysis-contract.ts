@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   buildEvidenceAnalysisCacheKey,
   EVIDENCE_ANALYSIS_PROVIDER_JSON_SCHEMA,
@@ -111,6 +112,7 @@ const cacheBase = {
   dossierId,
   purpose: "EVIDENCE_SUMMARY" as const,
   policyVersion: "policy-v1",
+  sourceProjectionHash: "projection-v1",
   sources: [{ revisionId, contentHash, accessKind: "PRIVATE_GRANT", accessReferenceId: "grant-1" }],
 };
 assert.notEqual(
@@ -122,6 +124,17 @@ assert.notEqual(
   buildEvidenceAnalysisCacheKey(cacheBase),
   buildEvidenceAnalysisCacheKey({ ...cacheBase, sources: [{ ...cacheBase.sources[0], contentHash: "b".repeat(64) }] }),
   "Editar una revisión debe invalidar la caché.",
+);
+assert.notEqual(
+  buildEvidenceAnalysisCacheKey(cacheBase),
+  buildEvidenceAnalysisCacheKey({ ...cacheBase, sourceProjectionHash: "projection-v2" }),
+  "Reducir la proyección autorizada debe invalidar la caché.",
+);
+const serviceSource = readFileSync(new URL("../lib/terraqo/evidence-analysis.ts", import.meta.url), "utf8");
+assert.match(
+  serviceSource,
+  /sourceProjectionHash\(viewerSources\) !== job\.sourceSetHash/,
+  "Un administrador secundario no debe recibir claims generados con una proyección más amplia.",
 );
 
 assert.deepEqual(validateEvidenceAnalysisOutput({

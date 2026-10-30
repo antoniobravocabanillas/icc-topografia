@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { explainDiscoveryMatch, normalizeDiscoveryTerms, projectDiscoveryEvidenceFields } from "../lib/terraqo/discovery-needs";
 import { isWorkspaceReplay } from "../lib/terraqo/idempotency-scope";
+import { constrainAllowedFields } from "../lib/terraqo/evaluation-source-policy";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import {
   terraqoEvaluationAssessmentSchema,
   terraqoEvaluationDossierCreateSchema,
@@ -93,6 +96,24 @@ assert.equal(explainDiscoveryMatch({
   need: { ...baseNeed, title: "Uso de estación total", problem: "", activities: [], requiredTools: [], requirements: [] },
   evidence: titleOnlyEvidence,
 }).hasEvidence, false, "Un campo excluido no puede provocar una coincidencia.");
+
+assert.deepEqual(
+  constrainAllowedFields(["title", "summary"], { allowedFields: ["summary"] }),
+  ["summary"],
+  "Editar una selección no puede ampliar los campos congelados en el dossier.",
+);
+assert.deepEqual(
+  constrainAllowedFields(["summary"], { allowedFields: ["title", "summary"] }),
+  ["summary"],
+  "La autorización viva también puede estrechar el snapshot.",
+);
+
+const discoverySource = readFileSync(resolve(process.cwd(), "lib/terraqo/discovery-needs.ts"), "utf8");
+assert.match(discoverySource, /professionalProfile: \{ liveCvEnabled: true \}/, "Discovery debe exigir una política pública explícita para la identidad profesional.");
+assert.match(discoverySource, /allowedFields,\s*\n\s*\},/, "El dossier debe congelar los campos autorizados al adjuntar una fuente.");
+const privateGrantBranch = discoverySource.indexOf("} else if (privateItem?.collection.grants[0])");
+const publicProjectionBranch = discoverySource.indexOf("} else if (publicItem?.collection.publicProjection");
+assert.ok(privateGrantBranch >= 0 && publicProjectionBranch > privateGrantBranch, "Una concesión privada válida debe evaluarse antes que la proyección pública para que liveCvEnabled no la oculte.");
 
 assert.equal(isWorkspaceReplay(
   { workspaceId: "workspace-a", operationFingerprint: "same-payload" },

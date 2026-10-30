@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { createHash } from "node:crypto";
 
 async function removeSandbox(directory: string) {
   for (let attempt = 0; attempt < 10; attempt += 1) {
@@ -39,6 +40,28 @@ async function main() {
       pending.set(record.uploadId, record);
     },
   };
+  let chunkWrites = 0;
+  let consumeBeforeFinish = false;
+  const activeWrites = new Map<string, Set<number>>();
+  const chunkGuard = {
+    assertPending: async (_userId: string, uploadId: string) => {
+      if (!pending.has(uploadId)) throw new upload.ExperienceEvidenceUploadError("La reserva fue consumida.", 409);
+    },
+    beginWrite: async (_userId: string, uploadId: string, index: number) => {
+      if (!pending.has(uploadId)) throw new upload.ExperienceEvidenceUploadError("La reserva fue consumida.", 409);
+      const writes = activeWrites.get(uploadId) || new Set<number>();
+      if (writes.has(index)) throw new upload.ExperienceEvidenceUploadError("El fragmento ya se está escribiendo.", 409);
+      writes.add(index);
+      activeWrites.set(uploadId, writes);
+      chunkWrites += 1;
+    },
+    finishWrite: async (_userId: string, uploadId: string, index: number) => {
+      if (consumeBeforeFinish) pending.delete(uploadId);
+      if (!pending.has(uploadId)) return false;
+      activeWrites.get(uploadId)?.delete(index);
+      return true;
+    },
+  };
   const total = upload.EXPERIENCE_EVIDENCE_CHUNK_SIZE + 257;
   const pdf = Buffer.alloc(total, 0x20);
   pdf.write("%PDF-1.7\n", 0, "ascii");
@@ -48,15 +71,16 @@ async function main() {
   assert.equal(initialized.chunks, 2, "Files above the gateway-safe chunk size must be split.");
   assert.equal(initialized.chunkSize, upload.EXPERIENCE_EVIDENCE_CHUNK_SIZE);
   await assert.rejects(
-    upload.storeExperienceEvidenceChunk({ userId: "user-other", uploadId: initialized.uploadId, index: 0, token: initialized.token, bytes: Uint8Array.from(pdf.subarray(0, initialized.chunkSize)).buffer }),
+    upload.storeExperienceEvidenceChunk({ userId: "user-other", uploadId: initialized.uploadId, index: 0, token: initialized.token, bytes: Uint8Array.from(pdf.subarray(0, initialized.chunkSize)).buffer }, chunkGuard),
     /sesión|pertenece/i,
   );
 
   const first = Uint8Array.from(pdf.subarray(0, initialized.chunkSize)).buffer;
   const second = Uint8Array.from(pdf.subarray(initialized.chunkSize)).buffer;
-  await upload.storeExperienceEvidenceChunk({ userId: "user-owner", uploadId: initialized.uploadId, index: 0, token: initialized.token, bytes: first });
-  await upload.storeExperienceEvidenceChunk({ userId: "user-owner", uploadId: initialized.uploadId, index: 0, token: initialized.token, bytes: first });
-  await upload.storeExperienceEvidenceChunk({ userId: "user-owner", uploadId: initialized.uploadId, index: 1, token: initialized.token, bytes: second });
+  await upload.authorizeExperienceEvidenceChunk({ userId: "user-owner", uploadId: initialized.uploadId, index: 0, token: initialized.token }, chunkGuard);
+  await upload.storeExperienceEvidenceChunk({ userId: "user-owner", uploadId: initialized.uploadId, index: 0, token: initialized.token, bytes: first }, chunkGuard);
+  await upload.storeExperienceEvidenceChunk({ userId: "user-owner", uploadId: initialized.uploadId, index: 0, token: initialized.token, bytes: first }, chunkGuard);
+  await upload.storeExperienceEvidenceChunk({ userId: "user-owner", uploadId: initialized.uploadId, index: 1, token: initialized.token, bytes: second }, chunkGuard);
   const finalized = await upload.finalizeExperienceEvidenceUpload({ userId: "user-owner", token: initialized.token }, budget);
   assert.ok(finalized.receipt.length > 80);
   assert.equal(finalized.contentType, "application/pdf");
@@ -72,6 +96,124 @@ async function main() {
     upload.finalizeExperienceEvidenceUpload({ userId: "user-owner", token: `${initialized.token}x` }, budget),
     /autorización/i,
   );
+  pending.delete(initialized.uploadId);
+  const writesBeforeConsumedReplay = chunkWrites;
+  await assert.rejects(
+    upload.storeExperienceEvidenceChunk({ userId: "user-owner", uploadId: initialized.uploadId, index: 0, token: initialized.token, bytes: first }, chunkGuard),
+    /consumida/i,
+  );
+  assert.equal(chunkWrites, writesBeforeConsumedReplay, "Un claim consumido debe fallar antes de recrear el blob.");
+
+  const raced = await upload.createExperienceEvidenceUpload({ userId: "user-owner", fileName: "race.pdf", contentType: "application/pdf", size: first.byteLength }, budget);
+  consumeBeforeFinish = true;
+  await assert.rejects(
+    upload.storeExperienceEvidenceChunk({ userId: "user-owner", uploadId: raced.uploadId, index: 0, token: raced.token, bytes: first }, chunkGuard),
+    /consumida/i,
+  );
+  consumeBeforeFinish = false;
+  const media = await import("../lib/server/media");
+  const ownerPrefix = createHash("sha256").update("user-owner").digest("hex").slice(0, 32);
+  const racedKey = `${media.EXPERIENCE_EVIDENCE_PREFIX}/pending/${ownerPrefix}/${raced.uploadId}/chunks/0`;
+  assert.equal(await media.getWorklogEvidenceUploadStore().getMetadata(racedKey), null, "A write that loses its durable reservation must remove the blob.");
+
+  // Exercise the production reservation transitions against an isolated,
+  // serialized transaction adapter, including a PUT held across finalize.
+  const { prisma } = await import("../lib/prisma");
+  const originalTransaction = prisma.$transaction;
+  type Marker = { identifier: string; token: string; expires: Date };
+  let markers: Marker[] = [];
+  let transactionTail = Promise.resolve();
+  const transaction = {
+    $executeRaw: async () => 1,
+    verificationToken: {
+      findMany: async ({ where }: { where: { identifier: string; expires?: { gt: Date } } }) =>
+        markers.filter((row) => row.identifier === where.identifier && (!where.expires || row.expires > where.expires.gt)),
+      delete: async ({ where }: { where: { token: string } }) => {
+        const previous = markers.find((row) => row.token === where.token);
+        assert.ok(previous);
+        markers = markers.filter((row) => row.token !== where.token);
+        return previous;
+      },
+      create: async ({ data }: { data: Marker }) => { markers.push(data); return data; },
+    },
+  };
+  prisma.$transaction = ((operation: (tx: typeof transaction) => Promise<unknown>) => {
+    const result = transactionTail.then(async () => {
+      const snapshot = [...markers];
+      try { return await operation(transaction); }
+      catch (error) { markers = snapshot; throw error; }
+    });
+    transactionTail = result.then(() => undefined, () => undefined);
+    return result;
+  }) as unknown as typeof originalTransaction;
+  try {
+    const localStore = media.getWorklogEvidenceUploadStore();
+    const smallPdf = Uint8Array.from(Buffer.from("%PDF-1.7\n%%EOF\n")).buffer;
+    const live = await upload.createExperienceEvidenceUpload({ userId: "user-owner", fileName: "fenced.pdf", contentType: "application/pdf", size: smallPdf.byteLength });
+    let releaseWrite!: () => void;
+    let signalStarted!: () => void;
+    const started = new Promise<void>((resolve) => { signalStarted = resolve; });
+    const held = new Promise<void>((resolve) => { releaseWrite = resolve; });
+    const heldStore = {
+      getMetadata: localStore.getMetadata.bind(localStore),
+      getWithMetadata: localStore.getWithMetadata.bind(localStore),
+      delete: localStore.delete.bind(localStore),
+      set: async (...args: Parameters<typeof localStore.set>) => {
+        const result = await localStore.set(...args);
+        signalStarted();
+        await held;
+        return result;
+      },
+    };
+    const writing = upload.storeExperienceEvidenceChunk({ userId: "user-owner", uploadId: live.uploadId, index: 0, token: live.token, bytes: smallPdf }, { store: heldStore });
+    await started;
+    try {
+      await assert.rejects(upload.finalizeExperienceEvidenceUpload({ userId: "user-owner", token: live.token }), /escritura/i);
+      await assert.rejects(upload.storeExperienceEvidenceChunk({ userId: "user-owner", uploadId: live.uploadId, index: 0, token: live.token, bytes: smallPdf }), /escribiendo/i);
+    } finally {
+      releaseWrite();
+      await writing;
+    }
+    const settledRecord = JSON.parse(Buffer.from(markers[0].token, "base64url").toString("utf8"));
+    assert.equal(settledRecord.activeWrites, undefined, "A confirmed PUT must release its durable marker.");
+    await upload.finalizeExperienceEvidenceUpload({ userId: "user-owner", token: live.token });
+    await assert.rejects(upload.storeExperienceEvidenceChunk({ userId: "user-owner", uploadId: live.uploadId, index: 0, token: live.token, bytes: smallPdf }), /finalizada/i);
+
+    const uncertain = await upload.createExperienceEvidenceUpload({ userId: "user-owner", fileName: "uncertain.pdf", contentType: "application/pdf", size: smallPdf.byteLength });
+    const uncertainStore = {
+      ...heldStore,
+      set: async (...args: Parameters<typeof localStore.set>) => {
+        await localStore.set(...args);
+        throw new Error("simulated transport rejection after remote commit");
+      },
+    };
+    await assert.rejects(upload.storeExperienceEvidenceChunk({ userId: "user-owner", uploadId: uncertain.uploadId, index: 0, token: uncertain.token, bytes: smallPdf }, { store: uncertainStore }), /transport rejection/);
+    const uncertainRecord = markers.map((row) => JSON.parse(Buffer.from(row.token, "base64url").toString("utf8"))).find((row) => row.uploadId === uncertain.uploadId);
+    assert.equal(uncertainRecord.activeWrites.length, 1, "An ambiguous remote failure must retain its durable marker.");
+    await assert.rejects(upload.finalizeExperienceEvidenceUpload({ userId: "user-owner", token: uncertain.token }), /escritura/i);
+  } finally {
+    prisma.$transaction = originalTransaction;
+  }
+
+  const boundedBody = await import("../lib/server/bounded-request-body");
+  const oversizedStream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array(33 * 1024));
+      controller.close();
+    },
+  });
+  const lyingLength = new Request("https://example.invalid/upload", {
+    method: "POST",
+    headers: { "content-length": "1" },
+    body: oversizedStream,
+    duplex: "half",
+  } as RequestInit);
+  await assert.rejects(
+    boundedBody.readBoundedRequestBytes(lyingLength, 32 * 1024),
+    (error: unknown) => error instanceof boundedBody.BoundedRequestBodyError && error.status === 413,
+  );
+  const bodyWithoutLength = new Request("https://example.invalid/upload", { method: "POST", body: JSON.stringify({ action: "init" }) });
+  assert.deepEqual(await boundedBody.readBoundedJson(bodyWithoutLength, 1024), { action: "init" });
 
   const root = originalCwd;
   const [nextConfig, createForm, editForm, actions, serverUpload, initRoute, chunkRoute] = await Promise.all([
@@ -97,10 +239,18 @@ async function main() {
   assert.match(serverUpload, /personalRetainedStorageUnits\(tx, userId\)/);
   assert.match(serverUpload, /charged\.count !== 1/);
   assert.match(serverUpload, /verificationToken\.deleteMany/);
+  assert.match(serverUpload, /beginPendingUploadWrite/);
+  assert.match(serverUpload, /finishPendingUploadWrite/);
+  assert.match(serverUpload, /activeWrites/);
+  assert.match(serverUpload, /await store\.delete\(key\)/);
   assert.match(serverUpload, /await import\(["']@\/lib\/server\/worklog-media-security["']\)/);
   assert.match(initRoute, /32\s*\*\s*1024/);
   assert.match(initRoute, /application\/json/);
   assert.match(chunkRoute, /application\/octet-stream/);
+  assert.match(chunkRoute, /authorizeExperienceEvidenceChunk/);
+  assert.match(chunkRoute, /readBoundedRequestBytes/);
+  assert.doesNotMatch(chunkRoute, /request\.arrayBuffer\(\)/);
+  assert.doesNotMatch(initRoute, /request\.json\(\)/);
 
   console.log("Experience evidence chunk upload contract: OK (gateway-safe chunks, ownership, integrity, bounded pending budget, atomic retained quota, receipt flow, 4 MB Server Action limit).");
   } finally {
