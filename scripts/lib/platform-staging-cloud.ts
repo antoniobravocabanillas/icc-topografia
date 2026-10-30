@@ -56,7 +56,7 @@ export function assertStagingCandidate(actual: unknown, expected: { commit: stri
 // Emit only structural diagnostics, never raw stdout/stderr or error messages.
 export function cloudFailureDiagnostic(output: string) {
   return {
-    locations: [...new Set(output.match(/(?:test-platform-staging-[a-z0-9-]+|platform-staging-environment)\.ts:\d+:\d+/g) ?? [])].slice(0, 6),
+    locations: [...new Set(output.match(/(?:test-platform-staging-[a-z0-9-]+|run-platform-staging-cloud|platform-staging-cloud|platform-staging-runner|platform-staging-environment)\.ts:\d+:\d+/g) ?? [])].slice(0, 6),
     codes: [...new Set(output.match(/\b(?:P\d{4}|ERR_ASSERTION|TimeoutError|PrismaClientInitializationError)\b/g) ?? [])].slice(0, 6),
   };
 }

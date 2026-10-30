@@ -44,4 +44,8 @@ async function main() {
   }
   console.log(`Staging cloud verified PASS: phase=${target.phase}; commit=${head}; deploy=${target.deployId}`);
 }
-void main().catch(() => { console.error("Staging cloud FAIL: configuracion, candidato o gate rechazado. Produccion sigue en HOLD."); process.exitCode = 1; });
+void main().catch((error: unknown) => {
+  console.error("Staging cloud FAIL: configuracion, candidato o gate rechazado. Produccion sigue en HOLD.");
+  console.error(JSON.stringify(cloudFailureDiagnostic(error instanceof Error ? error.stack ?? "" : "")));
+  process.exitCode = 1;
+});
