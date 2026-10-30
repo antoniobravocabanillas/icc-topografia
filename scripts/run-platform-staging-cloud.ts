@@ -17,9 +17,11 @@ async function main() {
   if (stage === "prepare") {
     // The public marker contains no credential and is only generated on staging.
     writeFileSync(resolve(root, "public/__terraqo_staging_candidate.json"), JSON.stringify({ siteId: stagingCloudSite, commit: head, deployId: target.deployId }));
-    const install = spawnSync(process.execPath, [resolve(root, "node_modules/playwright/cli.js"), "install", "--with-deps", "chromium"], {
-      cwd: root, env: target.environment, encoding: "utf8", timeout: 180_000, maxBuffer: 2 * 1024 * 1024, windowsHide: true, shell: false,
+    const browserEnvironment = Object.fromEntries(Object.entries(target.environment).filter(([key]) => ["PATH", "HOME", "TMPDIR", "TEMP", "TMP", "SYSTEMROOT", "WINDIR", "USERPROFILE", "LOCALAPPDATA"].includes(key.toUpperCase())));
+    const install = spawnSync(process.execPath, [resolve(root, "node_modules/playwright/cli.js"), "install", "chromium"], {
+      cwd: root, env: browserEnvironment, encoding: "utf8", timeout: 180_000, maxBuffer: 2 * 1024 * 1024, windowsHide: true, shell: false,
     });
+    if (install.status !== 0) console.error((install.stderr || install.stdout || "Chromium installer failed.").slice(-2500));
     assert.equal(install.status, 0, "No se pudo preparar Chromium para staging.");
     console.log(`Staging cloud prepare PASS: phase=${target.phase}; commit=${head}; deploy=${target.deployId}`);
     return;
