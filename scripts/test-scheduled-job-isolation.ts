@@ -28,10 +28,25 @@ assert.equal(
   productionTargets.professionalDocumentCleanupApi,
   "https://api.terraqoglobal.com/api/internal/professional-document-cleanup",
 );
+assert.equal(
+  resolveScheduledJobTargets({
+    URL: "https://iridescent-fenglisu-d6595c.netlify.app",
+    NEXT_PUBLIC_SITE_URL: "https://terraqoglobal.com",
+    NEXT_PUBLIC_API_URL: "https://api.terraqoglobal.com",
+  }).billingReconcileApi,
+  "https://iridescent-fenglisu-d6595c.netlify.app/api/internal/billing-reconcile",
+);
 
 for (const environment of [
+  { ...stageEnvironment, PLATFORM_STAGING_CONFIRM: undefined },
   { ...stageEnvironment, NEXT_PUBLIC_API_URL: "https://api.terraqoglobal.com" },
   { ...stageEnvironment, URL: "https://terraqoglobal.com" },
+  {
+    URL: "https://iridescent-fenglisu-d6595c.netlify.app",
+    NEXT_PUBLIC_SITE_URL: "https://terraqoglobal.com",
+    NEXT_PUBLIC_API_URL: "https://api.terraqoglobal.com",
+    PLATFORM_STAGING_CONFIRM: "staging",
+  },
   { ...stageEnvironment, URL: "http://terraqo-platform-staging.example.net" },
   { ...stageEnvironment, NEXT_PUBLIC_API_URL: "https://user:pass@example.net" },
   { ...stageEnvironment, NEXT_PUBLIC_API_URL: `${stageOrigin}/nested` },
@@ -39,7 +54,7 @@ for (const environment of [
 ]) {
   assert.throws(
     () => resolveScheduledJobTargets(environment),
-    /SCHEDULED_(?:STAGING_ORIGIN_MISMATCH|SITE_URL_INVALID|API_URL_(?:INVALID|MISSING))/,
+    /SCHEDULED_(?:DEPLOYMENT_ORIGIN_MISMATCH|STAGING_(?:ORIGIN_MISMATCH|CONFIRM_REQUIRED)|SITE_URL_INVALID|API_URL_(?:INVALID|MISSING))|SCHEDULED_PUBLIC_URL_MISSING/,
   );
 }
 

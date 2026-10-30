@@ -13,6 +13,17 @@ export type ScheduledJobTargets = {
   complaintsMailApi: string;
 };
 
+const productionDeploymentHosts = new Set([
+  "terraqoglobal.com",
+  "www.terraqoglobal.com",
+  "iridescent-fenglisu-d6595c.netlify.app",
+]);
+const productionPublicHosts = new Set([
+  "terraqoglobal.com",
+  "www.terraqoglobal.com",
+]);
+const productionApiHosts = new Set(["api.terraqoglobal.com"]);
+
 function httpsOrigin(value: string | undefined, name: string) {
   if (!value?.trim()) throw new Error(`${name}_MISSING`);
 
@@ -53,13 +64,31 @@ export function resolveScheduledJobTargets(
     environment.NEXT_PUBLIC_API_URL,
     "SCHEDULED_API_URL",
   );
+  const configuredSiteOrigin = httpsOrigin(
+    environment.NEXT_PUBLIC_SITE_URL,
+    "SCHEDULED_PUBLIC_URL",
+  );
+  const deploymentHost = new URL(siteOrigin).hostname.toLowerCase();
+  const configuredSiteHost = new URL(configuredSiteOrigin).hostname.toLowerCase();
+  const apiHost = new URL(apiOrigin).hostname.toLowerCase();
+  const productionDeployment = productionDeploymentHosts.has(deploymentHost);
+  const productionConfiguration =
+    productionPublicHosts.has(configuredSiteHost) &&
+    productionApiHosts.has(apiHost);
 
-  if (environment.PLATFORM_STAGING_CONFIRM?.trim().toLowerCase() === "staging") {
-    const stagingOrigin = httpsOrigin(
-      environment.NEXT_PUBLIC_SITE_URL,
-      "SCHEDULED_STAGING_URL",
-    );
-    if (siteOrigin !== stagingOrigin || apiOrigin !== stagingOrigin) {
+  if (productionDeployment !== productionConfiguration) {
+    throw new Error("SCHEDULED_DEPLOYMENT_ORIGIN_MISMATCH");
+  }
+
+  if (productionDeployment) {
+    if (environment.PLATFORM_STAGING_CONFIRM?.trim().toLowerCase() === "staging") {
+      throw new Error("SCHEDULED_STAGING_ORIGIN_MISMATCH");
+    }
+  } else {
+    if (environment.PLATFORM_STAGING_CONFIRM?.trim().toLowerCase() !== "staging") {
+      throw new Error("SCHEDULED_STAGING_CONFIRM_REQUIRED");
+    }
+    if (siteOrigin !== configuredSiteOrigin || apiOrigin !== configuredSiteOrigin) {
       throw new Error("SCHEDULED_STAGING_ORIGIN_MISMATCH");
     }
   }
