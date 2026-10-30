@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import { createRequire } from "node:module";
+import { setEnvDefaults, type AuthConfig } from "@auth/core";
 import { platformFlags } from "./lib/platform-staging-environment";
 import { assertStagingCandidate, cloudFailureDiagnostic, stagingCloudBranch, stagingCloudEnvironment, stagingCloudGateEnvironment, stagingCloudOrigin, stagingCloudSite } from "./lib/platform-staging-cloud";
 
@@ -14,12 +15,20 @@ const productionGuard = createRequire(import.meta.url)("../plugins/terraqo-stagi
 const productionEnvironment = { ...productionGuard.productionOrigins, SITE_ID: productionGuard.productionSite,
   CONTEXT: "production", BRANCH: "codex/icc-production-preview", AUTH_TRUST_HOST: "true" };
 productionGuard.assertProductionEnvironment(productionEnvironment);
+// Exercise the installed Auth.js behavior so an empty override cannot silently
+// pass the release gate and break both login providers and credentials.
+const trustedAuth: AuthConfig = { providers: [] };
+setEnvDefaults({ ...productionEnvironment, NODE_ENV: "production" }, trustedAuth);
+assert.equal(trustedAuth.trustHost, true);
+const emptyOverrideAuth: AuthConfig = { providers: [] };
+setEnvDefaults({ ...productionEnvironment, NODE_ENV: "production", AUTH_URL: "" }, emptyOverrideAuth);
+assert.equal(emptyOverrideAuth.trustHost, false);
 for (const key of Object.keys(productionGuard.productionOrigins)) {
   for (const value of [stagingCloudOrigin, "", "https://secret:password@terraqoglobal.com", "https://terraqoglobal.com/redirect"]) {
     assert.throws(() => productionGuard.assertProductionEnvironment({ ...productionEnvironment, [key]: value }), (error: Error) => !error.message.includes(value || "secret"));
   }
 }
-for (const change of [{ AUTH_URL: stagingCloudOrigin }, { NEXTAUTH_URL: "https://portal.terraqoglobal.com" }, { AUTH_TRUST_HOST: "false" },
+for (const change of [{ AUTH_URL: "" }, { NEXTAUTH_URL: "" }, { AUTH_URL: stagingCloudOrigin }, { NEXTAUTH_URL: "https://portal.terraqoglobal.com" }, { AUTH_TRUST_HOST: "false" },
   { BRANCH: stagingCloudBranch }, { PLATFORM_STAGING_CONFIRM: "staging" }, { B5_GATE_DATABASE_URL: "secret" }, { TERRAQO_STAGING_MUTATING_TESTS: "synthetic" }]) {
   assert.throws(() => productionGuard.assertProductionEnvironment({ ...productionEnvironment, ...change }));
 }

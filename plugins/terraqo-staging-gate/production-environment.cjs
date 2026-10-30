@@ -14,8 +14,9 @@ function assertProductionEnvironment(environment) {
   for (const [key, expected] of Object.entries(productionOrigins)) {
     if (environment[key] !== expected) throw new Error(`Production build: invalid ${key}.`);
   }
-  // Auth.js must resolve the current trusted host for both portal and admin.
-  if (environment.AUTH_URL || environment.NEXTAUTH_URL || environment.AUTH_TRUST_HOST !== "true") {
+  // Auth.js uses nullish coalescing: AUTH_URL="" suppresses AUTH_TRUST_HOST.
+  // The URL overrides must be absent, not present with an empty value.
+  if (environment.AUTH_URL !== undefined || environment.NEXTAUTH_URL !== undefined || environment.AUTH_TRUST_HOST !== "true") {
     throw new Error("Production build: authentication must use the trusted request host.");
   }
   for (const [key, value] of Object.entries(environment)) {
