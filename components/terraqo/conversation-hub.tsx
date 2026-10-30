@@ -42,6 +42,8 @@ import {
   WritingAssistantTrigger,
   composerToolClass,
 } from "@/components/terraqo/composer-tools";
+import { useAdaptivePolling } from "@/components/terraqo/use-adaptive-polling";
+import { CONVERSATION_POLLING_POLICY } from "@/lib/terraqo/adaptive-polling";
 import styles from "./conversation-hub.module.css";
 
 type Conversation = ConversationHubData["conversations"][number];
@@ -49,6 +51,8 @@ type Message = Conversation["messages"][number];
 type Attachment = Message["attachmentItems"][number];
 type Filter = "all" | "unread" | "groups" | "companies";
 type DetailTab = "chat" | "files" | "profile";
+
+const MESSAGE_REFRESH_EVENTS = ["terraqo:messages-changed"] as const;
 
 type ConversationHubProps = {
   data: ConversationHubData;
@@ -124,6 +128,23 @@ function formatBytes(value: number) {
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function hubRevision(hub: ConversationHubData) {
+  const revision = (conversation: Conversation) => [
+    conversation.id,
+    conversation.updatedAt,
+    conversation.messages.length,
+    conversation.messages.at(-1)?.id || null,
+    conversation.participants.map((participant) => [
+      participant.userId,
+      participant.lastReadAt || null,
+    ]),
+  ];
+  return JSON.stringify({
+    conversations: hub.conversations.map(revision),
+    selected: hub.selected ? revision(hub.selected) : null,
+  });
+}
+
 export function ConversationHub(props: ConversationHubProps) {
   // Never carry an attachment or pending recording to a different recipient.
   return (
@@ -173,19 +194,35 @@ function ConversationWorkspace({
   const [starting, setStarting] = useState(false);
   const startingRef = useRef(false);
   const [imagePreview, setImagePreview] = useState("");
-  const refreshHub = useCallback(async () => {
+  const pollRevisionRef = useRef(hubRevision(data));
+  const refreshHub = useCallback(async (signal?: AbortSignal) => {
     const query = selected?.id
       ? `?conversation=${encodeURIComponent(selected.id)}`
       : "?peek=1";
     const response = await fetch(`/api/terraqo/messages${query}`, {
       cache: "no-store",
+      signal,
     });
-    if (!response.ok) return;
+    if (!response.ok) return false;
     const payload = await response.json();
-    if (payload?.data) setHub(payload.data as ConversationHubData);
+    if (!payload?.data) return false;
+    const nextHub = payload.data as ConversationHubData;
+    const nextRevision = hubRevision(nextHub);
+    const changed = pollRevisionRef.current !== nextRevision;
+    pollRevisionRef.current = nextRevision;
+    setHub(nextHub);
+    return changed;
   }, [selected?.id]);
 
-  useEffect(() => setHub(data), [data]);
+  const pollHub = useCallback((signal: AbortSignal) => {
+    if (sendingRef.current) return Promise.resolve(false);
+    return refreshHub(signal);
+  }, [refreshHub]);
+
+  useEffect(() => {
+    setHub(data);
+    pollRevisionRef.current = hubRevision(data);
+  }, [data]);
   useEffect(() => {
     if (!selected?.id) return;
     setBody(window.localStorage.getItem(`terraqo:message-draft:${selected.id}`) || "");
@@ -197,23 +234,10 @@ function ConversationWorkspace({
     if (body) window.localStorage.setItem(key, body);
     else window.localStorage.removeItem(key);
   }, [body, selected?.id]);
-  useEffect(() => {
-    let timer = 0;
-    const refresh = () => {
-      if (document.visibilityState === "visible" && !sendingRef.current)
-        void refreshHub();
-    };
-    timer = window.setInterval(refresh, 3000);
-    window.addEventListener("focus", refresh);
-    window.addEventListener("terraqo:messages-changed", refresh);
-    document.addEventListener("visibilitychange", refresh);
-    return () => {
-      window.clearInterval(timer);
-      window.removeEventListener("focus", refresh);
-      window.removeEventListener("terraqo:messages-changed", refresh);
-      document.removeEventListener("visibilitychange", refresh);
-    };
-  }, [refreshHub]);
+  useAdaptivePolling(pollHub, {
+    policy: CONVERSATION_POLLING_POLICY,
+    refreshEvents: MESSAGE_REFRESH_EVENTS,
+  });
   useEffect(() => {
     if (newMessageOpen) newMessageRef.current?.showModal();
     else newMessageRef.current?.close();

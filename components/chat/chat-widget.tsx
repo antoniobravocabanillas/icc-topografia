@@ -1,12 +1,18 @@
 "use client";
 
-import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
 import { MessageCircle, Send, X } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { UserAvatar } from "@/components/terraqo/user-avatar";
+import { useAdaptivePolling } from "@/components/terraqo/use-adaptive-polling";
+import { CONVERSATION_POLLING_POLICY } from "@/lib/terraqo/adaptive-polling";
+import {
+  installTerraqoAudioUnlock,
+  playTerraqoAlert,
+} from "@/lib/terraqo/alert-sounds";
 
 type ChatMessage = {
   id: string;
@@ -73,6 +79,9 @@ export function ChatWidget() {
   const [showHumanForm, setShowHumanForm] = useState(false);
   const startFormRef = useRef<HTMLFormElement | null>(null);
   const messagesRef = useRef<HTMLDivElement | null>(null);
+  const pollRevisionRef = useRef("");
+  const latestAdminMessageRef = useRef("");
+  const pollInitializedRef = useRef(false);
 
   const assignedName = conversation?.assignedProfile?.displayName || conversation?.assignedTo?.name || conversation?.assignedTo?.email || "";
   const assignedRole = conversation?.assignedProfile?.roleTitle || "Asesor tecnico";
@@ -90,39 +99,80 @@ export function ChatWidget() {
     if (stored) setConversationId(stored);
   }, []);
 
-  function resetConversation(notice?: string) {
+  const resetConversation = useCallback((notice?: string) => {
     window.localStorage.removeItem(storageKey);
     setConversationId("");
     setConversation(null);
     setMessageBody("");
     if (notice) setSystemNotice(notice);
-  }
+  }, []);
 
   useEffect(() => {
-    if (!conversationId) return;
+    installTerraqoAudioUnlock();
+  }, []);
 
-    async function loadConversation() {
-      const response = await fetch(`/api/chat?conversationId=${conversationId}`, { cache: "no-store" });
-      const result = await response.json().catch(() => null);
-      if (response.ok && result?.conversation) {
-        if (result.conversation.status === "CLOSED") {
-          resetConversation("La conversacion anterior fue cerrada por el equipo ICC. Puedes iniciar un nuevo chat cuando quieras.");
-          return;
-        }
+  useEffect(() => {
+    pollRevisionRef.current = "";
+    latestAdminMessageRef.current = "";
+    pollInitializedRef.current = false;
+  }, [conversationId]);
 
-        setConversation(result.conversation);
-        return;
+  const loadConversation = useCallback(async (signal: AbortSignal) => {
+    if (!conversationId) return false;
+    const response = await fetch(`/api/chat?conversationId=${conversationId}`, {
+      cache: "no-store",
+      signal,
+    });
+    const result = await response.json().catch(() => null);
+    if (response.ok && result?.conversation) {
+      const nextConversation = result.conversation as ChatConversation;
+      if (nextConversation.status === "CLOSED") {
+        resetConversation("La conversacion anterior fue cerrada por el equipo ICC. Puedes iniciar un nuevo chat cuando quieras.");
+        return true;
       }
 
-      if (response.status === 404) {
-        resetConversation("No encontramos la conversacion anterior. Puedes iniciar un nuevo chat.");
+      const nextRevision = JSON.stringify([
+        nextConversation.status,
+        nextConversation.assignedTo?.email || null,
+        nextConversation.assignedProfile?.displayName || null,
+        nextConversation.messages.map((message) => [
+          message.id,
+          message.sender,
+          message.createdAt,
+        ]),
+      ]);
+      const changed = pollRevisionRef.current !== nextRevision;
+      pollRevisionRef.current = nextRevision;
+
+      const latestAdminMessage = nextConversation.messages
+        .filter((message) => message.sender === "admin")
+        .at(-1)?.id || "";
+      if (!pollInitializedRef.current) {
+        pollInitializedRef.current = true;
+        latestAdminMessageRef.current = latestAdminMessage;
+      } else if (
+        latestAdminMessage &&
+        latestAdminMessage !== latestAdminMessageRef.current
+      ) {
+        latestAdminMessageRef.current = latestAdminMessage;
+        await playTerraqoAlert("message");
       }
+
+      setConversation(nextConversation);
+      return changed;
     }
 
-    loadConversation();
-    const interval = window.setInterval(loadConversation, 3000);
-    return () => window.clearInterval(interval);
-  }, [conversationId]);
+    if (response.status === 404) {
+      resetConversation("No encontramos la conversacion anterior. Puedes iniciar un nuevo chat.");
+      return true;
+    }
+    return false;
+  }, [conversationId, resetConversation]);
+
+  useAdaptivePolling(loadConversation, {
+    enabled: Boolean(conversationId) && !pathname.startsWith("/portal"),
+    policy: CONVERSATION_POLLING_POLICY,
+  });
 
   useEffect(() => {
     messagesRef.current?.scrollTo({ top: messagesRef.current.scrollHeight, behavior: "smooth" });

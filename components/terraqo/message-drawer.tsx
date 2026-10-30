@@ -15,6 +15,8 @@ import {
   ComposerEmojiPicker,
   WritingAssistantTrigger,
 } from "@/components/terraqo/composer-tools";
+import { useAdaptivePolling } from "@/components/terraqo/use-adaptive-polling";
+import { CONVERSATION_POLLING_POLICY } from "@/lib/terraqo/adaptive-polling";
 
 type Person = {
   id: string;
@@ -49,6 +51,25 @@ type Conversation = {
 };
 type Hub = { conversations: Conversation[]; selected: Conversation | null };
 
+const MESSAGE_REFRESH_EVENTS = ["terraqo:messages-changed"] as const;
+
+function hubRevision(hub: Hub) {
+  const revision = (conversation: Conversation) => [
+    conversation.id,
+    conversation.updatedAt,
+    conversation.messages.length,
+    conversation.messages.at(-1)?.id || null,
+    conversation.participants.map((participant) => [
+      participant.userId,
+      participant.lastReadAt || null,
+    ]),
+  ];
+  return JSON.stringify({
+    conversations: hub.conversations.map(revision),
+    selected: hub.selected ? revision(hub.selected) : null,
+  });
+}
+
 function other(conversation: Conversation, userId: string) {
   return conversation.participants.find((item) => item.userId !== userId)?.user;
 }
@@ -66,6 +87,7 @@ export function MessageDrawer({ currentUserId }: { currentUserId: string }) {
   const operationKeyRef = useRef("");
   const drawerRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const pollRevisionRef = useRef("");
   useEffect(() => {
     if (!open) return;
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -100,13 +122,18 @@ export function MessageDrawer({ currentUserId }: { currentUserId: string }) {
   }, [open]);
   const load = useCallback(async (
     id?: string,
-    options?: { peek?: boolean; preserveSelection?: boolean },
+    options?: {
+      peek?: boolean;
+      preserveSelection?: boolean;
+      signal?: AbortSignal;
+    },
   ) => {
     const params = new URLSearchParams();
     if (id) params.set("conversation", id);
     if (options?.peek) params.set("peek", "1");
     const response = await fetch(`/api/terraqo/messages?${params}`, {
       cache: "no-store",
+      signal: options?.signal,
     });
     const payload = await response.json();
     if (!response.ok)
@@ -115,33 +142,40 @@ export function MessageDrawer({ currentUserId }: { currentUserId: string }) {
       );
     setHub(payload.data);
     if (!options?.preserveSelection) setSelectedId(id);
+    return payload.data as Hub;
   }, []);
-  useEffect(() => {
-    if (open && !hub)
-      load(undefined, { peek: true, preserveSelection: true }).catch((cause) =>
-        setError(cause.message),
-      );
-  }, [hub, load, open]);
-  useEffect(() => {
-    if (!open) return;
-    const refresh = () => {
-      if (document.visibilityState !== "visible") return;
-      load(selectedId, {
+  const pollMessages = useCallback(async (signal: AbortSignal) => {
+    try {
+      const nextHub = await load(selectedId, {
         peek: !selectedId,
         preserveSelection: true,
-      }).catch(() => undefined);
-    };
-    const interval = window.setInterval(refresh, 3000);
-    window.addEventListener("focus", refresh);
-    window.addEventListener("terraqo:messages-changed", refresh);
-    document.addEventListener("visibilitychange", refresh);
-    return () => {
-      window.clearInterval(interval);
-      window.removeEventListener("focus", refresh);
-      window.removeEventListener("terraqo:messages-changed", refresh);
-      document.removeEventListener("visibilitychange", refresh);
-    };
-  }, [load, open, selectedId]);
+        signal,
+      });
+      const nextRevision = hubRevision(nextHub);
+      const changed = pollRevisionRef.current !== nextRevision;
+      pollRevisionRef.current = nextRevision;
+      setError("");
+      return changed;
+    } catch (cause) {
+      const aborted =
+        (cause instanceof DOMException || cause instanceof Error) &&
+        cause.name === "AbortError";
+      if (!aborted) {
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "No pudimos cargar tus mensajes.",
+        );
+      }
+      throw cause;
+    }
+  }, [load, selectedId]);
+
+  useAdaptivePolling(pollMessages, {
+    enabled: open,
+    policy: CONVERSATION_POLLING_POLICY,
+    refreshEvents: MESSAGE_REFRESH_EVENTS,
+  });
   useEffect(() => {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<{ conversationId?: string }>).detail;

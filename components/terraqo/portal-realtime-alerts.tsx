@@ -9,6 +9,8 @@ import {
   installTerraqoAudioUnlock,
   playTerraqoAlert,
 } from "@/lib/terraqo/alert-sounds";
+import { ALERT_POLLING_POLICY } from "@/lib/terraqo/adaptive-polling";
+import { useAdaptivePolling } from "@/components/terraqo/use-adaptive-polling";
 
 type AlertEvent = {
   id: string;
@@ -25,6 +27,8 @@ type PulseData = {
   latestEvent: AlertEvent | null;
 };
 
+const PORTAL_REFRESH_EVENTS = ["terraqo:message-sent"] as const;
+
 export function PortalRealtimeAlerts({
   currentUserId,
   messagesEnabled = true,
@@ -39,76 +43,58 @@ export function PortalRealtimeAlerts({
   });
   const [toast, setToast] = useState<AlertEvent | null>(null);
   const initializedRef = useRef(false);
-  const requestRef = useRef<AbortController | null>(null);
+  const snapshotRef = useRef("");
   const latestKey = `terraqo:latest-alert:${currentUserId}`;
 
-  const poll = useCallback(async () => {
-    if (!navigator.onLine || requestRef.current) return;
-    const controller = new AbortController();
-    requestRef.current = controller;
-    try {
-      const response = await fetch("/api/terraqo/activity-pulse", {
-        cache: "no-store",
-        signal: controller.signal,
-      });
-      if (!response.ok) return;
-      const payload = (await response.json()) as { data?: PulseData };
-      if (!payload.data) return;
-      setPulse(payload.data);
-      window.dispatchEvent(
-        new CustomEvent("terraqo:realtime-counts", { detail: payload.data }),
-      );
-      if (!payload.data.latestEvent) return;
-      const latestId = payload.data.latestEvent.id;
-      const previousId = window.localStorage.getItem(latestKey);
-      if (!initializedRef.current) {
-        initializedRef.current = true;
-        window.localStorage.setItem(latestKey, latestId);
-        return;
-      }
-      if (latestId !== previousId) {
-        window.localStorage.setItem(latestKey, latestId);
-        if (
-          payload.data.latestEvent.channel === "message" &&
-          !messagesEnabled
-        )
-          return;
-        setToast(payload.data.latestEvent);
-        await playTerraqoAlert(payload.data.latestEvent.channel);
-        if (payload.data.latestEvent.channel === "message") {
-          window.dispatchEvent(new CustomEvent("terraqo:messages-changed"));
-        }
-      }
-    } catch (error) {
-      if (!(error instanceof DOMException && error.name === "AbortError")) {
-        // Realtime alerts are non-blocking; the next pulse retries automatically.
-      }
-    } finally {
-      if (requestRef.current === controller) requestRef.current = null;
+  const poll = useCallback(async (signal: AbortSignal) => {
+    const response = await fetch("/api/terraqo/activity-pulse", {
+      cache: "no-store",
+      signal,
+    });
+    if (!response.ok) return false;
+    const payload = (await response.json()) as { data?: PulseData };
+    if (!payload.data) return false;
+
+    const nextSnapshot = JSON.stringify([
+      payload.data.unreadMessages,
+      payload.data.unreadNotifications,
+      payload.data.latestEvent?.id || null,
+    ]);
+    const changed = snapshotRef.current !== nextSnapshot;
+    snapshotRef.current = nextSnapshot;
+    setPulse(payload.data);
+    window.dispatchEvent(
+      new CustomEvent("terraqo:realtime-counts", { detail: payload.data }),
+    );
+
+    const latestEvent = payload.data.latestEvent;
+    const latestId = latestEvent?.id || "";
+    const previousId = window.localStorage.getItem(latestKey);
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      if (latestId) window.localStorage.setItem(latestKey, latestId);
+      return changed;
     }
+    if (!latestEvent || latestId === previousId) return changed;
+
+    window.localStorage.setItem(latestKey, latestId);
+    if (latestEvent.channel === "message" && !messagesEnabled) return changed;
+    setToast(latestEvent);
+    await playTerraqoAlert(latestEvent.channel);
+    if (latestEvent.channel === "message") {
+      window.dispatchEvent(new CustomEvent("terraqo:messages-changed"));
+    }
+    return changed;
   }, [latestKey, messagesEnabled]);
 
   useEffect(() => {
     installTerraqoAudioUnlock();
-    void poll();
-    const interval = window.setInterval(() => void poll(), 4000);
-    const refresh = () => void poll();
-    const visibility = () => {
-      if (document.visibilityState === "visible") void poll();
-    };
-    window.addEventListener("focus", refresh);
-    window.addEventListener("online", refresh);
-    window.addEventListener("terraqo:message-sent", refresh);
-    document.addEventListener("visibilitychange", visibility);
-    return () => {
-      window.clearInterval(interval);
-      requestRef.current?.abort();
-      window.removeEventListener("focus", refresh);
-      window.removeEventListener("online", refresh);
-      window.removeEventListener("terraqo:message-sent", refresh);
-      document.removeEventListener("visibilitychange", visibility);
-    };
-  }, [poll]);
+  }, []);
+
+  useAdaptivePolling(poll, {
+    policy: ALERT_POLLING_POLICY,
+    refreshEvents: PORTAL_REFRESH_EVENTS,
+  });
 
   useEffect(() => {
     if (!toast) return;

@@ -18,6 +18,7 @@ const contractScripts = [
   "test:request-origin",
   "test:scheduled-job-isolation",
   "test:billing-scheduler-contract",
+  "test:adaptive-polling-contract",
   "test:portal-journeys",
   "test:field-verification-recovery",
   "test:attendance-location-queue",

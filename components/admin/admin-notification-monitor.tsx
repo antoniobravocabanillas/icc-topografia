@@ -9,6 +9,8 @@ import {
   installTerraqoAudioUnlock,
   playTerraqoAlert,
 } from "@/lib/terraqo/alert-sounds";
+import { ALERT_POLLING_POLICY } from "@/lib/terraqo/adaptive-polling";
+import { useAdaptivePolling } from "@/components/terraqo/use-adaptive-polling";
 
 type PulseEvent = {
   id: string;
@@ -30,55 +32,47 @@ export function AdminNotificationMonitor() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
   const initializedRef = useRef(false);
-  const requestRef = useRef(false);
+  const snapshotRef = useRef("");
 
-  const poll = useCallback(async () => {
-      if (requestRef.current || !navigator.onLine) return;
-      requestRef.current = true;
-      try {
-        const response = await fetch("/api/admin/notifications/pulse", { cache: "no-store" });
-        if (!response.ok) return;
-        const payload = await response.json() as PulsePayload;
-        setUnreadCount(payload.unreadNotifications);
-        if (!payload.latestEvent) return;
+  const poll = useCallback(async (signal: AbortSignal) => {
+    const response = await fetch("/api/admin/notifications/pulse", {
+      cache: "no-store",
+      signal,
+    });
+    if (!response.ok) return false;
+    const payload = await response.json() as PulsePayload;
+    const nextSnapshot = JSON.stringify([
+      payload.unreadNotifications,
+      payload.latestEvent?.id || null,
+    ]);
+    const changed = snapshotRef.current !== nextSnapshot;
+    snapshotRef.current = nextSnapshot;
+    setUnreadCount(payload.unreadNotifications);
 
-        const lastSeen = window.localStorage.getItem(storageKey);
-        if (!initializedRef.current) {
-          initializedRef.current = true;
-          window.localStorage.setItem(storageKey, payload.latestEvent.id);
-          return;
-        }
+    const latestEvent = payload.latestEvent;
+    const latestId = latestEvent?.id || "";
+    const lastSeen = window.localStorage.getItem(storageKey);
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      if (latestId) window.localStorage.setItem(storageKey, latestId);
+      return changed;
+    }
+    if (!latestEvent || latestId === lastSeen) return changed;
 
-        if (payload.latestEvent.id !== lastSeen) {
-          window.localStorage.setItem(storageKey, payload.latestEvent.id);
-          setEvent(payload.latestEvent);
-          setIsVisible(true);
-          await playTerraqoAlert(
-            payload.latestEvent.type === "notification"
-              ? "notification"
-              : "message",
-          );
-        }
-      } catch {
-        // The monitor is non-critical; failed polls should not interrupt admin work.
-      } finally {
-        requestRef.current = false;
-      }
-    }, []);
+    window.localStorage.setItem(storageKey, latestId);
+    setEvent(latestEvent);
+    setIsVisible(true);
+    await playTerraqoAlert(
+      latestEvent.type === "notification" ? "notification" : "message",
+    );
+    return changed;
+  }, []);
 
   useEffect(() => {
     installTerraqoAudioUnlock();
-    void poll();
-    const interval = window.setInterval(() => void poll(), 4000);
-    const refresh = () => void poll();
-    window.addEventListener("focus", refresh);
-    window.addEventListener("online", refresh);
-    return () => {
-      window.clearInterval(interval);
-      window.removeEventListener("focus", refresh);
-      window.removeEventListener("online", refresh);
-    };
-  }, [poll]);
+  }, []);
+
+  useAdaptivePolling(poll, { policy: ALERT_POLLING_POLICY });
 
   return (
     <aside aria-label="Avisos y preferencias de sonido" className="mb-6 flex flex-wrap items-center justify-end gap-3">
