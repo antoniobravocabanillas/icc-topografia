@@ -313,10 +313,12 @@ este release.
 5. [Completado] `npm run check:b5-schema-drift`: solo los dos artefactos
    full-text documentados.
 6. [Completado] Desplegar exactamente la revision candidata con flags
-   controlados. La revision de seguridad vigente es `0979d71`, deploy
-   `6ae424f68bb42eedf27df92e` en el sitio aislado, con B1-B4 activos, B5
-   apagado y proveedor IA `off`. Las revisiones y deploys anteriores se
-   conservan como evidencia historica del endurecimiento incremental.
+   controlados. La revision vigente es `909131e`, deploy
+   `6ae42ae7786a4cd557f6fad4` en el sitio aislado, con B1-B4 activos, B5
+   apagado y proveedor IA `off`. La revision `0979d71` y su deploy
+   `6ae424f68bb42eedf27df92e` conservan la evidencia del flujo remoto de
+   archivos. Las revisiones y deploys anteriores se mantienen como historial
+   del endurecimiento incremental.
 7. [Parcial] Smoke E2E anonimo aprobado: salud, home, cuenta, red vacia,
    aislamiento de enlaces, OAuth apagado, contratos 401/404 y evidencia visual
    desktop/movil. El gate B5 directo sobre PostgreSQL remoto aprobo dos
@@ -330,6 +332,10 @@ este release.
    visual del PDF; no reaparecio `P2028`. Pendiente B5 HTTP, request IDs,
    observabilidad/dispatcher, accesibilidad fisica, callbacks de staging y
    limpieza runtime de las fixtures de evidencia.
+   La portada profesional `/portal` tambien aprobo el recorrido autenticado
+   sin depender del workspace comercial publico; `/portal/experiencias`
+   mantiene la evidencia adjunta y la consola del navegador termino con cero
+   errores y cero warnings.
 
 ### Fase C - activacion por cohortes
 

@@ -52,12 +52,14 @@ Remediación posterior al escaneo sellado `813a5bcb-0810-41fa-aea9-b5016243ebed`
 - `npm run build`: aprobado.
 - `npm run test:experience-evidence-chunk-upload`: aprobado tres veces consecutivas, incluido cleanup estable en Windows.
 - `node --conditions=react-server --import tsx scripts/test-portal-experience-evidence.ts`: aprobado.
-- `npm run test:terraqo-local-contracts`: aprobado; 35 comprobaciones no mutantes, incluido el nuevo contrato de carga.
+- `npm run test:terraqo-local-contracts`: aprobado; 36 comprobaciones no mutantes, incluidos los contratos de carga y alcance de la portada profesional.
 
 ## Evidencia remota de staging
 
 - Revisión desplegada: `0979d71` (`fix: allow remote evidence transaction window`).
 - Deploy exclusivo de staging: `6ae424f68bb42eedf27df92e`.
+- Revisión posterior de portada: `909131e` (`fix: decouple professional portal from public workspace`).
+- Deploy vigente de staging: `6ae42ae7786a4cd557f6fad4`.
 - URL canónica: `https://terraqo-platform-staging.netlify.app`.
 - Smoke no mutante posterior al deploy: `/api/health` 200 y `/cuenta` 200.
 - Recorrido autenticado real: inicialización 200, fragmento 200, finalización 200 y Server Action final 303 hacia `/portal/experiencias?success=experience`.
@@ -66,13 +68,14 @@ Remediación posterior al escaneo sellado `813a5bcb-0810-41fa-aea9-b5016243ebed`
 - Los dos objetos de Blobs del intento fallido anterior se eliminaron por clave exacta. El store conserva únicamente el objeto referenciado por la evidencia exitosa.
 - El conector Supabase conserva permisos de solo lectura sobre `icc`; por ello una cuenta sintética, la experiencia huérfana del primer fallo y la experiencia exitosa siguen como fixtures identificadas. No se intentó ampliar permisos ni extraer la credencial runtime.
 - El login por credenciales con una cuenta de correo marcado como verificado quedó aprobado. La entrega real de correo continúa fuera de alcance mientras el kill switch de correo de staging permanezca apagado.
-- Riesgos de entorno observados: el enlace de verificación generado en staging resuelve al host público y la portada `/portal` de la cuenta sintética falla si no existe un workspace público activo; `/portal/experiencias` sí funciona. Ambos deben cerrarse antes de la promoción.
+- La portada `/portal` quedó desacoplada del workspace comercial público para perfiles profesionales: el recorrido autenticado carga el cockpit, `/portal/experiencias` conserva la experiencia y su PDF y la consola reporta cero errores y cero warnings. El portal cliente mantiene la resolución obligatoria de su tenant.
+- Riesgo de entorno pendiente: el enlace de verificación generado en staging todavía resuelve al host público. Debe cerrarse antes de la promoción.
 - El asesor de seguridad de Supabase devolvió cero lints en este corte. Aun así, debe confirmarse en Dashboard que `icc` no esté incluido entre los schemas expuestos por Data API; no se habilitará RLS de forma masiva sin diseñar políticas y grants.
 
 ## Estado cuantificado
 
-- Preparación técnica del candidato antes de producción: **94 %**.
-- El porcentaje no constituye autorización de publicación. El `HOLD` continúa por configuración de callback/host de staging, portada del portal para perfiles sin workspace público, limpieza runtime de fixtures, B5 HTTP/observabilidad/dispatcher, accesibilidad en dispositivo físico y firmas operativas.
+- Preparación técnica del candidato antes de producción: **95 %**.
+- El porcentaje no constituye autorización de publicación. El `HOLD` continúa por configuración de callback/host de staging, limpieza runtime de fixtures, B5 HTTP/observabilidad/dispatcher, accesibilidad en dispositivo físico y firmas operativas.
 
 ## Restricciones vigentes
 

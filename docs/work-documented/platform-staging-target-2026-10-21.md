@@ -98,6 +98,10 @@ Netlify `terraqo-platform-staging`:
   `6ae034aad34c092236a4dea7` (revision candidata `ffe13b5`).
 - Restauracion B1-B4 posterior al rollback:
   `6ae035a47a8bf812cb457057` (revision candidata `ffe13b5`).
+- Carga remota de evidencia profesional:
+  `6ae424f68bb42eedf27df92e` (revision `0979d71`).
+- Portada profesional desacoplada del workspace comercial publico:
+  `6ae42ae7786a4cd557f6fad4` (revision `909131e`).
 - URL validada: `https://terraqo-platform-staging.netlify.app`.
 
 Se configuraron la identidad no secreta de Supabase, URLs del sitio y los nueve
@@ -244,6 +248,9 @@ los restaura en `finally`.
   aislamiento, propuesta v2, cierre y constancia privada.
 - Limpieza posterior a la restauracion: cero usuarios, workspaces,
   necesidades, colaboraciones, constancias y jobs de analisis.
+- El cockpit profesional `/portal` respondio autenticado aun sin workspace
+  comercial publico; la experiencia historica y su PDF siguieron visibles en
+  `/portal/experiencias`, con cero errores y cero warnings de consola.
 
 El E2E activo de proveedor B5, accesibilidad fisica, dispatcher HTTPS,
 rollback observado y firmas siguen pendientes; por ello el release permanece
