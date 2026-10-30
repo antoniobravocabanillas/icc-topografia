@@ -1,8 +1,10 @@
 import { runEducationCleanupWorker } from "../../lib/terraqo/education-cleanup-job";
+import { resolveScheduledJobTargets } from "../../lib/terraqo/scheduled-job-targets";
 
 const cleanupBackground = async (request: Request) => {
   try {
     await runEducationCleanupWorker(request, { fetch, secret: process.env.PROFESSIONAL_DOCUMENT_CLEANUP_SECRET,
+      targets: resolveScheduledJobTargets(),
       report: value => console.info("Education cleanup outcome", value) });
   } catch {
     // Provider retries are safe under the durable attempt fences. Never log

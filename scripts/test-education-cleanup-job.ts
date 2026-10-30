@@ -6,6 +6,10 @@ import { queueEducationCleanup, runEducationCleanupWorker } from "../lib/terraqo
 async function main() {
   const secret = randomBytes(32).toString("hex");
   const reports: Record<string, unknown>[] = [], calls: { url: string; init?: RequestInit }[] = [];
+  const targets = {
+    educationCleanupApi: "https://api.example.invalid/api/internal/education-evidence-cleanup",
+    educationCleanupWorker: "https://site.example.invalid/.netlify/functions/education-evidence-cleanup-background",
+  };
   const counters = { completed: 1, retained: 0, retry: 0, quarantined: 0, skipped: 0, pending: 0 };
   let reply: unknown = { selected: 2, processed: 1, deferred: 1, counts: counters, privateKey: "MUST_NOT_REPORT" };
   const fetcher = (async (url: string | URL | Request, init?: RequestInit) => {
@@ -17,7 +21,7 @@ async function main() {
       identity: "MUST_NOT_REPORT" } });
     return Response.json(reply);
   }) as typeof fetch;
-  const ports = { secret, fetch: fetcher, report: (value: Record<string, unknown>) => reports.push(value) };
+  const ports = { secret, targets, fetch: fetcher, report: (value: Record<string, unknown>) => reports.push(value) };
   const request = (body: unknown, auth = true) => new Request("https://example.invalid/worker", { method: "POST",
     headers: { "content-type": "application/json", ...(auth ? { authorization: `Bearer ${secret}` } : {}) }, body: JSON.stringify(body) });
   await queueEducationCleanup(ports); assert.deepEqual(reports.pop(), { queued: 1 });
@@ -50,11 +54,22 @@ async function main() {
     platform: "node", format: "esm", write: false });
   const scheduled = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
   assert.equal(scheduled.config.schedule, "*/5 * * * *");
-  const originalFetch = globalThis.fetch, originalSecret = process.env.PROFESSIONAL_DOCUMENT_CLEANUP_SECRET;
+  const originals = {
+    fetch: globalThis.fetch,
+    secret: process.env.PROFESSIONAL_DOCUMENT_CLEANUP_SECRET,
+    url: process.env.URL,
+    site: process.env.NEXT_PUBLIC_SITE_URL,
+    api: process.env.NEXT_PUBLIC_API_URL,
+    staging: process.env.PLATFORM_STAGING_CONFIRM,
+  };
   try {
+    process.env.URL = "https://staging.example.invalid";
+    process.env.NEXT_PUBLIC_SITE_URL = "https://staging.example.invalid";
+    process.env.NEXT_PUBLIC_API_URL = "https://staging.example.invalid";
+    process.env.PLATFORM_STAGING_CONFIRM = "staging";
     process.env.PROFESSIONAL_DOCUMENT_CLEANUP_SECRET = secret;
     globalThis.fetch = async (url, init) => {
-      assert.equal(String(url), "https://terraqoglobal.com/.netlify/functions/education-evidence-cleanup-background");
+      assert.equal(String(url), "https://staging.example.invalid/.netlify/functions/education-evidence-cleanup-background");
       assert.equal(init?.body, JSON.stringify({ action: "DISPATCH" }));
       assert.equal(new Headers(init?.headers).get("authorization"), `Bearer ${secret}`);
       assert.equal(init?.redirect, "error");
@@ -64,9 +79,17 @@ async function main() {
     globalThis.fetch = async () => new Response(null, { status: 401 });
     assert.equal((await scheduled.default()).status, 503);
   } finally {
-    globalThis.fetch = originalFetch;
-    if (originalSecret === undefined) delete process.env.PROFESSIONAL_DOCUMENT_CLEANUP_SECRET;
-    else process.env.PROFESSIONAL_DOCUMENT_CLEANUP_SECRET = originalSecret;
+    globalThis.fetch = originals.fetch;
+    for (const [name, value] of Object.entries({
+      PROFESSIONAL_DOCUMENT_CLEANUP_SECRET: originals.secret,
+      URL: originals.url,
+      NEXT_PUBLIC_SITE_URL: originals.site,
+      NEXT_PUBLIC_API_URL: originals.api,
+      PLATFORM_STAGING_CONFIRM: originals.staging,
+    })) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
   }
   console.log("PASS controlled job ports: 10s short trigger/202 queue only, worker secret before I/O, strict bounded body, targeted and batch counters/backlog sanitized, invalid response rejected, no redirects/retries/global SQL.");
 }

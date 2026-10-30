@@ -1,11 +1,13 @@
 import { timingSafeEqual } from "node:crypto";
+import type { ScheduledJobTargets } from "./scheduled-job-targets";
 
-const api = "https://api.terraqoglobal.com/api/internal/education-evidence-cleanup";
-// The provider exposes native functions on the published site's primary host;
-// the API subdomain routes application endpoints and returns 404 for this path.
-const worker = "https://terraqoglobal.com/.netlify/functions/education-evidence-cleanup-background";
 type Command = { action: "DISPATCH" } | { action: "RECOVER"; attemptId: string };
-type Ports = { fetch: typeof fetch; secret: string | undefined; report(value: Record<string, unknown>): void };
+type Ports = {
+  fetch: typeof fetch;
+  secret: string | undefined;
+  targets: Pick<ScheduledJobTargets, "educationCleanupApi" | "educationCleanupWorker">;
+  report(value: Record<string, unknown>): void;
+};
 const results = ["completed", "retained", "retry", "quarantined", "skipped", "pending"] as const;
 const healthFields = ["pending", "overdue", "quarantined", "watchesDue", "orphaned"] as const;
 const integer = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 0;
@@ -50,7 +52,12 @@ async function send(ports: Ports, url: string, command: Command | undefined, dur
  * claim of cleanup completion; a lost reply is reconciled by durable fences. */
 export async function queueEducationCleanup(ports: Ports) {
   if (!ports.secret || ports.secret.length < 32) throw Error("JOB_NOT_CONFIGURED");
-  const response = await send(ports, worker, { action: "DISPATCH" }, 10000);
+  const response = await send(
+    ports,
+    ports.targets.educationCleanupWorker,
+    { action: "DISPATCH" },
+    10000,
+  );
   if (response.body) void response.body.cancel().catch(() => undefined);
   if (response.status !== 202) throw Error("JOB_QUEUE_REJECTED");
   ports.report({ queued: 1 });
@@ -71,7 +78,7 @@ export async function runEducationCleanupWorker(request: Request, ports: Ports) 
   else if (value.action === "RECOVER" && Object.keys(value).length === 2 && typeof value.attemptId === "string" &&
     /^[A-Za-z0-9_-]{1,100}$/.test(value.attemptId)) command = { action: "RECOVER", attemptId: value.attemptId };
   else return;
-  const response = await send(ports, api, command, 55000);
+  const response = await send(ports, ports.targets.educationCleanupApi, command, 55000);
   if (!response.ok) { if (response.body) void response.body.cancel().catch(() => undefined); throw Error("JOB_RECOVERY_FAILED"); }
   const data = await boundedBody(response.body, 2048, 5000);
   let outcome: Record<string, unknown>;
@@ -88,7 +95,7 @@ export async function runEducationCleanupWorker(request: Request, ports: Ports) 
     if (total !== data.processed) throw Error("JOB_RESULT_INVALID");
     outcome = { mode: "batch", selected: data.selected, processed: data.processed, deferred: data.deferred, counts };
   }
-  const read = await send(ports, api, undefined, 15000);
+  const read = await send(ports, ports.targets.educationCleanupApi, undefined, 15000);
   if (!read.ok) { if (read.body) void read.body.cancel().catch(() => undefined); throw Error("JOB_HEALTH_FAILED"); }
   const state = await boundedBody(read.body, 2048, 5000);
   if (!object(state) || !object(state.backlog)) throw Error("JOB_HEALTH_INVALID");

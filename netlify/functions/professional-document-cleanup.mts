@@ -1,8 +1,13 @@
+import { resolveScheduledJobTargets } from "../../lib/terraqo/scheduled-job-targets";
+
 // Retry private storage compensation without logging identities, keys or content.
 const cleanup = async () => {
   const secret = process.env.PROFESSIONAL_DOCUMENT_CLEANUP_SECRET;
   if (!secret || secret.length < 32) return new Response("Not configured", {status:503});
-  const result = await fetch("https://api.terraqoglobal.com/api/internal/professional-document-cleanup", {
+  let target: string;
+  try { target = resolveScheduledJobTargets().professionalDocumentCleanupApi; }
+  catch { return new Response("Not configured", {status:503}); }
+  const result = await fetch(target, {
     method:"POST", headers:{authorization:`Bearer ${secret}`}, redirect:"error", signal:AbortSignal.timeout(55000),
   });
   if (result.ok) {
