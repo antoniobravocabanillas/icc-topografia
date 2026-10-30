@@ -31,6 +31,7 @@ Remediación posterior al escaneo sellado `813a5bcb-0810-41fa-aea9-b5016243ebed`
    - Las imágenes se decodifican y regeneran como WEBP; los PDF validan firma y terminador antes de persistirse.
    - Un presupuesto temporal persistido limita a 64 MB las cargas incompletas por usuario. Conserva el tamaño fuente mientras existan fragmentos, registra la clave final antes de escribirla y recupera huérfanos vencidos sin borrar referencias vivas.
    - La cuota retenida se carga y el presupuesto temporal se consume en la misma transacción serializable que crea las filas de evidencia. El lock de perfil/experiencia, el piso compartido y la clave única evitan carreras, doble cobro y reutilización entre experiencias.
+   - La transacción interactiva reserva hasta 5 segundos para abrirse y 20 segundos para completar el cálculo de almacenamiento remoto. El límite corrige el `P2028` reproducido en Supabase sin relajar serialización, ownership ni atomicidad.
    - Los formularios envían únicamente recibos firmados al Server Action; los binarios grandes quedan fuera de ese canal.
 
 ## Compatibilidad y rollout
@@ -55,15 +56,27 @@ Remediación posterior al escaneo sellado `813a5bcb-0810-41fa-aea9-b5016243ebed`
 
 ## Evidencia remota de staging
 
-- Deploy exclusivo de staging: `6ae2827588750df4a49f8bc4`.
+- Revisión desplegada: `0979d71` (`fix: allow remote evidence transaction window`).
+- Deploy exclusivo de staging: `6ae424f68bb42eedf27df92e`.
 - URL canónica: `https://terraqo-platform-staging.netlify.app`.
-- Smoke no mutante: `/api/health` 200, `/cuenta` 200 con formulario de acceso, registro inválido 422 y passkey inválida 400.
-- El recorrido autenticado del control de correo queda pendiente: el conector Supabase permitió la lectura agregada, pero rechazó crear la fixture en `icc.User`; la credencial runtime permanece protegida en Netlify y no se extrajo. No se dejaron datos sintéticos.
-- El flujo de carga fragmentada todavía debe desplegarse y ejercitarse en staging con una cuenta profesional aislada antes de promoverse. La compilación local confirma las dos rutas nuevas, pero no sustituye el recorrido autenticado contra Blobs y PostgreSQL de staging.
+- Smoke no mutante posterior al deploy: `/api/health` 200 y `/cuenta` 200.
+- Recorrido autenticado real: inicialización 200, fragmento 200, finalización 200 y Server Action final 303 hacia `/portal/experiencias?success=experience`.
+- Lectura posterior en PostgreSQL: una experiencia, una evidencia PDF de 603 bytes, cuota retenida en 1 MB y cero reservas activas para el upload exitoso.
+- La tarjeta renderizada muestra el PDF adjunto y la revisión visual no detectó pérdida del formulario, evidencia ni estado. Los logs de funciones de los cinco minutos posteriores no registraron errores ni un nuevo `P2028`.
+- Los dos objetos de Blobs del intento fallido anterior se eliminaron por clave exacta. El store conserva únicamente el objeto referenciado por la evidencia exitosa.
+- El conector Supabase conserva permisos de solo lectura sobre `icc`; por ello una cuenta sintética, la experiencia huérfana del primer fallo y la experiencia exitosa siguen como fixtures identificadas. No se intentó ampliar permisos ni extraer la credencial runtime.
+- El login por credenciales con una cuenta de correo marcado como verificado quedó aprobado. La entrega real de correo continúa fuera de alcance mientras el kill switch de correo de staging permanezca apagado.
+- Riesgos de entorno observados: el enlace de verificación generado en staging resuelve al host público y la portada `/portal` de la cuenta sintética falla si no existe un workspace público activo; `/portal/experiencias` sí funciona. Ambos deben cerrarse antes de la promoción.
+- El asesor de seguridad de Supabase devolvió cero lints en este corte. Aun así, debe confirmarse en Dashboard que `icc` no esté incluido entre los schemas expuestos por Data API; no se habilitará RLS de forma masiva sin diseñar políticas y grants.
+
+## Estado cuantificado
+
+- Preparación técnica del candidato antes de producción: **94 %**.
+- El porcentaje no constituye autorización de publicación. El `HOLD` continúa por configuración de callback/host de staging, portada del portal para perfiles sin workspace público, limpieza runtime de fixtures, B5 HTTP/observabilidad/dispatcher, accesibilidad en dispositivo físico y firmas operativas.
 
 ## Restricciones vigentes
 
 - Sin despliegue a producción.
 - Sin migraciones ni cambios de datos.
 - Sin activación de B5 ni proveedor de IA.
-- El deploy de staging, si se ejecuta, debe mantener B5 apagado y pasar nuevamente los gates HTTP autenticados aplicables.
+- El deploy de staging mantiene B1-B4 activos, B5 apagado, proveedor IA `off`, OAuth apagado y correo transaccional apagado.

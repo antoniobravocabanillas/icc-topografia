@@ -312,10 +312,11 @@ este release.
    las siete migraciones B1-B5 en orden.
 5. [Completado] `npm run check:b5-schema-drift`: solo los dos artefactos
    full-text documentados.
-6. [Completado] Desplegar exactamente la revision candidata con flags apagados.
-   Revision vigente `4313f2d`, deploy `6add4e394d17c7cb1c4722b6` en el sitio
-   aislado. El deploy inicial `6add4b1827c97b3b16ae86a4` queda como evidencia
-   anterior al endurecimiento del replay concurrente.
+6. [Completado] Desplegar exactamente la revision candidata con flags
+   controlados. La revision de seguridad vigente es `0979d71`, deploy
+   `6ae424f68bb42eedf27df92e` en el sitio aislado, con B1-B4 activos, B5
+   apagado y proveedor IA `off`. Las revisiones y deploys anteriores se
+   conservan como evidencia historica del endurecimiento incremental.
 7. [Parcial] Smoke E2E anonimo aprobado: salud, home, cuenta, red vacia,
    aislamiento de enlaces, OAuth apagado, contratos 401/404 y evidencia visual
    desktop/movil. El gate B5 directo sobre PostgreSQL remoto aprobo dos
@@ -323,8 +324,12 @@ este release.
    downgrade, flags y limpieza total. El gate HTTP B1/B2 aprobo login real con
    dos identidades, anonimo 401, WorkCase, duplicado 409, aislamiento de lectura
    y mutacion cruzada 404, con limpieza total. B3 y B4 también aprobaron sus
-   recorridos HTTP/UI autenticados y limpieza independiente. Pendiente B5 HTTP,
-   request IDs, rollback y observabilidad.
+   recorridos HTTP/UI autenticados y limpieza independiente. La carga de
+   evidencia profesional aprobo el flujo real init/chunk/finalize/attach con
+   respuestas 200/200/200/303, una fila de evidencia, cuota atomica y lectura
+   visual del PDF; no reaparecio `P2028`. Pendiente B5 HTTP, request IDs,
+   observabilidad/dispatcher, accesibilidad fisica, callbacks de staging y
+   limpieza runtime de las fixtures de evidencia.
 
 ### Fase C - activacion por cohortes
 
