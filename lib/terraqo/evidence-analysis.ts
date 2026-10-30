@@ -326,6 +326,25 @@ async function requestAnalysisProvider(messages: ReturnType<typeof analysisMessa
   return { output: parseJsonObject(content), provider, model, inputTokens: payload?.usage?.input_tokens ?? null, outputTokens: payload?.usage?.output_tokens ?? null };
 }
 
+/** Provider-only probe for isolated operational gates. It never reads or
+ * writes PostgreSQL and still applies the production schema and citation
+ * validation before returning metadata. */
+export async function runEvidenceAnalysisProviderProbe(input: {
+  purpose: EvidenceAnalysisPurpose;
+  need: { title: string; problem: string; requirements: Array<{ label: string; priority: string }> };
+  sources: EvidenceAnalysisSource[];
+}) {
+  const providerResult = await requestAnalysisProvider(analysisMessages(input));
+  const output = validateEvidenceAnalysisOutput(providerResult.output, input.sources);
+  return {
+    output,
+    provider: providerResult.provider,
+    model: providerResult.model,
+    inputTokens: providerResult.inputTokens,
+    outputTokens: providerResult.outputTokens,
+  };
+}
+
 type JobSourceRecord = {
   evaluationSourceId: string;
   worklogRevisionId: string;

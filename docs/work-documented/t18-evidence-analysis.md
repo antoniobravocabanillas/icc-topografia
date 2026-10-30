@@ -23,7 +23,10 @@ Fecha: 18 de octubre de 2026.
 - No genera CONFIRMED, score de persona, ranking ni recomendación de contratación.
 - No envía mensajes ni publica resultados.
 - No usa datos de clientes para entrenamiento.
-- No se aplicó ninguna migración remota ni se activó el flag fuera del proceso de prueba. Solo se llamó al Ollama local por loopback con fixtures sintéticos.
+- No se aplicó ninguna migración remota ni se activó el flag fuera del proceso
+  de prueba. Ollama se llamó por loopback con fixtures sintéticos y Groq se
+  validó en un gate de contrato aislado, sin PostgreSQL, dispatcher ni datos
+  reales.
 
 ## Gate local
 
@@ -31,6 +34,8 @@ Fecha: 18 de octubre de 2026.
 - npm run typecheck.
 - npm run test:evidence-analysis-contract.
 - npm run test:b5-ollama-provider-gate: `READY` en un intento con Qwen local; 385/174 tokens y 45.243 ms.
+- npm run test:b5-groq-provider-contract: schema estricto y citas aprobados en
+  una sola llamada con `openai/gpt-oss-20b`; 692/656 tokens y cero acceso a DB.
 - ESLint focalizado de archivos T18: aprobado sin advertencias.
 - npm run build: aprobado. Persisten advertencias preexistentes fuera de T18 en la página pública de empresa y componentes heredados con img.
 

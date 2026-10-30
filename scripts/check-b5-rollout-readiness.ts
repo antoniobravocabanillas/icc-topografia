@@ -32,13 +32,14 @@ async function main() {
     assert.doesNotMatch(sql, /CREATE\s+(?:UNIQUE\s+)?INDEX\s+CONCURRENTLY/i, `${migration} no puede usar CONCURRENTLY dentro de migrate deploy.`);
   }
 
-  const [analysisSql, discoverySql, mediaSnapshotSql, envExample, worker, analysisSource, workspaceRoles, serverGuard, netlifyConfig, packageJson, driftGate] = await Promise.all([
+  const [analysisSql, discoverySql, mediaSnapshotSql, envExample, worker, analysisSource, groqProviderGate, workspaceRoles, serverGuard, netlifyConfig, packageJson, driftGate] = await Promise.all([
     read("prisma/migrations/20261018153000_evidence_analysis_jobs/migration.sql"),
     read("prisma/migrations/20261017230000_discovery_needs/migration.sql"),
     read("prisma/migrations/20261020143000_share_item_media_snapshot/migration.sql"),
     read(".env.example"),
     read("netlify/functions/evidence-analysis-background.mts"),
     read("lib/terraqo/evidence-analysis.ts"),
+    read("scripts/test-b5-groq-provider-contract.ts"),
     read("lib/terraqo/workspace-roles.ts"),
     read("lib/server/runtime-server-only.ts"),
     read("netlify.toml"),
@@ -78,6 +79,10 @@ async function main() {
   assert.match(analysisSource, /type:\s*"json_schema"/, "Groq debe usar Structured Outputs con JSON Schema.");
   assert.match(analysisSource, /strict:\s*true/, "El contrato Groq debe usar constrained decoding estricto.");
   assert.doesNotMatch(analysisSource, /response_format:\s*\{\s*type:\s*"json_object"/, "Groq no puede volver al modo JSON sin garantía de schema.");
+  assert.match(groqProviderGate, /TERRAQO_GROQ_PROVIDER_TESTS/, "El gate Groq debe exigir consentimiento explícito.");
+  assert.match(groqProviderGate, /terraqo:b5-groq-synthetic-provider-contract/, "El consentimiento Groq debe ser exacto y estable.");
+  assert.match(groqProviderGate, /runEvidenceAnalysisProviderProbe/, "El gate Groq debe ejercitar el adaptador productivo.");
+  assert.doesNotMatch(groqProviderGate, /@\/lib\/prisma|new\s+PrismaClient/, "El gate Groq aislado no puede abrir PostgreSQL.");
   assert.doesNotMatch(workspaceRoles, /next\/headers/, "El módulo de roles reutilizable no puede depender de Next headers.");
   assert.match(serverGuard, /typeof window !== "undefined"/, "El límite servidor compatible con workers debe rechazar el navegador.");
   const workerBundle = await build({

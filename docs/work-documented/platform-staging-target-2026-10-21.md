@@ -441,3 +441,33 @@ respondieron `200` en salud; el gate temporal y el `POST` B5 permanecieron en
 cohortes vacías y ausencia de `GROQ_API_KEY`. La base staging permaneció con
 cero filas en las nueve tablas de control y el enlace local volvió al Site ID
 productivo sin desplegarlo.
+
+### Intento de repetición combinada
+
+Se preparó un gate efímero autenticado para repetir proveedor y dispatcher en
+una sola ventana, todavía con B5 apagado. La primera solicitud fue rechazada
+antes de crear datos por una serialización inválida y el cliente seguro local
+impidió transportar nuevamente la credencial en comandos. No se degradó la
+autenticación del gate ni se abrió un endpoint mutante anónimo para completar
+la prueba.
+
+La consulta independiente confirmó cero fixtures. Se retiraron de inmediato
+el gate, su token y `GROQ_API_KEY`; el proveedor volvió a `off`. El candidato
+limpio `6ae48d2f63ab90b1cd1fc33a` respondió `200` en salud, `404` para la
+función retirada y `404` para el `POST` B5. Las nueve tablas de control
+permanecieron en cero. Por tanto, el gate combinado continúa pendiente y este
+intento no cuenta como ejecución de proveedor.
+
+### Gate aislado de Structured Outputs
+
+Para separar el contrato del proveedor de la conexión runtime se añadió un
+gate sin PostgreSQL que reutiliza el adaptador productivo, exige consentimiento
+exacto y realiza una única llamada con evidencia sintética. El 30 de octubre
+de 2026 aprobó con `openai/gpt-oss-20b`, 692 tokens de entrada y 656 de salida;
+la respuesta superó JSON Schema estricto, Zod, scope de fuente y verificación
+literal de citas. No se imprimieron prompts ni resultados.
+
+Este resultado cierra el defecto `INVALID_ANALYSIS_SCHEMA` del proveedor de
+forma aislada, pero no sustituye el recorrido combinado HTTPS + background
+worker + PostgreSQL. B5 y su cohorte permanecen apagados hasta repetir ese
+recorrido de extremo a extremo con transporte seguro de credenciales.

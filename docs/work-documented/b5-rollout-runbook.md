@@ -59,6 +59,19 @@ npm run test:b5-ollama-provider-gate
 
 Este gate mutante rechaza tanto PostgreSQL como Ollama remotos. Crea un expediente y una fuente pública completamente sintéticos, procesa un job real con el worker de dominio, exige contrato/citas válidas y limpia todos los fixtures. No sustituye la prueba del dispatcher HTTPS ni autoriza exponer el puerto 11434.
 
+Para validar únicamente el contrato Structured Outputs de Groq, sin abrir
+PostgreSQL ni el dispatcher:
+
+```powershell
+$env:TERRAQO_GROQ_PROVIDER_TESTS = "terraqo:b5-groq-synthetic-provider-contract"
+npm run test:b5-groq-provider-contract
+```
+
+El gate realiza una sola llamada con evidencia sintética, usa exactamente el
+adaptador y el schema de producción y vuelve a validar scope y citas. Solo
+registra modelo y conteos de tokens; nunca imprime clave, prompt ni salida. No
+sustituye el gate combinado de staging.
+
 Con Groq u OpenAI configurado en el Site ID aislado, pero manteniendo
 `TERRAQO_EVIDENCE_ANALYSIS_V1=false`, el recorrido remoto de proveedor y
 dispatcher se ejecuta con:

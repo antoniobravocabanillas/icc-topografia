@@ -68,6 +68,7 @@
     "check:b5-schema-drift": "tsx scripts/check-b5-schema-drift.ts",
     "test:b5-multiuser-gate": "node --conditions=react-server --import tsx scripts/test-b5-multiuser-gate.ts",
     "test:b5-ollama-provider-gate": "node --conditions=react-server --import tsx scripts/test-b5-ollama-provider-gate.ts",
+    "test:b5-groq-provider-contract": "node --conditions=react-server --import tsx scripts/test-b5-groq-provider-contract.ts",
     "test:b5-browser-accessibility": "node --conditions=react-server --import tsx scripts/test-b5-browser-accessibility.ts",
     "test:platform-staging-http": "node --conditions=react-server --import tsx scripts/test-platform-staging-http.ts",
     "test:platform-staging-b3-http": "node --conditions=react-server --import tsx scripts/test-platform-staging-b3-http.ts",
