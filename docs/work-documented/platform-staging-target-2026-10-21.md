@@ -102,6 +102,10 @@ Netlify `terraqo-platform-staging`:
   `6ae424f68bb42eedf27df92e` (revision `0979d71`).
 - Portada profesional desacoplada del workspace comercial publico:
   `6ae42ae7786a4cd557f6fad4` (revision `909131e`).
+- Guard de superficies URL aisladas:
+  `6ae42d75179ec9a602d9993b` (revision `f8243f3`).
+- Callbacks de verificacion y cambio de correo aislados:
+  `6ae42f40f8d72f7d408e28b7` (revision `62d3f73`).
 - URL validada: `https://terraqo-platform-staging.netlify.app`.
 
 Se configuraron la identidad no secreta de Supabase, URLs del sitio y los nueve
@@ -251,6 +255,9 @@ los restaura en `finally`.
 - El cockpit profesional `/portal` respondio autenticado aun sin workspace
   comercial publico; la experiencia historica y su PDF siguieron visibles en
   `/portal/experiencias`, con cero errores y cero warnings de consola.
+- Los redirects de verificacion de correo y cambio de correo apuntan al host
+  canonico de staging; los enlaces Profesional y Empresa permanecen en el
+  mismo origen y `/api/auth/providers` expone unicamente `credentials`.
 
 El E2E activo de proveedor B5, accesibilidad fisica, dispatcher HTTPS,
 rollback observado y firmas siguen pendientes; por ello el release permanece

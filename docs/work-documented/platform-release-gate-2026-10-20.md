@@ -313,8 +313,8 @@ este release.
 5. [Completado] `npm run check:b5-schema-drift`: solo los dos artefactos
    full-text documentados.
 6. [Completado] Desplegar exactamente la revision candidata con flags
-   controlados. La revision vigente es `909131e`, deploy
-   `6ae42ae7786a4cd557f6fad4` en el sitio aislado, con B1-B4 activos, B5
+   controlados. La revision vigente es `62d3f73`, deploy
+   `6ae42f40f8d72f7d408e28b7` en el sitio aislado, con B1-B4 activos, B5
    apagado y proveedor IA `off`. La revision `0979d71` y su deploy
    `6ae424f68bb42eedf27df92e` conservan la evidencia del flujo remoto de
    archivos. Las revisiones y deploys anteriores se mantienen como historial
@@ -336,6 +336,9 @@ este release.
    sin depender del workspace comercial publico; `/portal/experiencias`
    mantiene la evidencia adjunta y la consola del navegador termino con cero
    errores y cero warnings.
+   Site, Portal, Admin, API y Auth quedaron fijados al mismo host de staging.
+   Los redirects no mutantes de verificacion y cambio de correo regresan a ese
+   host, mientras OAuth conserva exclusivamente el proveedor `credentials`.
 
 ### Fase C - activacion por cohortes
 
