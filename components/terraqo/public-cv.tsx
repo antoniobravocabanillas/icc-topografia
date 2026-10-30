@@ -120,7 +120,7 @@ export function isPublicCvSection(value: string): value is PublicCvSection {
 
 function formatDate(date?: Date | null, options: Intl.DateTimeFormatOptions = { day: "2-digit", month: "short", year: "numeric" }) {
   if (!date) return "Fecha por confirmar";
-  return new Intl.DateTimeFormat("es-PE", options).format(date).replace(".", "");
+  return new Intl.DateTimeFormat("es-PE", { ...options, timeZone: "America/Lima" }).format(date).replace(".", "");
 }
 
 function formatPeriod(start?: Date | null, end?: Date | null) {
@@ -208,13 +208,7 @@ function verifiedDocumentCount(profile: PublicCvProfile) {
 }
 
 function publicEvidenceCount(profile: PublicCvProfile) {
-  return profile.worklogs.reduce((total, worklog) => total + 1 + worklog.evidenceUrls.length + worklog.media.length, 0);
-}
-
-function validationScore(profile: PublicCvProfile) {
-  const total = Math.max(1, profile.experiences.length + profile.worklogs.length);
-  const validated = profile.experiences.filter((item) => item.verifiedByTerraqo).length + profile.worklogs.filter((item) => item.validations.length > 0 || item.evidenceStatus === "VERIFIED").length;
-  return Math.round((validated / total) * 100);
+  return profile.worklogs.reduce((total, worklog) => total + worklog.evidenceUrls.length + worklog.media.length, 0);
 }
 
 function latestActivity(profile: PublicCvProfile) {
@@ -295,8 +289,8 @@ export function PublicCVPage({ profile }: PublicCVPageProps) {
               <div className="mt-7 border-t border-white/10 pt-7">
                 <MetricStrip
                   experienceLabel={formatExperienceDuration(totalExperienceMonths)}
-                  projects={projects.length || profile.experiences.length}
-                  validation={validationScore(profile)}
+                  projects={projects.length}
+                  validation={`${profile.experiences.filter(item => item.verifiedByTerraqo || item.verificationStatus === "APPROVED").length} de ${profile.experiences.length}`}
                   evidence={publicEvidenceCount(profile)}
                   lastActivity={lastActivity}
                 />
@@ -805,37 +799,26 @@ function PublicCvProjectsPage({ profile, username, projects }: { profile: Public
 }
 
 function VerificationPanel({ profile, verifiedDocs, username }: { profile: PublicCvProfile; verifiedDocs: number; username: string }) {
-  const verifiedExperiences = profile.experiences.filter((experience) => experience.verifiedByTerraqo).length;
+  const verifiedExperiences = profile.experiences.filter((experience) => experience.verifiedByTerraqo || experience.verificationStatus === "APPROVED").length;
   const approvedWorklogs = profile.worklogs.filter((worklog) => worklog.validations.length > 0 || worklog.evidenceStatus === "VERIFIED").length;
   const items = [
-    { label: "Identidad verificada", detail: profile.identityVerificationStatus === "VERIFIED" ? "DNI validado" : "Pendiente de validación", done: profile.identityVerificationStatus === "VERIFIED", icon: IdCard },
+    { label: "Identidad", detail: profile.identityVerificationStatus === "VERIFIED" ? "DNI validado" : "Pendiente de validación", done: profile.identityVerificationStatus === "VERIFIED", icon: IdCard },
     { label: "Documentos revisados", detail: `${verifiedDocs} de ${profile.documents.length || 0} documentos`, done: verifiedDocs > 0, icon: FileCheck2 },
-    { label: "Experiencia validada", detail: `${verifiedExperiences} experiencias`, done: verifiedExperiences > 0, icon: BriefcaseBusiness },
-    { label: "Actividad comprobada", detail: `${approvedWorklogs} registros y evidencias`, done: approvedWorklogs > 0, icon: ClipboardCheck }
+    { label: "Experiencia validada", detail: `${verifiedExperiences} de ${profile.experiences.length} experiencias`, done: verifiedExperiences > 0, icon: BriefcaseBusiness },
+    { label: "Actividad revisada", detail: `${approvedWorklogs} de ${profile.worklogs.length} registros`, done: approvedWorklogs > 0, icon: ClipboardCheck }
   ];
-  const completed = items.filter((item) => item.done).length;
-  const trustScore = Math.round((completed / items.length) * 100);
-  const trustLevel = trustScore === 100 ? "Verificado" : trustScore >= 75 ? "Avanzado" : trustScore >= 50 ? "En desarrollo" : "Inicial";
 
   return (
     <aside className="rounded-[18px] border border-[#488ac9]/35 bg-[#07111f]/82 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_18px_45px_rgba(0,0,0,0.22)]">
       <h2 className="flex items-center gap-3 font-mono text-[11px] font-black uppercase tracking-[0.12em] text-white/80"><ShieldCheck className="h-5 w-5 text-[#488ac9]" />Confianza y verificación</h2>
-      <div className="mt-5 text-center">
-        <p className="text-xs font-semibold text-white/50">Tu nivel de confianza</p>
-        <p className="mt-1 font-display text-sm font-black uppercase tracking-[0.12em] text-[#25c0d5]">{trustLevel}</p>
-        <div className="relative mx-auto mt-4 grid h-28 w-28 place-items-center rounded-full" role="img" aria-label={`${trustScore}% de nivel de confianza`} style={{ background: `conic-gradient(#25c0d5 ${trustScore * 3.6}deg, rgba(72,138,201,0.18) 0deg)` }}>
-          <span className="absolute inset-[9px] rounded-full border border-white/[0.06] bg-[#07111f]" />
-          <strong className="relative font-display text-3xl font-black text-white">{trustScore}%</strong>
-        </div>
-        <p className="mt-3 text-xs font-semibold text-white/60">{completed} de {items.length} áreas completadas</p>
-      </div>
+      <p className="mt-4 text-xs leading-6 text-white/65">Consulta qué información cuenta con revisión. Cada respaldo se limita al documento, experiencia o registro correspondiente.</p>
       <div className="mt-5 space-y-2 border-t border-white/10 pt-4">
         {items.map((item) => (
           <div key={item.label} className="grid grid-cols-[22px_1fr_20px] items-center gap-2.5 rounded-lg px-1 py-1.5" title={item.detail}>
             <span className={item.done ? "text-[#25c0d5]" : "text-[#d99a2b]"}><item.icon className="h-4 w-4" /></span>
-            <strong className="text-xs font-bold text-white/70">{item.label}</strong>
+            <div><strong className="text-xs font-semibold text-white/85">{item.label}</strong><p className="mt-1 text-xs text-white/65">{item.detail}</p></div>
             <span className={item.done ? "text-[#25c0d5]" : "text-[#d99a2b]"} title={item.done ? "Validado" : "Pendiente"}>
-              <CheckCircle2 className="h-4 w-4" />
+              {item.done ? <CheckCircle2 className="h-4 w-4" /> : <Clock3 className="h-4 w-4" />}
             </span>
           </div>
         ))}
@@ -845,12 +828,12 @@ function VerificationPanel({ profile, verifiedDocs, username }: { profile: Publi
   );
 }
 
-function MetricStrip({ experienceLabel, projects, validation, evidence, lastActivity }: { experienceLabel: string; projects: number; validation: number; evidence: number; lastActivity: Date }) {
+function MetricStrip({ experienceLabel, projects, validation, evidence, lastActivity }: { experienceLabel: string; projects: number; validation: string; evidence: number; lastActivity: Date }) {
   const metrics = [
     { label: "Experiencia acumulada", value: experienceLabel, icon: UserRoundCheck },
-    { label: "Proyectos completados", value: projects, icon: FolderKanban },
-    { label: "Experiencias validadas", value: `${validation}%`, icon: Grid2X2 },
-    { label: "Evidencias públicas", value: evidence, icon: ClipboardCheck }
+    { label: "Proyectos vinculados", value: projects, icon: FolderKanban },
+    { label: "Experiencias validadas", value: validation, icon: Grid2X2 },
+    { label: "Archivos y referencias públicas", value: evidence, icon: ClipboardCheck }
   ];
   return (
     <div className="grid grid-cols-2 overflow-hidden rounded-[16px] border border-white/10 bg-[#07111f]/72 md:grid-cols-[repeat(4,1fr)_190px]">

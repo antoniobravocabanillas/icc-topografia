@@ -25,7 +25,7 @@ export function TerraqoPublicFooter() {
             <Link href={`${terraqoDomains.public}/producto`}>Producto</Link>
             <Link href={`${terraqoDomains.public}/automatizacion`}>Automatización</Link>
             <Link href={`${terraqoDomains.public}/membresias`}>Membresías</Link>
-            <Link href={`${terraqoDomains.public}/red`}>Red operativa</Link>
+            <Link href={`${terraqoDomains.public}/red`}>Red profesional</Link>
             <a href={terraqoDomains.portal}>Ingresar</a>
             <Link href={`${terraqoDomains.public}/privacidad`}>Privacidad</Link>
             <Link href={`${terraqoDomains.public}/terminos`}>Términos</Link>

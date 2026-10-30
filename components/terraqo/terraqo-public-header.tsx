@@ -10,7 +10,7 @@ import { terraqoDomains } from "@/lib/terraqo-domains";
 const navItems = [
   { label: "Plataforma", href: "/plataforma" },
   { label: "Producto", href: "/producto" },
-  { label: "Red operativa", href: "/red" },
+  { label: "Red profesional", href: "/red" },
   { label: "Automatización", href: "/automatizacion" },
   { label: "Membresías", href: "/membresias" }
 ];
@@ -20,9 +20,7 @@ export function TerraqoPublicHeader({ tone = "light" }: { tone?: "light" | "dark
   const [open, setOpen] = useState(false);
   const isHome = pathname === "/";
   const resolvedTone = tone === "dark" || isHome ? "dark" : "light";
-  const visibleNavItems = isHome
-    ? navItems.filter((item) => ["/plataforma", "/red", "/membresias"].includes(item.href))
-    : navItems;
+  const visibleNavItems = navItems;
 
   useEffect(() => setOpen(false), [pathname]);
 
@@ -50,12 +48,12 @@ export function TerraqoPublicHeader({ tone = "light" }: { tone?: "light" | "dark
         </Link>
 
         <nav className="tq-desktop-nav" aria-label="Navegación principal de Terraqo">
-          {visibleNavItems.map((item) => <Link key={item.href} href={`${terraqoDomains.public}${item.href}`} aria-current={pathname === item.href ? "page" : undefined}>{isHome && item.href === "/red" ? "Red profesional" : item.label}</Link>)}
+          {visibleNavItems.map((item) => <Link key={item.href} href={`${terraqoDomains.public}${item.href}`} aria-current={pathname === item.href ? "page" : undefined}>{item.label}</Link>)}
         </nav>
 
         <div className="tq-header-actions">
           <Link href={`${terraqoDomains.portal}/cuenta`} prefetch={false} className="tq-login-link"><LogIn aria-hidden="true" /> Entrar</Link>
-          <Link href={isHome ? `${terraqoDomains.portal}/registro` : `${terraqoDomains.public}/contacto?asunto=demo-terraqo`} className="tq-header-cta">{isHome ? "Crear mi identidad" : "Solicitar acceso"} <ArrowUpRight aria-hidden="true" /></Link>
+          <Link href={`${terraqoDomains.portal}/registro`} className="tq-header-cta">Crear mi identidad <ArrowUpRight aria-hidden="true" /></Link>
           <button type="button" className="tq-menu-button" aria-label={open ? "Cerrar menú" : "Abrir menú"} aria-expanded={open} aria-controls="terraqo-mobile-navigation" onClick={() => setOpen((value) => !value)}>
             {open ? <X /> : <Menu />}
           </button>
@@ -65,7 +63,8 @@ export function TerraqoPublicHeader({ tone = "light" }: { tone?: "light" | "dark
       {open ? (
         <nav id="terraqo-mobile-navigation" className="tq-mobile-nav" aria-label="Navegación móvil de Terraqo">
           <div className="tq-public-wrap">
-            {visibleNavItems.map((item) => <Link key={item.href} href={`${terraqoDomains.public}${item.href}`} onClick={() => setOpen(false)}>{isHome && item.href === "/red" ? "Red profesional" : item.label}<ArrowUpRight /></Link>)}
+            {visibleNavItems.map((item) => <Link key={item.href} href={`${terraqoDomains.public}${item.href}`} onClick={() => setOpen(false)}>{item.label}<ArrowUpRight /></Link>)}
+            <Link href={`${terraqoDomains.portal}/registro`} onClick={() => setOpen(false)}>Crear mi identidad <ArrowUpRight /></Link>
             <Link href={`${terraqoDomains.portal}/cuenta`} prefetch={false} onClick={() => setOpen(false)}>Entrar a Terraqo <LogIn /></Link>
           </div>
         </nav>
