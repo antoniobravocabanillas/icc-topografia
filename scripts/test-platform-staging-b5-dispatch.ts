@@ -71,6 +71,7 @@ async function waitForTerminalJob(
 async function main() {
   const target = confirmedStagingTarget();
   process.env.DATABASE_URL = target.databaseUrl;
+  process.env.TERRAQO_EVIDENCE_ANALYSIS_MAX_ATTEMPTS = "1";
 
   const [{ prisma }, analysis] = await Promise.all([
     import("@/lib/prisma"),
@@ -144,7 +145,6 @@ async function main() {
       data: {
         professionalProfileId: profile.id,
         authorId: professional.id,
-        workspaceId: workspace.id,
         title: "Replanteo sintetico de ejes",
         summary,
         outcome: "Ejes A y B senalizados para revision.",
@@ -221,7 +221,7 @@ async function main() {
       },
       select: { id: true },
     });
-    const source = await prisma.terraqoEvaluationSource.create({
+    await prisma.terraqoEvaluationSource.create({
       data: {
         dossierId: dossier.id,
         worklogRevisionId: revisionId,
@@ -231,31 +231,24 @@ async function main() {
       },
       select: { id: true },
     });
-    const job = await prisma.terraqoAnalysisJob.create({
-      data: {
-        workspaceId: workspace.id,
+    // Use the real queue path: its source hash covers the authorized projection,
+    // not just a fixture ID. A fabricated hash is correctly rejected by the worker.
+    const operationKey = randomUUID();
+    const queued = await analysis.queueEvidenceAnalysisJob({
+      actorId: admin.id,
+      workspaceId: workspace.id,
+      operationKey,
+      payload: {
         dossierId: dossier.id,
         purpose: "EVIDENCE_SUMMARY",
-        status: "QUEUED",
-        policyVersion: analysis.EVIDENCE_ANALYSIS_POLICY_VERSION,
-        promptVersion: analysis.EVIDENCE_ANALYSIS_PROMPT_VERSION,
-        sourceSetHash: createHash("sha256").update(source.id).digest("hex"),
-        cacheKey: createHash("sha256").update(`cache-${runId}`).digest("hex"),
-        maxAttempts: 1,
-        createdById: admin.id,
-        operationKey: randomUUID(),
-        operationFingerprint: `b5-dispatch-job-${runId}`,
-        sources: {
-          create: {
-            evaluationSourceId: source.id,
-            worklogRevisionId: revisionId,
-            contentHash,
-            accessKind: "PUBLIC_CV",
-          },
-        },
+        sourceRevisionIds: [revisionId],
+        expectedPolicies: [{ sourceRevisionId: revisionId, contentHash, accessKind: "PUBLIC_CV" }],
       },
-      select: { id: true },
     });
+    const job = queued.job;
+    assert.equal(queued.dispatchRequired, true);
+    assert.equal(job.maxAttempts, 1);
+    assert.equal(job.status, "QUEUED");
 
     const dispatchResponse = await fetch(
       new URL("/.netlify/functions/evidence-analysis-background", target.origin),

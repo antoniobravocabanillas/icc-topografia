@@ -1,10 +1,30 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
+import { createRequire } from "node:module";
 import { platformFlags } from "./lib/platform-staging-environment";
 import { assertStagingCandidate, cloudFailureDiagnostic, stagingCloudBranch, stagingCloudEnvironment, stagingCloudGateEnvironment, stagingCloudOrigin, stagingCloudSite } from "./lib/platform-staging-cloud";
 
 const head = "a".repeat(40);
+const productionGuard = createRequire(import.meta.url)("../plugins/terraqo-staging-gate/production-environment.cjs") as {
+  assertProductionEnvironment: (environment: Record<string, string | undefined>) => void;
+  productionOrigins: Record<string, string>;
+  productionSite: string;
+};
+const productionEnvironment = { ...productionGuard.productionOrigins, SITE_ID: productionGuard.productionSite,
+  CONTEXT: "production", BRANCH: "codex/icc-production-preview", AUTH_TRUST_HOST: "true" };
+productionGuard.assertProductionEnvironment(productionEnvironment);
+for (const key of Object.keys(productionGuard.productionOrigins)) {
+  for (const value of [stagingCloudOrigin, "", "https://secret:password@terraqoglobal.com", "https://terraqoglobal.com/redirect"]) {
+    assert.throws(() => productionGuard.assertProductionEnvironment({ ...productionEnvironment, [key]: value }), (error: Error) => !error.message.includes(value || "secret"));
+  }
+}
+for (const change of [{ AUTH_URL: stagingCloudOrigin }, { NEXTAUTH_URL: "https://portal.terraqoglobal.com" }, { AUTH_TRUST_HOST: "false" },
+  { BRANCH: stagingCloudBranch }, { PLATFORM_STAGING_CONFIRM: "staging" }, { B5_GATE_DATABASE_URL: "secret" }, { TERRAQO_STAGING_MUTATING_TESTS: "synthetic" }]) {
+  assert.throws(() => productionGuard.assertProductionEnvironment({ ...productionEnvironment, ...change }));
+}
+productionGuard.assertProductionEnvironment({ SITE_ID: stagingCloudSite, CONTEXT: "production" });
+productionGuard.assertProductionEnvironment({ SITE_ID: productionGuard.productionSite, CONTEXT: "deploy-preview" });
 const deployId = "b".repeat(24);
 const env: NodeJS.ProcessEnv = {
   NODE_ENV: "production",
@@ -66,6 +86,7 @@ for (const wrong of [{ ...marker, commit: "c".repeat(40) }, { ...marker, deployI
 const diagnostic = cloudFailureDiagnostic(`secret ${env.B5_GATE_DATABASE_URL} password session=private\nTimeoutError ERR_ASSERTION\nat test-platform-staging-b3-http.ts:220:5`);
 assert.deepEqual(diagnostic, { locations: ["test-platform-staging-b3-http.ts:220:5"], codes: ["TimeoutError", "ERR_ASSERTION"] });
 assert.equal(JSON.stringify(diagnostic).includes("private"), false);
+assert.deepEqual(cloudFailureDiagnostic("El worker termino en SOURCE_REVOKED/SOURCE_REVOKED. private-token"), { locations: [], codes: ["SOURCE_REVOKED"] });
 
 let spawns = 0;
 let failures = 0;
@@ -73,7 +94,7 @@ const pluginProcess = { env: { SITE_ID: "production", PLATFORM_STAGING_CLOUD_CON
 const pluginModule = { exports: {} as { onPreBuild: (context: unknown) => void; onSuccess: (context: unknown) => void } };
 runInNewContext(readFileSync("plugins/terraqo-staging-gate/index.cjs", "utf8"), {
   module: pluginModule, process: pluginProcess,
-  require: (name: string) => name === "node:child_process" ? { spawnSync: () => { spawns++; return { status: 0 }; } } : { resolve: (value: string) => value },
+  require: (name: string) => name === "./production-environment.cjs" ? productionGuard : name === "node:child_process" ? { spawnSync: () => { spawns++; return { status: 0 }; } } : { resolve: (value: string) => value },
 });
 const context = { utils: { build: { failBuild: () => { failures++; } } } };
 pluginModule.exports.onPreBuild(context); pluginModule.exports.onSuccess(context);
@@ -84,4 +105,10 @@ assert.equal(failures, 1); assert.equal(spawns, 0);
 pluginProcess.env.SITE_ID = stagingCloudSite;
 pluginModule.exports.onPreBuild(context); pluginModule.exports.onSuccess(context);
 assert.equal(spawns, 2);
-console.log("Staging cloud contract PASS: exact site/branch/commit/deploy, per-phase consent, isolated credentials, candidate readback and production no-op.");
+Object.assign(pluginProcess.env, productionEnvironment, { PLATFORM_STAGING_CLOUD_CONFIRM: "" });
+pluginModule.exports.onPreBuild(context);
+assert.equal(failures, 1); assert.equal(spawns, 2);
+Object.assign(pluginProcess.env, { NEXT_PUBLIC_PORTAL_URL: stagingCloudOrigin });
+pluginModule.exports.onPreBuild(context);
+assert.equal(failures, 2); assert.equal(spawns, 2);
+console.log("Staging cloud contract PASS: exact site/branch/commit/deploy, per-phase consent, isolated credentials, candidate readback and production destination guard.");

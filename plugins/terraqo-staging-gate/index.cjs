@@ -1,9 +1,14 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Netlify loads this local plugin through its CommonJS entrypoint. */
 const { spawnSync } = require("node:child_process");
 const { resolve } = require("node:path");
+const { assertProductionEnvironment } = require("./production-environment.cjs");
 const stagingSite = "6b8c43fb-6083-450a-9b85-46a820fb6358";
 
 function run(stage, { utils }) {
+  if (stage === "prepare") {
+    try { assertProductionEnvironment(process.env); }
+    catch (error) { utils.build.failBuild(error.message); return; }
+  }
   if (process.env.SITE_ID !== stagingSite) {
     if (process.env.PLATFORM_STAGING_CLOUD_CONFIRM) utils.build.failBuild("Staging gate configured on a different site.");
     return;
