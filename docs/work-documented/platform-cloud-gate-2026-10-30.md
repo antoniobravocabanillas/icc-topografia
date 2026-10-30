@@ -1,5 +1,9 @@
 # Gate remoto de plataforma con secretos de staging
 
+**Corte posterior:** B4, B5 readiness y dispatcher/proveedor ya aprobaron. El
+detalle de candidatos, limpieza, correcciones y limites esta en
+`platform-launch-readback-2026-10-30.md`. No equivale a publicacion productiva.
+
 ## Alcance
 
 Transporte alternativo al archivo local ausente: Netlify ejecuta las mismas

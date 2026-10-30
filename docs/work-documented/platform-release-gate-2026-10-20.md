@@ -2,6 +2,11 @@
 
 ## Dictamen
 
+**Corte vigente posterior:** consultar `platform-launch-readback-2026-10-30.md`.
+B1-B5 remoto aprobado, 46 contratos, CI verde y revisiones complementarias
+selladas. Lanzamiento pendiente de ensayo productivo, respaldo/recuperacion y
+condiciones operativas. Los porcentajes y pendientes siguientes son historicos.
+
 **Continuacion de accesibilidad del 30 de octubre:** el acceso publico pasa
 34 estados en Chromium sobre build local aislado (incluye movimiento reducido,
 teclado, 320 px y texto al 200 %). Se corrige tambien la disposicion movil del

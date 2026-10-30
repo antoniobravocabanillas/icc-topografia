@@ -119,7 +119,9 @@ async function main() {
 
   try {
     await writeFile(passwordFile, password, { encoding: "utf8", flag: "wx" });
-    await run(initdb, ["-D", dataDirectory, "-U", databaseUser, "-A", "scram-sha-256", "--pwfile", passwordFile, "--no-sync"], { cwd: root });
+    // Windows can default to WIN1252. Match the application's UTF-8 data,
+    // including names, Unicode evidence and emoji, on every rehearsal host.
+    await run(initdb, ["-D", dataDirectory, "-U", databaseUser, "-A", "scram-sha-256", "--pwfile", passwordFile, "--encoding=UTF8", "--no-sync"], { cwd: root });
     logHandle = await open(logPath, "a");
     postgres = spawn(
       postgresExecutable,
@@ -182,6 +184,8 @@ async function main() {
     }
     await logHandle?.close();
     if (!executionError) {
+      assert.equal(path.dirname(path.resolve(temporary)), path.resolve(os.tmpdir()));
+      assert.ok(path.basename(temporary).startsWith("terraqo-staging-rehearsal-v2-"));
       await rm(temporary, { recursive: true, force: true, maxRetries: 10, retryDelay: 250 });
     } else {
       console.error(`El ensayo se preservo para diagnostico en ${temporary}.`);

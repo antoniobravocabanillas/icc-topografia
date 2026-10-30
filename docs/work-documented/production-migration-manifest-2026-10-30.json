@@ -1,0 +1,88 @@
+{
+  "format": "terraqo-production-migration-review/v1",
+  "sourceCommit": "e6ff153694dc01ab8a2b5848556fa6839626b2af",
+  "candidateCommit": "d28b881cdfcf7576069579a3e00087eb53157a13",
+  "mode": "review-only-not-an-apply-script",
+  "sourceAppliedMigrations": 28,
+  "sourceUnfinishedMigrations": 0,
+  "bootstrapCount": 8,
+  "newMigrationCount": 7,
+  "productionApplied": false,
+  "migrations": [
+    {
+      "name": "20261007114000_cv_publication_operations",
+      "sha256": "aebf3c101fe70e15a59e8da8e046c34460db61350996b1ddb80823b08334b94a",
+      "plannedAction": "reconcile_only_after_fresh_catalog_proof"
+    },
+    {
+      "name": "20261007195600_education_evidence_prerequisites",
+      "sha256": "32f3390c670bddffc0f7a00f6f5a82175af8f73ae64bf10be4ff8c366861c6d7",
+      "plannedAction": "reconcile_only_after_fresh_catalog_proof"
+    },
+    {
+      "name": "20261008015500_education_evidence_withdrawal",
+      "sha256": "f1cb6984b9d2aecee5057df77a981dab9ffc50d36849ce64474f5298fa279300",
+      "plannedAction": "reconcile_only_after_fresh_catalog_proof"
+    },
+    {
+      "name": "20261008051000_native_worklog_operations",
+      "sha256": "793ef74992f0d91e311cd692402884dc6db13777427c57298ed1829e9961d9c9",
+      "plannedAction": "reconcile_only_after_fresh_catalog_proof"
+    },
+    {
+      "name": "20261008161000_native_worklog_decision",
+      "sha256": "48443fa878589145aa5f19bb5ac680acebbee12a3cd9248179b65fd4bb708686",
+      "plannedAction": "reconcile_only_after_fresh_catalog_proof"
+    },
+    {
+      "name": "20261008162500_native_worklog_content_key",
+      "sha256": "53a30a11ef03631c9827ed303f409dae5ee51e8331fe6f9a822f68dd239adbb4",
+      "plannedAction": "reconcile_only_after_fresh_catalog_proof"
+    },
+    {
+      "name": "20261008232500_native_worklog_authority_snapshot",
+      "sha256": "56390cab35263715b382b1e7f5c180abba043dfe4c0f371711ab167d05a33ace",
+      "plannedAction": "reconcile_only_after_fresh_catalog_proof"
+    },
+    {
+      "name": "20261009035000_native_worklog_first_decision",
+      "sha256": "734d3af1c5e165cdb0f573375e273b730e09523e0a2ac116f60644ad0e236a0c",
+      "plannedAction": "reconcile_only_after_fresh_catalog_proof"
+    },
+    {
+      "name": "20261016113000_worklog_archive_cursor_index",
+      "sha256": "1c087e22e5971d76df58674a550c51d03f5cd94f304285945fd2edcb45c79327",
+      "plannedAction": "apply_in_maintenance_after_gates"
+    },
+    {
+      "name": "20261016143000_worklog_full_text_search",
+      "sha256": "0225064b5112e0b91debf1cd833a0f8f990faa6567f081f5981deb6b2132df2e",
+      "plannedAction": "apply_in_maintenance_after_gates"
+    },
+    {
+      "name": "20261016183000_worklog_revisions_work_cases",
+      "sha256": "eb7bdb7ae7709a202052e978c2abcd1f41ab676e32ff156fb592b29de8b4d208",
+      "plannedAction": "apply_in_maintenance_after_gates"
+    },
+    {
+      "name": "20261017120000_scoped_sharing_endorsements",
+      "sha256": "10acb5ad3e553e59da248fd734abb1cbf610e3ec48736b61c80ef9f25a37e1a3",
+      "plannedAction": "apply_in_maintenance_after_gates"
+    },
+    {
+      "name": "20261017230000_discovery_needs",
+      "sha256": "8a61cad9b6e16abf34903f760fd0ffdde5992fc753dd165d21f4bd2720e89444",
+      "plannedAction": "apply_in_maintenance_after_gates"
+    },
+    {
+      "name": "20261018153000_evidence_analysis_jobs",
+      "sha256": "fd68f7e35136fa569c434c773a574dc146ecc8ca2172d40ee503d999599d06fe",
+      "plannedAction": "apply_in_maintenance_after_gates"
+    },
+    {
+      "name": "20261020143000_share_item_media_snapshot",
+      "sha256": "5942c4826669b236fc4e09e1e5fdf97f123e38724c5d12b08fecdb5ab25418fd",
+      "plannedAction": "apply_in_maintenance_after_gates"
+    }
+  ]
+}

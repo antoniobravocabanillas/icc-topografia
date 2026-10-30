@@ -2,6 +2,12 @@
 
 Fecha: 30 de octubre de 2026. Daybreak omitido por indicacion del usuario.
 
+**Corte posterior:** B1-B5 ya tienen gates remotos aprobados; el candidato de
+aplicacion es `d28b881`. Se corrigieron destinos de entorno productivo y se
+detectaron los prerrequisitos reales del ledger/migraciones. Estado consolidado,
+limites de cada prueba y siguiente bloque: `platform-launch-readback-2026-10-30.md`.
+Las secciones siguientes conservan el historial y no son la lista actual de pendientes.
+
 ## Continuacion: acceso publico y control de plantillas
 
 El parche posterior a `b390c3c` corrige el registro invisible con movimiento
