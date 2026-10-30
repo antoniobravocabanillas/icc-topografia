@@ -357,7 +357,7 @@ type JobSourceRecord = {
   accessSnapshot: Prisma.JsonValue;
 };
 
-async function authorizedSourceProjection(actorId: string, source: JobSourceRecord): Promise<EvidenceAnalysisSource | null> {
+async function authorizedSourceProjection(actorId: string, source: JobSourceRecord, client: Prisma.TransactionClient = prisma): Promise<EvidenceAnalysisSource | null> {
   const baseSelect = {
     id: true,
     contentHash: true,
@@ -377,7 +377,7 @@ async function authorizedSourceProjection(actorId: string, source: JobSourceReco
     },
   } satisfies Prisma.TerraqoWorklogRevisionSelect;
 
-  const revision = await prisma.terraqoWorklogRevision.findFirst({
+  const revision = await client.terraqoWorklogRevision.findFirst({
     where: {
       id: source.worklogRevisionId,
       contentHash: source.contentHash,
@@ -393,13 +393,13 @@ async function authorizedSourceProjection(actorId: string, source: JobSourceReco
     !revision.worklog.professionalProfile.liveCvEnabled
   ) return null;
   if (source.accessKind === "PUBLIC_CV") {
-    const publicRevision = await prisma.terraqoWorklogRevision.findFirst({
+    const publicRevision = await client.terraqoWorklogRevision.findFirst({
       where: { id: revision.id, currentFor: { visibility: "PUBLIC", lifecycle: "PUBLISHED", deletedAt: null } },
       select: { id: true },
     });
     if (!publicRevision) return null;
   } else {
-    const item = await prisma.terraqoShareCollectionItem.findFirst({
+    const item = await client.terraqoShareCollectionItem.findFirst({
       where: {
         revisionId: revision.id,
         collection: source.accessKind === "PUBLIC_SELECTION"
@@ -561,7 +561,10 @@ export async function queueEvidenceAnalysisJob(input: {
       accessReferenceId: source.accessReferenceId,
       accessSnapshot: source.accessSnapshot,
     }));
-    const authorized = await Promise.all(sourceRecords.map((source) => authorizedSourceProjection(input.actorId, source)));
+    // Authorization and the queued source hash must observe the same transaction.
+    // A global-client read here also needs a second pooled connection while the
+    // first is locked, causing avoidable queue timeouts on serverless runtimes.
+    const authorized = await Promise.all(sourceRecords.map((source) => authorizedSourceProjection(input.actorId, source, tx)));
     if (authorized.some((source) => !source)) throw new EvidenceAnalysisError("SOURCE_REVOKED", "Alguna fuente fue retirada o perdió autorización.", 409);
     const authorizedSources = authorized.filter((source): source is EvidenceAnalysisSource => Boolean(source));
 
@@ -617,7 +620,7 @@ export async function queueEvidenceAnalysisJob(input: {
       data: { analysisStatus: dossierAnalysisStatus, analysisFailureCode: null, analysisUpdatedAt: new Date() },
     });
     return { job, dispatchRequired: !cached };
-  }, { isolationLevel: "Serializable" });
+  }, { isolationLevel: "Serializable", maxWait: 5_000, timeout: 15_000 });
   emitTerraqoOperationalEvent("analysis_queued", { jobId: result.job.id, workspaceId: input.workspaceId, dossierId: result.job.dossierId, status: result.job.status });
   return result;
 }

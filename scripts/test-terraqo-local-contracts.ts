@@ -41,6 +41,7 @@ const contractScripts = [
   "test:collaboration-contract",
   "test:closure-contract",
   "test:evidence-analysis-contract",
+  "test:evidence-analysis-queue",
   "test:recovery-observability-contract",
   "test:product-entitlements-contract",
   "test:public-checkout-pricing",

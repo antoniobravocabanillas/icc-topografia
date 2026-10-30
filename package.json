@@ -65,6 +65,7 @@
     "test:collaboration-contract": "tsx scripts/test-collaboration-contract.ts",
     "test:closure-contract": "tsx scripts/test-closure-contract.ts",
     "test:evidence-analysis-contract": "node --conditions=react-server --import tsx scripts/test-evidence-analysis-contract.ts",
+    "test:evidence-analysis-queue": "node --conditions=react-server --import tsx scripts/test-evidence-analysis-queue.ts",
     "test:recovery-observability-contract": "node --conditions=react-server --import tsx scripts/test-recovery-observability-contract.ts",
     "test:product-entitlements-contract": "node --conditions=react-server --import tsx scripts/test-product-entitlements-contract.ts",
     "test:public-checkout-pricing": "tsx scripts/test-public-checkout-pricing.ts",
