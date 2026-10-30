@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import {
   platformFlags,
   validatePlatformStagingEnvironment,
@@ -128,5 +130,20 @@ rejectsSupabase({
 rejectsSupabase({
   B5_GATE_DATABASE_URL: `postgresql://postgres.${supabaseRef}:unique-stage-credential@aws-0-sa-east-1.pooler.supabase.com:5432/postgres`,
 }, /PROJECT_REF confirmado/i);
+
+const deployScript = readFileSync(
+  resolve(process.cwd(), "scripts/deploy-platform-staging.ps1"),
+  "utf8",
+);
+const clearOperatorEnvironment = deployScript.indexOf(
+  '[Environment]::SetEnvironmentVariable($name, $null, "Process")',
+);
+const netlifyDeploy = deployScript.indexOf("npx netlify deploy --build");
+const restoreOperatorEnvironment = deployScript.lastIndexOf(
+  "$preflightEnvironment[$name]",
+);
+assert.ok(clearOperatorEnvironment >= 0, "El deploy debe limpiar las variables efimeras del preflight.");
+assert.ok(netlifyDeploy > clearOperatorEnvironment, "La limpieza del entorno debe ocurrir antes del build Netlify.");
+assert.ok(restoreOperatorEnvironment > netlifyDeploy, "El entorno del operador debe restaurarse despues del deploy.");
 
 console.log("Platform staging readiness contract: OK (fail-closed PostgreSQL/Supabase target, flags, cohort and secrets)." );

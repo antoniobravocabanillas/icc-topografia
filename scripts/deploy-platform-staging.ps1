@@ -12,6 +12,45 @@ $envPath = Join-Path $repo ".env"
 $envLocalPath = Join-Path $repo ".env.local"
 $envHoldPath = Join-Path $repo ".env.codex-staging-hold"
 $envLocalHoldPath = Join-Path $repo ".env.local.codex-staging-hold"
+$preflightVariableNames = @(
+  "PLATFORM_STAGING_CONFIRM",
+  "PLATFORM_STAGING_ALLOW_REMOTE",
+  "PLATFORM_STAGING_DATABASE_PROVIDER",
+  "PLATFORM_STAGING_RESOURCE_NAME",
+  "PLATFORM_STAGING_SUPABASE_PROJECT_REF",
+  "PLATFORM_STAGING_DATABASE_ROLE",
+  "PLATFORM_STAGING_ENABLED_FLAGS",
+  "PLATFORM_STAGING_PILOT_WORKSPACE_IDS",
+  "PLATFORM_STAGING_ACTIVATION_CONFIRM",
+  "B5_GATE_DATABASE_URL",
+  "B5_GATE_EXPECTED_DATABASE",
+  "NEXT_PUBLIC_SITE_URL",
+  "NEXT_PUBLIC_PORTAL_URL",
+  "NEXT_PUBLIC_ADMIN_URL",
+  "NEXT_PUBLIC_API_URL",
+  "AUTH_URL",
+  "AUTH_SECRET",
+  "EVIDENCE_ANALYSIS_DISPATCH_SECRET",
+  "TERRAQO_STAGING_DOCUMENT_CLEANUP_SECRET",
+  "TERRAQO_STAGING_BILLING_RECONCILE_SECRET",
+  "TERRAQO_WORKLOG_FTS_V1",
+  "TERRAQO_WORK_CASES_V1",
+  "TERRAQO_SCOPED_SHARING_V1",
+  "TERRAQO_SCOPED_ENDORSEMENTS_V1",
+  "TERRAQO_DISCOVERY_NEEDS_V1",
+  "TERRAQO_CONTEXTUAL_MESSAGING_V1",
+  "TERRAQO_COLLABORATION_V1",
+  "TERRAQO_CLOSURE_V1",
+  "TERRAQO_EVIDENCE_ANALYSIS_V1",
+  "TERRAQO_B5_PILOT_WORKSPACE_IDS",
+  "TERRAQO_EVIDENCE_ANALYSIS_PROVIDER",
+  "TERRAQO_OAUTH_ENABLED",
+  "TERRAQO_TRANSACTIONAL_EMAIL_ENABLED"
+)
+$preflightEnvironment = @{}
+foreach ($name in $preflightVariableNames) {
+  $preflightEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, "Process")
+}
 
 if ($SiteId -ne $expectedSiteId) {
   throw "SiteId no autorizado para este gate de staging."
@@ -45,6 +84,13 @@ try {
     throw "El preflight de staging fallo."
   }
 
+  # El preflight usa confirmaciones y credenciales efimeras del operador. No
+  # deben heredarse al build: Netlify debe resolver exclusivamente las variables
+  # guardadas en el Site ID aislado.
+  foreach ($name in $preflightVariableNames) {
+    [Environment]::SetEnvironmentVariable($name, $null, "Process")
+  }
+
   $movedEnv = $false
   $movedEnvLocal = $false
   try {
@@ -75,5 +121,12 @@ try {
   }
 }
 finally {
+  foreach ($name in $preflightVariableNames) {
+    [Environment]::SetEnvironmentVariable(
+      $name,
+      $preflightEnvironment[$name],
+      "Process"
+    )
+  }
   Pop-Location
 }
