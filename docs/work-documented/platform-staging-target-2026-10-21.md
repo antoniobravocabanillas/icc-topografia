@@ -110,6 +110,9 @@ Netlify `terraqo-platform-staging`:
   `6ae4478b49094462c6cdb4a5` (revision `9e2ea15`).
 - Skip seguro de conciliacion con proveedor apagado y cron final limpio:
   `6ae44a22faa10dea72d3a653` (revision `2f75982`).
+- Polling adaptativo de alertas/mensajes y aislamiento del entorno efimero de
+  preflight antes del build:
+  `6ae44fa4085faf34750b8d15` (revision `782861b`, incluye `938e072`).
 - URL validada: `https://terraqo-platform-staging.netlify.app`.
 
 Se configuraron la identidad no secreta de Supabase, URLs del sitio y los nueve

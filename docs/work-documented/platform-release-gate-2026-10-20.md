@@ -313,8 +313,8 @@ este release.
 5. [Completado] `npm run check:b5-schema-drift`: solo los dos artefactos
    full-text documentados.
 6. [Completado] Desplegar exactamente la revision candidata con flags
-   controlados. La revision vigente es `2f75982`, deploy
-   `6ae44a22faa10dea72d3a653` en el sitio aislado, con B1-B4 activos, B5
+   controlados. La revision vigente es `782861b`, deploy
+   `6ae44fa4085faf34750b8d15` en el sitio aislado, con B1-B4 activos, B5
    apagado y proveedor IA `off`. La revision `0979d71` y su deploy
    `6ae424f68bb42eedf27df92e` conservan la evidencia del flujo remoto de
    archivos. Las revisiones y deploys anteriores se mantienen como historial
@@ -348,8 +348,22 @@ este release.
   secretos productivos desde despliegues no productivos antes de realizar I/O.
 - `2f75982` trata facturacion no configurada como un skip autenticado antes de
   consultar PostgreSQL; los modos `test` y `live` conservan validacion estricta.
-- `npm run test:terraqo-local-contracts`: 39/39 contratos no mutantes.
+- `938e072` reemplaza cinco intervalos independientes por un scheduler comun:
+  evita solicitudes concurrentes, pausa cuando la pagina esta oculta u offline,
+  refresca de inmediato al recuperar foco/conectividad y aplica backoff acotado
+  de 4 a 8 segundos para alertas y de 3 a 6 segundos para conversaciones. Los
+  eventos nuevos conservan sonido y se corrigio el caso de un primer evento
+  posterior a un pulso inicialmente vacio.
+- `782861b` impide que confirmaciones o credenciales efimeras del preflight se
+  hereden al build local de Netlify. El build recibe solo las variables
+  almacenadas en el Site ID aislado y el entorno del operador se restaura en
+  `finally`.
+- `npm run test:terraqo-local-contracts`: 40/40 contratos no mutantes.
 - `npm run build`: aprobado, 100 paginas generadas.
+- Deploy de staging `6ae44fa4085faf34750b8d15`: estado `ready`; salud, home y
+  cuenta responden 200, los pulsos privados responden 401 sin sesion y Auth.js
+  expone solo `credentials`. Playwright confirmo cero errores de consola en home
+  y cuenta; permanece un warning no bloqueante de preload CSS.
 - Ciclo natural de cron observado a las 02:45 America/Lima sobre el deploy
   `6ae44a22faa10dea72d3a653`: limpieza educativa, background worker,
   limpieza documental, reclamaciones y conciliacion ejecutaron sin warnings ni
