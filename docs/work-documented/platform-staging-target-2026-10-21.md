@@ -471,3 +471,21 @@ Este resultado cierra el defecto `INVALID_ANALYSIS_SCHEMA` del proveedor de
 forma aislada, pero no sustituye el recorrido combinado HTTPS + background
 worker + PostgreSQL. B5 y su cohorte permanecen apagados hasta repetir ese
 recorrido de extremo a extremo con transporte seguro de credenciales.
+
+### Candidato de staging con gate aislado
+
+El commit `8049aa5` se publicó únicamente en el Site ID aislado mediante el
+deploy `6ae48fb98b1bbb5e470b8d01`. La URL estable y la URL inmutable
+respondieron `200` en `/api/health`; el `POST /api/v1/analysis-jobs` y la
+función efímera retirada respondieron `404`. B5 permaneció en `false`, el
+proveedor en `off`, sin cohorte, `GROQ_API_KEY` ni token temporal.
+
+El build local de Netlify no puede materializar valores marcados como secretos
+y por ello el sitemap registró la recuperación `safe-db` al ver la máscara de
+`DATABASE_URL`. Esto no se tomó como prueba de runtime. Después del despliegue,
+los workers programados conectaron a PostgreSQL y reportaron colas vacías; una
+consulta independiente a Supabase confirmó cero filas en usuarios, workspaces,
+perfiles, bitácoras, casos, colecciones, necesidades, expedientes y jobs de
+análisis. `/api/categories` devolvió `500` porque la base aislada sigue sin el
+workspace público requerido, no por pérdida de conexión. No se sembraron datos
+ni se aplicó DDL.
