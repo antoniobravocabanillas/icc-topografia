@@ -31,3 +31,20 @@ Netlify preparo Chromium tras retirar la instalacion privilegiada de paquetes
 del sistema. El siguiente fallo fue agotamiento del heap de Node durante
 TypeScript; se asignan 4096 MiB al proceso de build. No se cambia memoria de
 funciones serverless, plan contratado ni datos de clientes.
+
+## Renderizado de correo
+
+Se actualizo `@react-email/render` a 2.2.0. Esta version usa `html-to-text` 10
+y elimina `deepmerge` de la cadena de dependencias de produccion del correo.
+La auditoria de produccion queda en cuatro avisos bajos, todos asociados al
+mismo advisory de SimpleWebAuthn y sus dependientes Auth.js; no hay avisos
+moderados, altos ni criticos. No se forzo una version incompatible de WebAuthn.
+
+El contrato renderiza las plantillas reales de verificacion por enlace,
+codigo y perfil pendiente/verificado. Comprueba escape HTML, enlace completo
+en texto plano, codigo con cero inicial y estado correcto de verificacion.
+No envia correo. Aprobaron contrato, TypeScript, lint focalizado y la
+resolucion reproducible de npm 10 (`ci --dry-run`).
+
+Referencia de la actualizacion:
+https://github.com/resend/react-email/releases/tag/@react-email%2Frender@2.2.0
