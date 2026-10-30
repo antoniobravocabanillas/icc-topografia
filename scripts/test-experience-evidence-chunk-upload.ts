@@ -30,6 +30,7 @@ async function main() {
   const upload = await import("../lib/server/experience-evidence-upload");
   const pending = new Map<string, { size: number; chunks: number; storageKey?: string }>();
   const budget = {
+    finishFinal: async () => true,
     reserve: async (_userId: string, record: { uploadId: string; size: number; chunks: number; storageKey?: string }) => {
       const used = [...pending.values()].reduce((sum, item) => sum + item.size, 0);
       if (used + record.size > 64 * 1024 * 1024) throw new upload.ExperienceEvidenceUploadError("Tienes demasiadas evidencias pendientes.", 429);
@@ -120,6 +121,8 @@ async function main() {
   // serialized transaction adapter, including a PUT held across finalize.
   const { prisma } = await import("../lib/prisma");
   const originalTransaction = prisma.$transaction;
+  const originalDeleteTokens = prisma.verificationToken.deleteMany;
+  const originalFindEvidence = prisma.terraqoExperienceEvidence.findMany;
   type Marker = { identifier: string; token: string; expires: Date };
   let markers: Marker[] = [];
   let transactionTail = Promise.resolve();
@@ -135,6 +138,11 @@ async function main() {
         return previous;
       },
       create: async ({ data }: { data: Marker }) => { markers.push(data); return data; },
+      deleteMany: async ({ where }: { where: { identifier?: string; token: { in: string[] }; expires?: { lte: Date } } }) => {
+        const before = markers.length;
+        markers = markers.filter((row) => !((!where.identifier || row.identifier === where.identifier) && where.token.in.includes(row.token) && (!where.expires || row.expires <= where.expires.lte)));
+        return { count: before - markers.length };
+      },
     },
   };
   prisma.$transaction = ((operation: (tx: typeof transaction) => Promise<unknown>) => {
@@ -146,6 +154,8 @@ async function main() {
     transactionTail = result.then(() => undefined, () => undefined);
     return result;
   }) as unknown as typeof originalTransaction;
+  prisma.verificationToken.deleteMany = transaction.verificationToken.deleteMany as unknown as typeof originalDeleteTokens;
+  prisma.terraqoExperienceEvidence.findMany = (async () => []) as unknown as typeof originalFindEvidence;
   try {
     const localStore = media.getWorklogEvidenceUploadStore();
     const smallPdf = Uint8Array.from(Buffer.from("%PDF-1.7\n%%EOF\n")).buffer;
@@ -191,8 +201,68 @@ async function main() {
     const uncertainRecord = markers.map((row) => JSON.parse(Buffer.from(row.token, "base64url").toString("utf8"))).find((row) => row.uploadId === uncertain.uploadId);
     assert.equal(uncertainRecord.activeWrites.length, 1, "An ambiguous remote failure must retain its durable marker.");
     await assert.rejects(upload.finalizeExperienceEvidenceUpload({ userId: "user-owner", token: uncertain.token }), /escritura/i);
+
+    const recordOf = (row: Marker) => JSON.parse(Buffer.from(row.token, "base64url").toString("utf8"));
+    const expire = (id: string) => { markers.find((row) => recordOf(row).uploadId === id)!.expires = new Date(0); };
+    const initialize = () => upload.createExperienceEvidenceUpload({ userId: "user-owner", fileName: "next.pdf", contentType: "application/pdf", size: smallPdf.byteLength });
+    expire(uncertain.uploadId);
+    await initialize();
+    assert.ok(markers.some((row) => recordOf(row).uploadId === uncertain.uploadId), "Expiry cleanup must preserve an unresolved write ledger.");
+
+    // Simulate a PUT whose remote commit arrives only after expiry cleanup.
+    const delayed = await initialize();
+    let lateCommit!: () => Promise<void>;
+    const delayedStore = { ...heldStore, set: async (...args: Parameters<typeof localStore.set>) => {
+      lateCommit = async () => { await localStore.set(...args); };
+      throw new Error("unacknowledged remote PUT");
+    } };
+    await assert.rejects(upload.storeExperienceEvidenceChunk({ userId: "user-owner", uploadId: delayed.uploadId, index: 0, token: delayed.token, bytes: smallPdf }, { store: delayedStore }), /unacknowledged/);
+    expire(delayed.uploadId);
+    await initialize();
+    await lateCommit();
+    const delayedKey = `${media.EXPERIENCE_EVIDENCE_PREFIX}/pending/${ownerPrefix}/${delayed.uploadId}/chunks/0`;
+    assert.ok(await localStore.getMetadata(delayedKey));
+    await initialize();
+    assert.equal(await localStore.getMetadata(delayedKey), null, "The retained ledger must let later cleanup remove a late commit.");
+    assert.ok(markers.some((row) => recordOf(row).uploadId === delayed.uploadId));
+
+    // A confirmed late write can clear its marker, but cannot become usable.
+    const expiredConfirmed = await initialize();
+    const expiredStore = { ...heldStore, set: async (...args: Parameters<typeof localStore.set>) => {
+      expire(expiredConfirmed.uploadId);
+      return localStore.set(...args);
+    } };
+    await assert.rejects(upload.storeExperienceEvidenceChunk({ userId: "user-owner", uploadId: expiredConfirmed.uploadId, index: 0, token: expiredConfirmed.token, bytes: smallPdf }, { store: expiredStore }), /consumida/);
+    assert.equal(recordOf(markers.find((row) => recordOf(row).uploadId === expiredConfirmed.uploadId)!).activeWrites, undefined);
+    await initialize();
+    assert.equal(markers.some((row) => recordOf(row).uploadId === expiredConfirmed.uploadId), false);
+
+    // Final assembled PUTs need the same durable protection as chunk PUTs.
+    const finalUncertain = await initialize();
+    await upload.storeExperienceEvidenceChunk({ userId: "user-owner", uploadId: finalUncertain.uploadId, index: 0, token: finalUncertain.token, bytes: smallPdf });
+    await assert.rejects(upload.finalizeExperienceEvidenceUpload({ userId: "user-owner", token: finalUncertain.token }, { store: delayedStore }), /unacknowledged/);
+    const finalRecord = recordOf(markers.find((row) => recordOf(row).uploadId === finalUncertain.uploadId)!);
+    assert.ok(finalRecord.finalWrite);
+    expire(finalUncertain.uploadId);
+    await initialize();
+    await lateCommit();
+    assert.ok(await localStore.getMetadata(finalRecord.storageKey));
+    await initialize();
+    assert.equal(await localStore.getMetadata(finalRecord.storageKey), null);
+    assert.ok(markers.some((row) => recordOf(row).uploadId === finalUncertain.uploadId));
+
+    // Eight unresolved 8 MiB reservations fill the budget even after expiry.
+    const identifier = markers[0].identifier;
+    markers = Array.from({ length: 8 }, (_, index) => ({ identifier, expires: new Date(0), token: Buffer.from(JSON.stringify({ v: 1, uploadId: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`, size: 8 * 1024 * 1024, chunks: 3, activeWrites: [{ index: 0, nonce: "00000000-0000-4000-8000-000000000099" }] })).toString("base64url") }));
+    const fullBudgetKey = `${media.EXPERIENCE_EVIDENCE_PREFIX}/pending/${ownerPrefix}/00000000-0000-4000-8000-000000000000/chunks/0`;
+    await localStore.set(fullBudgetKey, smallPdf);
+    await assert.rejects(initialize(), (error: unknown) => error instanceof upload.ExperienceEvidenceUploadError && error.status === 429);
+    assert.equal(await localStore.getMetadata(fullBudgetKey), null, "Cleanup must still run when the pending budget is full.");
+    assert.equal(markers.length, 8);
   } finally {
     prisma.$transaction = originalTransaction;
+    prisma.verificationToken.deleteMany = originalDeleteTokens;
+    prisma.terraqoExperienceEvidence.findMany = originalFindEvidence;
   }
 
   const boundedBody = await import("../lib/server/bounded-request-body");

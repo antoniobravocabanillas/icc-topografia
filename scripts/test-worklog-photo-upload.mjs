@@ -62,6 +62,7 @@ const prisma = {
   },
 };
 const boundedRequestBody = load("../lib/server/bounded-request-body.ts");
+const boundedMultipart = load("../lib/server/bounded-multipart.ts");
 const { uploadWorklogEvidence } = load("../lib/server/worklog-evidence.ts", {
   "@/lib/prisma": { prisma },
   "@/lib/terraqo/billing/storage-quota": {
@@ -105,6 +106,7 @@ const { uploadWorklogEvidence } = load("../lib/server/worklog-evidence.ts", {
     assertLegacyWorklogs: async () => {},
   },
   "./bounded-request-body": boundedRequestBody,
+  "./bounded-multipart": boundedMultipart,
   "./worklog-media-security": {
     WorklogMediaSecurityError: class WorklogMediaSecurityError extends Error {},
     sanitizeWorklogEvidenceImage: async ({ bytes, claimedContentType, fileName }) => {
@@ -165,6 +167,10 @@ await test("same image twice in a request is stored once", async () => {
   assert.equal(rows.length, 1);
 });
 await test("raw photo cardinality is rejected before image decoding", async () => {
+  const originalParse = Request.prototype.formData;
+  let parsed = 0;
+  Request.prototype.formData = function () { parsed++; return originalParse.call(this); };
+  try {
   const response = await uploadWorklogEvidence(
     request(Array.from({ length: 7 }, (_, index) => photo(String(index)))),
     "owner",
@@ -174,6 +180,30 @@ await test("raw photo cardinality is rejected before image decoding", async () =
   assert.equal(decoded, 0);
   assert.equal(reserved, 0);
   assert.equal(rows.length, 0);
+  assert.equal(parsed, 0, "Excess parts must fail before the native parser allocates any File objects.");
+  } finally { Request.prototype.formData = originalParse; }
+});
+await test("multipart preflight handles quoted boundaries and limits tiny or empty parts", async () => {
+  const boundary = "test-boundary";
+  const raw = (count, header = 'Content-Disposition: form-data; name="photos"; filename="a.jpg"') =>
+    Buffer.from(Array.from({ length: count }, () => `--${boundary}\r\n${header}\r\n\r\n\r\n`).join("") + `--${boundary}--\r\n`);
+  const type = `multipart/form-data; boundary="${boundary}"`;
+  assert.equal(boundedMultipart.assertMultipartPartLimits(raw(6), type, 6), 6);
+  const withPreamble = Buffer.concat([Buffer.from("MIME preamble\r\n"), raw(1), Buffer.from("epilogue")]);
+  const extendedType = `multipart/form-data; charset=utf-8; boundary="${boundary}"; extra="a;b"`;
+  assert.equal(boundedMultipart.assertMultipartPartLimits(withPreamble, extendedType, 6), 1);
+  assert.equal([...await new Request("https://test.invalid", { method: "POST", body: withPreamble, headers: { "content-type": extendedType } }).formData()].length, 1);
+  assert.throws(() => boundedMultipart.assertMultipartPartLimits(raw(1000), type, 6), /Too many/);
+  assert.throws(() => boundedMultipart.assertMultipartPartLimits(raw(1, "X:" + "x".repeat(8193)), type, 6), /headers/);
+  assert.throws(() => boundedMultipart.assertMultipartPartLimits(raw(1), `${type}; boundary=other`, 6), /boundary/);
+  const binary = Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="photos"; filename="binary.jpg"\r\n\r\nbinary\r\n--${boundary}Xstill-binary\r\n--${boundary}--\r\n`);
+  assert.equal(boundedMultipart.assertMultipartPartLimits(binary, type, 6), 1);
+  const file = photo(`binary\r\n--${boundary}Xstill-binary`);
+  const encoded = request([file]);
+  const bytes = new Uint8Array(await encoded.arrayBuffer());
+  assert.equal(boundedMultipart.assertMultipartPartLimits(bytes, encoded.headers.get("content-type"), 6), 1);
+  const valid = await uploadWorklogEvidence(request(Array.from({ length: 6 }, (_, i) => photo(`valid-${i}`))), "owner", "entry");
+  assert.equal(valid.status, 200);
 });
 await test("remaining worklog quota is enforced before image decoding", async () => {
   rows.push(...Array.from({ length: 5 }, (_, index) => ({

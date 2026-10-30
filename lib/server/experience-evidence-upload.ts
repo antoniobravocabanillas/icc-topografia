@@ -24,6 +24,7 @@ type PendingUploadBudget = {
   chunks: number;
   storageKey?: string;
   activeWrites?: Array<{ index: number; nonce: string }>;
+  finalWrite?: string;
 };
 
 type UploadClaim = {
@@ -115,6 +116,7 @@ function decodePendingBudget(value: string): PendingUploadBudget | null {
     const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as PendingUploadBudget;
     if (parsed.v !== 1 || !/^[a-f0-9-]{36}$/.test(parsed.uploadId) || !Number.isSafeInteger(parsed.size) || parsed.size < 1 || parsed.size > MAX_EXPERIENCE_EVIDENCE_SIZE || !Number.isSafeInteger(parsed.chunks) || parsed.chunks < 1 || parsed.chunks > 3) return null;
     if (parsed.storageKey && (!parsed.storageKey.startsWith(`${EXPERIENCE_EVIDENCE_PREFIX}/pending/`) || parsed.storageKey.includes("..") || parsed.storageKey.includes("\\"))) return null;
+    if (parsed.finalWrite !== undefined && (!parsed.storageKey || !/^[a-f0-9-]{36}$/.test(parsed.finalWrite))) return null;
     if (parsed.activeWrites !== undefined) {
       if (!Array.isArray(parsed.activeWrites) || parsed.activeWrites.length > parsed.chunks) return null;
       const indices = new Set<number>();
@@ -144,28 +146,32 @@ async function cleanupExpiredPendingUploads(userId: string, records: PendingUplo
 async function reservePendingUploadBudget(userId: string, record: PendingUploadBudget, expires: Date) {
   const identifier = pendingBudgetIdentifier(userId);
   const now = new Date();
-  const expired = await prisma.$transaction(async (tx) => {
+  const { expired, budgetExceeded, unresolvedExpired } = await prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${identifier}))`);
     const rows = await tx.verificationToken.findMany({ where: { identifier }, select: { token: true, expires: true } });
-    const active = rows.filter((row) => row.expires > now).map((row) => decodePendingBudget(row.token));
-    if (active.some((value) => !value)) throw new ExperienceEvidenceUploadError("El presupuesto temporal de carga requiere revisión.", 409);
-    const activeBytes = active.reduce((sum, value) => sum + (value?.size || 0), 0);
-    if (!Number.isSafeInteger(activeBytes + record.size) || activeBytes + record.size > MAX_PENDING_UPLOAD_BYTES) throw new ExperienceEvidenceUploadError("Tienes demasiadas evidencias pendientes. Termina o espera a que venzan las cargas anteriores.", 429);
+    const decoded = rows.map((row) => ({ ...row, record: decodePendingBudget(row.token) }));
+    // Expiry invalidates a capability; it does not cancel an in-flight remote
+    // PUT. Keep uncertain writes charged and recoverable until reconciled.
+    if (decoded.some((row) => !row.record)) throw new ExperienceEvidenceUploadError("El presupuesto temporal de carga requiere revisión.", 409);
+    const active = decoded.filter((row) => row.expires > now || row.record?.activeWrites?.length || row.record?.finalWrite);
+    const activeBytes = active.reduce((sum, row) => sum + (row.record?.size || 0), 0);
+    const budgetExceeded = !Number.isSafeInteger(activeBytes + record.size) || activeBytes + record.size > MAX_PENDING_UPLOAD_BYTES;
     const stale = rows.filter((row) => row.expires <= now).map((row) => ({ token: row.token, record: decodePendingBudget(row.token) })).filter((value): value is { token: string; record: PendingUploadBudget } => Boolean(value.record));
-    const malformed = rows.filter((row) => row.expires <= now && !decodePendingBudget(row.token)).map((row) => row.token);
-    if (malformed.length) await tx.verificationToken.deleteMany({ where: { token: { in: malformed } } });
-    await tx.verificationToken.create({ data: { identifier, token: encodePendingBudget(record), expires } });
-    return stale;
+    if (!budgetExceeded) await tx.verificationToken.create({ data: { identifier, token: encodePendingBudget(record), expires } });
+    return { expired: stale, budgetExceeded, unresolvedExpired: stale.some(({ record }) => record.activeWrites?.length || record.finalWrite) };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   if (expired.length) {
     try {
       await cleanupExpiredPendingUploads(userId, expired.map((value) => value.record));
-      await prisma.verificationToken.deleteMany({ where: { identifier, token: { in: expired.map((value) => value.token) }, expires: { lte: now } } });
+      const settled = expired.filter(({ record }) => !record.activeWrites?.length && !record.finalWrite);
+      if (settled.length) await prisma.verificationToken.deleteMany({ where: { identifier, token: { in: settled.map((value) => value.token) }, expires: { lte: now } } });
     } catch {
-      // Keep expired records as durable cleanup work. They are excluded from
-      // the active-byte budget and retried on the user's next initialization.
+      // Preserve cleanup work, including unresolved PUTs, for reconciliation.
     }
   }
+  if (budgetExceeded) throw new ExperienceEvidenceUploadError(unresolvedExpired
+    ? "Hay cargas pendientes de revisión. Contacta con soporte para recuperar su espacio temporal."
+    : "Tienes demasiadas evidencias pendientes. Termina o espera a que venzan las cargas anteriores.", 429);
 }
 
 async function refreshPendingUploadBudget(userId: string, record: PendingUploadBudget, expires: Date) {
@@ -176,7 +182,7 @@ async function refreshPendingUploadBudget(userId: string, record: PendingUploadB
     const previous = rows.find((row) => decodePendingBudget(row.token)?.uploadId === record.uploadId);
     if (!previous) throw new ExperienceEvidenceUploadError("La reserva temporal de esta carga venció.", 409);
     const decoded = decodePendingBudget(previous.token);
-    if (!decoded || decoded.activeWrites?.length) throw new ExperienceEvidenceUploadError("Hay fragmentos de esta evidencia todavía en escritura. Reintenta en unos segundos.", 409);
+    if (!decoded || decoded.activeWrites?.length || decoded.finalWrite) throw new ExperienceEvidenceUploadError("Hay fragmentos de esta evidencia todavía en escritura. Reintenta en unos segundos.", 409);
     await tx.verificationToken.delete({ where: { token: previous.token } });
     await tx.verificationToken.create({ data: { identifier, token: encodePendingBudget(record), expires } });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
@@ -201,6 +207,8 @@ function assertUploadClaim(claim: UploadClaim, userId: string) {
 type UploadBudgetDependencies = {
   reserve: typeof reservePendingUploadBudget;
   refresh: typeof refreshPendingUploadBudget;
+  finishFinal: (userId: string, uploadId: string, nonce: string) => Promise<boolean>;
+  store: ReturnType<typeof getWorklogEvidenceUploadStore>;
 };
 
 async function pendingUploadIsActive(client: Pick<Prisma.TransactionClient, "verificationToken">, userId: string, uploadId: string) {
@@ -240,36 +248,36 @@ async function beginPendingUploadWrite(userId: string, uploadId: string, index: 
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5_000, timeout: 10_000 });
 }
 
-async function finishPendingUploadWrite(userId: string, uploadId: string, index: number, nonce: string) {
+async function finishPendingUploadWrite(userId: string, uploadId: string, index: number | "final", nonce: string) {
   const identifier = pendingBudgetIdentifier(userId);
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${identifier}))`);
-    const rows = await tx.verificationToken.findMany({ where: { identifier, expires: { gt: new Date() } }, select: { token: true, expires: true } });
+    const rows = await tx.verificationToken.findMany({ where: { identifier }, select: { token: true, expires: true } });
     const previous = rows.find((row) => decodePendingBudget(row.token)?.uploadId === uploadId);
     if (!previous) return false;
     const record = decodePendingBudget(previous.token);
     if (!record) return false;
     const activeWrites = record.activeWrites || [];
-    const marker = activeWrites.find((write) => write.index === index);
-    if (!marker) return true;
-    if (marker.nonce !== nonce) throw new ExperienceEvidenceUploadError("La escritura del fragmento perdió su reserva exclusiva.", 409);
+    const markerNonce = index === "final" ? record.finalWrite : activeWrites.find((write) => write.index === index)?.nonce;
+    if (!markerNonce) return previous.expires > new Date();
+    if (markerNonce !== nonce) throw new ExperienceEvidenceUploadError("La escritura del fragmento perdió su reserva exclusiva.", 409);
     const remaining = activeWrites.filter((write) => write.nonce !== nonce);
     await tx.verificationToken.delete({ where: { token: previous.token } });
     await tx.verificationToken.create({
       data: {
         identifier,
-        token: encodePendingBudget({ ...record, activeWrites: remaining.length ? remaining : undefined }),
+        token: encodePendingBudget({ ...record, activeWrites: remaining.length ? remaining : undefined, finalWrite: index === "final" ? undefined : record.finalWrite }),
         expires: previous.expires,
       },
     });
-    return true;
+    return previous.expires > new Date();
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5_000, timeout: 10_000 });
 }
 
 type UploadChunkDependencies = {
   assertPending: typeof assertPendingUploadReservation;
   beginWrite: typeof beginPendingUploadWrite;
-  finishWrite: typeof finishPendingUploadWrite;
+  finishWrite: (userId: string, uploadId: string, index: number, nonce: string) => Promise<boolean>;
   store: ReturnType<typeof getWorklogEvidenceUploadStore>;
 };
 
@@ -351,7 +359,7 @@ export async function storeExperienceEvidenceChunk(
       }
     }
     // A transport rejection does not prove that the remote PUT was canceled.
-    // Keep its marker until expiry cleanup so finalize/attach cannot race a
+    // Keep its marker through expiry so finalize/attach cannot race a
     // late object commit by treating an uncertain write as complete.
     throw error;
   }
@@ -367,7 +375,7 @@ function verifyPdf(bytes: Buffer) {
 export async function finalizeExperienceEvidenceUpload(input: { userId: string; token: string }, dependencies?: Partial<UploadBudgetDependencies>) {
   const claim = open<UploadClaim>(input.token, "experience-evidence-upload");
   assertUploadClaim(claim, input.userId);
-  const store = getWorklogEvidenceUploadStore();
+  const store = dependencies?.store || getWorklogEvidenceUploadStore();
   const chunks: Buffer[] = [];
   for (let index = 0; index < claim.chunks; index += 1) {
     const entry = await store.getWithMetadata(chunkKey(claim, index), { type: "arrayBuffer" });
@@ -409,7 +417,8 @@ export async function finalizeExperienceEvidenceUpload(input: { userId: string; 
   // Keep charging the original source size while its chunks exist. A highly
   // compressible image must not free temporary budget before those chunks are
   // attached and deleted.
-  await (dependencies?.refresh || refreshPendingUploadBudget)(input.userId, { v: 1, uploadId: claim.uploadId, size: claim.size, chunks: claim.chunks, storageKey }, new Date(receiptExp * 1000));
+  const finalWrite = randomUUID();
+  await (dependencies?.refresh || refreshPendingUploadBudget)(input.userId, { v: 1, uploadId: claim.uploadId, size: claim.size, chunks: claim.chunks, storageKey, finalWrite }, new Date(receiptExp * 1000));
   const result = await store.set(storageKey, Uint8Array.from(bytes).buffer, {
     onlyIfNew: true,
     metadata: { kind: "experience-evidence-ready", ownerId: input.userId, uploadId: claim.uploadId, fileName, contentType, size: bytes.length, sha256, expiresAt: receiptExp },
@@ -417,6 +426,13 @@ export async function finalizeExperienceEvidenceUpload(input: { userId: string; 
   if (result.modified === false) {
     const existing = await store.getMetadata(storageKey);
     if (existing?.metadata.ownerId !== input.userId || existing.metadata.uploadId !== claim.uploadId || existing.metadata.sha256 !== sha256) throw new ExperienceEvidenceUploadError("La evidencia final entra en conflicto con una carga anterior.", 409);
+  }
+  // A failed/ambiguous PUT retains finalWrite, just like a chunk write. Only a
+  // confirmed write can clear it; an expired confirmation cannot issue a receipt.
+  const finishFinal = dependencies?.finishFinal || ((userId: string, uploadId: string, nonce: string) => finishPendingUploadWrite(userId, uploadId, "final", nonce));
+  if (!await finishFinal(input.userId, claim.uploadId, finalWrite)) {
+    await store.delete(storageKey).catch(() => undefined);
+    throw new ExperienceEvidenceUploadError("La reserva temporal venció durante la escritura de la evidencia.", 409);
   }
   const receipt: EvidenceReceipt = { v: 1, kind: "experience-evidence-receipt", sub: input.userId, uploadId: claim.uploadId, storageKey, fileName, contentType, size: bytes.length, chunks: claim.chunks, sha256, exp: receiptExp };
   return { receipt: seal(receipt), fileName, contentType, size: bytes.length };
@@ -501,7 +517,7 @@ export async function attachExperienceEvidenceReceipts(tokens: string[], experie
           const record = decodePendingBudget(row.token);
           return record && uploadIds.has(record.uploadId) ? [{ row, record }] : [];
         });
-        if (matchingBudgets.some(({ record }) => record.activeWrites?.length)) throw new ExperienceEvidenceUploadError("Una evidencia todavía tiene fragmentos en escritura. Reintenta en unos segundos.", 409);
+        if (matchingBudgets.some(({ record }) => record.activeWrites?.length || record.finalWrite)) throw new ExperienceEvidenceUploadError("Una evidencia todavía tiene fragmentos en escritura. Reintenta en unos segundos.", 409);
         const consumed = matchingBudgets.map(({ row }) => row);
         if (consumed.length) await tx.verificationToken.deleteMany({ where: { token: { in: consumed.map((row) => row.token) } } });
         stage = "attached-read";

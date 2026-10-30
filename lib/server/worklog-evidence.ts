@@ -12,6 +12,7 @@ import { canViewWorklog } from "@/lib/terraqo/worklog";
 import { syncWorklogReputation } from "@/lib/terraqo/builders";
 import { BillingError } from "@/lib/terraqo/billing/provider";
 import { assertLegacyWorklogs, NativeWorklogLegacyGuardError } from "./native-worklog-legacy-guard";
+import { assertMultipartPartLimits } from "./bounded-multipart";
 import {
   BoundedRequestBodyError,
   readBoundedRequestBytes,
@@ -79,6 +80,7 @@ export async function uploadWorklogEvidence(
     );
     let formData: FormData;
     try {
+      assertMultipartPartLimits(multipartBytes, contentType, MAX_WORKLOG_EVIDENCE_FILES);
       formData = await new Request(request.url, {
         method: "POST",
         headers: { "content-type": contentType },

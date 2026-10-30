@@ -352,20 +352,32 @@ export async function discoverEvidenceForNeed(workspaceId: string, needId: strin
     { summary: { contains: term, mode: "insensitive" as const } },
     { outcome: { contains: term, mode: "insensitive" as const } },
   ]);
-  const candidates = await prisma.terraqoWorklogRevision.findMany({
+  const publicCollection = { publicProjection: { revokedAt: null }, lifecycle: { not: "ARCHIVED" as const } };
+  const visibleTextFilters = terms.flatMap((term) => (["title", "summary", "outcome"] as const).map((field) => ({
+    [field]: { contains: term, mode: "insensitive" as const },
+    shareItems: { some: { collection: publicCollection, allowedFields: { has: field } } },
+  })));
+  // Keep separate bounded candidate pools: unrelated partial selections must
+  // neither suppress matching public text nor filter through hidden fields.
+  const exposures: Prisma.TerraqoWorklogRevisionWhereInput[] = [
+    { worklog: { visibility: "PUBLIC" }, ...(textFilters.length ? { OR: textFilters } : {}) },
+    { worklog: { visibility: { not: "PUBLIC" } }, OR: visibleTextFilters },
+    { worklog: { visibility: { not: "PUBLIC" } }, shareItems: { some: {
+      collection: publicCollection,
+      allowedFields: { hasSome: ["responsibilities", "methods", "tools", "skills", "locationLabel"] },
+    } } },
+  ];
+  const pools = await Promise.all(exposures.map((exposure) => prisma.terraqoWorklogRevision.findMany({
     where: {
       worklog: { deletedAt: null, lifecycle: "PUBLISHED", currentRevisionId: { not: null }, professionalProfile: { liveCvEnabled: true } },
       currentFor: { isNot: null },
-      OR: [
-        { worklog: { visibility: "PUBLIC" } },
-        { shareItems: { some: { collection: { publicProjection: { revokedAt: null }, lifecycle: { not: "ARCHIVED" } } } } },
-      ],
-      ...(textFilters.length ? { AND: [{ OR: textFilters }] } : {}),
+      AND: [exposure],
     },
     select: candidateSelect,
     orderBy: { createdAt: "desc" },
     take: 300,
-  });
+  })));
+  const candidates = [...new Map(pools.flat().map((candidate) => [candidate.id, candidate])).values()];
 
   const seenWork = new Set<string>();
   return candidates.flatMap((candidate) => {

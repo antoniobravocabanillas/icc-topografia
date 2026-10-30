@@ -2,6 +2,24 @@
 
 ## Dictamen
 
+**Actualizacion de seguimiento del 30 de octubre:** el candidato `fc28df9`
+incorpora las correcciones de los 12 hallazgos seleccionados. El scan del delta
+`52d75cdc-67ad-462f-86c6-95f00a3cef1c` reviso 33/33 archivos de codigo y quedo
+sellado con tres hallazgos bajos adicionales; no reporto medios ni altos en
+ese delta. No sustituye la revision del candidato completo ni el gate externo.
+Las tres correcciones complementarias y su evidencia estan en
+`security-followup-2026-10-30.md`.
+
+El ultimo porcentaje ponderado registrado en este documento sigue siendo
+**68 % de preparacion para publicar**, frente a **97 % de implementacion
+tecnica**. El avance local posterior no se suma automaticamente: requiere
+cerrar la verificacion de seguridad y los recorridos externos pendientes.
+Daybreak queda omitido por indicacion del usuario; no es una dependencia
+obligatoria para estas correcciones o para las pruebas locales.
+
+El dictamen y los inventarios siguientes conservan el corte historico del
+candidato `1c4e4d4`; deben leerse junto con este seguimiento.
+
 La implementacion B1-B5 tiene un candidato Git inmutable (`1c4e4d4`) y un
 destino Supabase/Netlify exclusivo de staging. Los gates locales no mutantes,
 las migraciones de staging y los recorridos B1-B4 estan aprobados. La
@@ -35,7 +53,7 @@ La identidad no secreta y las comprobaciones realizadas se registran en
 credenciales ni datos reales; el DDL se limito al baseline y las migraciones
 versionadas B1-B5 del candidato.
 
-## Estado del candidato
+## Estado historico del candidato antes de su consolidacion
 
 - Repositorio: `icc-topografia`.
 - Rama: `codex/icc-production-preview`.
