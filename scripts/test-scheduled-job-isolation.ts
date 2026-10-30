@@ -90,10 +90,13 @@ async function main() {
   ] as const;
   const originals = Object.fromEntries(names.map((name) => [name, process.env[name]]));
   const originalFetch = globalThis.fetch;
+  const originalWarn = console.warn;
   const calls: string[] = [];
+  const warnings: unknown[][] = [];
   const secret = "s".repeat(64);
 
   try {
+    console.warn = (...values: unknown[]) => warnings.push(values);
     Object.assign(process.env, stageEnvironment, {
       PROFESSIONAL_DOCUMENT_CLEANUP_SECRET: secret,
       BILLING_RECONCILE_SECRET: secret,
@@ -156,8 +159,15 @@ async function main() {
     assert.equal((await complaints.default()).status, 503);
     assert.equal((await education.default()).status, 503);
     assert.equal(calls.length, 0, "An isolated staging mismatch must fail before network I/O.");
+    assert.deepEqual(warnings.at(-1), [
+      "Education cleanup invocation unavailable",
+      { code: "SCHEDULED_STAGING_ORIGIN_MISMATCH" },
+    ]);
+    assert.ok(!JSON.stringify(warnings).includes(stageOrigin));
+    assert.ok(!JSON.stringify(warnings).includes(secret));
   } finally {
     globalThis.fetch = originalFetch;
+    console.warn = originalWarn;
     for (const name of names) {
       const value = originals[name];
       if (value === undefined) delete process.env[name];

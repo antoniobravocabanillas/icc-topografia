@@ -9,8 +9,12 @@ const scheduledCleanup = async () => {
       targets: resolveScheduledJobTargets(),
       report: value => console.info("Education cleanup invocation", value) });
     return new Response("Queued", { status: 200 });
-  } catch {
-    console.warn("Education cleanup invocation unavailable");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    const code = /^(?:JOB|SCHEDULED)_[A-Z0-9_]+$/.test(message)
+      ? message
+      : "JOB_UNAVAILABLE";
+    console.warn("Education cleanup invocation unavailable", { code });
     return new Response("Queue unavailable", { status: 503 });
   }
 };
