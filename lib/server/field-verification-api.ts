@@ -20,13 +20,13 @@ import { terraqoAttendanceLocationSyncSchema, terraqoAttendanceOptionsSchema, te
 const requestSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("status") }),
   z.object({ action: z.literal("passkey_registration_options") }),
-  z.object({ action: z.literal("passkey_registration_verify"), challengeId: z.string().cuid(), response: z.record(z.unknown()), deviceName: z.string().trim().max(120).optional() }),
+  z.object({ action: z.literal("passkey_registration_verify"), challengeId: z.string().cuid(), response: z.record(z.string(), z.unknown()), deviceName: z.string().trim().max(120).optional() }),
   z.object({ action: z.literal("attendance_options"), data: terraqoAttendanceOptionsSchema }),
-  z.object({ action: z.literal("attendance_verify"), challengeId: z.string().cuid(), response: z.record(z.unknown()) }),
+  z.object({ action: z.literal("attendance_verify"), challengeId: z.string().cuid(), response: z.record(z.string(), z.unknown()) }),
   z.object({ action: z.literal("location_samples_sync"), data: terraqoAttendanceLocationSyncSchema }),
   z.object({ action: z.literal("request_worklog_validation"), worklogId: z.string().cuid(), data: terraqoWorklogValidationRequestSchema }),
   z.object({ action: z.literal("validation_options"), validationId: z.string().cuid() }),
-  z.object({ action: z.literal("validation_verify"), challengeId: z.string().cuid(), response: z.record(z.unknown()) })
+  z.object({ action: z.literal("validation_verify"), challengeId: z.string().cuid(), response: z.record(z.string(), z.unknown()) })
 ]);
 
 export async function runFieldVerificationAction(input: {

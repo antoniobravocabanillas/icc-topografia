@@ -17,7 +17,7 @@ async function main() {
   if (stage === "prepare") {
     // The public marker contains no credential and is only generated on staging.
     writeFileSync(resolve(root, "public/__terraqo_staging_candidate.json"), JSON.stringify({ siteId: stagingCloudSite, commit: head, deployId: target.deployId }));
-    const browserEnvironment = Object.fromEntries(Object.entries(target.environment).filter(([key]) => ["PATH", "HOME", "TMPDIR", "TEMP", "TMP", "SYSTEMROOT", "WINDIR", "USERPROFILE", "LOCALAPPDATA"].includes(key.toUpperCase())));
+    const browserEnvironment: NodeJS.ProcessEnv = { NODE_ENV: "production", ...Object.fromEntries(Object.entries(target.environment).filter(([key]) => ["PATH", "HOME", "TMPDIR", "TEMP", "TMP", "SYSTEMROOT", "WINDIR", "USERPROFILE", "LOCALAPPDATA"].includes(key.toUpperCase()))) };
     const install = spawnSync(process.execPath, [resolve(root, "node_modules/playwright/cli.js"), "install", "chromium"], {
       cwd: root, env: browserEnvironment, encoding: "utf8", timeout: 180_000, maxBuffer: 2 * 1024 * 1024, windowsHide: true, shell: false,
     });

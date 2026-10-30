@@ -46,7 +46,7 @@ export const cvEducationSchema = z.object({
 }).strict();
 
 export const cvExtractionSchema = z.object({
-  profile: cvProfileSchema.default({}),
+  profile: cvProfileSchema.prefault({}),
   experiences: z.array(cvExperienceSchema).max(80).default([]),
   education: z.array(cvEducationSchema).max(60).default([]),
   warnings: z.array(z.string().trim().min(1).max(300)).max(30).default([]),
@@ -64,6 +64,6 @@ export const cvImportReviewSchema = z.object({
   items: z.array(z.object({
     id: z.string().cuid(),
     decision: z.enum(["ACCEPTED", "REJECTED"]),
-    normalizedData: z.record(z.unknown()),
+    normalizedData: z.record(z.string(), z.unknown()),
   }).strict()).min(1).max(180),
 }).strict();

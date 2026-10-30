@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { sparseUpdateSchema } from "./common";
 
 export const productInputSchema = z.object({
   name: z.string().trim().min(2),
@@ -16,11 +17,11 @@ export const productInputSchema = z.object({
   badge: z.string().trim().optional().nullable(),
   images: z.array(z.string().url().or(z.string().startsWith("/"))).default([]),
   technicalSheet: z.string().url().or(z.string().startsWith("/")).optional().nullable(),
-  specifications: z.record(z.string()).default({}),
+  specifications: z.record(z.string(), z.string()).default({}),
   categoryId: z.string().min(1)
 });
 
-export const productUpdateSchema = productInputSchema.partial();
+export const productUpdateSchema = sparseUpdateSchema(productInputSchema.shape);
 
 export const categoryInputSchema = z.object({
   name: z.string().trim().min(2),
@@ -29,4 +30,4 @@ export const categoryInputSchema = z.object({
   parentId: z.string().optional().nullable()
 });
 
-export const categoryUpdateSchema = categoryInputSchema.partial();
+export const categoryUpdateSchema = sparseUpdateSchema(categoryInputSchema.shape);

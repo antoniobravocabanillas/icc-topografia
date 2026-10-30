@@ -8,6 +8,7 @@ const contractScripts = [
   "test:platform-staging-readiness",
   "test:platform-staging-runner",
   "test:platform-staging-cloud",
+  "test:validation-compatibility",
   "test:workforce-analytics",
   "test:worklog-journey-linking",
   "test:attendance-policy",

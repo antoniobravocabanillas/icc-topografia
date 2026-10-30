@@ -16,6 +16,7 @@
     "gate:platform-staging": "tsx scripts/run-platform-staging-gate.ts",
     "test:platform-staging-runner": "tsx scripts/test-platform-staging-runner.ts",
     "test:platform-staging-cloud": "tsx scripts/test-platform-staging-cloud.ts",
+    "test:validation-compatibility": "tsx scripts/test-validation-compatibility.ts",
     "test:account-access-browser": "tsx scripts/test-account-access-browser.ts",
     "test:release-environment-templates": "tsx scripts/test-release-environment-templates.ts",
     "deploy:platform-staging": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/deploy-platform-staging.ps1",
@@ -144,7 +145,7 @@
     "sharp": "0.35.5",
     "tailwind-merge": "^2.5.5",
     "three": "^0.184.0",
-    "zod": "^3.24.2"
+    "zod": "4.6.7"
   },
   "overrides": {
     "postcss": "$postcss",

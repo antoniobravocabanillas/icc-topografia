@@ -521,7 +521,7 @@ export const publicCareerApplicationSchema = z.object({
   software: z.array(z.string().trim().min(1).max(120)).max(40).default([]),
   coverNote: z.string().trim().min(20).max(3000),
   availabilityNote: z.string().trim().max(600).optional(),
-  customAnswers: z.record(customCareerAnswer).default({}),
+  customAnswers: z.record(z.string(), customCareerAnswer).default({}),
   termsAccepted: z.literal(true),
   privacyAccepted: z.literal(true),
 });

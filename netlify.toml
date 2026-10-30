@@ -4,6 +4,10 @@
 
 [build.environment]
   NODE_VERSION = "22"
+  NPM_VERSION = "10.9.9"
+  # TypeScript checks the full platform during build; this is the build heap,
+  # not a custom serverless-function memory allocation.
+  NODE_OPTIONS = "--max-old-space-size=4096"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"

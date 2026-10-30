@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { sparseUpdateSchema } from "./common";
 
 export const serviceInputSchema = z.object({
   title: z.string().trim().min(2),
@@ -28,17 +29,17 @@ export const serviceInputSchema = z.object({
   successCases: z.array(z.string().trim()).default([]),
   relatedServices: z.array(z.string().trim()).default([]),
   sectorSlugs: z.array(z.string().trim()).default([]),
-  content: z.record(z.unknown()).default({}),
+  content: z.record(z.string(), z.unknown()).default({}),
   isPublished: z.coerce.boolean().default(true)
 });
 
-export const serviceUpdateSchema = serviceInputSchema.partial();
+export const serviceUpdateSchema = sparseUpdateSchema(serviceInputSchema.shape);
 
 export const postInputSchema = z.object({
   title: z.string().trim().min(2),
   slug: z.string().trim().min(2).optional(),
   excerpt: z.string().trim().min(10),
-  content: z.record(z.unknown()).default({}),
+  content: z.record(z.string(), z.unknown()).default({}),
   author: z.string().trim().optional().nullable(),
   category: z.string().trim().optional().nullable(),
   metaTitle: z.string().trim().optional().nullable(),
@@ -46,7 +47,7 @@ export const postInputSchema = z.object({
   publishedAt: z.coerce.date().optional().nullable()
 });
 
-export const postUpdateSchema = postInputSchema.partial();
+export const postUpdateSchema = sparseUpdateSchema(postInputSchema.shape);
 
 export const faqInputSchema = z.object({
   question: z.string().trim().min(5),
@@ -56,4 +57,4 @@ export const faqInputSchema = z.object({
   active: z.coerce.boolean().default(true)
 });
 
-export const faqUpdateSchema = faqInputSchema.partial();
+export const faqUpdateSchema = sparseUpdateSchema(faqInputSchema.shape);
