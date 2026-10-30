@@ -1,4 +1,4 @@
-import "server-only";
+import "@/lib/server/runtime-server-only";
 
 type OperationalEvent =
   | "analysis_queued"

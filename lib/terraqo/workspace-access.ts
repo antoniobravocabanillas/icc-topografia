@@ -1,9 +1,11 @@
-import type { Role, TerraqoMemberRole } from "@prisma/client";
+import type { Role } from "@prisma/client";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
+import { workspaceAdminMemberRoles } from "@/lib/terraqo/workspace-roles";
+
+export { workspaceAdminMemberRoles } from "@/lib/terraqo/workspace-roles";
 
 export const ADMIN_WORKSPACE_COOKIE = "terraqo_admin_workspace";
-export const workspaceAdminMemberRoles: TerraqoMemberRole[] = ["OWNER", "ADMIN", "MANAGER"];
 
 async function preferredWorkspaceFromRequest() {
   try {

@@ -1,11 +1,11 @@
-import "server-only";
+import "@/lib/server/runtime-server-only";
 
 import { createHash } from "node:crypto";
 import { Prisma, type TerraqoEvaluationSourceAccessKind } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { emitTerraqoOperationalEvent } from "@/lib/server/terraqo-observability";
-import { workspaceAdminMemberRoles } from "@/lib/terraqo/workspace-access";
+import { workspaceAdminMemberRoles } from "@/lib/terraqo/workspace-roles";
 
 export const EVIDENCE_ANALYSIS_POLICY_VERSION = "terraqo-evidence-analysis-policy-v1";
 export const EVIDENCE_ANALYSIS_PROMPT_VERSION = "terraqo-evidence-analysis-prompt-v1";

@@ -311,3 +311,98 @@ y `.env.local`; no quedaron archivos hold ni cambios sin commit.
 El E2E activo de proveedor B5, accesibilidad fisica, dispatcher HTTPS,
 rollback observado y firmas siguen pendientes; por ello el release permanece
 en HOLD.
+
+## Limpieza de fixture residual antes de B5 activo
+
+El 30 de octubre de 2026 se retiró el único fixture residual del gate de
+evidencias de experiencia. La operación se limitó al proyecto Supabase
+`mghdpciewbsowjrjwmwk` y al Site ID Netlify
+`6b8c43fb-6083-450a-9b85-46a820fb6358`.
+
+- El primer intento desde SQL Editor fue rechazado por PostgreSQL antes de
+  modificar datos: `postgres` tenía lectura, mientras
+  `terraqo_staging_migrator` era propietario y
+  `terraqo_staging_runtime` conservaba DML.
+- Netlify ocultó correctamente `DATABASE_URL` al CLI local. No se degradaron
+  permisos ni se reactivó el migrador.
+- Se desplegó un worker efímero únicamente en staging, protegido por Site ID,
+  project ref, rol runtime, origen, token de un solo uso e invariantes globales
+  exactas. La transacción exigió una sola cuenta sintética, cero workspaces,
+  jobs y bitácoras, e IDs conocidos antes de borrar.
+- La verificación independiente por el conector Supabase confirmó cero filas en
+  usuarios, workspaces, perfiles, experiencias, evidencia, buckets de uso,
+  tokens, jobs de análisis y bitácoras.
+- Netlify Blobs confirmó lista vacía para la clave física exacta del fixture.
+- El worker fue retirado y el candidato limpio se redesplegó como
+  `6ae47d7f11e562ded300ea13`: `/api/health` respondió `200` y la función retirada
+  respondió `404`.
+- `.env`, `.env.local` y el enlace local Netlify fueron restaurados; producción
+  no recibió deploy, DDL ni mutaciones.
+
+## Gate físico B5: dispatcher y proveedor externo
+
+El 30 de octubre de 2026 se ejecutó el gate físico del dispatcher HTTPS con un
+fixture sintético aislado y `TERRAQO_EVIDENCE_ANALYSIS_V1=false`. La cohorte B5
+permaneció vacía durante toda la prueba.
+
+El primer job reveló dos fallos de empaquetado del worker standalone:
+
+1. `evidence-analysis.ts` importaba los roles administrativos desde
+   `workspace-access.ts`, que depende de `next/headers`.
+2. Después de separar los roles, el zip seguía incluyendo
+   `server-only/index.js`, cuyo marcador React lanza una excepción fuera de las
+   condiciones de React Server.
+
+Se corrigió el límite arquitectónico con `workspace-roles.ts` como módulo puro
+y `runtime-server-only.ts` como guard compatible con Next.js y Netlify
+Functions. `check:b5-rollout` ahora construye el worker y rechaza cualquier
+dependencia transitiva en `next/headers` o en el marcador React-only. El
+contrato de análisis, TypeScript y ESLint aprobaron tras el cambio.
+
+La tercera ejecución física confirmó que el background worker corrigió el
+arranque: reclamó el job y registró `attemptCount=1`. El proveedor Groq respondió,
+pero su salida no cumplió el contrato de citas y el job cerró de forma segura
+como `FAILED/INVALID_ANALYSIS_SCHEMA`; no se persistieron claims, modelo,
+tokens ni una evaluación utilizable. No se relajó la validación para forzar un
+resultado exitoso.
+
+El fixture se eliminó y el conector Supabase confirmó nuevamente cero usuarios,
+workspaces, perfiles, bitácoras, necesidades, dossiers, jobs, tokens y buckets.
+El siguiente ciclo B5 debe usar formato JSON Schema estricto con un modelo Groq
+compatible, o cambiar a un proveedor compatible, y repetir el gate antes de
+habilitar `TERRAQO_EVIDENCE_ANALYSIS_V1`.
+
+### Cierre fail-closed del candidato B5
+
+Después del gate físico se retiró `GROQ_API_KEY` del Site ID de staging y la API
+de Netlify confirmó la configuración final: proveedor `off`, confirmación de
+proveedor vacía, `TERRAQO_EVIDENCE_ANALYSIS_V1=false` y cohortes B5 vacías. La
+clave quedó ausente, no solamente ocultada.
+
+El árbol limpio se desplegó únicamente en staging como
+`6ae4871085b33db63ff45e16`. La URL estable y la URL inmutable respondieron
+`200` en `/api/health`; la función efímera respondió `404` y el `POST` a
+`/api/v1/analysis-jobs` respondió `404`, confirmando el feature flag cerrado.
+La verificación independiente posterior confirmó cero filas en usuarios,
+workspaces, perfiles, bitácoras, necesidades, dossiers, jobs de análisis,
+tokens de verificación y buckets de uso.
+
+`check:b5-rollout`, el contrato de análisis, typecheck, lint y el build completo
+de 100 páginas aprobaron. `.env` y `.env.local` fueron restaurados, no quedaron
+archivos hold y el enlace local de Netlify volvió al Site ID productivo sin
+realizar un deploy productivo. B5 continúa en HOLD exclusivamente por el
+contrato de salida del proveedor; B1–B4 permanecen sin cambios.
+
+## Observación de seguridad del esquema staging
+
+El inventario automatizado de Supabase marcó RLS deshabilitado en las tablas
+del esquema `icc`. La comprobación directa mostró que `anon`, `authenticated`,
+`authenticator` y `service_role` no tienen `USAGE` sobre el esquema ni permisos
+CRUD sobre `icc."User"`; tampoco existe una configuración
+`pgrst.db_schemas` que exponga `icc`. Por ello no se observó acceso público
+actual mediante Supabase Data API.
+
+Se conserva como deuda de defensa en profundidad: antes de conceder `USAGE`,
+añadir `icc` a PostgREST o usar clientes Supabase sobre este esquema, deben
+definirse políticas RLS explícitas y probarse con roles públicos. No se aplicó
+DDL ni se cambiaron grants durante este ciclo.

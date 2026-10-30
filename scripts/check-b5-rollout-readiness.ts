@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { build } from "esbuild";
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -31,12 +32,15 @@ async function main() {
     assert.doesNotMatch(sql, /CREATE\s+(?:UNIQUE\s+)?INDEX\s+CONCURRENTLY/i, `${migration} no puede usar CONCURRENTLY dentro de migrate deploy.`);
   }
 
-  const [analysisSql, discoverySql, mediaSnapshotSql, envExample, worker, netlifyConfig, packageJson, driftGate] = await Promise.all([
+  const [analysisSql, discoverySql, mediaSnapshotSql, envExample, worker, analysisSource, workspaceRoles, serverGuard, netlifyConfig, packageJson, driftGate] = await Promise.all([
     read("prisma/migrations/20261018153000_evidence_analysis_jobs/migration.sql"),
     read("prisma/migrations/20261017230000_discovery_needs/migration.sql"),
     read("prisma/migrations/20261020143000_share_item_media_snapshot/migration.sql"),
     read(".env.example"),
     read("netlify/functions/evidence-analysis-background.mts"),
+    read("lib/terraqo/evidence-analysis.ts"),
+    read("lib/terraqo/workspace-roles.ts"),
+    read("lib/server/runtime-server-only.ts"),
     read("netlify.toml"),
     read("package.json"),
     read("scripts/check-b5-schema-drift.ts"),
@@ -68,6 +72,24 @@ async function main() {
 
   assert.match(worker, /timingSafeEqual/, "El worker debe comparar el secreto en tiempo constante.");
   assert.match(worker, /background:\s*true/, "El análisis debe ejecutarse como función background.");
+  assert.match(analysisSource, /from "@\/lib\/terraqo\/workspace-roles"/, "El worker debe consumir roles desde un módulo puro.");
+  assert.doesNotMatch(analysisSource, /workspace-access/, "El worker no puede importar acceso ligado a request/cookies.");
+  assert.match(analysisSource, /runtime-server-only/, "El análisis debe conservar un límite explícito de ejecución servidor.");
+  assert.doesNotMatch(workspaceRoles, /next\/headers/, "El módulo de roles reutilizable no puede depender de Next headers.");
+  assert.match(serverGuard, /typeof window !== "undefined"/, "El límite servidor compatible con workers debe rechazar el navegador.");
+  const workerBundle = await build({
+    entryPoints: [join(root, "netlify", "functions", "evidence-analysis-background.mts")],
+    bundle: true,
+    write: false,
+    platform: "node",
+    format: "esm",
+    packages: "external",
+    tsconfig: join(root, "tsconfig.json"),
+    logLevel: "silent",
+  });
+  assert.equal(workerBundle.outputFiles.length, 1, "El gate debe producir un único bundle de worker.");
+  assert.doesNotMatch(workerBundle.outputFiles[0]!.text, /next\/headers/, "El bundle B5 no puede resolver APIs de request de Next.js.");
+  assert.doesNotMatch(workerBundle.outputFiles[0]!.text, /(?:from|import)\s*["']server-only["']|This module cannot be imported from a Client Component/, "El bundle B5 no puede cargar el marcador React-only en Functions.");
   const workerCode = worker.replace(/\/\/.*$/gm, "");
   assert.doesNotMatch(workerCode, /\bmemory\s*:/, "El plan Starter no admite memoria personalizada en la función.");
   assert.doesNotMatch(netlifyConfig, /\[functions\."?evidence-analysis-background"?\][\s\S]*?\bmemory\s*=/i, "Netlify no debe asignar memoria personalizada al worker B5.");
