@@ -489,3 +489,24 @@ perfiles, bitácoras, casos, colecciones, necesidades, expedientes y jobs de
 análisis. `/api/categories` devolvió `500` porque la base aislada sigue sin el
 workspace público requerido, no por pérdida de conexión. No se sembraron datos
 ni se aplicó DDL.
+
+## Diff scan sellado del candidato inmutable
+
+El 30 de octubre de 2026 se selló el scan
+`c0063481-ad37-479b-a035-0b94126dd55a` sobre el rango exacto
+`e6ff153694dc01ab8a2b5848556fa6839626b2af..1c4e4d4d37d03ac54088ab04914a76f51769290c`.
+La cobertura cerró los 250 elementos autoritativos del diff y produjo 12
+hallazgos reportables: 3 medios y 9 bajos.
+
+Los tres medios bloquean la promoción pública: el revisor puede ver borradores
+de respaldo antes del envío, recibe campos fuera de `requestedScope`, y el
+script de staging hereda `NETLIFY_AUTH_TOKEN` hacia un CLI no fijado y el
+entorno de build. Los nueve bajos cubren proyección de campos, monotonía del
+contador passkey, límites reales de cuerpos/listas, cardinalidad de checkout y
+ciclo de vida de claims de carga.
+
+El informe canónico está en
+`C:\Users\Binv\.codex\state\plugins\codex-security\scans\icc-topografia\1c4e4d4d37d03ac54088ab04914a76f51769290c_20261030T124858Z_b0e7jy4h\report.md`.
+No se aplicó DDL, no se activó B5, no se desplegó producción y no se modificaron
+clientes reales. El siguiente candidato debe corregir los medios, resolver o
+aceptar formalmente los bajos y repetir el diff scan sobre un nuevo SHA.

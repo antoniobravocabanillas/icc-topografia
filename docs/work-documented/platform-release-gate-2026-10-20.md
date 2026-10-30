@@ -1,20 +1,18 @@
-# Gate de plataforma B1-B5 - corte 20 de octubre de 2026
+# Gate de plataforma B1-B5 - corte actualizado 30 de octubre de 2026
 
 ## Dictamen
 
-La implementacion local de B1-B5 esta disponible y los gates locales no mutantes
-estan aprobados. La revision de seguridad post-remediacion quedo sellada con
-cero hallazgos reportables en el snapshot revisado. La liberacion continua en
-**HOLD** por dos causas independientes:
+La implementacion B1-B5 tiene un candidato Git inmutable (`1c4e4d4`) y un
+destino Supabase/Netlify exclusivo de staging. Los gates locales no mutantes,
+las migraciones de staging y los recorridos B1-B4 estan aprobados. La
+liberacion continua en **HOLD** por dos causas independientes:
 
-1. El arbol de trabajo sigue siendo mutable y mezcla cambios de producto,
-   pruebas, documentacion y artefactos locales. El scan sellado conserva el
-   digest exacto revisado, pero no reemplaza un candidato Git inmutable.
-2. El destino Supabase exclusivo de staging ya esta migrado, sin drift no
-   documentado y con runtime sin DDL. La revision candidata fue desplegada y la
-   cohorte B1-B3 aprobo recorrido autenticado, aislamiento, concurrencia y
-   revision visual; faltan B4-B5, rollback, observabilidad externa y accesibilidad sobre
-   dispositivos fisicos.
+1. El diff scan sellado del candidato inmutable encontro 12 hallazgos
+   reportables: 3 medios y 9 bajos. Los medios bloquean la publicacion; los
+   bajos requieren correccion o aceptacion formal con responsable y fecha.
+2. Falta cerrar el recorrido combinado B5 por HTTPS, worker y PostgreSQL, la
+   accesibilidad en dispositivos y lector reales, y las firmas formales de
+   producto, seguridad, operacion y responsable tecnico.
 
 Este documento prepara la liberacion, pero no autoriza aplicar migraciones,
 activar flags, desplegar, ejecutar cobros ni usar datos de clientes.
@@ -81,6 +79,25 @@ Verificacion post-remediacion sellada:
 - Informe sellado:
   `C:\Users\Binv\.codex\state\plugins\codex-security\scans\icc-topografia\e6ff153694dc01ab8a2b5848556fa6839626b2af_20261021T044847Z_rxmruakc\report.md`.
 
+Revision sellada del candidato inmutable actual:
+
+- Scan: `c0063481-ad37-479b-a035-0b94126dd55a`.
+- Rango:
+  `e6ff153694dc01ab8a2b5848556fa6839626b2af..1c4e4d4d37d03ac54088ab04914a76f51769290c`.
+- Snapshot:
+  `codex-security-snapshot/v1:sha256:68a2e7af65099ad63812f4223628145b6b4953f44c754424ef4c506c637ee402`.
+- Cobertura: completa; 250 de 250 elementos autoritativos del diff revisados,
+  19 candidatos validados y 16 sometidos a analisis de ruta de ataque.
+- Resultado final: 12 hallazgos reportables, 3 medios y 9 bajos; 3 candidatos
+  fueron suprimidos durante validacion y 4 descartados por politica de ruta de
+  ataque.
+- Medios bloqueantes: visibilidad prematura de borradores de respaldo,
+  sobreproyeccion de campos al revisor y exposicion de `NETLIFY_AUTH_TOKEN` al
+  build/CLI no fijado.
+- Informe sellado:
+  `C:\Users\Binv\.codex\state\plugins\codex-security\scans\icc-topografia\1c4e4d4d37d03ac54088ab04914a76f51769290c_20261030T124858Z_b0e7jy4h\report.md`.
+- Produccion no fue inspeccionada ni modificada durante la revision.
+
 Orden de remediacion propuesto:
 
 1. Aislamiento tenant e idempotencia: vincular los replays de necesidades,
@@ -108,9 +125,10 @@ Estado local de remediacion al 21 de octubre de 2026:
 - Las decisiones profesionales pendientes conservan la excepcion terminal
   documentada en ADR-007.
 
-La seguridad del snapshot ya no bloquea la preparacion del candidato. No se debe
-iniciar staging hasta crear y volver a validar una revision Git inmutable y
-registrar la aprobacion producto/seguridad de ADR-007.
+La remediacion del snapshot historico permitio crear el candidato inmutable. El
+scan actual reabre el gate de seguridad: no se debe preparar produccion hasta
+corregir los tres medios, decidir los nueve bajos y sellar un nuevo diff scan
+sin hallazgos medios abiertos.
 
 ## Inventario B1-B5
 
@@ -346,8 +364,12 @@ este release.
 
 ### Corte operativo del 30 de octubre de 2026
 
-- Preparacion tecnica estimada: **97 %**. Este porcentaje mide el candidato y
-  staging; no constituye autorizacion para produccion.
+- Implementacion tecnica y staging: **97 %**. Este porcentaje mide codigo,
+  migraciones, contratos y preparacion del entorno; no autoriza produccion.
+- Readiness para publicacion: **68 %**. Ponderacion registrada: base tecnica y
+  staging 40/40, E2E/operacion 18/25, seguridad 6/20 y
+  accesibilidad/aprobaciones 4/15. El porcentaje no puede superar el gate
+  mientras exista un hallazgo medio abierto.
 - `9e2ea15` separa credenciales de schedulers por entorno y rechaza destinos o
   secretos productivos desde despliegues no productivos antes de realizar I/O.
 - `2f75982` trata facturacion no configurada como un skip autenticado antes de
@@ -380,10 +402,11 @@ este release.
 - No se aplicaron migraciones, no se desplego produccion y no se modificaron
   clientes reales.
 
-El HOLD permanece por la activacion externa B5 (proveedor, dispatcher HTTPS y
-ventana de observabilidad), la limpieza controlada de la fixture runtime que
-aun requiera escritura acotada, accesibilidad en dispositivo/lector reales y
-las firmas formales de producto, seguridad, operacion y responsable tecnico.
+El HOLD permanece por los tres hallazgos medios del scan inmutable, la decision
+sobre los nueve bajos, el recorrido combinado B5 (proveedor, dispatcher HTTPS,
+PostgreSQL y ventana de observabilidad), la accesibilidad en
+dispositivo/lector reales y las firmas formales de producto, seguridad,
+operacion y responsable tecnico.
 
 El runner `test:platform-staging-b5-dispatch` ya deja preparada la prueba
 acotada del proveedor/worker: falla antes de cargar Prisma si no coinciden Site
