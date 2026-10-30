@@ -60,10 +60,13 @@ async function verifyPrismaBoundary() {
   const require = createRequire(import.meta.url);
   const generated = require.resolve(".prisma/client/index.js");
   const source = readFileSync(generated, "utf8");
-  assert.match(source, /"schemaEnvPath": "\.\.\/\.\.\/\.\.\/\.env"/);
+  // Prisma records null in a clean CI checkout and a relative path locally.
+  // Both builds must exercise the same synthetic dotenv positive control.
+  const schemaEnvPath = /"schemaEnvPath"\s*:\s*(?:"(?:[^"\\]|\\.)*"|null)/;
+  assert.ok(schemaEnvPath.test(source), "Generated Prisma client must expose its dotenv location.");
   // Exercise the installed generated client and actual Prisma runtime, with
   // only its dotenv location pointed at a synthetic temporary directory.
-  const isolatedSource = source.replace(/"schemaEnvPath": "\.\.\/\.\.\/\.\.\/\.env"/, () => `"schemaEnvPath": ${JSON.stringify(fixtureEnv)}`);
+  const isolatedSource = source.replace(schemaEnvPath, () => `"schemaEnvPath": ${JSON.stringify(fixtureEnv)}`);
   const generatedModule = { exports: {} as { PrismaClient: new () => { $disconnect: () => Promise<void> } } };
   const saved = { ...process.env };
   const literal = "postgresql://synthetic:literal${VALUE}@127.0.0.1:1/unused";
