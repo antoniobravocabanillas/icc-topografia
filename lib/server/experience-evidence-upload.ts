@@ -376,7 +376,15 @@ export async function attachExperienceEvidenceReceipts(tokens: string[], experie
         if (consumed.length) await tx.verificationToken.deleteMany({ where: { token: { in: consumed.map((row) => row.token) } } });
         stage = "attached-read";
         return tx.terraqoExperienceEvidence.findMany({ where: { storageKey: { in: receipts.map((item) => item.storageKey) }, experienceId }, orderBy: { createdAt: "asc" } });
-      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      }, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        // Supabase is remote and the retained-storage floor intentionally
+        // aggregates every personal evidence source while holding the owner
+        // lock. Prisma's 5 s interactive-transaction default can expire before
+        // the final receipt read even though every statement succeeded.
+        maxWait: 5_000,
+        timeout: 20_000,
+      });
       stage = "chunk-cleanup";
       const store = getWorklogEvidenceUploadStore();
       await Promise.all(receipts.flatMap((receipt) => Array.from({ length: receipt.chunks }, (_, index) => store.delete(`${EXPERIENCE_EVIDENCE_PREFIX}/pending/${userPrefix(userId)}/${receipt.uploadId}/chunks/${index}`).catch(() => undefined))));

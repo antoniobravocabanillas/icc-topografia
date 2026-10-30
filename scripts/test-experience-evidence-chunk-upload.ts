@@ -90,6 +90,8 @@ async function main() {
   assert.match(editForm, /ExperienceEvidenceForm/);
   assert.doesNotMatch(actions, /evidenceFilesFromForm|storeExperienceEvidenceFiles/);
   assert.match(actions, /attachExperienceEvidenceReceipts/);
+  assert.match(serverUpload, /maxWait:\s*5_000/);
+  assert.match(serverUpload, /timeout:\s*20_000/);
   assert.match(serverUpload, /MAX_PENDING_UPLOAD_BYTES\s*=\s*64\s*\*\s*1024\s*\*\s*1024/);
   assert.match(serverUpload, /pg_advisory_xact_lock/);
   assert.match(serverUpload, /personalRetainedStorageUnits\(tx, userId\)/);
