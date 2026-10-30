@@ -49,6 +49,27 @@ assert.ok(
   "test-b5-browser-accessibility.ts debe importar Prisma únicamente después de validar la base dedicada.",
 );
 
+const stagingB5DispatchSource = readFileSync(
+  resolve(process.cwd(), "scripts", "test-platform-staging-b5-dispatch.ts"),
+  "utf8",
+);
+assert.doesNotMatch(
+  stagingB5DispatchSource,
+  /^import\s+.*(?:@\/lib\/prisma|lib\/prisma)/m,
+  "El gate B5 HTTPS no debe cargar Prisma antes de confirmar staging.",
+);
+const stagingB5Consent = stagingB5DispatchSource.indexOf(
+  "process.env.TERRAQO_STAGING_B5_PROVIDER_TESTS",
+);
+const stagingB5Target = stagingB5DispatchSource.indexOf("validatePlatformStagingEnvironment(process.env)");
+const stagingB5PrismaImport = stagingB5DispatchSource.indexOf('import("@/lib/prisma")');
+assert.ok(stagingB5Consent >= 0, "El gate B5 HTTPS debe exigir consentimiento exacto.");
+assert.ok(stagingB5Target > stagingB5Consent, "El gate B5 HTTPS debe validar el destino después del consentimiento.");
+assert.ok(
+  stagingB5PrismaImport > stagingB5Target,
+  "El gate B5 HTTPS debe cargar Prisma únicamente después de validar el destino.",
+);
+
 const iccMutatingScripts = [
   "test-icc-mobile-flows.ts",
   "test-icc-native-login.ts",
@@ -81,4 +102,4 @@ assert.ok(
   "El runner HTTPS nativo debe cargar persistencia y sesiones únicamente después de validar alcance y origen.",
 );
 
-console.log(`PASS: ${guardedScripts.length} isolation gates, ${iccMutatingScripts.length} ICC validators, the native HTTPS runner, the B5 browser gate and the deployed portal fixture fail closed before loading Prisma.`);
+console.log(`PASS: ${guardedScripts.length} isolation gates, ${iccMutatingScripts.length} ICC validators, the native HTTPS runner, both B5 gates and the deployed portal fixture fail closed before loading Prisma.`);

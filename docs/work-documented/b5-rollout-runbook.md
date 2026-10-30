@@ -59,6 +59,21 @@ npm run test:b5-ollama-provider-gate
 
 Este gate mutante rechaza tanto PostgreSQL como Ollama remotos. Crea un expediente y una fuente pública completamente sintéticos, procesa un job real con el worker de dominio, exige contrato/citas válidas y limpia todos los fixtures. No sustituye la prueba del dispatcher HTTPS ni autoriza exponer el puerto 11434.
 
+Con Groq u OpenAI configurado en el Site ID aislado, pero manteniendo
+`TERRAQO_EVIDENCE_ANALYSIS_V1=false`, el recorrido remoto de proveedor y
+dispatcher se ejecuta con:
+
+```powershell
+npm run test:platform-staging-b5-dispatch
+```
+
+El runner exige el project ref, rol runtime, URL y dos consentimientos exactos;
+rechaza cualquier dato preexistente, crea un expediente/fuente/job sinteticos,
+invoca el background worker por HTTPS, espera un estado terminal valido,
+comprueba proveedor, trazabilidad y proyeccion autorizada y elimina todos sus
+fixtures en `finally`. No activa la UI ni sustituye el posterior gate HTTP con
+la cohorte T18 encendida.
+
 ## Precondiciones externas
 
 Antes de abrir una conexion, cargar las variables del entorno aislado en el

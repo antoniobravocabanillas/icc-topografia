@@ -385,6 +385,12 @@ ventana de observabilidad), la limpieza controlada de la fixture runtime que
 aun requiera escritura acotada, accesibilidad en dispositivo/lector reales y
 las firmas formales de producto, seguridad, operacion y responsable tecnico.
 
+El runner `test:platform-staging-b5-dispatch` ya deja preparada la prueba
+acotada del proveedor/worker: falla antes de cargar Prisma si no coinciden Site
+URL, project ref, rol runtime, flags y consentimientos; solo admite una base
+vacia y limpia sus fixtures. Su existencia no cuenta como evidencia hasta
+ejecutarlo contra un despliegue con proveedor y secreto exclusivos de staging.
+
 ### Fase C - activacion por cohortes
 
 1. B1/B2.
