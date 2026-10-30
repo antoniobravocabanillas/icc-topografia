@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { prisma } from "@/lib/prisma";
 import { createCustomerTicketAction, replyCustomerTicketAction, respondPublicQuoteFromFormAction, updateClientProfileAction } from "@/lib/server/customer-actions";
 import { createMetadata } from "@/lib/seo";
+import { resolvePortalHomeWorkspaceId } from "@/lib/terraqo/portal-home-scope";
 import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 import { worklogInclude } from "@/lib/terraqo/worklog";
 import { selectProfessionalWorkspaceMembership } from "@/lib/terraqo/professional-workspace";
@@ -63,61 +64,6 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
   const params = await searchParams;
   const session = await auth();
   if (!session?.user?.email) redirect("/cuenta");
-  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
-
-  const account = await prisma.clientAccount.findFirst({
-    where: {
-      OR: [{ userId: session.user.id }, { user: { email: session.user.email } }],
-      terraqoWorkspaceId,
-      deletedAt: null,
-    },
-    include: {
-      company: true,
-      contact: true,
-      client: {
-        include: {
-          quotes: {
-            where: { terraqoWorkspaceId,deletedAt:null,status:{not:"DRAFT"} },
-            include: { items: true, sellerProfile: true },
-            orderBy: { createdAt: "desc" },
-          },
-          projects: {
-            where: { terraqoWorkspaceId },
-            include: {
-              images: { orderBy: { position: "asc" }, take: 1 },
-              progress: { orderBy: { createdAt: "desc" }, take: 3 },
-            },
-            orderBy: { updatedAt: "desc" },
-          },
-          tickets: {
-            where: { terraqoWorkspaceId },
-            include: {
-              assignedProfile: true,
-              messages: { orderBy: { createdAt: "asc" } },
-            },
-            orderBy: { updatedAt: "desc" },
-          },
-          documents: { orderBy: { createdAt: "desc" } },
-          user: {
-            select: {
-              orders: {
-                where: { terraqoWorkspaceId },
-                include: {
-                  items: {
-                    include: {
-                      product: { select: { name: true, slug: true } },
-                    },
-                  },
-                },
-                orderBy: { createdAt: "desc" },
-                take: 30,
-              },
-            },
-          },
-        },
-      },
-    },
-  });
   const professionalProfile = await prisma.terraqoProfessionalProfile.findFirst({
     where: {
       OR: [{ userId: session.user.id }, { user: { email: session.user.email } }],
@@ -175,6 +121,65 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
       },
     },
   });
+  const terraqoWorkspaceId = await resolvePortalHomeWorkspaceId(
+    Boolean(professionalProfile),
+    getDefaultTerraqoWorkspaceId,
+  );
+  const account = terraqoWorkspaceId
+    ? await prisma.clientAccount.findFirst({
+        where: {
+          OR: [{ userId: session.user.id }, { user: { email: session.user.email } }],
+          terraqoWorkspaceId,
+          deletedAt: null,
+        },
+        include: {
+          company: true,
+          contact: true,
+          client: {
+            include: {
+              quotes: {
+                where: { terraqoWorkspaceId, deletedAt: null, status: { not: "DRAFT" } },
+                include: { items: true, sellerProfile: true },
+                orderBy: { createdAt: "desc" },
+              },
+              projects: {
+                where: { terraqoWorkspaceId },
+                include: {
+                  images: { orderBy: { position: "asc" }, take: 1 },
+                  progress: { orderBy: { createdAt: "desc" }, take: 3 },
+                },
+                orderBy: { updatedAt: "desc" },
+              },
+              tickets: {
+                where: { terraqoWorkspaceId },
+                include: {
+                  assignedProfile: true,
+                  messages: { orderBy: { createdAt: "asc" } },
+                },
+                orderBy: { updatedAt: "desc" },
+              },
+              documents: { orderBy: { createdAt: "desc" } },
+              user: {
+                select: {
+                  orders: {
+                    where: { terraqoWorkspaceId },
+                    include: {
+                      items: {
+                        include: {
+                          product: { select: { name: true, slug: true } },
+                        },
+                      },
+                    },
+                    orderBy: { createdAt: "desc" },
+                    take: 30,
+                  },
+                },
+              },
+            },
+          },
+        },
+      })
+    : null;
   let professionalWorkspaceId: string | null = null;
   let professionalDashboard: ProfessionalDashboardData | null = null;
 
