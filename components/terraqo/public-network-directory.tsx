@@ -50,7 +50,7 @@ export function PublicNetworkDirectory({ profiles }: { profiles: PublicProfile[]
   const [sort, setSort] = useState("recent");
 
   const specialtyOptions = useMemo(
-    () => Array.from(new Set(profiles.flatMap((profile) => [...profile.categories, ...profile.specialties]).filter(Boolean))).sort((a, b) => a.localeCompare(b, "es")),
+    () => Array.from(new Map(profiles.flatMap((profile) => [...profile.categories, ...profile.specialties]).filter(Boolean).map(value => [normalized(value), value.trim()])).values()).sort((a, b) => a.localeCompare(b, "es")),
     [profiles]
   );
   const locationOptions = useMemo(
@@ -64,7 +64,7 @@ export function PublicNetworkDirectory({ profiles }: { profiles: PublicProfile[]
       const skills = [...profile.categories, ...profile.specialties];
       const haystack = normalized([profile.name, profile.headline, profile.bio, profile.location, profile.companyName, profile.roleTitle, ...skills].filter(Boolean).join(" "));
       if (needle && !haystack.includes(needle)) return false;
-      if (specialty !== "all" && !skills.includes(specialty)) return false;
+      if (specialty !== "all" && !skills.some(skill => normalized(skill) === normalized(specialty))) return false;
       if (location !== "all" && profile.location !== location) return false;
       if (availability === "available" && !["AVAILABLE", "OPEN_TO_PROJECTS"].includes(profile.status)) return false;
       if (availability === "online" && (!profile.onlineUntil || Date.parse(profile.onlineUntil) <= Date.now())) return false;
@@ -82,11 +82,11 @@ export function PublicNetworkDirectory({ profiles }: { profiles: PublicProfile[]
   return (
     <div className="tq-network-public min-h-screen bg-[#f4f7f6] text-[#092b2a]">
       <section className="border-b border-[#dce6e2] bg-white">
-        <div className="tq-public-wrap grid gap-10 py-14 lg:grid-cols-[minmax(0,0.9fr)_minmax(420px,1.1fr)] lg:items-end lg:py-20">
+        <div className="tq-public-wrap grid gap-6 py-8 lg:py-10">
           <div>
-            <p className="font-mono text-xs font-bold uppercase tracking-[0.16em] text-[#08746d]">Red operativa Terraqo</p>
-            <h1 className="mt-5 max-w-3xl font-display text-5xl font-black leading-[0.98] tracking-[-0.045em] text-[#082d2b] sm:text-6xl">Encuentra capacidad demostrada, no solo perfiles.</h1>
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-[#526562]">Profesionales que habilitaron su perfil descubrible, con una vista pública de sus especialidades y disponibilidad para colaborar.</p>
+            <p className="font-mono text-xs font-bold uppercase tracking-[0.16em] text-[#08746d]">Red profesional Terraqo</p>
+            <h1 className="mt-3 max-w-4xl font-display text-3xl font-semibold leading-tight tracking-[-0.035em] text-[#082d2b] sm:text-4xl">Encuentra capacidad demostrada, no solo perfiles.</h1>
+            <p className="mt-3 max-w-3xl text-base leading-7 text-[#526562]">Profesionales que habilitaron su perfil descubrible, con una vista pública de sus especialidades y disponibilidad para colaborar.</p>
           </div>
           <div className="rounded-[20px] border border-[#cddbd6] bg-[#f8faf9] p-4 shadow-[0_20px_60px_rgba(8,45,43,0.07)] sm:p-6">
             <label className="block">
@@ -102,7 +102,7 @@ export function PublicNetworkDirectory({ profiles }: { profiles: PublicProfile[]
         </div>
       </section>
 
-      <section className="tq-public-wrap py-10 lg:py-14">
+      <section className="tq-public-wrap py-6 lg:py-8">
         <div className="mb-6 flex flex-col justify-between gap-3 border-b border-[#cddbd6] pb-5 sm:flex-row sm:items-end">
           <div>
             <p role="status" className="text-sm font-black text-[#153d39]">{filtered.length} {filtered.length === 1 ? "perfil público" : "perfiles públicos"}</p>
@@ -137,7 +137,6 @@ export function PublicNetworkDirectory({ profiles }: { profiles: PublicProfile[]
 
 function ProfileRow({ profile }: { profile: PublicProfile }) {
   const skills = Array.from(new Set([...profile.categories, ...profile.specialties])).slice(0, 5);
-  const online = Boolean(profile.onlineUntil && Date.parse(profile.onlineUntil) > Date.now());
   return (
     <article className="tq-network-profile group p-5 transition hover:bg-[#f7faf8] sm:p-7">
       <div className="grid gap-5 md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center">
@@ -147,7 +146,7 @@ function ProfileRow({ profile }: { profile: PublicProfile }) {
             <h2 className="font-display text-2xl font-black tracking-[-0.025em] text-[#092b2a]"><Link href={`/cv/${profile.username}`}>{profile.name}</Link></h2>
             {profile.verified ? <span className="rounded-full bg-[#dff4ea] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-[#07664e]">Verificado</span> : null}
             <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#52706a]"><i className="h-2 w-2 rounded-full bg-[#25a9b8]" />{availabilityLabel(profile.status)}</span>
-            <span className={`inline-flex items-center gap-1.5 text-xs font-bold ${online ? "text-[#087a58]" : "text-[#7a8986]"}`}><i className={`h-2 w-2 rounded-full ${online ? "bg-[#14a16d]" : "bg-[#93a39f]"}`} />{online ? "En línea" : "Fuera de línea"}</span>
+
           </div>
           <p className="mt-1 font-bold text-[#08746d]">{profile.headline || profile.roleTitle || "Profesional Terraqo"}</p>
           <p className="mt-2 text-sm text-[#657773]">{[profile.companyName, profile.location, profile.country].filter(Boolean).join(" · ")}</p>
@@ -155,7 +154,7 @@ function ProfileRow({ profile }: { profile: PublicProfile }) {
           {profile.bio ? <details className="tq-network-bio"><summary>Conocer su trayectoria</summary><p>{profile.bio}</p><Link href={`/cv/${profile.username}/evidencias`}>Explorar sus evidencias públicas →</Link></details> : null}
         </div>
         <div className="flex min-w-[190px] flex-row items-center justify-between gap-4 md:flex-col md:items-end">
-          <p className="text-xs font-semibold text-[#657773]">{profile.verifiedExperiences} verificadas · {profile.visibleExperiences} visibles</p>
+          <p className="text-xs font-semibold text-[#657773]">{profile.verifiedExperiences} de {profile.visibleExperiences} experiencias visibles verificadas</p>
           <Link href={`/cv/${profile.username}`} className="inline-flex min-h-11 items-center justify-center rounded-[8px] bg-[#07534e] px-5 text-sm font-black text-white transition group-hover:bg-[#08746d]">Ver perfil completo</Link>
         </div>
       </div>
@@ -166,7 +165,7 @@ function ProfileRow({ profile }: { profile: PublicProfile }) {
 function Filter({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: Array<{ value: string; label: string }> }) {
   return (
     <label>
-      <span className="sr-only">{label}</span>
+      <span className="mb-2 block text-xs font-semibold">{label}</span>
       <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} className="h-11 w-full rounded-[8px] border border-[#c8d6d1] bg-white px-3 text-sm font-bold text-[#405954] outline-none focus:border-[#08746d]">
         {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select>

@@ -2,16 +2,16 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowLeft, ArrowRight, BadgeCheck, BellRing, BriefcaseBusiness, CalendarDays, Check, FileCheck2, MapPin, Network, ShieldCheck, UserRoundCheck, Workflow } from "lucide-react";
+import { ArrowLeft, ArrowRight, BellRing, BriefcaseBusiness, CalendarDays, Check, FileCheck2, MapPin, Network, ShieldCheck, UserRoundCheck, Workflow } from "lucide-react";
 import { terraqoDomains } from "@/lib/terraqo-domains";
 import styles from "./terraqo-home-experience.module.css";
 
 const views = [
-  { id:"identity", label:"Identidad", icon:UserRoundCheck, title:"Una trayectoria que se actualiza con trabajo real.", copy:"Experiencias, bitácoras, documentos y validaciones bajo control del profesional.", stats:["12 registros","5 experiencias","4 validaciones"] },
-  { id:"workspace", label:"Workspace", icon:BriefcaseBusiness, title:"La operación mantiene contexto y responsables.", copy:"Proyectos, equipos, archivos y conversaciones aislados dentro de cada empresa.", stats:["17 proyectos","22 profesionales","148 evidencias"] },
-  { id:"automation", label:"Automatización", icon:Workflow, title:"Los procesos avanzan sin seguimiento manual.", copy:"Eventos y acciones conectan CRM, proyectos, talento y comunicación según el plan.", stats:["5 flujos","1.000 ejecuciones","Auditoría activa"] },
+  { id:"identity", label:"Identidad", icon:UserRoundCheck, title:"Una trayectoria que se actualiza con trabajo real.", copy:"Experiencias, bitácoras, documentos y validaciones bajo control del profesional.", stats:["Bitácoras","Experiencias","Revisiones"] },
+  { id:"workspace", label:"Workspace", icon:BriefcaseBusiness, title:"La operación mantiene contexto y responsables.", copy:"Proyectos, equipos, archivos y conversaciones aislados dentro de cada empresa.", stats:["Proyectos","Equipos","Evidencias"] },
+  { id:"automation", label:"Automatización", icon:Workflow, title:"Los procesos avanzan sin seguimiento manual.", copy:"Eventos y acciones conectan CRM, proyectos, talento y comunicación según el plan.", stats:["Eventos","Acciones","Seguimiento"] },
 ] as const;
-const signals = [["AB","Antonio Bravo","Replanteo de luminarias"],["YD","Yamila Denis","Levantamiento validado"],["IC","ICC Topografía","Oportunidad publicada"]];
+const signals = [["01","Profesionales","Trayectoria y trabajo documentado"],["02","Equipos","Contribuciones con contexto"],["03","Empresas","Colaboración con permisos"]];
 
 export type HomeWorklog = {
   id: string;
@@ -86,7 +86,7 @@ export function TerraqoHomeExperience({ latestWorklogs }: { latestWorklogs: Home
     <section className={styles.hero}>
       <div className={styles.heroCopy}>
         <span className={styles.eyebrow}>La red del trabajo real</span>
-        <h1>Tu trabajo merece <em>ser reconocido.</em></h1>
+        <h1>Tu experiencia.<br />Visible.<em>Con respaldo.</em></h1>
         <p>Convierte cada proyecto en parte de tu trayectoria. Personas, empresas y evidencia conectadas con contexto verificable.</p>
         <div className={styles.actions}><Link href={`${terraqoDomains.portal}/registro`} prefetch={false}>Crear mi identidad <ArrowRight aria-hidden="true" /></Link><Link href="/producto">Conoce Terraqo <ArrowRight aria-hidden="true" /></Link></div>
         <div className={styles.facts}><span><Check aria-hidden="true" /> Perfil independiente</span><span><Check aria-hidden="true" /> Evidencia verificable</span><span><Check aria-hidden="true" /> Propiedad de tus datos</span></div>
@@ -106,7 +106,7 @@ export function TerraqoHomeExperience({ latestWorklogs }: { latestWorklogs: Home
     </section>
     <section className={styles.statement}><span>No es otro directorio</span><h2>Un CV dice lo que hiciste.<em>Terraqo puede demostrarlo.</em></h2><p>El trabajo deja de quedar aislado en documentos y conversaciones. Cada resultado puede conservar proyecto, autor, fecha, evidencia y validación.</p></section>
     <section className={styles.product}><div className={styles.sectionIntro}><span>Producto conectado</span><h2>Tres espacios. Una sola fuente de contexto.</h2><p>Selecciona una vista para entender cómo se relacionan sin mezclar propiedad ni permisos.</p></div><div className={styles.productShell}><nav>{views.map(({id,label,icon:Icon})=><button key={id} type="button" aria-pressed={active===id} onClick={()=>setActive(id)}><Icon />{label}</button>)}</nav><div className={styles.productView} key={active}><div className={styles.productIcon}><ActiveIcon /></div><div><small>{current.label}</small><h3>{current.title}</h3><p>{current.copy}</p><div className={styles.stats}>{current.stats.map((stat)=><span key={stat}>{stat}</span>)}</div><Link href={active==="automation"?"/automatizacion":active==="workspace"?"/plataforma":"/producto"}>Ver capacidad completa <ArrowRight /></Link></div></div></div></section>
-    <section className={styles.networkSection}><div className={styles.sectionIntro}><span>Red profesional</span><h2>Conecta con capacidad demostrada, no con ruido.</h2><p>Descubre profesionales y empresas por experiencia visible, especialidad, disponibilidad y trabajo documentado.</p></div><div className={styles.people}>{signals.map(([initials,name,event],index)=><article key={name}><header><i>{initials}</i><div><h3>{name}</h3><p>{index===2?"Empresa verificada":"Profesional disponible"}</p></div>{index<2&&<BadgeCheck />}</header><span>{event}</span><footer><Link href="/red">Explorar en la red</Link><ArrowRight /></footer></article>)}</div></section>
+    <section className={styles.networkSection}><div className={styles.sectionIntro}><span>Red profesional</span><h2>Conecta con capacidad demostrada, no con ruido.</h2><p>Descubre profesionales y empresas por experiencia visible, especialidad, disponibilidad y trabajo documentado.</p></div><div className={styles.people}>{signals.map(([initials,name,event])=><article key={name}><header><i>{initials}</i><div><h3>{name}</h3><p>Explora la red profesional</p></div></header><span>{event}</span><footer><Link href="/red">Explorar en la red</Link><ArrowRight /></footer></article>)}</div></section>
     <section className={styles.trust}><div><span>Confianza por capas</span><h2>No toda información tiene el mismo peso.</h2><p>Terraqo diferencia lo declarado de aquello revisado, respaldado o confirmado.</p><Link href="/plataforma">Conocer la arquitectura <ArrowRight /></Link></div><ol>{[["01","Declarado"],["02","Revisado por Terraqo"],["03","Respaldado por supervisor"],["04","Confirmado por empresa"]].map(([n,label])=><li key={n}><b>{n}</b><span>{label}</span><FileCheck2 /></li>)}</ol></section>
     <section className={styles.automation}><BellRing /><div><span>Automatización por suscripción</span><h2>El seguimiento ocurre mientras el equipo trabaja.</h2><p>Professional activa alertas y asignaciones; Premium suma condiciones; Enterprise incorpora integraciones y gobierno avanzado.</p></div><Link href="/automatizacion">Comparar capacidades <ArrowRight /></Link></section>
     <section className={styles.closing}><Network /><h2>Construye una identidad profesional que crece mientras trabajas.</h2><p>Trabajo real. Contexto compartido. Confianza verificable.</p><div className={styles.actions}><Link href={`${terraqoDomains.portal}/registro`} prefetch={false}>Crear cuenta <ArrowRight /></Link><Link href="/membresias">Ver membresías</Link></div></section>
