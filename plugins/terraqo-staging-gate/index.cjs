@@ -11,7 +11,10 @@ function run(stage, { utils }) {
   const result = spawnSync(process.execPath, ["--import", "tsx", resolve("scripts/run-platform-staging-cloud.ts"), stage], {
     cwd: process.cwd(), env: process.env, stdio: "inherit", timeout: 1_100_000, shell: false,
   });
-  if (result.status !== 0) utils.build.failBuild(`Staging ${stage} failed; production release remains blocked.`);
+  if (result.status !== 0) {
+    const fail = stage === "verify" ? utils.build.failPlugin : utils.build.failBuild;
+    fail(`Staging ${stage} failed; production release remains blocked.`);
+  }
 }
 
 module.exports = {

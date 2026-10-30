@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFile, execFileSync, spawnSync } from "node:child_process";
 import { existsSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -27,16 +27,32 @@ async function main() {
     return;
   }
   async function verifyCandidate() {
-    const response = await fetch(`${stagingCloudOrigin}/__terraqo_staging_candidate.json?deploy=${target.deployId}`, { cache: "no-store", signal: AbortSignal.timeout(30_000) });
+    let response: Response | undefined;
+    // Only this idempotent GET may retry transport failures. A wrong identity
+    // or HTTP error still fails immediately, and fixture writes never retry.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        response = await fetch(`${stagingCloudOrigin}/__terraqo_staging_candidate.json?deploy=${target.deployId}`, { cache: "no-store", headers: { connection: "close" }, signal: AbortSignal.timeout(30_000) });
+        break;
+      } catch (error) {
+        if (attempt === 2) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
+    assert.ok(response);
     assert.equal(response.status, 200, "El candidato todavia no esta servido.");
     assertStagingCandidate(await response.json(), target);
   }
   for (const gate of target.gates) {
     await verifyCandidate();
     const started = Date.now();
-    const result = spawnSync(process.execPath, ["--conditions=react-server", "--import", "tsx", resolve(root, "scripts", stagingGateScript(gate))], {
-      cwd: root, env: stagingCloudGateEnvironment(target.environment, gate), encoding: "utf8", timeout: 480_000,
-      maxBuffer: 2 * 1024 * 1024, windowsHide: true, shell: false,
+    // Keep the event loop alive while browsers run; a synchronous child blocks
+    // socket close/timer events and can leave stale HTTP connections behind.
+    const result = await new Promise<{ status: number; signal: string | null; stdout: string; stderr: string }>((resolveResult) => {
+      execFile(process.execPath, ["--conditions=react-server", "--import", "tsx", resolve(root, "scripts", stagingGateScript(gate))], {
+        cwd: root, env: stagingCloudGateEnvironment(target.environment, gate), encoding: "utf8", timeout: 480_000,
+        maxBuffer: 2 * 1024 * 1024, windowsHide: true, shell: false,
+      }, (error, stdout, stderr) => resolveResult({ status: typeof error?.code === "number" ? error.code : error ? 1 : 0, signal: error?.signal ?? null, stdout, stderr }));
     });
     console.log(JSON.stringify({ gate, passed: result.status === 0, exit: result.status, signal: result.signal, durationMs: Date.now() - started,
       ...(result.status === 0 ? {} : cloudFailureDiagnostic(`${result.stdout ?? ""}\n${result.stderr ?? ""}`)) }));
