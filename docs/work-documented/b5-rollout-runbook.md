@@ -75,6 +75,13 @@ staging/gate/test, si la URL publica corresponde a produccion, si un flag esta
 activo, si la cohorte no esta vacia o si los secretos operativos son debiles o
 reutilizados. No imprime usuarios, contrasenas ni URLs completas.
 
+La preparacion del proveedor se valida en una segunda pasada, todavia con
+`TERRAQO_EVIDENCE_ANALYSIS_V1=false`. Para Groq u OpenAI se exige
+`PLATFORM_STAGING_PROVIDER_CONFIRM` con el nombre exacto y la credencial
+correspondiente; Ollama remoto se rechaza. Al encender T18, el preflight exige
+todos los flags B1-B4, exactamente un workspace piloto, coincidencia exacta
+entre ambos allowlists y `PLATFORM_STAGING_ACTIVATION_CONFIRM=cohort`.
+
 1. Identificar por escrito una base de staging aislada y confirmar host, base y propietario. No aceptar una URL ambigua, alias de producción ni rama Accelerate compartida.
 2. Tomar respaldo recuperable y ejecutar una restauración de prueba antes de la ventana.
 3. Mantener todos los flags B1–B5 en `false`, proveedor en `off` y allowlist del piloto vacía.

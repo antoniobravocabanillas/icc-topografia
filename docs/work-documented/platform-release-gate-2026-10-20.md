@@ -209,6 +209,10 @@ Mantener inicialmente apagado:
   remota confirmada, `B5_GATE_ALLOW_REMOTE_READONLY`.
 - `PLATFORM_STAGING_CONFIRM` y `PLATFORM_STAGING_ALLOW_REMOTE`; ejecutar
   `npm run check:platform-staging` antes de cualquier conexion.
+- `PLATFORM_STAGING_PROVIDER_CONFIRM`: vacio con proveedor `off`; debe ser
+  exactamente `groq` u `openai` durante la preparacion de T18. El gate rechaza
+  Ollama remoto, proveedor sin credencial, B5 sin todos sus prerrequisitos y
+  una primera cohorte distinta de un unico workspace.
 - En Supabase, `B5_GATE_EXPECTED_DATABASE=postgres` solo es valido junto con el
   proveedor, nombre de recurso y project ref confirmados. No reutilizar el
   proyecto `Terraqo` ni inferir que un proyecto inactivo equivale a staging.

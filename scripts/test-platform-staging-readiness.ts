@@ -33,6 +33,7 @@ assert.equal(target.databaseProvider, "postgresql");
 assert.equal(target.remoteDatabase, true);
 assert.deepEqual(target.enabledFlags, []);
 assert.deepEqual(target.pilotWorkspaceIds, []);
+assert.equal(target.evidenceAnalysisProvider, "off");
 
 const supabaseRef = "abcdefghijklmnopqrst";
 const supabaseEnvironment = {
@@ -88,6 +89,27 @@ const activated = validatePlatformStagingEnvironment({
 assert.deepEqual(activated.enabledFlags, ["TERRAQO_WORKLOG_FTS_V1", "TERRAQO_WORK_CASES_V1"]);
 rejects({ TERRAQO_OAUTH_ENABLED: "true" }, /OAuth debe iniciar deshabilitado/);
 rejects({ TERRAQO_TRANSACTIONAL_EMAIL_ENABLED: "true" }, /correo transaccional debe iniciar deshabilitado/);
+rejects({
+  TERRAQO_EVIDENCE_ANALYSIS_PROVIDER: "ollama",
+  PLATFORM_STAGING_PROVIDER_CONFIRM: "ollama",
+}, /debe ser off, groq u openai/);
+rejects({ TERRAQO_EVIDENCE_ANALYSIS_PROVIDER: "groq" }, /PROVIDER_CONFIRM=groq/);
+rejects({
+  TERRAQO_EVIDENCE_ANALYSIS_PROVIDER: "groq",
+  PLATFORM_STAGING_PROVIDER_CONFIRM: "groq",
+}, /Define GROQ_API_KEY/);
+rejects({
+  TERRAQO_EVIDENCE_ANALYSIS_PROVIDER: "openai",
+  PLATFORM_STAGING_PROVIDER_CONFIRM: "openai",
+  OPENAI_API_KEY: "short",
+}, /OPENAI_API_KEY debe tener al menos 24/);
+const providerPrepared = validatePlatformStagingEnvironment({
+  ...safeEnvironment,
+  TERRAQO_EVIDENCE_ANALYSIS_PROVIDER: "groq",
+  PLATFORM_STAGING_PROVIDER_CONFIRM: "groq",
+  GROQ_API_KEY: "gsk_staging_contract_12345678901234567890",
+});
+assert.equal(providerPrepared.evidenceAnalysisProvider, "groq");
 rejects({ TERRAQO_B5_PILOT_WORKSPACE_IDS: "workspace-real" }, /coincidir exactamente/);
 rejects({
   TERRAQO_B5_PILOT_WORKSPACE_IDS: "cm00000000000000000000001",
@@ -101,6 +123,40 @@ const pilotActivated = validatePlatformStagingEnvironment({
   PLATFORM_STAGING_ACTIVATION_CONFIRM: "cohort",
 });
 assert.deepEqual(pilotActivated.pilotWorkspaceIds, ["cm00000000000000000000001"]);
+const allFlags = platformFlags.join(",");
+const activeB5Environment: Record<string, string | undefined> = {
+  ...safeEnvironment,
+  PLATFORM_STAGING_ENABLED_FLAGS: allFlags,
+  PLATFORM_STAGING_PILOT_WORKSPACE_IDS: "cm00000000000000000000001",
+  PLATFORM_STAGING_ACTIVATION_CONFIRM: "cohort",
+  PLATFORM_STAGING_PROVIDER_CONFIRM: "groq",
+  TERRAQO_B5_PILOT_WORKSPACE_IDS: "cm00000000000000000000001",
+  TERRAQO_EVIDENCE_ANALYSIS_PROVIDER: "groq",
+  GROQ_API_KEY: "gsk_staging_contract_12345678901234567890",
+};
+for (const flag of platformFlags) activeB5Environment[flag] = "true";
+const activeB5 = validatePlatformStagingEnvironment(activeB5Environment);
+assert.equal(activeB5.evidenceAnalysisProvider, "groq");
+assert.deepEqual(activeB5.pilotWorkspaceIds, ["cm00000000000000000000001"]);
+rejects({
+  ...Object.fromEntries(platformFlags.map((flag) => [flag, "true"])),
+  PLATFORM_STAGING_ENABLED_FLAGS: allFlags,
+  PLATFORM_STAGING_PILOT_WORKSPACE_IDS: "cm00000000000000000000001",
+  PLATFORM_STAGING_ACTIVATION_CONFIRM: "cohort",
+  TERRAQO_B5_PILOT_WORKSPACE_IDS: "cm00000000000000000000001",
+}, /exige un proveedor externo confirmado/);
+const missingPrerequisiteFlags = platformFlags.filter((flag) => flag !== "TERRAQO_WORK_CASES_V1");
+rejects({
+  ...Object.fromEntries(missingPrerequisiteFlags.map((flag) => [flag, "true"])),
+  PLATFORM_STAGING_ENABLED_FLAGS: missingPrerequisiteFlags.join(","),
+  PLATFORM_STAGING_PILOT_WORKSPACE_IDS: "cm00000000000000000000001",
+  PLATFORM_STAGING_ACTIVATION_CONFIRM: "cohort",
+  PLATFORM_STAGING_PROVIDER_CONFIRM: "groq",
+  TERRAQO_B5_PILOT_WORKSPACE_IDS: "cm00000000000000000000001",
+  TERRAQO_EVIDENCE_ANALYSIS_PROVIDER: "groq",
+  TERRAQO_WORK_CASES_V1: "false",
+  GROQ_API_KEY: "gsk_staging_contract_12345678901234567890",
+}, /exige TERRAQO_WORK_CASES_V1/);
 rejects({ EVIDENCE_ANALYSIS_DISPATCH_SECRET: safeEnvironment.AUTH_SECRET }, /deben ser independientes/);
 rejects({ TERRAQO_STAGING_DOCUMENT_CLEANUP_SECRET: undefined }, /Define TERRAQO_STAGING_DOCUMENT_CLEANUP_SECRET/);
 rejects({ TERRAQO_STAGING_BILLING_RECONCILE_SECRET: undefined }, /Define TERRAQO_STAGING_BILLING_RECONCILE_SECRET/);
@@ -181,4 +237,4 @@ assert.ok(clearOperatorEnvironment >= 0, "El deploy debe limpiar las variables e
 assert.ok(netlifyDeploy > clearOperatorEnvironment, "La limpieza del entorno debe ocurrir antes del build Netlify.");
 assert.ok(restoreOperatorEnvironment > netlifyDeploy, "El entorno del operador debe restaurarse despues del deploy.");
 
-console.log("Platform staging readiness contract: OK (fail-closed PostgreSQL/Supabase target, flags, cohort and secrets)." );
+console.log("Platform staging readiness contract: OK (fail-closed target, provider, prerequisites, single cohort and secrets)." );

@@ -12,6 +12,13 @@ export const platformFlags = [
   "TERRAQO_EVIDENCE_ANALYSIS_V1",
 ] as const;
 
+const evidenceAnalysisFlag = "TERRAQO_EVIDENCE_ANALYSIS_V1";
+const evidenceAnalysisPrerequisiteFlags = platformFlags.filter(
+  (flag) => flag !== evidenceAnalysisFlag,
+);
+const stagingEvidenceAnalysisProviders = ["off", "groq", "openai"] as const;
+type StagingEvidenceAnalysisProvider = (typeof stagingEvidenceAnalysisProviders)[number];
+
 const localHosts = new Set(["127.0.0.1", "localhost", "::1"]);
 const productionHosts = new Set([
   "terraqoglobal.com",
@@ -32,6 +39,7 @@ export type PlatformStagingTarget = {
   remoteDatabase: boolean;
   enabledFlags: string[];
   pilotWorkspaceIds: string[];
+  evidenceAnalysisProvider: StagingEvidenceAnalysisProvider;
 };
 
 export type PlatformStagingEnvironment = Record<string, string | undefined>;
@@ -51,6 +59,11 @@ function parseHttpsUrl(value: string, name: string) {
 
 function validateSecret(value: string, name: string) {
   assert.ok(value.length >= 32, `${name} debe tener al menos 32 caracteres en staging.`);
+  assert.doesNotMatch(value, /replace|change|example|placeholder/i, `${name} no puede ser un marcador.`);
+}
+
+function validateProviderCredential(value: string, name: string) {
+  assert.ok(value.length >= 24, `${name} debe tener al menos 24 caracteres en staging.`);
   assert.doesNotMatch(value, /replace|change|example|placeholder/i, `${name} no puede ser un marcador.`);
 }
 
@@ -177,7 +190,51 @@ export function validatePlatformStagingEnvironment(
     const expected = enabledFlags.includes(flag) ? "true" : "false";
     assert.equal(environment[flag], expected, `${flag} debe ser ${expected} para esta cohorte.`);
   }
-  assert.equal(environment.TERRAQO_EVIDENCE_ANALYSIS_PROVIDER, "off", "El proveedor IA debe iniciar en off.");
+  const configuredEvidenceAnalysisProvider = (
+    environment.TERRAQO_EVIDENCE_ANALYSIS_PROVIDER ?? "off"
+  ).trim().toLowerCase();
+  assert.ok(
+    stagingEvidenceAnalysisProviders.includes(
+      configuredEvidenceAnalysisProvider as StagingEvidenceAnalysisProvider,
+    ),
+    "TERRAQO_EVIDENCE_ANALYSIS_PROVIDER debe ser off, groq u openai en staging remoto.",
+  );
+  const evidenceAnalysisProvider = configuredEvidenceAnalysisProvider as StagingEvidenceAnalysisProvider;
+  const providerConfirmation = environment.PLATFORM_STAGING_PROVIDER_CONFIRM?.trim().toLowerCase() ?? "";
+  if (evidenceAnalysisProvider === "off") {
+    assert.equal(
+      providerConfirmation,
+      "",
+      "PLATFORM_STAGING_PROVIDER_CONFIRM debe quedar vacio cuando el proveedor esta off.",
+    );
+  } else {
+    assert.equal(
+      providerConfirmation,
+      evidenceAnalysisProvider,
+      `Configurar ${evidenceAnalysisProvider} exige PLATFORM_STAGING_PROVIDER_CONFIRM=${evidenceAnalysisProvider}.`,
+    );
+    const credentialName = evidenceAnalysisProvider === "groq" ? "GROQ_API_KEY" : "OPENAI_API_KEY";
+    validateProviderCredential(required(environment, credentialName), credentialName);
+  }
+
+  if (enabledFlags.includes(evidenceAnalysisFlag)) {
+    assert.notEqual(
+      evidenceAnalysisProvider,
+      "off",
+      "Activar TERRAQO_EVIDENCE_ANALYSIS_V1 exige un proveedor externo confirmado.",
+    );
+    assert.equal(
+      pilotWorkspaceIds.length,
+      1,
+      "La primera cohorte de análisis debe contener exactamente un workspace piloto.",
+    );
+    for (const prerequisite of evidenceAnalysisPrerequisiteFlags) {
+      assert.ok(
+        enabledFlags.includes(prerequisite),
+        `Activar TERRAQO_EVIDENCE_ANALYSIS_V1 exige ${prerequisite}.`,
+      );
+    }
+  }
   assert.equal(environment.TERRAQO_OAUTH_ENABLED, "false", "OAuth debe iniciar deshabilitado en staging.");
   assert.equal(
     environment.TERRAQO_TRANSACTIONAL_EMAIL_ENABLED,
@@ -223,5 +280,6 @@ export function validatePlatformStagingEnvironment(
     remoteDatabase,
     enabledFlags,
     pilotWorkspaceIds,
+    evidenceAnalysisProvider,
   };
 }

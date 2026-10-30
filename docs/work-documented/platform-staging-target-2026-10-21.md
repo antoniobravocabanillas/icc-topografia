@@ -65,6 +65,12 @@ PLATFORM_STAGING_DATABASE_ROLE=terraqo_staging_runtime
 B5_GATE_EXPECTED_DATABASE=postgres
 ```
 
+La activacion controlada de T18 utiliza ademas
+`PLATFORM_STAGING_PROVIDER_CONFIRM=groq|openai`. El valor debe coincidir con
+`TERRAQO_EVIDENCE_ANALYSIS_PROVIDER`; con proveedor `off` queda vacio. El
+preflight exige una unica cohorte piloto y B1-B4 activos antes de aceptar
+`TERRAQO_EVIDENCE_ANALYSIS_V1=true`.
+
 El rol runtime tambien quedo registrado como variable no secreta en el sitio
 Netlify aislado `terraqo-platform-staging`; conserva DML sobre `icc` sin DDL y
 los flags de producto y proveedores externos permanecen apagados.
