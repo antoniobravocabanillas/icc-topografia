@@ -142,7 +142,7 @@ export function SignInForm({
     <form action={submit} className={embedded ? "tq-embedded-auth-form" : "relative overflow-hidden rounded-lg border bg-card p-6 text-foreground shadow-2xl md:p-8"}>
       <div className="tq-auth-heading">
         <p>Bienvenido a Terraqo</p>
-        <h1>{title === "Bienvenido de vuelta" ? "Inicia sesión" : title}</h1>
+        <h1 data-access-heading tabIndex={-1}>{title === "Bienvenido de vuelta" ? "Inicia sesión" : title}</h1>
         <span>{description === "Ingresa tus credenciales para continuar en el Portal Terraqo." ? "Accede a tu cuenta para continuar." : description}</span>
       </div>
 
@@ -167,8 +167,8 @@ export function SignInForm({
         <label className="tq-remember-email"><input type="checkbox" checked={rememberEmail} onChange={(event) => setRememberEmail(event.target.checked)} /><span>Recordar mi correo</span></label>
         <Button type="submit" size="lg" disabled={isPending} className="mt-1 w-full">{isPending ? "Validando acceso..." : "Iniciar sesión"}<ArrowRight aria-hidden="true" /></Button>
         <Button type="button" variant="outline" size="lg" disabled={passkeyBusy || isPending} onClick={signInWithPasskey} className="tq-passkey-button w-full"><Fingerprint aria-hidden="true" /> {passkeyBusy ? "Verificando dispositivo…" : "Entrar con huella, rostro o PIN"}</Button>
-        {error ? <p className="tq-auth-feedback is-error"><ShieldAlert aria-hidden="true" />{error}</p> : null}
-        {resendMessage ? <p className="tq-auth-feedback is-success"><CheckCircle2 aria-hidden="true" />{resendMessage}</p> : null}
+        {error ? <p role="alert" className="tq-auth-feedback is-error"><ShieldAlert aria-hidden="true" />{error}</p> : null}
+        {resendMessage ? <p role="status" className="tq-auth-feedback is-success"><CheckCircle2 aria-hidden="true" />{resendMessage}</p> : null}
         {emailNeedsVerification ? <button type="submit" formAction={resendVerification} className="tq-resend-verification">Reenviar correo de verificación</button> : null}
       </div>
 

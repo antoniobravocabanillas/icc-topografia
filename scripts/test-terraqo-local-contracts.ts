@@ -3,6 +3,7 @@ import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 
 const contractScripts = [
   "check:release-candidate",
+  "test:release-environment-templates",
   "check:b5-rollout",
   "test:platform-staging-readiness",
   "test:platform-staging-runner",

@@ -2,7 +2,24 @@
 
 Fecha: 30 de octubre de 2026. Daybreak omitido por indicacion del usuario.
 
-## Evidencia cerrada
+## Continuacion: acceso publico y control de plantillas
+
+El parche posterior a `b390c3c` corrige el registro invisible con movimiento
+reducido, el foco perdido al cambiar formulario, las etiquetas de registro,
+el contraste y la separacion de enlaces del footer en el intervalo movil.
+El nuevo gate de Chromium aprueba 34 estados sobre un build local aislado,
+con cero infracciones de axe en el panel, sin HTTP mutante ni fixtures de DB.
+Tambien se corrigio el rechazo de la plantilla de staging ya versionada:
+se admite su nombre exacto y se exigen secretos y consentimientos vacios.
+Los 42 controles locales actuales aprobaron. Evidencia, limites y comando
+reproducible: `account-access-gate-2026-10-30.md`.
+
+Sigue faltando `.env.platform-staging.local`. El scan sellado descrito abajo
+corresponde a `7d22378`, no al nuevo parche de interfaz/herramientas. El build
+de esta comprobacion usa URLs localhost y DB inaccesible; debe reconstruirse
+para staging antes de cualquier despliegue. No cambia el HOLD de publicacion.
+
+## Evidencia previa cerrada
 
 - Codigo de aplicacion inmutable: `7d22378f353f1a82b42afe790f576acce83296ae`.
 - Revision final del delta `fc28df9..7d22378`: scan

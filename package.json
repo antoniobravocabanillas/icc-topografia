@@ -15,6 +15,8 @@
     "check:platform-staging": "tsx scripts/check-platform-staging-readiness.ts",
     "gate:platform-staging": "tsx scripts/run-platform-staging-gate.ts",
     "test:platform-staging-runner": "tsx scripts/test-platform-staging-runner.ts",
+    "test:account-access-browser": "tsx scripts/test-account-access-browser.ts",
+    "test:release-environment-templates": "tsx scripts/test-release-environment-templates.ts",
     "deploy:platform-staging": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/deploy-platform-staging.ps1",
     "check:source-migration-ledger": "tsx scripts/check-source-migration-ledger.ts",
     "prepare:platform-staging-baseline": "tsx scripts/prepare-platform-staging-baseline.ts",

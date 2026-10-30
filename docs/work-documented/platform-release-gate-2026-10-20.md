@@ -2,6 +2,14 @@
 
 ## Dictamen
 
+**Continuacion de accesibilidad del 30 de octubre:** el acceso publico pasa
+34 estados en Chromium sobre build local aislado (incluye movimiento reducido,
+teclado, 320 px y texto al 200 %). Se corrige tambien la disposicion movil del
+footer y el rechazo de la plantilla publica de staging ya versionada. El gate
+local actualizado pasa 42 controles. Ver `account-access-gate-2026-10-30.md`.
+Esta evidencia no sustituye staging, lectores/dispositivos reales ni firmas,
+y no modifica el porcentaje ponderado de salida.
+
 **Ultimo hito del 30 de octubre:** la revision del complemento `fc28df9..7d22378`
 quedo sellada sin hallazgos nuevos (scan `f7e35ef7-06e3-41c2-826a-c1c45252586c`).
 Se prepararon el runner local seguro y su plantilla para retomar las pruebas

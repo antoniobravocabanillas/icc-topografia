@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { assertStagingTemplateIsPublic, isPrivateEnvironmentFile } from "./lib/release-environment-templates";
 
 const root = process.cwd();
 const trackedFiles = execFileSync("git", ["ls-files"], {
@@ -28,11 +29,7 @@ assert.deepEqual(
   `El candidato contiene artefactos locales rastreados: ${forbiddenTracked.join(", ")}`,
 );
 
-const forbiddenEnvFiles = trackedFiles.filter(
-  (path) =>
-    (path === ".env" || path.startsWith(".env.")) &&
-    path !== ".env.example",
-);
+const forbiddenEnvFiles = trackedFiles.filter(isPrivateEnvironmentFile);
 assert.deepEqual(
   forbiddenEnvFiles,
   [],
@@ -55,6 +52,7 @@ for (const pattern of [
 }
 
 const envExample = readFileSync(resolve(root, ".env.example"), "utf8");
+assertStagingTemplateIsPublic(readFileSync(resolve(root, ".env.platform-staging.example"), "utf8"));
 const envValues = new Map<string, string>();
 for (const line of envExample.split(/\r?\n/)) {
   const match = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(line);
