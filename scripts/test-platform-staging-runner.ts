@@ -60,13 +60,18 @@ async function verifyPrismaBoundary() {
   const require = createRequire(import.meta.url);
   const generated = require.resolve(".prisma/client/index.js");
   const source = readFileSync(generated, "utf8");
-  // Prisma records null in a clean CI checkout and a relative path locally.
-  // Both builds must exercise the same synthetic dotenv positive control.
-  const schemaEnvPath = /"schemaEnvPath"\s*:\s*(?:"(?:[^"\\]|\\.)*"|null)/;
-  assert.ok(schemaEnvPath.test(source), "Generated Prisma client must expose its dotenv location.");
+  // Prisma serializes an undefined schemaEnvPath by omitting the key in a
+  // clean checkout. Replace the config object, not a possibly absent key.
+  const relativeEnvPaths = /"relativeEnvPaths"\s*:\s*\{(?:[^{}"]|"(?:[^"\\]|\\.)*")*\}/;
+  assert.ok(relativeEnvPaths.test(source), "Generated Prisma client must expose its dotenv configuration.");
   // Exercise the installed generated client and actual Prisma runtime, with
   // only its dotenv location pointed at a synthetic temporary directory.
-  const isolatedSource = source.replace(schemaEnvPath, () => `"schemaEnvPath": ${JSON.stringify(fixtureEnv)}`);
+  const fixtureConfig = `"relativeEnvPaths": ${JSON.stringify({ rootEnvPath: null, schemaEnvPath: fixtureEnv })}`;
+  const isolatedSource = source.replace(relativeEnvPaths, () => fixtureConfig);
+  for (const config of [{ rootEnvPath: null }, { rootEnvPath: null, schemaEnvPath: null }, { rootEnvPath: null, schemaEnvPath: "../../../.env" }]) {
+    const generatedVariant = source.replace(relativeEnvPaths, () => `"relativeEnvPaths": ${JSON.stringify(config)}`);
+    assert.equal(generatedVariant.replace(relativeEnvPaths, () => fixtureConfig), isolatedSource);
+  }
   const generatedModule = { exports: {} as { PrismaClient: new () => { $disconnect: () => Promise<void> } } };
   const saved = { ...process.env };
   const literal = "postgresql://synthetic:literal${VALUE}@127.0.0.1:1/unused";
