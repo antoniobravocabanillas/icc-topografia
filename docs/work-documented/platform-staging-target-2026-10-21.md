@@ -433,3 +433,11 @@ Referencias verificadas el 30 de octubre de 2026:
 Esta preparación no invocó al proveedor, no reinstaló la credencial y no
 cambió las banderas remotas. El próximo gate físico debe volver a crear un
 fixture aislado, ejecutar una sola prueba y limpiar antes de considerar B5.
+
+El commit `8062233` se desplegó con el proveedor apagado como candidato
+`6ae489bb858bc005d6d031d1`. Tanto la URL estable como la URL inmutable
+respondieron `200` en salud; el gate temporal y el `POST` B5 permanecieron en
+`404`. La API de Netlify volvió a confirmar proveedor `off`, B5 `false`,
+cohortes vacías y ausencia de `GROQ_API_KEY`. La base staging permaneció con
+cero filas en las nueve tablas de control y el enlace local volvió al Site ID
+productivo sin desplegarlo.
