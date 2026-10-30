@@ -10,6 +10,9 @@ const safeEnvironment: Record<string, string | undefined> = {
   B5_GATE_DATABASE_URL: "postgresql://terraqo_stage:unique-stage-credential@db.preview.internal:5432/terraqo_staging_gate?schema=icc",
   B5_GATE_EXPECTED_DATABASE: "terraqo_staging_gate",
   NEXT_PUBLIC_SITE_URL: "https://preview-terraqo.example.net",
+  NEXT_PUBLIC_PORTAL_URL: "https://preview-terraqo.example.net",
+  NEXT_PUBLIC_ADMIN_URL: "https://preview-terraqo.example.net",
+  NEXT_PUBLIC_API_URL: "https://preview-terraqo.example.net",
   AUTH_URL: "https://preview-terraqo.example.net",
   TERRAQO_EVIDENCE_ANALYSIS_PROVIDER: "off",
   TERRAQO_OAUTH_ENABLED: "false",
@@ -65,6 +68,9 @@ rejects({
 }, /naturaleza aislada|productivo/);
 rejects({ PLATFORM_STAGING_ALLOW_REMOTE: "false" }, /PLATFORM_STAGING_ALLOW_REMOTE=true/);
 rejects({ NEXT_PUBLIC_SITE_URL: "https://portal.terraqoglobal.com", AUTH_URL: "https://portal.terraqoglobal.com" }, /producción/);
+rejects({ NEXT_PUBLIC_PORTAL_URL: "https://portal.terraqoglobal.com" }, /producción/);
+rejects({ NEXT_PUBLIC_ADMIN_URL: "https://admin-preview.example.net" }, /mismo host de staging/);
+rejects({ NEXT_PUBLIC_API_URL: undefined }, /Define NEXT_PUBLIC_API_URL/);
 rejects({ TERRAQO_WORK_CASES_V1: "true" }, /TERRAQO_WORK_CASES_V1 debe ser false/);
 rejects({ PLATFORM_STAGING_ENABLED_FLAGS: "UNKNOWN_FLAG", PLATFORM_STAGING_ACTIVATION_CONFIRM: "cohort" }, /Flag no autorizado/);
 rejects({ PLATFORM_STAGING_ENABLED_FLAGS: "TERRAQO_WORK_CASES_V1", TERRAQO_WORK_CASES_V1: "true" }, /ACTIVATION_CONFIRM=cohort/);

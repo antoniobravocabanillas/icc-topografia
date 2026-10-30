@@ -132,6 +132,14 @@ export function validatePlatformStagingEnvironment(
   const applicationUrl = parseHttpsUrl(required(environment, "NEXT_PUBLIC_SITE_URL"), "NEXT_PUBLIC_SITE_URL");
   const authUrl = parseHttpsUrl(required(environment, "AUTH_URL"), "AUTH_URL");
   assert.equal(authUrl.hostname, applicationUrl.hostname, "AUTH_URL y NEXT_PUBLIC_SITE_URL deben pertenecer al mismo host de staging.");
+  for (const name of ["NEXT_PUBLIC_PORTAL_URL", "NEXT_PUBLIC_ADMIN_URL", "NEXT_PUBLIC_API_URL"] as const) {
+    const surfaceUrl = parseHttpsUrl(required(environment, name), name);
+    assert.equal(
+      surfaceUrl.hostname,
+      applicationUrl.hostname,
+      `${name} y NEXT_PUBLIC_SITE_URL deben pertenecer al mismo host de staging.`,
+    );
+  }
 
   const enabledFlags = (environment.PLATFORM_STAGING_ENABLED_FLAGS ?? "")
     .split(",")
