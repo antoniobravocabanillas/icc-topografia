@@ -17,6 +17,7 @@ const contractScripts = [
   "test:portal-home-scope",
   "test:request-origin",
   "test:scheduled-job-isolation",
+  "test:billing-scheduler-contract",
   "test:portal-journeys",
   "test:field-verification-recovery",
   "test:attendance-location-queue",

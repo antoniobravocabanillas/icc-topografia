@@ -4,9 +4,13 @@ import type { BillingMode } from "./catalog";
 export class BillingError extends Error {
   constructor(public code: string, public status = 400, public uncertain = false) { super(code); }
 }
-export function billingMode(): BillingMode {
+export function configuredBillingMode(): BillingMode | null {
   const mode = process.env.CULQI_MODE;
-  if (mode !== "test" && mode !== "live") throw new BillingError("BILLING_NOT_CONFIGURED",503);
+  return mode === "test" || mode === "live" ? mode : null;
+}
+export function billingMode(): BillingMode {
+  const mode = configuredBillingMode();
+  if (!mode) throw new BillingError("BILLING_NOT_CONFIGURED",503);
   return mode;
 }
 export function providerCredentials() {
