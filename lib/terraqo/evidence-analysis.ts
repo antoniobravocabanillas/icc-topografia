@@ -82,6 +82,17 @@ export const EVIDENCE_ANALYSIS_PROVIDER_JSON_SCHEMA = {
   },
 } as const;
 
+/** Groq Structured Outputs constrains only the syntactic contract. Zod and
+ * citation verification below remain authoritative for semantic safety. */
+export const GROQ_EVIDENCE_ANALYSIS_RESPONSE_FORMAT = {
+  type: "json_schema",
+  json_schema: {
+    name: "terraqo_evidence_analysis",
+    strict: true,
+    schema: EVIDENCE_ANALYSIS_PROVIDER_JSON_SCHEMA,
+  },
+} as const;
+
 export type EvidenceAnalysisPurpose = "EVIDENCE_SUMMARY" | "REQUIREMENT_GAPS" | "QUESTION_DRAFTS";
 export type EvidenceAnalysisOutput = z.infer<typeof providerOutputSchema>;
 export type EvidenceAnalysisSource = {
@@ -280,12 +291,21 @@ async function requestAnalysisProvider(messages: ReturnType<typeof analysisMessa
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: { authorization: `Bearer ${process.env.GROQ_API_KEY}`, "content-type": "application/json" },
-      body: JSON.stringify({ model, messages, temperature: 0, max_completion_tokens: maxTokens, response_format: { type: "json_object" } }),
+      body: JSON.stringify({ model, messages, temperature: 0, max_completion_tokens: maxTokens, response_format: GROQ_EVIDENCE_ANALYSIS_RESPONSE_FORMAT }),
       signal,
     });
     const payload = await response.json().catch(() => null) as null | { choices?: Array<{ message?: { content?: string } }>; usage?: { prompt_tokens?: number; completion_tokens?: number } };
     const content = payload?.choices?.[0]?.message?.content;
-    if (!response.ok || !content) throw new EvidenceAnalysisError("PROVIDER_UNAVAILABLE", "El proveedor de análisis no respondió.", 503, response.status >= 429);
+    if (!response.ok) {
+      const contractRejected = response.status === 400 || response.status === 422;
+      throw new EvidenceAnalysisError(
+        contractRejected ? "PROVIDER_CONTRACT_REJECTED" : "PROVIDER_UNAVAILABLE",
+        contractRejected ? "El proveedor rechazó el contrato estructurado." : "El proveedor de análisis no respondió.",
+        503,
+        response.status === 429 || response.status >= 500,
+      );
+    }
+    if (!content) throw new EvidenceAnalysisError("PROVIDER_UNAVAILABLE", "El proveedor de análisis no respondió.", 503, false);
     return { output: parseJsonObject(content), provider, model, inputTokens: payload?.usage?.prompt_tokens ?? null, outputTokens: payload?.usage?.completion_tokens ?? null };
   }
 

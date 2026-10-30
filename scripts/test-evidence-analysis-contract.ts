@@ -3,6 +3,7 @@ import {
   buildEvidenceAnalysisCacheKey,
   EVIDENCE_ANALYSIS_PROVIDER_JSON_SCHEMA,
   EvidenceAnalysisError,
+  GROQ_EVIDENCE_ANALYSIS_RESPONSE_FORMAT,
   shouldDispatchEvidenceAnalysisJob,
   validateEvidenceAnalysisOutput,
   type EvidenceAnalysisSource,
@@ -32,6 +33,10 @@ assert.deepEqual(
   EVIDENCE_ANALYSIS_PROVIDER_JSON_SCHEMA.properties.claims.items.properties.kind.enum,
   ["EXPLICIT_DATA", "DECLARATION_SUMMARY", "PROPOSED_INTERPRETATION"],
 );
+assert.equal(GROQ_EVIDENCE_ANALYSIS_RESPONSE_FORMAT.type, "json_schema");
+assert.equal(GROQ_EVIDENCE_ANALYSIS_RESPONSE_FORMAT.json_schema.name, "terraqo_evidence_analysis");
+assert.equal(GROQ_EVIDENCE_ANALYSIS_RESPONSE_FORMAT.json_schema.strict, true);
+assert.equal(GROQ_EVIDENCE_ANALYSIS_RESPONSE_FORMAT.json_schema.schema, EVIDENCE_ANALYSIS_PROVIDER_JSON_SCHEMA);
 
 assert.equal(terraqoAnalysisJobCreateSchema.safeParse({
   dossierId,

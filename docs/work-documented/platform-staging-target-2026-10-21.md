@@ -406,3 +406,30 @@ Se conserva como deuda de defensa en profundidad: antes de conceder `USAGE`,
 añadir `icc` a PostgREST o usar clientes Supabase sobre este esquema, deben
 definirse políticas RLS explícitas y probarse con roles públicos. No se aplicó
 DDL ni se cambiaron grants durante este ciclo.
+
+## Preparación del siguiente gate de proveedor B5
+
+La documentación oficial de Groq confirma que `openai/gpt-oss-20b` admite
+Structured Outputs con `response_format.type=json_schema` y `strict=true`.
+El modo anterior `json_object` garantizaba únicamente JSON sintácticamente
+válido y explica que una respuesta pudiera fallar después en el contrato Zod.
+
+- La solicitud Groq ahora envía el schema exacto de Terraqo con constrained
+  decoding estricto y un nombre de contrato estable.
+- Zod, el alcance de `sourceId/revisionId` y la coincidencia literal del
+  extracto permanecen como barreras semánticas posteriores; el proveedor no
+  puede convertir una declaración en capacidad confirmada.
+- Un rechazo HTTP `400/422` del contrato se clasifica sin reintentos como
+  `PROVIDER_CONTRACT_REJECTED`; rate limits y errores `5xx` conservan la
+  política acotada de reintentos.
+- El preflight B5 impide regresar accidentalmente a `json_object` y el test de
+  contrato fija `json_schema`, `strict=true` y el schema compartido.
+
+Referencias verificadas el 30 de octubre de 2026:
+
+- https://console.groq.com/docs/structured-outputs
+- https://console.groq.com/docs/model/openai/gpt-oss-20b
+
+Esta preparación no invocó al proveedor, no reinstaló la credencial y no
+cambió las banderas remotas. El próximo gate físico debe volver a crear un
+fixture aislado, ejecutar una sola prueba y limpiar antes de considerar B5.

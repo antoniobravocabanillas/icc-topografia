@@ -75,6 +75,9 @@ async function main() {
   assert.match(analysisSource, /from "@\/lib\/terraqo\/workspace-roles"/, "El worker debe consumir roles desde un módulo puro.");
   assert.doesNotMatch(analysisSource, /workspace-access/, "El worker no puede importar acceso ligado a request/cookies.");
   assert.match(analysisSource, /runtime-server-only/, "El análisis debe conservar un límite explícito de ejecución servidor.");
+  assert.match(analysisSource, /type:\s*"json_schema"/, "Groq debe usar Structured Outputs con JSON Schema.");
+  assert.match(analysisSource, /strict:\s*true/, "El contrato Groq debe usar constrained decoding estricto.");
+  assert.doesNotMatch(analysisSource, /response_format:\s*\{\s*type:\s*"json_object"/, "Groq no puede volver al modo JSON sin garantía de schema.");
   assert.doesNotMatch(workspaceRoles, /next\/headers/, "El módulo de roles reutilizable no puede depender de Next headers.");
   assert.match(serverGuard, /typeof window !== "undefined"/, "El límite servidor compatible con workers debe rechazar el navegador.");
   const workerBundle = await build({
