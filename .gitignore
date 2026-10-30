@@ -1,5 +1,6 @@
 .env
 .env*.local
+.platform-staging-runner.lock.local
 .next
 node_modules
 dist

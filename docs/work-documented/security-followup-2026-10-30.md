@@ -3,6 +3,10 @@
 Fecha: 30 de octubre de 2026. Repositorio: `icc-topografia`.
 Base de este complemento: `fc28df9b280537afdc7d735f20a8dc01facb1b19`.
 
+Actualizacion posterior: el delta hasta `7d22378` quedo sellado sin hallazgos
+nuevos en el scan `f7e35ef7-06e3-41c2-826a-c1c45252586c`. Ver
+`platform-final-gate-2026-10-30.md` para cobertura, evidencia y bloqueos actuales.
+
 ## Evidencia inmutable
 
 - `fc28df9` contiene las correcciones iniciales de los 12 hallazgos elegidos.
@@ -69,8 +73,8 @@ E2E/operacion 18/25, seguridad 6/20 y accesibilidad/aprobaciones 4/15.
 Es un indicador de evidencia de salida, no una medida del porcentaje de codigo.
 El 97 % tecnico tampoco equivale a autorizacion de publicacion.
 
-Falta incorporar las correcciones a un candidato inmutable revisado, repetir
-el recorrido combinado B5 por HTTPS, worker y PostgreSQL, comprobar dispositivos
+Las correcciones ya estan en el candidato inmutable revisado `7d22378`. Falta
+repetir el recorrido combinado B5 por HTTPS, worker y PostgreSQL, comprobar dispositivos
 y lector de pantalla reales y cerrar las aprobaciones de salida. Las pruebas
 B1-B4 ya documentadas no se extrapolan automaticamente al nuevo candidato.
 
