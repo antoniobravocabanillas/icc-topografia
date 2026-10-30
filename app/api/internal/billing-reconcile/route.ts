@@ -3,10 +3,11 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { billingMode } from "@/lib/terraqo/billing/provider";
 import { reconcileAccount } from "@/lib/terraqo/billing/service";
+import { resolveBillingReconcileSecret } from "@/lib/terraqo/scheduled-job-targets";
 export const dynamic="force-dynamic";
 export const maxDuration=60;
 export async function POST(request:Request){
-  const secret=process.env.BILLING_RECONCILE_SECRET;
+  const secret=resolveBillingReconcileSecret();
   const presented=request.headers.get("authorization")||"";
   const expected=`Bearer ${secret||""}`;
   if(!secret||secret.length<32||presented.length!==expected.length||!timingSafeEqual(Buffer.from(presented),Buffer.from(expected)))return NextResponse.json({error:"UNAUTHORIZED"},{status:401});

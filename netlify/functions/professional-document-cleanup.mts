@@ -1,8 +1,11 @@
-import { resolveScheduledJobTargets } from "../../lib/terraqo/scheduled-job-targets";
+import {
+  resolveDocumentCleanupSecret,
+  resolveScheduledJobTargets,
+} from "../../lib/terraqo/scheduled-job-targets";
 
 // Retry private storage compensation without logging identities, keys or content.
 const cleanup = async () => {
-  const secret = process.env.PROFESSIONAL_DOCUMENT_CLEANUP_SECRET;
+  const secret = resolveDocumentCleanupSecret();
   if (!secret || secret.length < 32) return new Response("Not configured", {status:503});
   let target: string;
   try { target = resolveScheduledJobTargets().professionalDocumentCleanupApi; }

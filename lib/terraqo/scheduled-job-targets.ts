@@ -3,6 +3,10 @@ type ScheduledJobEnvironment = {
   NEXT_PUBLIC_SITE_URL?: string;
   NEXT_PUBLIC_API_URL?: string;
   PLATFORM_STAGING_CONFIRM?: string;
+  PROFESSIONAL_DOCUMENT_CLEANUP_SECRET?: string;
+  BILLING_RECONCILE_SECRET?: string;
+  TERRAQO_STAGING_DOCUMENT_CLEANUP_SECRET?: string;
+  TERRAQO_STAGING_BILLING_RECONCILE_SECRET?: string;
 };
 
 export type ScheduledJobTargets = {
@@ -23,6 +27,53 @@ const productionPublicHosts = new Set([
   "www.terraqoglobal.com",
 ]);
 const productionApiHosts = new Set(["api.terraqoglobal.com"]);
+
+function stagingEnvironment(environment: ScheduledJobEnvironment) {
+  return environment.PLATFORM_STAGING_CONFIRM?.trim().toLowerCase() === "staging";
+}
+
+function productionDeployment(environment: ScheduledJobEnvironment) {
+  const candidate = environment.URL || environment.NEXT_PUBLIC_SITE_URL;
+  if (!candidate?.trim()) return false;
+
+  try {
+    return productionDeploymentHosts.has(new URL(candidate.trim()).hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
+function resolveDeploymentSecret(
+  environment: ScheduledJobEnvironment,
+  stagingSecret: string | undefined,
+  productionSecret: string | undefined,
+) {
+  if (stagingEnvironment(environment)) {
+    return productionDeployment(environment) ? undefined : stagingSecret?.trim();
+  }
+
+  return productionDeployment(environment) ? productionSecret?.trim() : undefined;
+}
+
+export function resolveDocumentCleanupSecret(
+  environment: ScheduledJobEnvironment = process.env as ScheduledJobEnvironment,
+) {
+  return resolveDeploymentSecret(
+    environment,
+    environment.TERRAQO_STAGING_DOCUMENT_CLEANUP_SECRET,
+    environment.PROFESSIONAL_DOCUMENT_CLEANUP_SECRET,
+  );
+}
+
+export function resolveBillingReconcileSecret(
+  environment: ScheduledJobEnvironment = process.env as ScheduledJobEnvironment,
+) {
+  return resolveDeploymentSecret(
+    environment,
+    environment.TERRAQO_STAGING_BILLING_RECONCILE_SECRET,
+    environment.BILLING_RECONCILE_SECRET,
+  );
+}
 
 function httpsOrigin(value: string | undefined, name: string) {
   if (!value?.trim()) throw new Error(`${name}_MISSING`);
@@ -81,11 +132,11 @@ export function resolveScheduledJobTargets(
   }
 
   if (productionDeployment) {
-    if (environment.PLATFORM_STAGING_CONFIRM?.trim().toLowerCase() === "staging") {
+    if (stagingEnvironment(environment)) {
       throw new Error("SCHEDULED_STAGING_ORIGIN_MISMATCH");
     }
   } else {
-    if (environment.PLATFORM_STAGING_CONFIRM?.trim().toLowerCase() !== "staging") {
+    if (!stagingEnvironment(environment)) {
       throw new Error("SCHEDULED_STAGING_CONFIRM_REQUIRED");
     }
     if (siteOrigin !== configuredSiteOrigin || apiOrigin !== configuredSiteOrigin) {

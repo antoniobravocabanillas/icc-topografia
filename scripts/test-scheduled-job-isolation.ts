@@ -1,14 +1,56 @@
 import assert from "node:assert/strict";
 import { build } from "esbuild";
-import { resolveScheduledJobTargets } from "../lib/terraqo/scheduled-job-targets";
+import {
+  resolveBillingReconcileSecret,
+  resolveDocumentCleanupSecret,
+  resolveScheduledJobTargets,
+} from "../lib/terraqo/scheduled-job-targets";
 
 const stageOrigin = "https://terraqo-platform-staging.example.net";
+const documentSecret = "d".repeat(64);
+const billingSecret = "b".repeat(64);
 const stageEnvironment = {
   URL: stageOrigin,
   NEXT_PUBLIC_SITE_URL: stageOrigin,
   NEXT_PUBLIC_API_URL: stageOrigin,
   PLATFORM_STAGING_CONFIRM: "staging",
+  TERRAQO_STAGING_DOCUMENT_CLEANUP_SECRET: documentSecret,
+  TERRAQO_STAGING_BILLING_RECONCILE_SECRET: billingSecret,
+  PROFESSIONAL_DOCUMENT_CLEANUP_SECRET: "p".repeat(64),
+  BILLING_RECONCILE_SECRET: "r".repeat(64),
 };
+
+assert.equal(resolveDocumentCleanupSecret(stageEnvironment), documentSecret);
+assert.equal(resolveBillingReconcileSecret(stageEnvironment), billingSecret);
+assert.equal(
+  resolveDocumentCleanupSecret({
+    URL: "https://terraqoglobal.com",
+    PROFESSIONAL_DOCUMENT_CLEANUP_SECRET: "production-document",
+  }),
+  "production-document",
+);
+assert.equal(
+  resolveBillingReconcileSecret({
+    URL: "https://iridescent-fenglisu-d6595c.netlify.app",
+    BILLING_RECONCILE_SECRET: "production-billing",
+  }),
+  "production-billing",
+);
+assert.equal(
+  resolveDocumentCleanupSecret({
+    URL: stageOrigin,
+    PROFESSIONAL_DOCUMENT_CLEANUP_SECRET: "production-document",
+  }),
+  undefined,
+);
+assert.equal(
+  resolveBillingReconcileSecret({
+    URL: "https://terraqoglobal.com",
+    PLATFORM_STAGING_CONFIRM: "staging",
+    TERRAQO_STAGING_BILLING_RECONCILE_SECRET: billingSecret,
+  }),
+  undefined,
+);
 
 const targets = resolveScheduledJobTargets(stageEnvironment);
 assert.deepEqual(targets, {
@@ -87,26 +129,27 @@ async function main() {
     "PLATFORM_STAGING_CONFIRM",
     "PROFESSIONAL_DOCUMENT_CLEANUP_SECRET",
     "BILLING_RECONCILE_SECRET",
+    "TERRAQO_STAGING_DOCUMENT_CLEANUP_SECRET",
+    "TERRAQO_STAGING_BILLING_RECONCILE_SECRET",
   ] as const;
   const originals = Object.fromEntries(names.map((name) => [name, process.env[name]]));
   const originalFetch = globalThis.fetch;
   const originalWarn = console.warn;
   const calls: string[] = [];
   const warnings: unknown[][] = [];
-  const secret = "s".repeat(64);
 
   try {
     console.warn = (...values: unknown[]) => warnings.push(values);
-    Object.assign(process.env, stageEnvironment, {
-      PROFESSIONAL_DOCUMENT_CLEANUP_SECRET: secret,
-      BILLING_RECONCILE_SECRET: secret,
-    });
+    Object.assign(process.env, stageEnvironment);
     globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
       const target = String(url);
       calls.push(target);
       assert.ok(target.startsWith(stageOrigin), `Unexpected scheduler target: ${target}`);
       assert.equal(init?.redirect, "error");
-      assert.equal(new Headers(init?.headers).get("authorization"), `Bearer ${secret}`);
+      const expectedSecret = target.endsWith("billing-reconcile") || target.endsWith("complaints-mail")
+        ? billingSecret
+        : documentSecret;
+      assert.equal(new Headers(init?.headers).get("authorization"), `Bearer ${expectedSecret}`);
 
       if (target.endsWith("education-evidence-cleanup-background")) {
         return new Response(null, { status: 202 });
@@ -141,7 +184,7 @@ async function main() {
       `${stageOrigin}/.netlify/functions/education-evidence-cleanup-background`,
       {
         method: "POST",
-        headers: { authorization: `Bearer ${secret}`, "content-type": "application/json" },
+        headers: { authorization: `Bearer ${documentSecret}`, "content-type": "application/json" },
         body: JSON.stringify({ action: "DISPATCH" }),
       },
     );
@@ -164,7 +207,8 @@ async function main() {
       { code: "SCHEDULED_STAGING_ORIGIN_MISMATCH" },
     ]);
     assert.ok(!JSON.stringify(warnings).includes(stageOrigin));
-    assert.ok(!JSON.stringify(warnings).includes(secret));
+    assert.ok(!JSON.stringify(warnings).includes(documentSecret));
+    assert.ok(!JSON.stringify(warnings).includes(billingSecret));
   } finally {
     globalThis.fetch = originalFetch;
     console.warn = originalWarn;

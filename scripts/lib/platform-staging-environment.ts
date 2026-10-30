@@ -186,10 +186,29 @@ export function validatePlatformStagingEnvironment(
   );
   validateSecret(required(environment, "AUTH_SECRET"), "AUTH_SECRET");
   validateSecret(required(environment, "EVIDENCE_ANALYSIS_DISPATCH_SECRET"), "EVIDENCE_ANALYSIS_DISPATCH_SECRET");
+  validateSecret(
+    required(environment, "TERRAQO_STAGING_DOCUMENT_CLEANUP_SECRET"),
+    "TERRAQO_STAGING_DOCUMENT_CLEANUP_SECRET",
+  );
+  validateSecret(
+    required(environment, "TERRAQO_STAGING_BILLING_RECONCILE_SECRET"),
+    "TERRAQO_STAGING_BILLING_RECONCILE_SECRET",
+  );
   assert.notEqual(
     environment.AUTH_SECRET,
     environment.EVIDENCE_ANALYSIS_DISPATCH_SECRET,
     "AUTH_SECRET y EVIDENCE_ANALYSIS_DISPATCH_SECRET deben ser independientes.",
+  );
+  const operationalSecrets = [
+    environment.AUTH_SECRET,
+    environment.EVIDENCE_ANALYSIS_DISPATCH_SECRET,
+    environment.TERRAQO_STAGING_DOCUMENT_CLEANUP_SECRET,
+    environment.TERRAQO_STAGING_BILLING_RECONCILE_SECRET,
+  ];
+  assert.equal(
+    new Set(operationalSecrets).size,
+    operationalSecrets.length,
+    "Los secretos operativos de staging deben ser independientes.",
   );
 
   return {

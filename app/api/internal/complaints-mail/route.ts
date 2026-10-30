@@ -1,10 +1,11 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { deliverComplaintMail } from "@/lib/server/complaints";
+import { resolveBillingReconcileSecret } from "@/lib/terraqo/scheduled-job-targets";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 export async function POST(request: Request) {
-  const secret = process.env.BILLING_RECONCILE_SECRET;
+  const secret = resolveBillingReconcileSecret();
   const actual = Buffer.from(request.headers.get("authorization") || ""),
     expected = Buffer.from(`Bearer ${secret || ""}`);
   if (

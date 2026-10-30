@@ -20,6 +20,8 @@ const safeEnvironment: Record<string, string | undefined> = {
   TERRAQO_B5_PILOT_WORKSPACE_IDS: "",
   AUTH_SECRET: "stage-auth-secret-00000000000000000001",
   EVIDENCE_ANALYSIS_DISPATCH_SECRET: "stage-dispatch-secret-000000000000001",
+  TERRAQO_STAGING_DOCUMENT_CLEANUP_SECRET: "stage-document-cleanup-00000000000001",
+  TERRAQO_STAGING_BILLING_RECONCILE_SECRET: "stage-billing-reconcile-0000000000001",
 };
 for (const flag of platformFlags) safeEnvironment[flag] = "false";
 
@@ -98,6 +100,11 @@ const pilotActivated = validatePlatformStagingEnvironment({
 });
 assert.deepEqual(pilotActivated.pilotWorkspaceIds, ["cm00000000000000000000001"]);
 rejects({ EVIDENCE_ANALYSIS_DISPATCH_SECRET: safeEnvironment.AUTH_SECRET }, /deben ser independientes/);
+rejects({ TERRAQO_STAGING_DOCUMENT_CLEANUP_SECRET: undefined }, /Define TERRAQO_STAGING_DOCUMENT_CLEANUP_SECRET/);
+rejects({ TERRAQO_STAGING_BILLING_RECONCILE_SECRET: undefined }, /Define TERRAQO_STAGING_BILLING_RECONCILE_SECRET/);
+rejects({
+  TERRAQO_STAGING_DOCUMENT_CLEANUP_SECRET: safeEnvironment.TERRAQO_STAGING_BILLING_RECONCILE_SECRET,
+}, /secretos operativos de staging deben ser independientes/);
 
 function rejectsSupabase(change: Record<string, string | undefined>, expected: RegExp) {
   assert.throws(

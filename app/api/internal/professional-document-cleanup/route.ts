@@ -1,10 +1,11 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { recoverProfessionalDocumentCleanups, recoverPrivateUploadCleanup } from "@/lib/server/professional-document-cleanup";
+import { resolveDocumentCleanupSecret } from "@/lib/terraqo/scheduled-job-targets";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 export async function POST(request: Request) {
-  const secret = process.env.PROFESSIONAL_DOCUMENT_CLEANUP_SECRET;
+  const secret = resolveDocumentCleanupSecret();
   const presented = Buffer.from(request.headers.get("authorization") || "");
   const expected = Buffer.from(`Bearer ${secret || ""}`);
   if (!secret || secret.length < 32 || presented.length !== expected.length || !timingSafeEqual(presented, expected))

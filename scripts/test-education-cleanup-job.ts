@@ -57,6 +57,7 @@ async function main() {
   const originals = {
     fetch: globalThis.fetch,
     secret: process.env.PROFESSIONAL_DOCUMENT_CLEANUP_SECRET,
+    stagingSecret: process.env.TERRAQO_STAGING_DOCUMENT_CLEANUP_SECRET,
     url: process.env.URL,
     site: process.env.NEXT_PUBLIC_SITE_URL,
     api: process.env.NEXT_PUBLIC_API_URL,
@@ -67,7 +68,7 @@ async function main() {
     process.env.NEXT_PUBLIC_SITE_URL = "https://staging.example.invalid";
     process.env.NEXT_PUBLIC_API_URL = "https://staging.example.invalid";
     process.env.PLATFORM_STAGING_CONFIRM = "staging";
-    process.env.PROFESSIONAL_DOCUMENT_CLEANUP_SECRET = secret;
+    process.env.TERRAQO_STAGING_DOCUMENT_CLEANUP_SECRET = secret;
     globalThis.fetch = async (url, init) => {
       assert.equal(String(url), "https://staging.example.invalid/.netlify/functions/education-evidence-cleanup-background");
       assert.equal(init?.body, JSON.stringify({ action: "DISPATCH" }));
@@ -82,6 +83,7 @@ async function main() {
     globalThis.fetch = originals.fetch;
     for (const [name, value] of Object.entries({
       PROFESSIONAL_DOCUMENT_CLEANUP_SECRET: originals.secret,
+      TERRAQO_STAGING_DOCUMENT_CLEANUP_SECRET: originals.stagingSecret,
       URL: originals.url,
       NEXT_PUBLIC_SITE_URL: originals.site,
       NEXT_PUBLIC_API_URL: originals.api,

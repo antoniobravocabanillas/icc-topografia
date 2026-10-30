@@ -1,8 +1,11 @@
-import { resolveScheduledJobTargets } from "../../lib/terraqo/scheduled-job-targets";
+import {
+  resolveBillingReconcileSecret,
+  resolveScheduledJobTargets,
+} from "../../lib/terraqo/scheduled-job-targets";
 
 // Runs independently of browser activity. Never stores customer data in scheduler logs.
 async function billingReconcile() {
-  const secret=process.env.BILLING_RECONCILE_SECRET;
+  const secret=resolveBillingReconcileSecret();
   if(!secret) return new Response("Billing reconciliation is not configured",{status:503});
   let target:string;
   try{target=resolveScheduledJobTargets().billingReconcileApi;}
