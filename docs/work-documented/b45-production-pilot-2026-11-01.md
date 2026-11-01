@@ -1,5 +1,17 @@
 # Preparacion de activacion B4/B5
 
+## Decision posterior: despliegue global autorizado
+
+El usuario confirmo expresamente **"para todas las empresas"**. Esta decision sustituye la propuesta de cohorte ICC descrita debajo, que se conserva como antecedente.
+
+B4 publicado en `6ae7c1b544302f67260eb827`, commit de aplicacion `a9520b5cd049ff1b205732929bb832ce6ba51bdd`. Cohorte `*`; necesidades, mensajeria contextual, colaboracion y cierre activos. Limites configurados: 25 necesidades y 10 analisis por workspace/mes. No se modificaron planes ni se ejecutaron cobros o migraciones. B5 permanece apagado y proveedor off.
+
+Validacion productiva: 17/17 comprobaciones HTTP aprobadas, incluida autenticacion obligatoria en necesidades, analisis aun cerrado y redireccion Google correcta para portal y empresas. Publicacion desbloqueada despues del smoke. Estas pruebas no simulan actividad de clientes reales.
+
+Se prepara fase `b5-enabled` de staging: solo workspace sintetico fijo, login real, solicitud HTTP, dispatcher, proveedor, lectura del resultado, reintento idempotente y aislamiento al cambiar de workspace. No equivale a PASS hasta completar el recorrido remoto. Produccion conserva B5 apagado hasta entonces. El incidente separado de tres documentos ausentes permanece abierto.
+
+## Antecedente previo a la autorizacion global
+
 El usuario solicito avanzar con B4 y B5. No se interpreto como seleccion de todas las empresas ni como cambio de sus planes o cobros.
 
 ## Readback productivo

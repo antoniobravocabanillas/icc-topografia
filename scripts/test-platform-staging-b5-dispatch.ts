@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
+import bcrypt from "bcryptjs";
+import { chromium, type Browser, type BrowserContext } from "playwright";
 import {
   platformFlags,
   validatePlatformStagingEnvironment,
@@ -31,9 +33,9 @@ function confirmedStagingTarget() {
   assert.equal(target.databaseName, "postgres");
   assert.equal(target.applicationHost, origin.hostname);
   assert.ok(["groq", "openai"].includes(target.evidenceAnalysisProvider));
-  assert.deepEqual(target.pilotWorkspaceIds, []);
-  assert.equal(process.env.TERRAQO_EVIDENCE_ANALYSIS_V1, "false");
-  assert.ok(!target.enabledFlags.includes("TERRAQO_EVIDENCE_ANALYSIS_V1"));
+  const enabled = process.env.TERRAQO_EVIDENCE_ANALYSIS_V1 === "true";
+  assert.deepEqual(target.pilotWorkspaceIds, enabled ? ["cm00000000000000000000001"] : []);
+  assert.equal(target.enabledFlags.includes("TERRAQO_EVIDENCE_ANALYSIS_V1"), enabled);
   for (const flag of platformFlags.filter((item) => item !== "TERRAQO_EVIDENCE_ANALYSIS_V1")) {
     assert.ok(target.enabledFlags.includes(flag), `El gate de dispatcher exige ${flag}.`);
   }
@@ -52,6 +54,7 @@ function confirmedStagingTarget() {
     dispatchSecret,
     origin,
     provider: target.evidenceAnalysisProvider,
+    enabled,
   };
 }
 
@@ -81,6 +84,10 @@ async function main() {
   const userIds: string[] = [];
   let workspaceId: string | null = null;
   let professionalProfileId: string | null = null;
+  let browser: Browser | undefined;
+  let context: BrowserContext | undefined;
+  let controlWorkspaceId: string | undefined;
+  const password = randomUUID();
 
   try {
     const initialCounts = {
@@ -100,6 +107,8 @@ async function main() {
           email: `b5-dispatch-admin-${runId}@example.invalid`,
           name: "B5 dispatch admin",
           emailVerified: new Date(),
+          role: "ADMIN",
+          passwordHash: await bcrypt.hash(password, 12),
         },
         select: { id: true },
       }),
@@ -116,12 +125,14 @@ async function main() {
 
     const workspace = await prisma.terraqoWorkspace.create({
       data: {
+        ...(target.enabled ? { id: "cm00000000000000000000001" } : {}),
         name: `B5 dispatch ${runId}`,
         slug: `b5-dispatch-${runId}`,
         ownerUserId: admin.id,
         members: {
           create: { userId: admin.id, role: "OWNER", active: true, joinedAt: new Date() },
         },
+        subscriptions: { create: { tier: "PROFESSIONAL", status: "ACTIVE", seats: 2 } },
       },
       select: { id: true },
     });
@@ -234,21 +245,42 @@ async function main() {
     // Use the real queue path: its source hash covers the authorized projection,
     // not just a fixture ID. A fabricated hash is correctly rejected by the worker.
     const operationKey = randomUUID();
-    const queued = await analysis.queueEvidenceAnalysisJob({
-      actorId: admin.id,
-      workspaceId: workspace.id,
-      operationKey,
-      payload: {
+    const payload = {
         dossierId: dossier.id,
-        purpose: "EVIDENCE_SUMMARY",
+        purpose: "EVIDENCE_SUMMARY" as const,
         sourceRevisionIds: [revisionId],
-        expectedPolicies: [{ sourceRevisionId: revisionId, contentHash, accessKind: "PUBLIC_CV" }],
-      },
-    });
-    const job = queued.job;
+        expectedPolicies: [{ sourceRevisionId: revisionId, contentHash, accessKind: "PUBLIC_CV" as const }],
+    };
+    let job: { id: string };
+    if (target.enabled) {
+      browser = await chromium.launch({ headless: true });
+      context = await browser.newContext();
+      const page = await context.newPage();
+      await page.goto(new URL("/cuenta", target.origin).toString(), { waitUntil: "networkidle", timeout: 60_000 });
+      await page.locator("#email").fill(`b5-dispatch-admin-${runId}@example.invalid`);
+      await page.locator("#password").fill(password);
+      await Promise.all([
+        page.waitForURL((url) => url.origin === target.origin.origin && url.pathname.startsWith("/admin"), { timeout: 60_000 }),
+        page.getByRole("button", { name: "Iniciar sesión", exact: true }).click(),
+      ]);
+      const session = await context.request.get(new URL("/api/auth/session", target.origin).toString());
+      assert.equal((await session.json()).user.id, admin.id);
+      const endpoint = new URL("/api/v1/analysis-jobs", target.origin).toString();
+      assert.equal((await fetch(endpoint, { method: "POST" })).status, 401);
+      const response = await context.request.post(endpoint, { headers: { "Idempotency-Key": operationKey }, data: payload });
+      assert.equal(response.status(), 201, "La API autenticada debe crear y despachar el analisis.");
+      job = (await response.json()).data;
+      assert.ok(job.id);
+      const replay = await context.request.post(endpoint, { headers: { "Idempotency-Key": operationKey }, data: payload });
+      assert.equal(replay.status(), 201);
+      assert.equal((await replay.json()).data.id, job.id);
+      assert.equal(await prisma.terraqoAnalysisJob.count({ where: { workspaceId: workspace.id } }), 1);
+    } else {
+    const queued = await analysis.queueEvidenceAnalysisJob({ actorId: admin.id, workspaceId: workspace.id, operationKey, payload });
+    job = queued.job;
     assert.equal(queued.dispatchRequired, true);
-    assert.equal(job.maxAttempts, 1);
-    assert.equal(job.status, "QUEUED");
+    assert.equal(queued.job.maxAttempts, 1);
+    assert.equal(queued.job.status, "QUEUED");
 
     const dispatchResponse = await fetch(
       new URL("/.netlify/functions/evidence-analysis-background", target.origin),
@@ -264,6 +296,7 @@ async function main() {
       },
     );
     assert.equal(dispatchResponse.status, 202, "Netlify no acepto el background worker B5.");
+    }
 
     const terminal = await waitForTerminalJob(async () => {
       const current = await prisma.terraqoAnalysisJob.findUniqueOrThrow({
@@ -290,6 +323,22 @@ async function main() {
       jobId: job.id,
     });
     assert.equal(visible.status, terminal.status);
+    if (context) {
+      const response = await context.request.get(new URL(`/api/v1/analysis-jobs/${job.id}`, target.origin).toString());
+      assert.equal(response.status(), 200);
+      assert.equal((await response.json()).data.status, terminal.status);
+      // Move only the synthetic actor to another synthetic company. The existing
+      // authenticated session must not keep authority over the previous company.
+      const control = await prisma.terraqoWorkspace.create({ data: {
+        name: `B5 isolation ${runId}`, slug: `b5-isolation-${runId}`, ownerUserId: admin.id,
+        members: { create: { userId: admin.id, role: "OWNER", active: true, joinedAt: new Date() } },
+      }, select: { id: true } });
+      controlWorkspaceId = control.id;
+      await prisma.terraqoWorkspaceMember.updateMany({ where: { workspaceId: workspace.id, userId: admin.id }, data: { active: false } });
+      await prisma.terraqoWorkspace.update({ where: { id: workspace.id }, data: { ownerUserId: professional.id } });
+      const denied = await context.request.get(new URL(`/api/v1/analysis-jobs/${job.id}`, target.origin).toString());
+      assert.ok([403, 404].includes(denied.status()), "Otra empresa no debe leer el analisis.");
+    }
     assert.equal(visible.sources.length, 1);
     assert.ok(visible.sources[0]?.availableFields.includes("summary"));
     if (visible.status === "READY") {
@@ -299,9 +348,11 @@ async function main() {
     }
 
     console.log(
-      `B5 staging provider/dispatcher gate: OK (${visible.status}; ${stored.provider}; tokens ${stored.inputTokens ?? "n/a"}/${stored.outputTokens ?? "n/a"}).`,
+      `B5 staging ${target.enabled ? "authenticated API" : "provider/dispatcher"} gate: OK (${visible.status}; ${stored.provider}; tokens ${stored.inputTokens ?? "n/a"}/${stored.outputTokens ?? "n/a"}).`,
     );
   } finally {
+    await browser?.close();
+    if (controlWorkspaceId) await prisma.terraqoWorkspace.deleteMany({ where: { id: controlWorkspaceId } });
     if (workspaceId) await prisma.terraqoWorkspace.deleteMany({ where: { id: workspaceId } });
     if (professionalProfileId) {
       await prisma.terraqoProfessionalProfile.deleteMany({ where: { id: professionalProfileId } });

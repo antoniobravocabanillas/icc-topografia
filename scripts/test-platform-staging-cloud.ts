@@ -88,6 +88,20 @@ const b4: NodeJS.ProcessEnv = { ...env, PLATFORM_STAGING_CLOUD_PHASE: "b4", PLAT
   TERRAQO_B5_PILOT_WORKSPACE_IDS: "cm00000000000000000000001", PLATFORM_STAGING_PILOT_WORKSPACE_IDS: "cm00000000000000000000001" };
 for (const [index, flag] of platformFlags.entries()) b4[flag] = index < 8 ? "true" : "false";
 assert.deepEqual(stagingCloudEnvironment(b4, head).gates, ["b4", "b5-readiness"]);
+const b5: NodeJS.ProcessEnv = { ...b4,
+  PLATFORM_STAGING_CLOUD_PHASE: "b5-enabled",
+  PLATFORM_STAGING_CLOUD_CONFIRM: "mghdpciewbsowjrjwmwk:b5-enabled:synthetic-only",
+  PLATFORM_STAGING_ENABLED_FLAGS: platformFlags.join(","),
+  TERRAQO_EVIDENCE_ANALYSIS_V1: "true", TERRAQO_EVIDENCE_ANALYSIS_PROVIDER: "groq",
+  PLATFORM_STAGING_PROVIDER_CONFIRM: "groq", GROQ_API_KEY: "gsk_synthetic_fixture_only_000000000000000000000000",
+};
+assert.deepEqual(stagingCloudEnvironment(b5, head).gates, ["b5-dispatch"]);
+for (const changes of [
+  { TERRAQO_EVIDENCE_ANALYSIS_V1: "false" },
+  { TERRAQO_B5_PILOT_WORKSPACE_IDS: "*" },
+  { PLATFORM_STAGING_CLOUD_CONFIRM: "mghdpciewbsowjrjwmwk:b5-dispatch:synthetic-only" },
+  { TERRAQO_EVIDENCE_ANALYSIS_PROVIDER: "off" },
+]) assert.throws(() => stagingCloudEnvironment({ ...b5, ...changes }, head));
 
 const marker = { siteId: stagingCloudSite, commit: head, deployId };
 assertStagingCandidate(marker, { commit: head, deployId });

@@ -11,6 +11,7 @@ export const cloudPhases = {
   "b1-b3": ["b1-b2", "b3"],
   b4: ["b4", "b5-readiness"],
   "b5-dispatch": ["b5-dispatch"],
+  "b5-enabled": ["b5-dispatch"],
 } as const;
 
 export function stagingCloudEnvironment(source: NodeJS.ProcessEnv, head: string) {
@@ -30,11 +31,12 @@ export function stagingCloudEnvironment(source: NodeJS.ProcessEnv, head: string)
   const environment = stagingRunnerEnvironmentFromValues(values, source);
   assert.equal(source.DATABASE_URL, environment.DATABASE_URL, "La aplicacion y los fixtures deben usar la misma base aislada.");
   if (source.DIRECT_URL) assert.equal(source.DIRECT_URL, environment.DATABASE_URL, "DIRECT_URL no corresponde al destino aislado.");
-  const expectedFlags = selectedPhase === "b1-b3" ? platformFlags.slice(0, 4) : platformFlags.slice(0, 8);
+  const analysisEnabled = selectedPhase === "b5-enabled";
+  const expectedFlags = analysisEnabled ? platformFlags : selectedPhase === "b1-b3" ? platformFlags.slice(0, 4) : platformFlags.slice(0, 8);
   assert.equal(environment.PLATFORM_STAGING_ENABLED_FLAGS, expectedFlags.join(","), "Los flags deben coincidir con la fase remota.");
-  assert.equal(environment.TERRAQO_EVIDENCE_ANALYSIS_V1, "false");
-  assert.equal(environment.TERRAQO_B5_PILOT_WORKSPACE_IDS ?? "", selectedPhase === "b4" ? pilot : "");
-  assert.equal(environment.TERRAQO_EVIDENCE_ANALYSIS_PROVIDER, selectedPhase === "b5-dispatch" ? "groq" : "off");
+  assert.equal(environment.TERRAQO_EVIDENCE_ANALYSIS_V1, analysisEnabled ? "true" : "false");
+  assert.equal(environment.TERRAQO_B5_PILOT_WORKSPACE_IDS ?? "", selectedPhase === "b4" || analysisEnabled ? pilot : "");
+  assert.equal(environment.TERRAQO_EVIDENCE_ANALYSIS_PROVIDER, selectedPhase === "b5-dispatch" || analysisEnabled ? "groq" : "off");
   return { environment, phase: selectedPhase, gates: cloudPhases[selectedPhase], commit: head, deployId: source.DEPLOY_ID! };
 }
 
