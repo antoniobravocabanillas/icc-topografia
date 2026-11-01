@@ -2,6 +2,18 @@
 
 ## Decision posterior: despliegue global autorizado
 
+### Cierre del lanzamiento global
+
+B4 y B5 publicados para todas las empresas en `6ae7c75d88a34c95af6118c1`, commit `0ac82d6246bdcc159fae04fb5990a0ddebbf786b`. Publicacion desbloqueada despues de 20/20 verificaciones productivas. Proveedor Groq, modelo `openai/gpt-oss-20b`, secreto dedicado del dispatcher, cohorte `*`, 25 necesidades y 10 analisis mensuales por workspace. Son limites de operaciones, no un presupuesto monetario garantizado.
+
+Gate remoto habilitado aprobado en `6ae7c60447f02ada5b99b967`: resumen Netlify `PASS b5-enabled` para ese mismo commit y `plugin_state=success`. Cubre login real, API autenticada, dispatcher/proveedor, resultado READY o INSUFFICIENT validado, idempotencia, rechazo anonimo de las tres rutas y lectura denegada desde otra empresa. Readback SQL posterior independiente: usuarios=0, workspaces=0, jobs=0.
+
+Staging restaurado al artefacto cerrado verificado `6ae4f17330916b391143f258`; proveedor off, cohorte vacia y credencial temporal Groq eliminada. Necesidades y analisis devuelven 404 en staging. No se aplicaron migraciones, modificaron planes, ejecutaron cobros ni crearon analisis sobre datos de clientes en produccion.
+
+Evidencia local: `output/b5-enabled-gate-proof.json`, `output/production-launch-smoke.json`, `output/production-launch-cloud-state.json`. La prueba de proveedor se realizo con fuentes sinteticas en staging; el smoke productivo comprueba disponibilidad y limites de acceso, no una evaluacion privada de un cliente real. El incidente previo de tres documentos ausentes sigue separado y requiere originales o copia externa.
+
+### Secuencia y antecedentes
+
 El usuario confirmo expresamente **"para todas las empresas"**. Esta decision sustituye la propuesta de cohorte ICC descrita debajo, que se conserva como antecedente.
 
 B4 publicado en `6ae7c1b544302f67260eb827`, commit de aplicacion `a9520b5cd049ff1b205732929bb832ce6ba51bdd`. Cohorte `*`; necesidades, mensajeria contextual, colaboracion y cierre activos. Limites configurados: 25 necesidades y 10 analisis por workspace/mes. No se modificaron planes ni se ejecutaron cobros o migraciones. B5 permanece apagado y proveedor off.
