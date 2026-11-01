@@ -2,6 +2,8 @@
 
 Fecha: 30 de octubre de 2026. Daybreak omitido por indicacion del usuario.
 
+**Publicacion posterior confirmada:** B1-B3 ya estan en produccion. Estado vigente y limites: [lanzamiento del 1 de noviembre](platform-production-launch-2026-11-01.md). Los HOLD y decisiones pendientes siguientes son historicos.
+
 **Corte posterior:** B1-B5 ya tienen gates remotos aprobados; el candidato de
 aplicacion es `d28b881`. Se corrigieron destinos de entorno productivo y se
 detectaron los prerrequisitos reales del ledger/migraciones. Estado consolidado,
