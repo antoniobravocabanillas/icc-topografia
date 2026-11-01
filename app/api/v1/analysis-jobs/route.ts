@@ -1,5 +1,6 @@
 import { created, fail, handleApiError, parseJson } from "@/lib/server/api";
 import { requireDiscoveryWorkspaceActor } from "@/lib/server/discovery-needs-auth";
+import { DiscoveryNeedsError } from "@/lib/terraqo/discovery-needs";
 import { dispatchEvidenceAnalysisJob, failEvidenceAnalysisDispatch } from "@/lib/server/evidence-analysis-dispatch";
 import { EvidenceAnalysisError, getEvidenceAnalysisJob, queueEvidenceAnalysisJob } from "@/lib/terraqo/evidence-analysis";
 import { isValidWorklogOperationKey } from "@/lib/terraqo/worklog-create-operation";
@@ -31,6 +32,7 @@ export async function POST(request: Request) {
     }
     return created(await getEvidenceAnalysisJob({ actorId: session.user.id, workspaceId: workspace.id, jobId: queued.job.id }));
   } catch (error) {
+    if (error instanceof DiscoveryNeedsError) return fail(error.message, error.status);
     if (error instanceof EvidenceAnalysisError) return fail(error.message, error.status, { code: error.code, retryable: error.retryable });
     return handleApiError(error);
   }

@@ -1,5 +1,6 @@
 import { fail, handleApiError, ok } from "@/lib/server/api";
 import { requireDiscoveryWorkspaceActor } from "@/lib/server/discovery-needs-auth";
+import { DiscoveryNeedsError } from "@/lib/terraqo/discovery-needs";
 import { EvidenceAnalysisError, getEvidenceAnalysisJob } from "@/lib/terraqo/evidence-analysis";
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
@@ -8,6 +9,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     const [{ id }, { session, workspace }] = await Promise.all([context.params, requireDiscoveryWorkspaceActor()]);
     return ok(await getEvidenceAnalysisJob({ actorId: session.user.id, workspaceId: workspace.id, jobId: id }));
   } catch (error) {
+    if (error instanceof DiscoveryNeedsError) return fail(error.message, error.status);
     if (error instanceof EvidenceAnalysisError) return fail(error.message, error.status, { code: error.code, retryable: error.retryable });
     return handleApiError(error);
   }

@@ -10,6 +10,8 @@ Validacion productiva: 17/17 comprobaciones HTTP aprobadas, incluida autenticaci
 
 Se prepara fase `b5-enabled` de staging: solo workspace sintetico fijo, login real, solicitud HTTP, dispatcher, proveedor, lectura del resultado, reintento idempotente y aislamiento al cambiar de workspace. No equivale a PASS hasta completar el recorrido remoto. Produccion conserva B5 apagado hasta entonces. El incidente separado de tres documentos ausentes permanece abierto.
 
+Primer recorrido remoto `6ae7c33dc3debec46ba60539`: plugin de validacion fallido; build publicado solo en staging. Readback SQL independiente: cero usuarios, workspaces y jobs. Peticion anonima POST a analysis-jobs reprodujo HTTP 500 / INTERNAL_ERROR. Las tres rutas de analisis no traducian `DiscoveryNeedsError` de autenticacion/autorizacion: se corrige el manejo a su estado 401/403 y se amplian las comprobaciones HTTP anonimas de crear, leer y reintentar. Requiere nuevo gate remoto antes de activar B5.
+
 ## Antecedente previo a la autorizacion global
 
 El usuario solicito avanzar con B4 y B5. No se interpreto como seleccion de todas las empresas ni como cambio de sus planes o cobros.

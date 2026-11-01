@@ -1,5 +1,6 @@
 import { fail, handleApiError, ok } from "@/lib/server/api";
 import { requireDiscoveryWorkspaceActor } from "@/lib/server/discovery-needs-auth";
+import { DiscoveryNeedsError } from "@/lib/terraqo/discovery-needs";
 import { dispatchEvidenceAnalysisJob, failEvidenceAnalysisDispatch } from "@/lib/server/evidence-analysis-dispatch";
 import { EvidenceAnalysisError, getEvidenceAnalysisJob, retryEvidenceAnalysisJob } from "@/lib/terraqo/evidence-analysis";
 import { requireWorkspacePilotFeature } from "@/lib/terraqo/product-entitlements";
@@ -18,6 +19,7 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
     }
     return ok(await getEvidenceAnalysisJob({ actorId: session.user.id, workspaceId: workspace.id, jobId: id }));
   } catch (error) {
+    if (error instanceof DiscoveryNeedsError) return fail(error.message, error.status);
     if (error instanceof EvidenceAnalysisError) return fail(error.message, error.status, { code: error.code, retryable: error.retryable });
     return handleApiError(error);
   }

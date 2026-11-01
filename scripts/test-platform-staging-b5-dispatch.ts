@@ -267,6 +267,8 @@ async function main() {
       assert.equal((await session.json()).user.id, admin.id);
       const endpoint = new URL("/api/v1/analysis-jobs", target.origin).toString();
       assert.equal((await fetch(endpoint, { method: "POST" })).status, 401);
+      assert.equal((await fetch(`${endpoint}/${dossier.id}`)).status, 401);
+      assert.equal((await fetch(`${endpoint}/${dossier.id}/retry`, { method: "POST" })).status, 401);
       const response = await context.request.post(endpoint, { headers: { "Idempotency-Key": operationKey }, data: payload });
       assert.equal(response.status(), 201, "La API autenticada debe crear y despachar el analisis.");
       job = (await response.json()).data;
