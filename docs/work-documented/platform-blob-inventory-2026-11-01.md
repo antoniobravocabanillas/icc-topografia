@@ -37,3 +37,17 @@ B4/B5 siguen cerrados. Su gate tecnico de staging ya aprobo; resta definir cohor
 Hallazgo abierto: tres referencias de documento no tienen objeto en el almacen esperado. No se ha determinado origen, fecha de perdida ni posibilidad de recuperacion; no se atribuye a este lanzamiento. No borrar registros ni modificar cuotas para ocultarlo. Siguiente prioridad: rastrear esas tres referencias en registros de limpieza y respaldos, conservando la privacidad; completar referencias URL/JSON y preparar recuperacion externa.
 
 Resultado: output/production-blob-reference-check.json. Ejecucion real completa y ESLint aprobados. Listado de blobs y snapshot SQL no son una transaccion conjunta; cualquier accion posterior requiere volver a comprobar el estado.
+
+## Diagnostico de los tres documentos
+
+Comando: `node scripts/inventory-production-blobs.mjs --references --diagnose-documents`.
+
+- Las tres referencias corresponden a un perfil y fueron creadas el 16 de julio de 2026, entre 07:27 y 07:36 UTC.
+- El hash de todas las filas de TerraqoProfessionalDocument coincide exactamente con el respaldo privado del 30 de octubre a las 19:44:18 UTC. Las referencias preceden al lanzamiento; esto no fecha la ausencia de los blobs.
+- No se encontraron eventos ActivityLog por entidad documental ni por storageCleanupKey asociados a las claves ausentes. La ausencia de eventos no demuestra que nunca existiera una eliminacion.
+- Cero candidatos con la misma clave en otros almacenes listados y cero en el almacenamiento local conocido `.next/local-media/terraqo-professional-documents`. No es una busqueda exhaustiva de todas las copias externas.
+- No se abrieron contenidos, no se imprimieron identificadores personales o claves, no se alteraron cuotas ni documentos. El respaldo de PostgreSQL contiene referencias, no los bytes de estos archivos.
+
+La recuperacion de estos tres contenidos depende de localizar una copia externa o los originales. No es posible reconstruirlos desde el hash o el registro de base de datos. Mantener el incidente abierto, sin borrar referencias ni simular archivos recuperados. Bloque independiente ejecutable: completar cobertura de referencias URL/JSON y respaldo cifrado de los blobs actualmente existentes. B4/B5 permanecen cerrados.
+
+Validacion del diagnostico: dos lecturas reales con el mismo resultado, ESLint y diff sin errores. Evidencia agregada en `documentDiagnostic` del reporte local.

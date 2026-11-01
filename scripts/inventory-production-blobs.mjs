@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import { getStore, listStores } from '@netlify/blobs';
 import { Client } from 'pg';
 
@@ -86,6 +87,38 @@ try {
           if (await getStore({ ...options, name: store }).getMetadata(row.storageKey) === null) absent++;
         }
         checks.at(-1).individuallyAbsent = absent;
+        if (table === 'TerraqoProfessionalDocument' && process.argv.includes('--diagnose-documents')) {
+          const missingKeys = missing.map(row => row.storageKey);
+          const documentSummary = (await db.query(`SELECT count(*)::int AS count,
+            min("uploadedAt") AS earliest, max("uploadedAt") AS latest,
+            count(DISTINCT "professionalProfileId")::int AS profiles,
+            count(*) FILTER (WHERE "fileName" ~* '(fixture|synthetic|test|prueba)')::int AS testNamed
+            FROM icc."TerraqoProfessionalDocument" WHERE "storageKey"=ANY($1::text[])`, [missingKeys])).rows[0];
+          const audits = (await db.query(`SELECT a.action::text AS action,
+            CASE WHEN a.metadata->>'storageCleanupState' IN ('PENDING','COMPLETE','BLOCKED')
+              THEN a.metadata->>'storageCleanupState' ELSE 'OTHER_OR_NONE' END AS cleanup,
+            count(*)::int AS count
+            FROM icc."ActivityLog" a WHERE
+              (a."entityType"='ProfessionalDocument' AND a."entityId" IN
+                (SELECT id FROM icc."TerraqoProfessionalDocument" WHERE "storageKey"=ANY($1::text[])))
+              OR a.metadata->>'storageCleanupKey'=ANY($1::text[])
+            GROUP BY 1,2 ORDER BY 1,2`, [missingKeys])).rows;
+          const fingerprint = (await db.query(`SELECT count(*)::text AS rows,
+            encode(sha256(convert_to(coalesce(string_agg(h,',' ORDER BY h),''),'UTF8')),'hex') AS digest
+            FROM (SELECT encode(sha256(convert_to(row_to_json(t)::text,'UTF8')),'hex') h
+              FROM icc."TerraqoProfessionalDocument" t) hashes`)).rows[0];
+          const backup = JSON.parse(readFileSync('C:/Users/Binv/.terraqo-private/migration-20261030T194418Z/source-checksums.json', 'utf8')).TerraqoProfessionalDocument;
+          const localRoot = path.resolve('.next/local-media', store);
+          const localCandidates = missingKeys.filter(key => {
+            const candidate = path.resolve(localRoot, key);
+            return candidate.startsWith(localRoot + path.sep) && existsSync(candidate);
+          }).length;
+          const otherStoreCandidates = missingKeys.filter(key => [...objectKeys].some(([name, keys]) => name !== store && keys.has(key))).length;
+          report.documentDiagnostic = { documentSummary, audits, localCandidates, otherStoreCandidates,
+            tableMatchesPrelaunchBackup: fingerprint.rows === backup.rows && fingerprint.digest === backup.digest,
+            backupDate: '2026-10-30T19:44:18Z',
+            interpretation: 'Matching database rows establish prelaunch references, not prelaunch blob absence. No content recovery or cause inferred.' };
+        }
       }
       const attempts = (await db.query('SELECT a."storageKey",a.state, w.id IS NOT NULL AS withdrawn FROM icc."TerraqoEducationEvidenceAttempt" a LEFT JOIN icc."TerraqoEducationEvidenceWithdrawal" w ON w."attemptId"=a.id LIMIT 100001')).rows;
       assert.ok(attempts.length <= 100000);
