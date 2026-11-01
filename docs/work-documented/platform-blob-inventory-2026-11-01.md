@@ -22,3 +22,18 @@ Validacion: ejecucion real completa, comprobacion sintactica y ESLint. No es un 
 Siguiente bloque: cruzar referencias de almacenamiento de PostgreSQL con los listados, distinguiendo referencias activas, retiradas y reservas pendientes; informar discrepancias sin borrar ni liberar cuota. Despues, preparar respaldo cifrado y ensayo de recuperacion de blobs. El respaldo DB anterior no cubre estos objetos.
 
 B4/B5 siguen cerrados. Su gate tecnico de staging ya aprobo; resta definir cohorte y limites operativos/comerciales antes de activarlos. No se sustituyen esas decisiones con una activacion global.
+
+## Cruce de referencias completado
+
+`node scripts/inventory-production-blobs.mjs --references` consulta PostgreSQL mediante TLS verify-full y transaccion REPEATABLE READ READ ONLY. Seis tablas con storageKey cubiertas; incluye intentos/retiros educativos y reservas de cargas de experiencia. No se imprimen claves, tokens ni filas personales.
+
+- Adjuntos de mensajes: 3/3 presentes.
+- Evidencias de experiencia: 2/2 presentes.
+- Medios de bitacoras: 118/118 presentes.
+- Documentos profesionales: 39 presentes de 42 referencias. Las tres ausencias se confirmaron individualmente mediante getMetadata con consistencia strong, sin descargar contenido.
+- Sin archivos de workspace referenciados, evidencias educativas, intentos educativos o reservas de experiencia en esta lectura.
+- Cero objetos fuera de las referencias cubiertas en los tres almacenes con referencias encontradas. Esto no certifica los almacenes de imagenes/logos ni referencias historicas URL/JSON.
+
+Hallazgo abierto: tres referencias de documento no tienen objeto en el almacen esperado. No se ha determinado origen, fecha de perdida ni posibilidad de recuperacion; no se atribuye a este lanzamiento. No borrar registros ni modificar cuotas para ocultarlo. Siguiente prioridad: rastrear esas tres referencias en registros de limpieza y respaldos, conservando la privacidad; completar referencias URL/JSON y preparar recuperacion externa.
+
+Resultado: output/production-blob-reference-check.json. Ejecucion real completa y ESLint aprobados. Listado de blobs y snapshot SQL no son una transaccion conjunta; cualquier accion posterior requiere volver a comprobar el estado.
