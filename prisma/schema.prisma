@@ -981,6 +981,9 @@ enum TerraqoFileCategory {
 }
 
 model User {
+  requestedPublicationReviews         TerraqoPublicationReview[]        @relation("PublicationRequester")
+  decidedPublicationReviews           TerraqoPublicationReview[]        @relation("PublicationDecider")
+  revokedPublicationReviews           TerraqoPublicationReview[]        @relation("PublicationRevoker")
   nativeWorklogOperations             TerraqoNativeWorklogOperation[]   @relation("NativeWorklogOperationActor")
   billingAccounts                     TerraqoBillingAccount[]
   id                                  String                            @id @default(cuid())
@@ -2485,6 +2488,7 @@ model ActivityLog {
 }
 
 model TerraqoWorkspace {
+  publicationReviews       TerraqoPublicationReview[]
   nativeWorklogOperations  TerraqoNativeWorklogOperation[]
   billingAccounts          TerraqoBillingAccount[]
   id                       String                            @id @default(cuid())
@@ -3687,6 +3691,7 @@ model TerraqoWorklogRevision {
 }
 
 model TerraqoShareCollection {
+  publicationReviews    TerraqoPublicationReview[]
   id                    String                          @id @default(cuid())
   professionalProfileId String
   professionalProfile   TerraqoProfessionalProfile      @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
@@ -3755,6 +3760,7 @@ model TerraqoAccessGrant {
 }
 
 model TerraqoPublicProjection {
+  snapshot      Json?
   id            String                 @id @default(cuid())
   collectionId  String                 @unique
   collection    TerraqoShareCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
@@ -4673,5 +4679,41 @@ model TerraqoNativeWorklogFirstDecision {
   operation             TerraqoNativeWorklogOperation @relation(fields: [operationId, actorId, workspaceId, professionalProfileId, createdAt, fingerprint], references: [id, actorId, workspaceId, professionalProfileId, createdAt, fingerprint], onDelete: Restrict, onUpdate: Restrict, map: "NativeWorklogFirstDecision_receipt_fk")
   contribution          TerraqoBuilderContribution?   @relation(fields: [contributionId, actorId], references: [id, userId], onDelete: Restrict, onUpdate: Restrict, map: "NativeWorklogFirstDecision_contribution_fk")
 
+  @@schema("icc")
+}
+
+enum TerraqoPublicationDecision {
+  PENDING
+  APPROVED
+  CHANGES_REQUESTED
+  DECLINED
+
+  @@schema("icc")
+}
+
+model TerraqoPublicationReview {
+  id                String                     @id @default(cuid())
+  collectionId      String
+  collection        TerraqoShareCollection     @relation(fields: [collectionId], references: [id], onDelete: Restrict)
+  workspaceId       String
+  workspace         TerraqoWorkspace           @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  collectionVersion Int
+  scopeHash         String
+  snapshot          Json
+  requestedById     String
+  requestedBy       User                       @relation("PublicationRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+  decision          TerraqoPublicationDecision @default(PENDING)
+  decidedById       String?
+  decidedBy         User?                      @relation("PublicationDecider", fields: [decidedById], references: [id], onDelete: Restrict)
+  decidedAt         DateTime?
+  comment           String?
+  revokedById       String?
+  revokedBy         User?                      @relation("PublicationRevoker", fields: [revokedById], references: [id], onDelete: Restrict)
+  revokedAt         DateTime?
+  revokedReason     String?
+  createdAt         DateTime                   @default(now())
+
+  @@unique([collectionId, workspaceId, collectionVersion])
+  @@index([workspaceId, decision, createdAt])
   @@schema("icc")
 }

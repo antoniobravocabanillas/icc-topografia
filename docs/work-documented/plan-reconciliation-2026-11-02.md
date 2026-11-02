@@ -13,7 +13,7 @@ Sources: 01-plan-tecnico.pdf and 02-ui-ux-pantallas.pdf (15 Oct 2026), read from
 | T13–T17 / S12–S17, S21 | Need discovery, private dossier, contextual messaging, versioned collaboration and closure. | All five contract suites PASS. Prior real staging evidence is in b4-closure.md; not represented as a new live customer test. |
 | T18–T20 / S20 | Evidence analysis, recovery, entitlements. | Three contract suites PASS. Runtime deployment and live provider evidence remain separate from unit contracts. |
 | S01 | Verification recovery published in prior phase; authorized email delivered. | Do not bypass verification or resend without user intent. |
-| S22 | Existing company/member administration, distinct from professional identity. | Needs explicit screen-level reconciliation; do not infer full acceptance from generic team UI. |
+| S22 | Existing company/member administration, distinct from professional identity. | CONFIRMED GAP: existing /admin/equipo is staff/operational access; no complete workspace invitation lifecycle or last-administrator guard was found. Operational team invitations are a separate feature. |
 | S24 | scoped-sharing.ts explicitly rejects enterprise material because authorization is absent. | CONFIRMED IMPLEMENTATION GAP. Must implement version/media-specific request, review, revocation and exact preview before lifting the deny rule. |
 
 ## Public archive correction
@@ -38,3 +38,12 @@ Sources: 01-plan-tecnico.pdf and 02-ui-ux-pantallas.pdf (15 Oct 2026), read from
 
 ## Reproducing the browser gate
 Copy scripts/fixtures/public-archive into output/archive-ui-fixture, run `node node_modules/next/dist/bin/next dev output/archive-ui-fixture -p 3190`, then `node scripts/test-public-archive-browser.mjs`. The fixture imports production components/styles. API responses are intercepted with synthetic public data; no real users, mail, provider calls or database writes. The fixture is not an application route and is never deployed.
+
+## Published archive gate
+
+- Application commit: `c623ec8e70d27c04babc3cb0ac6c594b00bc4cfc`.
+- Production deploy: `6ae7ec06e99b195a657aa8be`; released and unlocked after smoke.
+- 20/20 read-only HTTP/auth boundary checks PASS.
+- Real public CV browser at 390 px: list, search response rendered, calendar, canonical detail, explicit return, no horizontal overflow and no page errors PASS. Screenshot inspected at `output/public-archive-production-mobile.png`.
+- No new database migrations, real customer changes, mail or financial operations performed in this phase.
+- S24 foundation is local only; see `s24-preparation-2026-11-02.md`. S22 and public WorkCase coverage remain separate acceptance work.
