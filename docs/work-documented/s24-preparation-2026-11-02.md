@@ -73,3 +73,51 @@ Validation for this continuation:
 - Reproduce: `node scripts/rehearse-publication-local.mjs --confirm=local-s24-only`. Proof: `output/publication-local-rehearsal.json`. Random password files removed, stopped synthetic-only cluster directories retained.
 
 Next: confirmed isolated staging preflight/backup, migration and enabled authenticated browser E2E; then full release build and production migration/deployment gate. Local PostgreSQL and browser fixtures do not substitute for hosted E2E. No remote migration, production deployment or flag enablement was performed here.
+
+## Continuation — hosted staging identity and migration preflight
+
+Live read-only checks confirmed:
+
+- Supabase project `mghdpciewbsowjrjwmwk`, name `Terraqo Platform Staging`, ACTIVE_HEALTHY, PostgreSQL 17.11.
+- Netlify staging site `6b8c43fb-6083-450a-9b85-46a820fb6358`, origin `https://terraqo-platform-staging.netlify.app`, branch `codex/platform-staging-release`. Published staging candidate remains `d28b881cdfcf7576069579a3e00087eb53157a13`, deploy `6ae4f17330916b391143f258`; it does not contain S24.
+- Database `postgres`, private schema `icc`: 43 applied Prisma migrations, zero unfinished/unrolled-back migrations. All 43 stored checksums match current local migration bytes exactly. S24 is the only pending local migration.
+- S24 review table and public projection snapshot column are absent, as expected before migration.
+- Neither `anon` nor `authenticated` has schema USAGE. Runtime role has no superuser, database creation, role creation or schema creation privilege; existing projection DML is available.
+
+Important migration execution detail: connector SQL runs as `postgres`, while the existing default table/sequence/function grants belong to `terraqo_staging_migrator`. Do not assume a connector-created table inherits runtime access. Before hosted installation, choose and verify execution under the intended migrator role or explicitly scoped runtime grants, preserving the private schema and recording the exact Prisma checksum/ledger consistently. Never apply the migration twice through different ledgers.
+
+Added read-only `scripts/check-publication-migration-readback.mjs`. It compares an exported confirmed-staging ledger to repository SQL and requires S24 to be the only pending migration. This is not a backup or live schema drift certification. `scripts/test-publication-migration-readback.mjs` verifies rejection of edited checksums, omissions, duplicates, unknown paths and empty ledgers.
+
+Validation: live ledger comparison PASS (43 exact byte matches); six checker scenarios PASS; `git diff --check` PASS. Readback artifact: `output/s24-staging-migration-readback.json` (ignored, migration metadata only).
+
+Next: verified staging backup/restore evidence, controlled hosted migration with runtime grants and aligned migration ledger, then a new staging candidate and real authenticated S24 browser E2E. No remote writes, migration, runtime flag enablement, production deployment or customer data modifications occurred in this continuation.
+
+## Continuation — backup runner and transactional installation artifact
+
+- Added `scripts/backup-publication-staging.mjs --confirm=staging-backup-only`: verifies the exact Netlify staging site and PostgreSQL host/user/database, invokes pg_dump with credentials in the child environment only, checks archive readability and writes a checksum manifest. It never restores remotely or applies DDL. Archive readability is explicitly not restore verification.
+- Attempted backup: BLOCKED. Netlify returns B5_GATE_DATABASE_URL masked; neither local dotenv files nor process environment supplies a staging connection. Initial masked URL parsing was corrected to an explicit fail-closed diagnostic with no input disclosure. No database connection or dump was made. Await a process-level B5_GATE_DATABASE_URL for the confirmed staging runtime role; never use production DATABASE_URL as fallback.
+- Added `scripts/prepare-publication-staging-migration.mjs`: validates all 43 readback checksums, prepares the exact committed migration plus transactional guards, executes as the intended staging migrator role, checks each runtime DML privilege, and records the Prisma checksum in the same transaction. Generated artifact is `output/s24-staging-migration.sql`; it must be executed as a whole transaction only through the confirmed staging project after backup/restore evidence. Database name and role checks do not replace external project identity confirmation.
+- Preparation and syntax/whitespace checks passed. The generated SQL has NOT been executed or certified against hosted staging. Do not treat artifact generation as migration success.
+
+Next: supply the readable staging connection via process environment, complete backup and disposable local restore, validate transactional installation against the restored database, then apply to the confirmed staging project and proceed with authenticated E2E. Production remains unchanged.
+
+## Continuation — local backup credential supplied
+
+- Confirmed `.env.platform-staging.local` is ignored by Git; credential content was not printed. Backup runner now reads only STAGING_BACKUP_DATABASE_URL from that file without populating the application environment. Administrative backup connection requires the exact confirmed project/host and session port; child connection defaults to read-only transactions.
+- Actual pg_dump attempt failed with PostgreSQL password authentication failure for postgres. Host, project username, password presence and URL structure checked without exposing the password; no surrounding placeholder brackets or whitespace detected. No valid archive or restore proof exists from this attempt.
+- Await correction of the postgres password for the dedicated staging project. No remote writes, migration or deployment performed. Syntax/whitespace checks pass.
+
+## Continuation — staging backup retry succeeded
+
+- User corrected the local credential and requested a retry. Actual pg_dump completed successfully for confirmed project mghdpciewbsowjrjwmwk, private schema icc, with read-only transactions.
+- Archive: output/s24-backup-1793591752281/icc.dump; 633045 bytes; SHA-256 b56606db2597f448be9e9f0e83ccedcee1c00f3c47aa8105145b9976c653897c. Manifest stored beside archive. pg_restore --list succeeded and includes the Prisma migration ledger.
+- Archive readability confirmed; restoreVerified remains false. Next: disposable local restore and migration rehearsal before any hosted S24 application. No remote writes or production changes.
+
+## Continuation — restored backup and hosted S24 migration PASS
+
+- Added scripts/restore-publication-staging-local.mjs. Restored the checksum-verified archive into loopback-only disposable PostgreSQL 18; source staging is PostgreSQL 17. Exact installation artifact passed; existing table counts preserved, duplicate installation rejected, runtime DML and private schema verified. Local clusters stopped and password files removed.
+- Initial local ownership setup failed on system objects; corrected to icc tables only. Hosted attempts via connector and direct psql failed atomically because postgres had ADMIN membership but SET=false and INHERIT=false for terraqo_staging_migrator. Confirmed ledger remained 43 and review table absent.
+- Installation now temporarily grants SET within the same transaction and restores SET=false before commit. Rehearsal reproduces a non-superuser postgres session and verifies the temporary permission is removed; an initial test using SET ROLE instead of session authorization was corrected to model RESET ROLE accurately.
+- Applied successfully through Supabase apply_migration to mghdpciewbsowjrjwmwk only, migration name enterprise_publication_review_s24. Prisma ledger now 44, checksum 1cbf0517579579375084bf54c3eb79c448b3f64d4c1687e52d5805b1698d5c46. Table and snapshot column verified. Runtime SELECT/INSERT/UPDATE/DELETE true; anon/authenticated schema USAGE false; temporary SET permission false.
+- Users/workspaces/worklogs/projections were zero before and after. No customer rows modified. Backup manifest output/s24-backup-1793591752281/manifest.json records restore and migration rehearsal success.
+- Production untouched. S24 application code is not yet deployed or enabled in staging. Next: authenticated browser gate, clean staging candidate deployment and explicit staging-only enablement, fixture cleanup and release validation. Hosted schema success is not application E2E completion.

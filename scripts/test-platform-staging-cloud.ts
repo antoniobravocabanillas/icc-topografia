@@ -59,6 +59,12 @@ for (const key of ["AUTH_URL", "NEXT_PUBLIC_SITE_URL", "NEXT_PUBLIC_PORTAL_URL",
 env.DATABASE_URL = env.B5_GATE_DATABASE_URL;
 const target = stagingCloudEnvironment(env, head);
 assert.deepEqual(target.gates, ["b1-b2", "b3"]);
+const s24 = { ...env, PLATFORM_STAGING_CLOUD_PHASE: "s24", PLATFORM_STAGING_CLOUD_CONFIRM: "mghdpciewbsowjrjwmwk:s24:synthetic-only", TERRAQO_WORKSPACE_PUBLICATION_V1: "true" };
+assert.deepEqual(stagingCloudEnvironment(s24, head).gates, ["s24"]);
+assert.equal(stagingCloudEnvironment(s24, head).environment.TERRAQO_WORKSPACE_PUBLICATION_V1, "true");
+assert.equal(stagingCloudGateEnvironment(stagingCloudEnvironment(s24, head).environment, "s24").TERRAQO_STAGING_MUTATING_TESTS, "mghdpciewbsowjrjwmwk:s24-http-fixtures");
+assert.throws(() => stagingCloudEnvironment({ ...s24, TERRAQO_WORKSPACE_PUBLICATION_V1: "false" }, head));
+assert.throws(() => stagingCloudEnvironment({ ...env, TERRAQO_WORKSPACE_PUBLICATION_V1: "true" }, head));
 assert.equal(target.environment.DATABASE_URL, env.B5_GATE_DATABASE_URL);
 assert.equal(target.environment.AUTH_SECRET, env.AUTH_SECRET);
 assert.equal(target.environment.PATH, "safe-path");

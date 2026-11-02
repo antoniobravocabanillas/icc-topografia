@@ -9,6 +9,7 @@ const project = "mghdpciewbsowjrjwmwk";
 const pilot = "cm00000000000000000000001";
 export const cloudPhases = {
   "b1-b3": ["b1-b2", "b3"],
+  s24: ["s24"],
   b4: ["b4", "b5-readiness"],
   "b5-dispatch": ["b5-dispatch"],
   "b5-enabled": ["b5-dispatch"],
@@ -32,7 +33,8 @@ export function stagingCloudEnvironment(source: NodeJS.ProcessEnv, head: string)
   assert.equal(source.DATABASE_URL, environment.DATABASE_URL, "La aplicacion y los fixtures deben usar la misma base aislada.");
   if (source.DIRECT_URL) assert.equal(source.DIRECT_URL, environment.DATABASE_URL, "DIRECT_URL no corresponde al destino aislado.");
   const analysisEnabled = selectedPhase === "b5-enabled";
-  const expectedFlags = analysisEnabled ? platformFlags : selectedPhase === "b1-b3" ? platformFlags.slice(0, 4) : platformFlags.slice(0, 8);
+  const expectedFlags = analysisEnabled ? platformFlags : selectedPhase === "b1-b3" || selectedPhase === "s24" ? platformFlags.slice(0, 4) : platformFlags.slice(0, 8);
+  assert.equal(environment.TERRAQO_WORKSPACE_PUBLICATION_V1 ?? "false", selectedPhase === "s24" ? "true" : "false", "S24 requires its own isolated phase.");
   assert.equal(environment.PLATFORM_STAGING_ENABLED_FLAGS, expectedFlags.join(","), "Los flags deben coincidir con la fase remota.");
   assert.equal(environment.TERRAQO_EVIDENCE_ANALYSIS_V1, analysisEnabled ? "true" : "false");
   assert.equal(environment.TERRAQO_B5_PILOT_WORKSPACE_IDS ?? "", selectedPhase === "b4" || analysisEnabled ? pilot : "");
@@ -43,6 +45,7 @@ export function stagingCloudEnvironment(source: NodeJS.ProcessEnv, head: string)
 export function stagingCloudGateEnvironment(environment: NodeJS.ProcessEnv, gate: string) {
   const consent: Record<string, string> = {
     "b1-b2": "b1-b2-http-fixtures", b3: "b3-http-fixtures", b4: "b4-http-fixtures",
+    s24: "s24-http-fixtures",
     "b5-readiness": "b5-http-readiness-fixtures", "b5-dispatch": "b5-synthetic-fixtures",
   };
   assert.ok(Object.hasOwn(consent, gate));
