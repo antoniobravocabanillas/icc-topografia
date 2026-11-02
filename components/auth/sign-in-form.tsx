@@ -51,6 +51,7 @@ export function SignInForm({
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [passkeyBusy, setPasskeyBusy] = useState(false);
+  const [resendBusy, setResendBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [rememberEmail, setRememberEmail] = useState(false);
   const [emailNeedsVerification, setEmailNeedsVerification] = useState(false);
@@ -97,24 +98,32 @@ export function SignInForm({
   }
 
   async function resendVerification(formData: FormData) {
+    if (resendBusy) return;
     setResendMessage(null);
     setError(null);
     const requestedEmail = String(formData.get("email") || "");
     const password = String(formData.get("password") || "");
     if (!requestedEmail || !password) return setError("Escribe tu correo y contraseña para reenviar la verificación.");
-    const response = await fetch("/api/auth/resend-verification", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: requestedEmail, password }),
-    });
-    const payload = await response.json().catch(() => null);
-    if (!response.ok) return setError(payload?.error?.message || "No se pudo reenviar la verificación.");
-    if (payload?.data?.status === "already_verified") {
-      setEmailNeedsVerification(false);
-      setResendMessage("Tu correo ya está verificado. Puedes iniciar sesión.");
-      return;
+    setResendBusy(true);
+    try {
+      const response = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: requestedEmail, password }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) return setError(payload?.error?.message || "No se pudo reenviar la verificación.");
+      if (payload?.data?.status === "already_verified") {
+        setEmailNeedsVerification(false);
+        setResendMessage("Tu correo ya está verificado. Puedes iniciar sesión.");
+        return;
+      }
+      setResendMessage(payload?.data?.delivered ? "Enlace reenviado. Revisa también spam o promociones." : "El servicio de correo aún no está configurado; no se envió ningún mensaje.");
+    } catch {
+      setError("No pudimos conectar con el servicio de correo. Tu contraseña se conserva para que puedas volver a intentarlo.");
+    } finally {
+      setResendBusy(false);
     }
-    setResendMessage(payload?.data?.delivered ? "Enlace reenviado. Revisa también spam o promociones." : "El servicio de correo aún no está configurado; no se envió ningún mensaje.");
   }
 
   async function signInWithPasskey() {
@@ -139,7 +148,7 @@ export function SignInForm({
   }
 
   return (
-    <form action={submit} className={embedded ? "tq-embedded-auth-form" : "relative overflow-hidden rounded-lg border bg-card p-6 text-foreground shadow-2xl md:p-8"}>
+    <form onSubmit={(event) => { event.preventDefault(); submit(new FormData(event.currentTarget)); }} className={embedded ? "tq-embedded-auth-form" : "relative overflow-hidden rounded-lg border bg-card p-6 text-foreground shadow-2xl md:p-8"}>
       <div className="tq-auth-heading">
         <p>Bienvenido a Terraqo</p>
         <h1 data-access-heading tabIndex={-1}>{title === "Bienvenido de vuelta" ? "Inicia sesión" : title}</h1>
@@ -169,7 +178,7 @@ export function SignInForm({
         <Button type="button" variant="outline" size="lg" disabled={passkeyBusy || isPending} onClick={signInWithPasskey} className="tq-passkey-button w-full"><Fingerprint aria-hidden="true" /> {passkeyBusy ? "Verificando dispositivo…" : "Entrar con huella, rostro o PIN"}</Button>
         {error ? <p role="alert" className="tq-auth-feedback is-error"><ShieldAlert aria-hidden="true" />{error}</p> : null}
         {resendMessage ? <p role="status" className="tq-auth-feedback is-success"><CheckCircle2 aria-hidden="true" />{resendMessage}</p> : null}
-        {emailNeedsVerification ? <button type="submit" formAction={resendVerification} className="tq-resend-verification">Reenviar correo de verificación</button> : null}
+        {emailNeedsVerification ? <Button type="button" variant="outline" className="w-full" disabled={resendBusy || isPending} onClick={(event) => { const form = event.currentTarget.form; if (form) void resendVerification(new FormData(form)); }}>{resendBusy ? "Enviando verificación…" : "Reenviar correo de verificación"}</Button> : null}
       </div>
 
       <SocialAccess providers={socialProviders} />

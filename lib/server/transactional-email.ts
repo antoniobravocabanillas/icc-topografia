@@ -8,6 +8,13 @@ type TransactionalEmailInput = {
   idempotencyKey?: string;
 };
 
+export class TransactionalEmailError extends Error {
+  constructor(public readonly providerStatus: number, public readonly providerCode: string) {
+    super("El proveedor no aceptó el correo transaccional.");
+    this.name = "TransactionalEmailError";
+  }
+}
+
 function senderAddress() {
   const configured = process.env.TERRAQO_EMAIL_FROM || process.env.EMAIL_FROM;
   if (!configured) return null;
@@ -41,7 +48,13 @@ export async function sendTransactionalEmail(input: TransactionalEmailInput) {
     })
   });
 
-  const payload = await response.json().catch(() => null) as { id?: string; message?: string } | null;
-  if (!response.ok) throw new Error(`No se pudo enviar el correo transaccional. ${payload?.message || response.statusText}`);
+  const payload = await response.json().catch(() => null) as { id?: string; name?: string } | null;
+  if (!response.ok || !payload?.id) {
+    // Provider bodies may contain recipient details. Log only a bounded code,
+    // never credentials, verification links, message bodies or addresses.
+    const code = payload?.name && /^[a-z_]{1,60}$/.test(payload.name) ? payload.name : "invalid_provider_response";
+    console.error("Transactional email rejected", { providerStatus: response.status, providerCode: code });
+    throw new TransactionalEmailError(response.status, code);
+  }
   return { delivered: true as const, id: payload?.id || null };
 }
