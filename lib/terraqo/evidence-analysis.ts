@@ -1,3 +1,5 @@
+import { publicationReviewEnabled } from "./publication-review";
+import { readPublicationSource, publicSelectionPolicyWhere } from "./publication-projection";
 import "@/lib/server/runtime-server-only";
 
 import { createHash } from "node:crypto";
@@ -387,6 +389,7 @@ async function authorizedSourceProjection(actorId: string, source: JobSourceReco
   });
   if (!revision) return null;
 
+  let pinnedFields: Record<string, string | string[] | null | undefined> | undefined;
   let allowedFields: Array<z.infer<typeof sourceFieldSchema>> = [...sourceFieldSchema.options];
   if (
     (source.accessKind === "PUBLIC_CV" || source.accessKind === "PUBLIC_SELECTION") &&
@@ -398,12 +401,17 @@ async function authorizedSourceProjection(actorId: string, source: JobSourceReco
       select: { id: true },
     });
     if (!publicRevision) return null;
+  } else if (source.accessKind === "PUBLIC_SELECTION" && publicationReviewEnabled()) {
+    const item = await readPublicationSource(client, source.accessReferenceId ?? "", revision.id);
+    if (!item) return null;
+    pinnedFields = item.fields;
+    allowedFields = Object.keys(item.fields).filter((field): field is z.infer<typeof sourceFieldSchema> => sourceFieldSchema.safeParse(field).success);
   } else {
     const item = await client.terraqoShareCollectionItem.findFirst({
       where: {
         revisionId: revision.id,
         collection: source.accessKind === "PUBLIC_SELECTION"
-          ? { lifecycle: { not: "ARCHIVED" }, publicProjection: { id: source.accessReferenceId ?? "", revokedAt: null } }
+          ? { lifecycle: { not: "ARCHIVED" }, publicProjection: { id: source.accessReferenceId ?? "", ...publicSelectionPolicyWhere() } }
           : { lifecycle: { not: "ARCHIVED" }, grants: { some: { id: source.accessReferenceId ?? "", subjectUserId: actorId, lifecycle: "ACTIVE", revokedAt: null, expiresAt: { gt: new Date() }, scopes: { has: "VIEW_COLLECTION" } } } },
       },
       select: { allowedFields: true },
@@ -427,8 +435,8 @@ async function authorizedSourceProjection(actorId: string, source: JobSourceReco
     locationLabel: revision.worklog.locationLabel,
   };
   const fields = Object.fromEntries(allowedFields.flatMap((field) => {
-    const value = values[field];
-    if (value === null || value === "" || (Array.isArray(value) && !value.length)) return [];
+    const value = pinnedFields ? pinnedFields[field] : values[field];
+    if (value === undefined || value === null || value === "" || (Array.isArray(value) && !value.length)) return [];
     return [[field, value]];
   })) as EvidenceAnalysisSource["fields"];
   return { sourceId: source.evaluationSourceId, revisionId: source.worklogRevisionId, contentHash: source.contentHash, accessKind: source.accessKind, fields };

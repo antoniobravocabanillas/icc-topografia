@@ -1,6 +1,6 @@
 # S24 enterprise publication — backend preparation, NOT release closure
 
-The original UI document requires exact revision/field/attachment/destination review, explicit approval, separate publication by the professional, and revocation of future access. The previous B3 deny rule is intentional and remains unchanged.
+The original UI document requires exact revision/field/attachment/destination review, explicit approval, separate publication by the professional, and revocation of future access. The B3 deny rule remains active while the rollout flag is off. The latest continuation adds approval-gated publication when explicitly enabled after migration.
 
 ## Prepared locally
 
@@ -54,3 +54,22 @@ Validation:
 Fixture reproduction: copy tsconfig.json/package.json/postcss.config.mjs and app/layout.tsx from scripts/fixtures/public-archive into output/publication-ui-fixture, then scripts/fixtures/publication-review/page.tsx into its app/page.tsx. Run `node node_modules/next/dist/bin/next dev output/publication-ui-fixture -p 3191` and the browser script.
 
 Next executable block remains publication integration and all downstream readers (steps 2–3). The enterprise publication deny is unchanged. No migration, feature enablement or production deploy was performed for this continuation.
+
+## Continuation — publication and derived readers integrated locally
+
+- Public selection v2 stores an immutable projection of approved fields and pinned media, including date/location. Publication checks every contributing company approval against the exact collection version and snapshot digest under the collection lock.
+- Public selection HTML/JSON, media reads, discovery, dossier source authorization and evidence analysis consume the current authorized root. Discovery loads roots in batches of 100; ranking uses pinned fields. Dossier accessSnapshot can only narrow live allowed fields. Contextual messaging carries need/dossier context, not unrestricted evidence payloads.
+- Revoked approvals, inactive/deleted companies, removed worklogs/media, mismatched scopes and narrower live selections fail closed. Public JSON and media are no-store; media permission is checked again after storage I/O.
+- Republishing v2 rotates both projection id and slug. Old links and derived access references do not regain access to a new publication.
+- With the feature disabled, v2 roots are excluded and the new snapshot/review schema is not queried by the resolver. Legacy v1 remains available.
+
+Validation for this continuation:
+
+- TypeScript, targeted ESLint and whitespace checks PASS.
+- Publication projection, review service, HTTP boundary, scoped sharing, discovery, evidence analysis and contextual messaging suites PASS.
+- Disposable PostgreSQL 18 rehearsal PASS using loopback only and synthetic users/workspace/evidence. Migration preserved a preexisting sentinel. Concurrent administrators produced exactly one accepted decision. Approval did not publish; public fields stayed frozen after worklog edits; revocation/inactive workspace denied access; republication invalidated old id/URL.
+- Rehearsal setup was corrected to explicit search_path=icc. The final runner applies the committed migration artifact itself after comparing it to the generated diff, normalizing schema qualification and Windows line endings. Initial runner failures were local harness issues; all temporary clusters were stopped.
+- `prisma/migrations/20261101000100_enterprise_publication_review/migration.sql` was successfully applied to the disposable database. Additive enum, review table/indexes/FKs and nullable snapshot column; no existing table/column/row deletion.
+- Reproduce: `node scripts/rehearse-publication-local.mjs --confirm=local-s24-only`. Proof: `output/publication-local-rehearsal.json`. Random password files removed, stopped synthetic-only cluster directories retained.
+
+Next: confirmed isolated staging preflight/backup, migration and enabled authenticated browser E2E; then full release build and production migration/deployment gate. Local PostgreSQL and browser fixtures do not substitute for hosted E2E. No remote migration, production deployment or flag enablement was performed here.

@@ -1,3 +1,5 @@
+import { publicationReviewEnabled, PublicationReviewError } from "./publication-review";
+import { preparePublicationProjection, loadPublicationProjections, publicSelectionPolicyWhere, PUBLICATION_PROJECTION_POLICY } from "./publication-projection";
 import { createHash, randomBytes } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import type { z } from "zod";
@@ -320,20 +322,27 @@ export async function publishCollectionProjection(input: {
     const locked = await tx.terraqoShareCollection.findUnique({ where: { id: collection.id }, select: { version: true } });
     if (!locked || locked.version !== input.expectedVersion)
       throw new ScopedSharingError("La selección cambió en otra sesión. Recarga antes de publicar.", 409);
-    if (collection.items.some((item) => item.revision.worklog.workspaceId))
+    if (!publicationReviewEnabled() && collection.items.some((item) => item.revision.worklog.workspaceId))
       throw new ScopedSharingError(
         "El material vinculado a una empresa necesita autorización S24 antes de publicarse.",
         422,
       );
 
+    let snapshot;
+    if (publicationReviewEnabled()) {
+      try { snapshot = await preparePublicationProjection(tx, collection.id, input.expectedVersion); }
+      catch (error) { if (error instanceof PublicationReviewError) throw new ScopedSharingError(error.message, error.status); throw error; }
+    }
+    const policyVersion = snapshot ? PUBLICATION_PROJECTION_POLICY : "public-selection-v1";
     const projection = await tx.terraqoPublicProjection.upsert({
       where: { collectionId: collection.id },
       create: {
         collectionId: collection.id,
         slug: randomBytes(18).toString("base64url"),
-        policyVersion: "public-selection-v1",
+        policyVersion,
+        ...(snapshot ? { snapshot } : {}),
       },
-      update: { revokedAt: null, publishedAt: new Date(), policyVersion: "public-selection-v1" },
+      update: { revokedAt: null, publishedAt: new Date(), policyVersion, ...(snapshot ? { snapshot, id: `c${randomBytes(12).toString("hex")}`, slug: randomBytes(18).toString("base64url") } : {}) },
       select: { id: true, slug: true, policyVersion: true, publishedAt: true, revokedAt: true },
     });
     await tx.terraqoShareCollection.update({
@@ -371,8 +380,9 @@ export async function revokeCollectionProjection(input: {
 
 export async function getPublicCollectionProjection(slug: string) {
   const projection = await prisma.terraqoPublicProjection.findFirst({
-    where: { slug, revokedAt: null },
+    where: { slug, ...publicSelectionPolicyWhere() },
     select: {
+      id: true,
       policyVersion: true,
       publishedAt: true,
       collection: {
@@ -411,6 +421,16 @@ export async function getPublicCollectionProjection(slug: string) {
     },
   });
   if (!projection) throw new ScopedSharingError("Selección no disponible.", 404);
+  if (publicationReviewEnabled()) {
+    const pinned = (await loadPublicationProjections(prisma, [projection.id])).get(projection.id);
+    if (!pinned) throw new ScopedSharingError("Selección no disponible.", 404);
+    return { policyVersion: projection.policyVersion, publishedAt: projection.publishedAt,
+      title: pinned.title, description: pinned.description,
+      items: pinned.items.map(item => ({ worklogId: item.worklogId, ...item.fields,
+        ...(item.fields.occurredAt ? { occurredAt: new Date(item.fields.occurredAt) } : {}),
+        media: item.mediaIds.map(id => ({ id, href: `/api/v1/public/selections/${encodeURIComponent(slug)}/media/${encodeURIComponent(id)}` })) })) };
+  }
+
 
   return {
     policyVersion: projection.policyVersion,

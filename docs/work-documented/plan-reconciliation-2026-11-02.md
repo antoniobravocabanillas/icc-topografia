@@ -49,3 +49,5 @@ Copy scripts/fixtures/public-archive into output/archive-ui-fixture, run `node n
 - S24 foundation is local only; see `s24-preparation-2026-11-02.md`. S22 and public WorkCase coverage remain separate acceptance work.
 
 S24 continuation: authenticated bounded API, private media preview, company review UI and professional request/status UI are implemented locally and fixture-tested. Publication/derived-consumer integration and PostgreSQL/staging acceptance remain open. Runtime flag remains off. See s24-preparation-2026-11-02.md.
+
+Latest S24 continuation: approval-gated immutable publication and public/discovery/dossier/analysis readers integrated locally. Committed additive migration and concurrent decision/revocation flow passed disposable PostgreSQL 18 with synthetic data. Hosted staging E2E and release gate remain pending; no production rollout in this phase.

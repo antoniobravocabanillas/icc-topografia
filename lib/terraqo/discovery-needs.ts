@@ -1,3 +1,5 @@
+import { publicationReviewEnabled } from "./publication-review";
+import { loadPublicationProjections, readPublicationSource, publicSelectionPolicyWhere } from "./publication-projection";
 import { createHash } from "node:crypto";
 import { Prisma, type TerraqoEvaluationSourceAccessKind } from "@prisma/client";
 import type { z } from "zod";
@@ -323,7 +325,7 @@ const candidateSelect = {
     },
   },
   shareItems: {
-    where: { collection: { publicProjection: { revokedAt: null }, lifecycle: { not: "ARCHIVED" } } },
+    where: { collection: { publicProjection: { ...publicSelectionPolicyWhere() }, lifecycle: { not: "ARCHIVED" } } },
     select: {
       id: true,
       allowedFields: true,
@@ -352,7 +354,7 @@ export async function discoverEvidenceForNeed(workspaceId: string, needId: strin
     { summary: { contains: term, mode: "insensitive" as const } },
     { outcome: { contains: term, mode: "insensitive" as const } },
   ]);
-  const publicCollection = { publicProjection: { revokedAt: null }, lifecycle: { not: "ARCHIVED" as const } };
+  const publicCollection = { publicProjection: { ...publicSelectionPolicyWhere() }, lifecycle: { not: "ARCHIVED" as const } };
   const visibleTextFilters = terms.flatMap((term) => (["title", "summary", "outcome"] as const).map((field) => ({
     [field]: { contains: term, mode: "insensitive" as const },
     shareItems: { some: { collection: publicCollection, allowedFields: { has: field } } },
@@ -379,6 +381,8 @@ export async function discoverEvidenceForNeed(workspaceId: string, needId: strin
   })));
   const candidates = [...new Map(pools.flat().map((candidate) => [candidate.id, candidate])).values()];
 
+  const pinnedProjections = publicationReviewEnabled() ? await loadPublicationProjections(prisma,
+    candidates.flatMap(candidate => candidate.shareItems.flatMap(item => item.collection.publicProjection ? [item.collection.publicProjection.id] : []))) : null;
   const seenWork = new Set<string>();
   return candidates.flatMap((candidate) => {
     const workKey = `${candidate.worklog.professionalProfile.id}:${candidate.worklog.workCaseLinks[0]?.workCaseId ?? candidate.worklog.id}`;
@@ -394,7 +398,16 @@ export async function discoverEvidenceForNeed(workspaceId: string, needId: strin
 
     return exposures.flatMap((exposure) => {
       if (seenWork.has(workKey)) return [];
-      const visible = projectDiscoveryEvidenceFields({
+      const pinned = exposure.accessKind === "PUBLIC_SELECTION" && pinnedProjections
+        ? pinnedProjections.get(exposure.accessReferenceId)?.items.find(item => item.revisionId === candidate.id) : undefined;
+      if (exposure.accessKind === "PUBLIC_SELECTION" && pinnedProjections && !pinned) return [];
+      const allowedFields = pinned ? Object.keys(pinned.fields) : exposure.allowedFields;
+      const data = pinned ? {
+        title: pinned.fields.title ?? "", summary: pinned.fields.summary ?? "", outcome: pinned.fields.outcome ?? null,
+        responsibilities: pinned.fields.responsibilities ?? [], methods: pinned.fields.methods ?? [], tools: pinned.fields.tools ?? [],
+        skills: [], locationLabel: pinned.fields.locationLabel ?? null,
+      } : {
+
         title: candidate.title,
         summary: candidate.summary,
         outcome: candidate.outcome,
@@ -403,11 +416,12 @@ export async function discoverEvidenceForNeed(workspaceId: string, needId: strin
         tools: candidate.tools,
         skills: candidate.worklog.skills,
         locationLabel: candidate.worklog.locationLabel,
-      }, exposure.allowedFields);
+      };
+      const visible = projectDiscoveryEvidenceFields(data, allowedFields);
       const reasons = explainDiscoveryMatch({ need: revision, evidence: visible });
       if (!reasons.hasEvidence) return [];
       seenWork.add(workKey);
-      const allowed = exposure.allowedFields === null ? null : new Set(exposure.allowedFields);
+      const allowed = allowedFields === null ? null : new Set(allowedFields);
       return [{
         revisionId: candidate.id,
         worklogId: candidate.worklog.id,
@@ -415,10 +429,10 @@ export async function discoverEvidenceForNeed(workspaceId: string, needId: strin
         professionalName: candidate.worklog.professionalProfile.user.name ?? "Profesional Terraqo",
         professionalImage: candidate.worklog.professionalProfile.user.image,
         headline: candidate.worklog.professionalProfile.headline,
-        ...(allowed === null || allowed.has("title") ? { title: candidate.title } : {}),
-        ...(allowed === null || allowed.has("summary") ? { summary: candidate.summary } : {}),
-        ...(allowed === null || allowed.has("occurredAt") ? { occurredAt: candidate.worklog.occurredAt } : {}),
-        ...(allowed === null || allowed.has("locationLabel") ? { locationLabel: candidate.worklog.locationLabel } : {}),
+        ...(allowed === null || allowed.has("title") ? { title: data.title } : {}),
+        ...(allowed === null || allowed.has("summary") ? { summary: data.summary } : {}),
+        ...(allowed === null || allowed.has("occurredAt") ? { occurredAt: pinned?.fields.occurredAt ? new Date(pinned.fields.occurredAt) : candidate.worklog.occurredAt } : {}),
+        ...(allowed === null || allowed.has("locationLabel") ? { locationLabel: data.locationLabel } : {}),
         accessKind: exposure.accessKind,
         accessReferenceId: exposure.accessReferenceId,
         reasons,
@@ -479,7 +493,15 @@ async function resolveSourceAccess(tx: Prisma.TransactionClient, actorId: string
   } else if (publicItem?.collection.publicProjection && revision.worklog.professionalProfile.liveCvEnabled) {
     accessKind = "PUBLIC_SELECTION";
     accessReferenceId = publicItem.collection.publicProjection.id;
-    allowedFields = publicItem.allowedFields;
+    if (publicationReviewEnabled()) {
+      const pinned = await readPublicationSource(tx, accessReferenceId, revision.id);
+      if (!pinned) throw new DiscoveryNeedsError("No existe autorización vigente para esta evidencia.", 403);
+      allowedFields = Object.keys(pinned.fields);
+    } else {
+      const legacy = await tx.terraqoPublicProjection.findFirst({ where: { id: accessReferenceId, ...publicSelectionPolicyWhere() }, select: { id: true } });
+      if (!legacy) throw new DiscoveryNeedsError("No existe autorización vigente para esta evidencia.", 403);
+      allowedFields = publicItem.allowedFields;
+    }
   }
   if (!accessKind || !accessReferenceId) throw new DiscoveryNeedsError("No existe autorización vigente para esta evidencia.", 403);
   return {
@@ -568,11 +590,18 @@ async function evaluationSourceIsAccessible(
     return revision ? { allowedFields: constrainAllowedFields(null, source.accessSnapshot) } : null;
   }
   if (source.accessKind === "PUBLIC_SELECTION") {
+    if (publicationReviewEnabled()) {
+      const current = await tx.terraqoWorklogRevision.findFirst({ where: { id: source.worklogRevisionId,
+        currentFor: { deletedAt: null, lifecycle: "PUBLISHED", professionalProfile: { liveCvEnabled: true } } }, select: { id: true } });
+      if (!current) return null;
+      const pinned = await readPublicationSource(tx, source.accessReferenceId ?? "", source.worklogRevisionId);
+      return pinned ? { allowedFields: constrainAllowedFields(Object.keys(pinned.fields), source.accessSnapshot) } : null;
+    }
     const item = await tx.terraqoShareCollectionItem.findFirst({
       where: {
         revisionId: source.worklogRevisionId,
         revision: { worklog: { professionalProfile: { liveCvEnabled: true } } },
-        collection: { lifecycle: { not: "ARCHIVED" }, publicProjection: { id: source.accessReferenceId ?? "", revokedAt: null } },
+        collection: { lifecycle: { not: "ARCHIVED" }, publicProjection: { id: source.accessReferenceId ?? "", ...publicSelectionPolicyWhere() } },
       },
       select: { allowedFields: true },
     });

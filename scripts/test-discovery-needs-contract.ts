@@ -135,6 +135,7 @@ function matchesFixture(value: unknown, filter: Record<string, unknown>): boolea
     const actual = row?.[key];
     if (expected === null || typeof expected !== "object") return actual === expected;
     const predicate = expected as Record<string, unknown>;
+    if ("in" in predicate) return (predicate.in as unknown[]).includes(actual);
     if ("contains" in predicate) return typeof actual === "string" && actual.toLowerCase().includes(String(predicate.contains).toLowerCase());
     if ("has" in predicate) return Array.isArray(actual) && actual.includes(predicate.has);
     if ("hasSome" in predicate) return Array.isArray(actual) && (predicate.hasSome as unknown[]).some((item) => actual.includes(item));
@@ -152,7 +153,7 @@ async function verifyDiscoveryMembership() {
   const row = {
     id: "revision", title: "Nivelacion", summary: "Acme confidencial", outcome: null,
     tools: ["GNSS"], methods: [], responsibilities: [], currentFor: { id: "worklog" },
-    shareItems: [{ allowedFields: ["tools"], collection: { lifecycle: "ACTIVE", publicProjection: { id: "projection", revokedAt: null } } }],
+    shareItems: [{ allowedFields: ["tools"], collection: { lifecycle: "ACTIVE", publicProjection: { id: "projection", revokedAt: null, policyVersion: "public-selection-v1" } } }],
     worklog: {
       id: "worklog", visibility: "PRIVATE", deletedAt: null, lifecycle: "PUBLISHED", currentRevisionId: "revision",
       skills: [], locationLabel: null, occurredAt: new Date(), workCaseLinks: [],

@@ -25,7 +25,7 @@ function requireEnabled() {
     throw new PublicationReviewError("Recurso no disponible.", 404);
 }
 
-const sourceSelect = {
+export const publicationSourceSelect = {
   id: true,
   version: true,
   title: true,
@@ -67,7 +67,7 @@ const sourceSelect = {
 async function collectionForReview(tx: Prisma.TransactionClient, id: string) {
   const collection = await tx.terraqoShareCollection.findFirst({
     where: { id, lifecycle: { not: "ARCHIVED" } },
-    select: sourceSelect,
+    select: publicationSourceSelect,
   });
   if (!collection)
     throw new PublicationReviewError("Selección no disponible.", 404);
