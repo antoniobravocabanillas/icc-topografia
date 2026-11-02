@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { PublicCVSectionPage } from "@/components/terraqo/public-cv";
 import {
-  publicCvProfileInclude,
+  publicCvArchiveProfileInclude as publicCvProfileInclude,
   publishedCvProfileWhere,
 } from "@/lib/terraqo/public-cv";
 import { prisma } from "@/lib/prisma";

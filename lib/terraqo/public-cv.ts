@@ -109,3 +109,9 @@ export const publicCvProfileInclude = {
 export type PublicCvProfile = Prisma.TerraqoProfessionalProfileGetPayload<{
   include: typeof publicCvProfileInclude;
 }>;
+
+// Archive routes only need the first page; the selected record is resolved separately.
+export const publicCvArchiveProfileInclude = {
+  ...publicCvProfileInclude,
+  worklogs: { ...publicCvProfileInclude.worklogs, take: 21 },
+} satisfies Prisma.TerraqoProfessionalProfileInclude;

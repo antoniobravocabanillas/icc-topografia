@@ -1,0 +1,1 @@
+import Fixture from '../../../../fixture';export default async function Page({params}:{params:Promise<{recordId:string}>}){return <Fixture id={(await params).recordId}/>;}

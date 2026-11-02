@@ -346,7 +346,7 @@ export function PublicCVSectionPage({
       right.occurredAt.getTime() - left.occurredAt.getTime() ||
       right.id.localeCompare(left.id),
   );
-  const initialArchiveWorklogs = orderedWorklogs.slice(0, 80);
+  const initialArchiveWorklogs = orderedWorklogs.slice(0, 20);
   const requestedWorklog = initialRecordId
     ? orderedWorklogs.find((worklog) => worklog.id === initialRecordId)
     : undefined;

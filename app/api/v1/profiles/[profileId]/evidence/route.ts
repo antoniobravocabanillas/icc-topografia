@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { fail, handleApiError, ok } from "@/lib/server/api";
 import {
   countWorklogArchive,
+  getWorklogArchiveProjects,
   getWorklogArchivePage,
 } from "@/lib/terraqo/worklog-archive";
 import {
@@ -23,6 +24,7 @@ export async function GET(
     const [{ profileId }, session] = await Promise.all([params, auth()]);
     const scope = await resolveEvidenceReadScope({
       actorUserId: session?.user?.id,
+      publicOnly: new URL(request.url).searchParams.get("audience") === "public",
       professionalProfileId: profileId,
     });
     if (!scope) return fail("Recurso no disponible.", 404);
@@ -50,17 +52,19 @@ export async function GET(
       scopeWhere: scope.where,
       scope,
     };
-    const [page, total] = await Promise.all([
+    const [page, total, projects] = await Promise.all([
       getWorklogArchivePage({
         ...requestScope,
         cursor: url.searchParams.get("cursor") || undefined,
       }),
       countWorklogArchive(requestScope),
+      url.searchParams.has("cursor") ? Promise.resolve(undefined) : getWorklogArchiveProjects(scope),
     ]);
 
     return ok(
       {
         version: 1,
+        ...(projects ? { projects } : {}),
         audience: scope.audience,
         items: page.items.map((item) => evidenceListDto(item, scope)),
         page: {

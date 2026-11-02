@@ -60,8 +60,11 @@ export function buildEvidenceReadWhere(input: {
 
 export async function resolveEvidenceReadScope(input: {
   actorUserId?: string | null;
+  publicOnly?: boolean;
   professionalProfileId: string;
 }): Promise<EvidenceReadScope | null> {
+  // Public screens must not expand to owner/member data when a visitor signs in.
+  const actorUserId = input.publicOnly ? undefined : input.actorUserId;
   const profile = await prisma.terraqoProfessionalProfile.findUnique({
     where: { id: input.professionalProfileId },
     select: {
@@ -73,7 +76,7 @@ export async function resolveEvidenceReadScope(input: {
   });
   if (!profile) return null;
 
-  if (input.actorUserId === profile.userId) {
+  if (actorUserId === profile.userId) {
     return {
       audience: "OWNER",
       profile,
@@ -92,7 +95,7 @@ export async function resolveEvidenceReadScope(input: {
     };
   }
 
-  if (!input.actorUserId) {
+  if (!actorUserId) {
     if (!profile.liveCvEnabled) return null;
     return {
       audience: "PUBLIC",
@@ -114,7 +117,7 @@ export async function resolveEvidenceReadScope(input: {
 
   const memberships = await prisma.terraqoWorkspaceMember.findMany({
     where: {
-      userId: input.actorUserId,
+      userId: actorUserId,
       active: true,
       workspace: { active: true, deletedAt: null },
     },

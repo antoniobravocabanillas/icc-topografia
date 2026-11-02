@@ -165,3 +165,14 @@ export async function countWorklogArchive(input: {
       : archiveWhere,
   });
 }
+
+// Facets use the same authorized record scope; no private project inventory is exposed.
+export async function getWorklogArchiveProjects(scope: EvidenceReadScope) {
+  const groups = await prisma.terraqoWorklogEntry.groupBy({
+    by: ["projectId"], where: { AND: [scope.where, { projectId: { not: null } }] },
+  });
+  return prisma.project.findMany({
+    where: { id: { in: groups.flatMap(group => group.projectId ? [group.projectId] : []) } },
+    select: { id: true, title: true }, orderBy: [{ title: "asc" }, { id: "asc" }],
+  });
+}

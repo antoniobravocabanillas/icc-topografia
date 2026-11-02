@@ -19,6 +19,7 @@ export async function GET(
     const [{ profileId }, session] = await Promise.all([params, auth()]);
     const scope = await resolveEvidenceReadScope({
       actorUserId: session?.user?.id,
+      publicOnly: new URL(request.url).searchParams.get("audience") === "public",
       professionalProfileId: profileId,
     });
     if (!scope) return fail("Recurso no disponible.", 404);

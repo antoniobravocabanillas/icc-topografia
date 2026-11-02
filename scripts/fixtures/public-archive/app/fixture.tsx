@@ -1,0 +1,3 @@
+import {PublicCvActivityExplorer,type PublicCvActivityRecord} from '@/components/terraqo/public-cv-activity-explorer';
+const item:PublicCvActivityRecord={id:'offpage',title:'Levantamiento de campo — prueba',summary:'Registro sintético para comprobar la navegación.',outcome:null,type:'FIELD_UPDATE',evidenceStatus:'DECLARED',occurredAt:'2026-10-28T15:00:00Z',createdAt:'2026-10-28T16:00:00Z',locationLabel:'Lima',skills:[],evidenceUrls:[],project:null,workspace:null,media:[],validations:[]};
+export default function Fixture({id}:{id?:string}){return <PublicCvActivityExplorer username="fixture" profileName="Perfil de prueba" profileId="fixture-profile" records={[{...item,id:id||'offpage'},{...item,id:'experience-legacy'}]} initialRecordId={id} initialNextCursor={null}/>;}
