@@ -18,3 +18,11 @@ Company login reported an unverified account and verification resend returned se
 
 ## Limits
 Direct authorized recovery proves token persistence, rendering, provider dispatch and recipient-server delivery; it does not prove authenticated resend through the deployed endpoint with the user's password. Do not request or log that password. Production rebuild and smoke validation are tracked in the local launch handoff.
+
+## Production closeout
+- TypeScript check PASS; Netlify production build PASS (2m 55.9s).
+- Application commit: adde7c06c0f021605b9a5b0c5f6b2f86c049cb87.
+- Published deploy: 6ae7d809dc103c91f8d08349; publication unlocked after validation.
+- Production smoke: 20/20 PASS, including portal/company pages, Google callback origins and authorization boundaries.
+- Published UI browser test PASS using synthetic credentials and intercepted authentication/resend responses (no additional real email or account mutation). Both failed-login and failed-resend paths retain the password. Mobile screenshot reviewed: output/verification-resend-production-mobile.png.
+- Only the authorized verification-token insertion was performed; no migrations, payments, manual account verification or unrelated data changes.
