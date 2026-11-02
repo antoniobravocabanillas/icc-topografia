@@ -55,7 +55,7 @@ type Collection = {
     id: string;
     allowedFields: string[];
     includeMedia: boolean;
-    revision: { title: string; worklog: { media: Array<{ id: string }> } };
+    revision: { title: string; worklog: { workspaceId?: string | null; media: Array<{ id: string }> } };
   }>;
   grants: Grant[];
   publicProjection: { slug: string; revokedAt: string | null } | null;
@@ -77,9 +77,11 @@ async function requestJson(url: string, init: RequestInit) {
 export function ScopedSharingConsole({
   candidates,
   collections,
+  publicationReviewEnabled = false,
 }: {
   candidates: Candidate[];
   collections: Collection[];
+  publicationReviewEnabled?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -288,6 +290,7 @@ export function ScopedSharingConsole({
                 </div>
                 {collection.grants.length ? <div className="mt-4 space-y-2">{collection.grants.map((grant) => <div key={grant.id} className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-xs"><span><strong>{grant.inviteEmail || "Usuario Terraqo"}</strong><br /><span className="text-slate-500">{grant.lifecycle} · vence {new Intl.DateTimeFormat("es-PE", { dateStyle: "medium" }).format(new Date(grant.expiresAt))}</span></span>{grant.lifecycle === "ACTIVE" ? <span className="flex gap-1"><button aria-label="Copiar enlace privado" onClick={async () => { await navigator.clipboard.writeText(`${window.location.origin}/portal/selecciones/${collection.id}`); setMessage({ tone: "ok", text: "Enlace privado copiado. Solo funcionará para la identidad autorizada y dentro de la vigencia." }); }} className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-primary hover:bg-primary/5"><Copy className="h-4 w-4" /></button><button aria-label="Revocar acceso" disabled={pending} onClick={() => run(async () => { await requestJson(`/api/v1/share-collections/${collection.id}/grants`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ grantId: grant.id, expectedVersion: collection.version, reason: "Revocado por el titular" }) }); setMessage({ tone: "ok", text: "Acceso revocado de inmediato." }); })} className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button></span> : null}</div>)}</div> : null}
                 <div className="mt-5 flex flex-wrap gap-2 border-t pt-5">
+                  {publicationReviewEnabled && collection.items.some(item => item.revision.worklog.workspaceId) ? <button disabled={pending} onClick={() => run(async () => { await requestJson("/api/v1/publication-reviews", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ collectionId: collection.id, expectedVersion: collection.version }) }); setMessage({ tone: "ok", text: "Solicitud enviada. Consulta el estado en Autorizaciones de publicación; el material sigue sin publicarse." }); })} className="inline-flex min-h-11 items-center gap-2 rounded-lg border px-4 text-sm font-bold hover:bg-slate-50"><ShieldCheck className="h-4 w-4" />Solicitar autorización empresarial</button> : null}
                   {activeProjection ? <><Link href={`/selecciones/${activeProjection.slug}`} target="_blank" className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-bold text-white"><Eye className="h-4 w-4" /> Ver página pública</Link><button disabled={pending} onClick={() => run(async () => { await requestJson(`/api/v1/share-collections/${collection.id}/projection`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedVersion: collection.version }) }); setMessage({ tone: "ok", text: "La página pública dejó de admitir nuevas lecturas." }); })} className="inline-flex min-h-11 items-center gap-2 rounded-lg border px-4 text-sm font-bold text-red-700 hover:bg-red-50">Revocar publicación</button></> : <button disabled={pending} onClick={() => run(async () => { await requestJson(`/api/v1/share-collections/${collection.id}/projection`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedVersion: collection.version }) }); setMessage({ tone: "ok", text: "Selección publicada con un enlace opaco y revocable." }); })} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-white hover:bg-primary/90"><Globe2 className="h-4 w-4" /> Publicar selección</button>}
                 </div>
               </article>

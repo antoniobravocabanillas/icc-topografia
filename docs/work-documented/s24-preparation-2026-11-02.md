@@ -18,7 +18,7 @@ The original UI document requires exact revision/field/attachment/destination re
 
 ## Required before enabling or claiming S24 complete
 
-1. Complete bounded authenticated API, professional request/status UI, workspace-scoped administrator queue and authorized exact-media preview. No approvals selected by default.
+1. Local API and UI completed in the continuation below. Real authenticated staging acceptance remains pending; do not count fixture tests as that gate.
 2. Integrate approval checks with separate publication. Pin the exact public snapshot and revalidate deletion/media permissions. Preserve the existing enterprise deny until every consumer is ready.
 3. Reconcile all consumers: public selection, media, discovery, dossier, contextual source and evidence analysis. No consumer may project current mutable date/location outside the approved snapshot or broaden allowedFields.
 4. Prepare the final migration only after the consumer design is complete; rehearse on an isolated PostgreSQL database, including concurrent decision/revocation and suspension, retries, stale content and post-revocation reads.
@@ -30,3 +30,27 @@ The original UI document requires exact revision/field/attachment/destination re
 - S22: workspace invitations, acceptance/cancellation/rate-limited resend, effective roles, suspension/removal and last-admin protection are not fulfilled by the existing operational staff screen.
 - S09: reconcile public WorkCase navigation and visibility against the specified public CV routes before marking its screen complete.
 - Three historical missing document blobs still need original files or external copies; database references are insufficient.
+
+## Continuation — authenticated review API and interface
+
+Completed locally behind the same disabled feature flag:
+
+- `GET/POST/PATCH/DELETE /api/v1/publication-reviews`: authenticated actor derived from session, strict input schemas, 16 KiB actual stream-byte limit, same-origin mutations, private/no-store responses, retryable 409 on transactional conflict.
+- Private attachment preview: exact snapshot media id/revision/workspace, current active administrator or requester, deleted/revoked denial, no storage-key disclosure, second permission check after blob loading, no-store and same-origin resource policy.
+- Company queue `/admin/publicaciones` uses the selected workspace and requires current OWNER/ADMIN membership. Global admin role alone does not grant publication authority. Navigation is feature-gated.
+- Professional selections gain explicit authorization request and read-only status/preview. Requesting authorization still does not publish material.
+- Review interface renders only requested fields/media. Confirmation starts unchecked, is reset between reviews and approval is blocked until every selected image loads. Errors, reasons, successful responses, changes requests and revocation are visible.
+- Workspace soft-deletion now invalidates reviewer authority as well as active=false.
+
+Validation:
+
+- `npx tsc --noEmit --incremental false`: PASS.
+- Targeted ESLint and `git diff --check`: PASS.
+- `node --conditions=react-server --import tsx scripts/test-publication-review-http.ts`: PASS; tests actual HTTP handler with injected identity/service doubles, including fake Content-Length and unauthenticated body non-consumption.
+- `npx tsx scripts/test-publication-review.ts`: PASS; transaction doubles, not PostgreSQL concurrency certification.
+- `node scripts/test-publication-review-browser.mjs`: PASS at 1280 and 375 px. Explicit approval, reason requirement, payload scope, confirmation reset, failed image denial and professional read-only mode. Synthetic API/attachment fixture only, no real company or DB mutations.
+- Batched screenshots inspected at `output/publication-review-{1280,375}.png`; no overflow. Impeccable mechanical detector returned no findings.
+
+Fixture reproduction: copy tsconfig.json/package.json/postcss.config.mjs and app/layout.tsx from scripts/fixtures/public-archive into output/publication-ui-fixture, then scripts/fixtures/publication-review/page.tsx into its app/page.tsx. Run `node node_modules/next/dist/bin/next dev output/publication-ui-fixture -p 3191` and the browser script.
+
+Next executable block remains publication integration and all downstream readers (steps 2–3). The enterprise publication deny is unchanged. No migration, feature enablement or production deploy was performed for this continuation.

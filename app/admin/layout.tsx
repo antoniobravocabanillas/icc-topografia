@@ -65,6 +65,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   ]);
   const navItems = getAdminNavigation(role, modules.map((module) => module.code))
     .filter((item) => item.href !== "/admin/necesidades" || process.env.TERRAQO_DISCOVERY_NEEDS_V1 === "true")
+    .filter((item) => item.href !== "/admin/publicaciones" || process.env.TERRAQO_WORKSPACE_PUBLICATION_V1 === "true")
     .map(({ group, label, href, icon }) => ({ group, label, href, icon }));
   const workspaceDisplayName = workspaceBranding?.brandName?.trim() || workspaceBranding?.name || activeWorkspace.name;
   const visualIdentity = resolveWorkspaceVisualIdentity(workspaceBranding?.settings);

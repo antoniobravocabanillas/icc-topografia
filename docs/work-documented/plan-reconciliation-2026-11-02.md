@@ -47,3 +47,5 @@ Copy scripts/fixtures/public-archive into output/archive-ui-fixture, run `node n
 - Real public CV browser at 390 px: list, search response rendered, calendar, canonical detail, explicit return, no horizontal overflow and no page errors PASS. Screenshot inspected at `output/public-archive-production-mobile.png`.
 - No new database migrations, real customer changes, mail or financial operations performed in this phase.
 - S24 foundation is local only; see `s24-preparation-2026-11-02.md`. S22 and public WorkCase coverage remain separate acceptance work.
+
+S24 continuation: authenticated bounded API, private media preview, company review UI and professional request/status UI are implemented locally and fixture-tested. Publication/derived-consumer integration and PostgreSQL/staging acceptance remain open. Runtime flag remains off. See s24-preparation-2026-11-02.md.

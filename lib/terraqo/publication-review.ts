@@ -83,7 +83,7 @@ async function administrator(
     SELECT m.id FROM icc."TerraqoWorkspaceMember" m
     JOIN icc."TerraqoWorkspace" w ON w.id=m."workspaceId"
     WHERE m."workspaceId"=${workspaceId} AND m."userId"=${userId}
-      AND m.active=true AND w.active=true AND m.role::text IN ('OWNER','ADMIN')
+      AND m.active=true AND w.active=true AND w."deletedAt" IS NULL AND m.role::text IN ('OWNER','ADMIN')
     FOR SHARE OF m,w`);
   if (!members.length)
     throw new PublicationReviewError(
@@ -130,7 +130,7 @@ export async function requestPublicationReviews(input: {
       const reviews = [];
       for (const workspaceId of workspaceIds) {
         const workspace = await tx.terraqoWorkspace.findFirst({
-          where: { id: workspaceId, active: true },
+          where: { id: workspaceId, active: true, deletedAt: null },
           select: { id: true },
         });
         if (!workspace)
@@ -185,15 +185,20 @@ export async function requestPublicationReviews(input: {
   );
 }
 
-export async function listPublicationReviews(userId: string) {
+export async function listPublicationReviews(
+  userId: string,
+  workspaceId?: string,
+) {
   requireEnabled();
   const rows = await prisma.terraqoPublicationReview.findMany({
     where: {
+      ...(workspaceId ? { workspaceId } : {}),
       OR: [
         { requestedById: userId },
         {
           workspace: {
             active: true,
+            deletedAt: null,
             members: {
               some: { userId, active: true, role: { in: ["OWNER", "ADMIN"] } },
             },
@@ -225,6 +230,65 @@ export async function listPublicationReviews(userId: string) {
     requestedByMe: requestedById === userId,
     snapshot: publicationSnapshotSchema.parse(snapshot),
   }));
+}
+
+/** Resolve only a pinned attachment. Permission is evaluated on every read;
+ * knowing a review/media id never grants access to other company material. */
+export async function getPublicationReviewMedia(input: {
+  userId: string;
+  reviewId: string;
+  mediaId: string;
+}) {
+  requireEnabled();
+  const review = await prisma.terraqoPublicationReview.findFirst({
+    where: {
+      id: input.reviewId,
+      revokedAt: null,
+      collection: { lifecycle: { not: "ARCHIVED" } },
+      OR: [
+        { requestedById: input.userId },
+        {
+          workspace: {
+            active: true,
+            deletedAt: null,
+            members: {
+              some: {
+                userId: input.userId,
+                active: true,
+                role: { in: ["OWNER", "ADMIN"] },
+              },
+            },
+          },
+        },
+      ],
+    },
+    select: { snapshot: true, scopeHash: true, workspaceId: true },
+  });
+  if (!review) throw new PublicationReviewError("Recurso no disponible.", 404);
+  const snapshot = publicationSnapshotSchema.parse(review.snapshot);
+  if (publicationSnapshotHash(snapshot) !== review.scopeHash)
+    throw new PublicationReviewError("El alcance no está disponible.", 409);
+  const item = snapshot.items.find((item) =>
+    item.mediaIds.includes(input.mediaId),
+  );
+  if (!item) throw new PublicationReviewError("Recurso no disponible.", 404);
+  const media = await prisma.terraqoWorklogMedia.findFirst({
+    where: {
+      id: input.mediaId,
+      contentType: "image/webp",
+      worklog: {
+        id: item.worklogId,
+        workspaceId: review.workspaceId,
+        deletedAt: null,
+        revisions: {
+          some: { id: item.revisionId, contentHash: item.contentHash },
+        },
+      },
+    },
+    select: { storageKey: true, contentType: true },
+  });
+  if (!media) throw new PublicationReviewError("Recurso no disponible.", 404);
+  return media;
 }
 
 export async function decidePublicationReview(input: {

@@ -29,6 +29,7 @@ const collectionInclude = {
           worklog: {
             select: {
               id: true,
+              workspaceId: true,
               occurredAt: true,
               locationLabel: true,
               media: { select: { id: true, contentType: true }, orderBy: { sortOrder: "asc" } },

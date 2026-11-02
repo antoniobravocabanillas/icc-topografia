@@ -1,3 +1,5 @@
+import { PublicationReviewConsole } from "@/components/terraqo/publication-review-console";
+import { listPublicationReviews, publicationReviewEnabled } from "@/lib/terraqo/publication-review";
 import { notFound } from "next/navigation";
 import { PortalPageHeading } from "@/components/terraqo/portal-page-heading";
 import { ScopedSharingConsole } from "@/components/terraqo/scoped-sharing-console";
@@ -25,21 +27,24 @@ export default async function SelectionsPage() {
     listShareCollections(session.user.id),
   ]);
 
+  const reviews = publicationReviewEnabled() ? (await listPublicationReviews(session.user.id)).filter(review => review.requestedByMe) : [];
   return (
     <div className="space-y-8">
       <PortalPageHeading eyebrow="Privacidad y alcance" title="Selecciones compartidas" description="Construye una vista precisa de tu trayectoria, decide campo por campo y revoca el acceso cuando quieras. Una selección nace privada." />
       <ScopedSharingConsole
+        publicationReviewEnabled={publicationReviewEnabled()}
         candidates={revisions.map((revision) => ({ revisionId: revision.id, title: revision.title, summary: revision.summary, occurredAt: revision.worklog.occurredAt.toISOString(), locationLabel: revision.worklog.locationLabel, mediaCount: revision.worklog.media.length }))}
         collections={collections.map((collection) => ({
           id: collection.id,
           title: collection.title,
           description: collection.description,
           version: collection.version,
-          items: collection.items.map((item) => ({ id: item.id, allowedFields: item.allowedFields, includeMedia: item.includeMedia, revision: { title: item.revision.title, worklog: { media: item.revision.worklog.media } } })),
+          items: collection.items.map((item) => ({ id: item.id, allowedFields: item.allowedFields, includeMedia: item.includeMedia, revision: { title: item.revision.title, worklog: { workspaceId: item.revision.worklog.workspaceId, media: item.revision.worklog.media } } })),
           grants: collection.grants.map((grant) => ({ ...grant, expiresAt: grant.expiresAt.toISOString(), createdAt: grant.createdAt.toISOString(), revokedAt: grant.revokedAt?.toISOString() || null })),
           publicProjection: collection.publicProjection ? { ...collection.publicProjection, publishedAt: collection.publicProjection.publishedAt.toISOString(), revokedAt: collection.publicProjection.revokedAt?.toISOString() || null } : null,
         }))}
       />
+      {publicationReviewEnabled() ? <PublicationReviewConsole reviews={reviews.map(review => ({ ...review, revokedAt: review.revokedAt?.toISOString() || null }))} /> : null}
     </div>
   );
 }
