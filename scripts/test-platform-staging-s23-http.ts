@@ -52,7 +52,7 @@ async function main() {
     assert.equal((await outsiderContext.request.patch(api, { headers, data: approval })).status(), 404);
     const ownerPage = await ownerContext.newPage();
     await ownerPage.goto(`${origin}/portal/selecciones`);
-    await ownerPage.getByLabel("Acceso hasta").fill(approval.expiresAt.slice(0, 16));
+    await ownerPage.getByLabel("Acceso hasta (hora de este dispositivo)", { exact: true }).fill(approval.expiresAt.slice(0, 16));
     await ownerPage.getByLabel("Confirmo el acceso").check();
     const approved = ownerPage.waitForResponse(r => r.url() === api && r.request().method() === "PATCH");
     await ownerPage.getByRole("button", { name: "Conceder acceso", exact: true }).click(); assert.equal((await approved).status(), 200);
