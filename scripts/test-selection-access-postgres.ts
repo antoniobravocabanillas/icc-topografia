@@ -1,0 +1,73 @@
+import assert from "node:assert/strict";
+import { confirmedLocalDisposableDatabaseUrl } from "./lib/confirmed-local-disposable-database";
+
+async function main() {
+  const connection = confirmedLocalDisposableDatabaseUrl({ value: process.env.DATABASE_URL, expected: process.env.S23_TEST_DATABASE, valueVariable: "DATABASE_URL", expectedVariable: "S23_TEST_DATABASE" });
+  assert.equal(new URL(connection).username, "s23_test_runtime");
+  assert.equal(process.env.S23_TEST_SYNTHETIC, "confirmed");
+  const { prisma } = await import("../lib/prisma");
+  const service = await import("../lib/terraqo/selection-access-request");
+  const suffix = Date.now();
+  const concurrent = async <T>(action: () => Promise<T>) => {
+    const outcomes = await Promise.allSettled(Array.from({ length: 8 }, action));
+    assert.ok(outcomes.some(outcome => outcome.status === "fulfilled"));
+    for (const outcome of outcomes) if (outcome.status === "rejected") assert.ok(outcome.reason.code === "P2034" || (outcome.reason.code === "P2010" && outcome.reason.meta?.code === "40001"), "Only serialization retry is expected");
+    return outcomes.filter(outcome => outcome.status === "rejected").length;
+  };
+  try {
+    const [role] = await prisma.$queryRaw<{ rolsuper: boolean }[]>`SELECT rolsuper FROM pg_roles WHERE rolname=current_user`;
+    assert.equal(role.rolsuper, false);
+    const owner = await prisma.user.create({ data: { email: `owner-${suffix}@s23.invalid` } });
+    const requester = await prisma.user.create({ data: { email: `requester-${suffix}@s23.invalid` } });
+    const outsider = await prisma.user.create({ data: { email: `outsider-${suffix}@s23.invalid` } });
+    const profile = await prisma.terraqoProfessionalProfile.create({ data: { userId: owner.id } });
+    const collection = await prisma.terraqoShareCollection.create({ data: { professionalProfileId: profile.id, createdById: owner.id, title: "Synthetic private selection", operationKey: `test-${suffix}`, operationFingerprint: "synthetic" } });
+    const target = { targetType: "collection" as const, target: collection.id };
+    const requestConflicts = await concurrent(() => service.requestSelectionAccess(requester.id, target));
+    await service.requestSelectionAccess(requester.id, target);
+    assert.equal(await prisma.terraqoSelectionAccessRequest.count({ where: { requesterId: requester.id } }), 1);
+    const [pending] = await service.listSelectionAccessRequests(owner.id);
+    assert.ok(pending);
+    assert.deepEqual(await service.listSelectionAccessRequests(outsider.id), []);
+    assert.deepEqual(await service.resolveRequestedSelectionAccess(requester.id, target), { available: false });
+    const approval = { requestId: pending.id, expectedVersion: pending.version, decision: "APPROVED" as const, confirmed: true as const, expectedCollectionVersion: collection.version, scopeChangeConfirmed: false, allowDownload: false, expiresAt: new Date(Date.now() + 3_600_000).toISOString() };
+    await assert.rejects(service.decideSelectionAccess(outsider.id, approval), { status: 404 });
+    await assert.rejects(service.decideSelectionAccess(owner.id, { ...approval, allowDownload: true }), { status: 422 });
+    await assert.rejects(service.decideSelectionAccess(owner.id, { ...approval, expiresAt: new Date().toISOString() }), { status: 422 });
+    assert.equal(await prisma.terraqoAccessGrant.count({ where: { collectionId: collection.id } }), 0);
+    const approvalConflicts = await concurrent(() => service.decideSelectionAccess(owner.id, approval));
+    assert.deepEqual(await service.decideSelectionAccess(owner.id, approval), { status: "APPROVED", replayed: true });
+    const grants = await prisma.terraqoAccessGrant.findMany({ where: { collectionId: collection.id } });
+    assert.equal(grants.length, 1, "Concurrent approval must create one grant");
+    assert.deepEqual(grants[0].scopes, ["VIEW_COLLECTION"]);
+    await assert.rejects(service.decideSelectionAccess(owner.id, { requestId: pending.id, expectedVersion: pending.version, decision: "DECLINED" }), { status: 409 });
+    assert.equal((await service.resolveRequestedSelectionAccess(requester.id, target)).available, true);
+    assert.deepEqual(await service.resolveRequestedSelectionAccess(outsider.id, target), { available: false });
+    await prisma.terraqoAccessGrant.update({ where: { id: grants[0].id }, data: { revokedAt: new Date(), lifecycle: "REVOKED" } });
+    assert.deepEqual(await service.resolveRequestedSelectionAccess(requester.id, target), { available: false });
+    await prisma.terraqoAccessGrant.update({ where: { id: grants[0].id }, data: { revokedAt: null, lifecycle: "ACTIVE", expiresAt: new Date(Date.now() - 1000) } });
+    assert.deepEqual(await service.resolveRequestedSelectionAccess(requester.id, target), { available: false });
+    await service.requestSelectionAccess(outsider.id, target);
+    const [stale] = await service.listSelectionAccessRequests(owner.id);
+    await prisma.terraqoShareCollection.update({ where: { id: collection.id }, data: { version: { increment: 1 } } });
+    await assert.rejects(service.decideSelectionAccess(owner.id, { ...approval, requestId: stale.id, expectedVersion: stale.version }), { status: 409 });
+    await service.decideSelectionAccess(owner.id, { requestId: stale.id, expectedVersion: stale.version, decision: "DECLINED" });
+    assert.equal(await prisma.terraqoAccessGrant.count({ where: { subjectUserId: outsider.id } }), 0);
+    const renewed = await prisma.user.create({ data: { email: `renewed-${suffix}@s23.invalid` } });
+    await service.requestSelectionAccess(renewed.id, target);
+    const [renewal] = await service.listSelectionAccessRequests(owner.id);
+    const updated = await prisma.terraqoShareCollection.update({ where: { id: collection.id }, data: { version: { increment: 1 } } });
+    const revisedApproval = { ...approval, requestId: renewal.id, expectedVersion: renewal.version, expectedCollectionVersion: updated.version };
+    await assert.rejects(service.decideSelectionAccess(owner.id, revisedApproval), { status: 409 });
+    await assert.rejects(service.decideSelectionAccess(owner.id, { ...revisedApproval, expectedCollectionVersion: updated.version - 1, scopeChangeConfirmed: true }), { status: 409 });
+    assert.equal(await prisma.terraqoAccessGrant.count({ where: { subjectUserId: renewed.id } }), 0);
+    await service.decideSelectionAccess(owner.id, { ...revisedApproval, scopeChangeConfirmed: true });
+    assert.equal(await prisma.terraqoAccessGrant.count({ where: { subjectUserId: renewed.id } }), 1);
+    assert.deepEqual(await service.decideSelectionAccess(owner.id, { ...revisedApproval, scopeChangeConfirmed: true }), { status: "APPROVED", replayed: true });
+    for (let i = 0; i < 9; i++) await service.requestSelectionAccess(outsider.id, { targetType: "public-link", target: `unknown-${suffix}-${i}` });
+    await assert.rejects(service.requestSelectionAccess(outsider.id, { targetType: "public-link", target: `unknown-${suffix}-extra` }), { status: 429 });
+    assert.deepEqual(await service.listSelectionAccessRequests(owner.id), []);
+    console.log(JSON.stringify({ passed: true, requestConflicts, approvalConflicts, checks: "non-superuser runtime; unique concurrent request/approval; idempotent retry; owner isolation; failed approval rollback; stale version; decline; revocation; expiry; daily limit including unknown targets" }));
+  } finally { await prisma.$disconnect(); }
+}
+void main();

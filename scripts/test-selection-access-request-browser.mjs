@@ -1,0 +1,73 @@
+import { chromium, expect } from "@playwright/test";
+import assert from "node:assert/strict";
+const browser = await chromium.launch();
+try {
+  for (const width of [1440, 375, 320]) {
+    const page = await browser.newPage({ viewport: { width, height: 950 } });
+    const calls = []; let fail = true; let lookup = "unavailable";
+    await page.route("**/api/v1/selection-access-requests", async route => {
+      calls.push({ method: route.request().method(), body: route.request().postDataJSON() });
+      await route.fulfill({ status: fail ? 409 : 200, json: fail ? { error: { message: "La solicitud cambió. Reintenta." } } : { data: { message: "Si la selección admite solicitudes, el titular podrá revisar tu petición.", status: "APPROVED" } } });
+    });
+    await page.route("**/api/v1/selection-access-requests?*", async route => {
+      if (lookup === "offline") return route.abort();
+      await route.fulfill({ status: lookup === "login" ? 401 : 200, json: { data: lookup === "approved" ? { available: true, href: "/portal/selecciones/granted-fixture", expiresAt: "2035-01-01T00:00:00Z" } : { available: false } } });
+    });
+    await page.goto("http://localhost:3190/solicitudes");
+    await expect(page.getByRole("heading", { name: "Solicitudes de acceso" })).toBeVisible();
+    assert.equal(calls.length, 0);
+    const approve = page.getByRole("button", { name: "Conceder acceso" });
+    await expect(approve).toBeDisabled();
+    await expect(page.getByLabel("Permitir descargar")).not.toBeChecked();
+    await page.getByLabel("Motivo (opcional)").fill("Necesito revisar el trabajo");
+    await page.getByRole("button", { name: "Enviar solicitud" }).click();
+    await expect(page.getByLabel("Motivo (opcional)")).toHaveValue("Necesito revisar el trabajo");
+    fail = false;
+    await page.getByRole("button", { name: "Enviar solicitud" }).click();
+    await expect(page.getByRole("button", { name: "Solicitud registrada" })).toBeDisabled();
+    await page.getByLabel("Acceso hasta").fill("2030-01-02T12:00");
+    await expect(approve).toBeDisabled();
+    await page.getByLabel("Confirmo el acceso").check();
+    await expect(approve).toBeEnabled();
+    fail = true;
+    await approve.click();
+    await expect(page.getByLabel("Confirmo el acceso")).toBeChecked();
+    await expect(page.getByLabel("Acceso hasta")).toHaveValue("2030-01-02T12:00");
+    fail = false;
+    await approve.click();
+    await expect(page.getByText("Acceso concedido.", { exact: true })).toBeVisible();
+    assert.equal(calls.at(-1).body.allowDownload, false);
+    assert.equal(calls.at(-1).body.confirmed, true);
+    assert.equal(calls.at(-1).body.expectedVersion, 1);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    await page.screenshot({ path: `output/access-request-${width}.png`, fullPage: true });
+    await page.reload();
+    await page.getByRole("button", { name: "Rechazar", exact: true }).click();
+    await expect(page.getByText("Solicitud rechazada. No se concedió acceso.", { exact: true })).toBeVisible();
+    assert.deepEqual(Object.keys(calls.at(-1).body).sort(), ["decision", "expectedVersion", "requestId"]);
+    await page.getByRole("button", { name: "Comprobar mi acceso" }).click();
+    await expect(page.getByText("No hay un acceso vigente", { exact: false })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Abrir selección autorizada" })).toHaveCount(0);
+    lookup = "approved";
+    await page.getByRole("button", { name: "Comprobar mi acceso" }).click();
+    await expect(page.getByRole("link", { name: "Abrir selección autorizada" })).toHaveAttribute("href", "/portal/selecciones/granted-fixture");
+    lookup = "offline";
+    await page.getByRole("button", { name: "Comprobar mi acceso" }).click();
+    await expect(page.getByRole("link", { name: "Abrir selección autorizada" })).toHaveCount(0);
+    lookup = "login";
+    await page.getByRole("button", { name: "Comprobar mi acceso" }).click();
+    await expect(page.getByRole("link", { name: "Iniciar sesión" })).toHaveAttribute("href", "/cuenta?callbackUrl=%2Fselecciones%2Ffixture");
+    await page.goto("http://localhost:3190/solicitudes?changed=1");
+    await page.getByLabel("Acceso hasta").fill("2030-01-02T12:00");
+    await page.getByLabel("Confirmo el acceso").check();
+    await expect(page.getByRole("button", { name: "Conceder acceso" })).toBeDisabled();
+    await page.getByLabel("He revisado el alcance actualizado").check();
+    await page.screenshot({ path: `output/access-request-revised-${width}.png`, fullPage: true });
+    await page.getByRole("button", { name: "Conceder acceso" }).click();
+    await expect(page.getByText("Acceso concedido.", { exact: true })).toBeVisible();
+    assert.equal(calls.at(-1).body.expectedCollectionVersion, 2);
+    assert.equal(calls.at(-1).body.scopeChangeConfirmed, true);
+    await page.close();
+  }
+  console.log("PASS: 1440/375/320 request retry, explicit approval/expiry, download opt-in, preserved failed draft, rejection payload, no overflow. Network mocked.");
+} finally { await browser.close(); }

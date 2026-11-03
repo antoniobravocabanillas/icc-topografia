@@ -1,0 +1,51 @@
+import { chromium, expect } from "@playwright/test";
+import assert from "node:assert/strict";
+
+const browser = await chromium.launch();
+try {
+  const page = await browser.newPage({ viewport: { width: 375, height: 850 } });
+  let status = 200;
+  let fingerprint = "authorized-v1";
+  let requests = 0;
+  await page.route("**/api/fixture-access?access=check", async route => {
+    requests++;
+    await route.fulfill({ status, json: status === 200 ? { data: { fingerprint } } : { error: { message: "Unavailable" } } });
+  });
+  await page.goto("http://localhost:3190/acceso");
+  await expect(page.getByRole("heading", { name: "Contenido autorizado de prueba" })).toBeVisible();
+  await page.getByRole("textbox", { name: "Nota local" }).fill("Conservar vista");
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect.poll(() => requests).toBe(2);
+  await expect(page.getByRole("textbox", { name: "Nota local" })).toHaveValue("Conservar vista");
+  status = 404;
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(page.getByRole("status")).toHaveText("Esta selección no está disponible.");
+  await expect(page.getByRole("heading", { name: "Contenido autorizado de prueba" })).toHaveCount(0);
+  status = 503;
+  await page.getByRole("button", { name: "Volver a comprobar" }).click();
+  await expect(page.getByRole("status")).toContainText("No pudimos comprobar");
+  status = 200;
+  await page.getByRole("button", { name: "Volver a comprobar" }).click();
+  await expect(page.getByRole("heading", { name: "Contenido autorizado de prueba" })).toBeVisible();
+  await page.evaluate(() => window.dispatchEvent(new Event("offline")));
+  await expect(page.getByRole("heading", { name: "Contenido autorizado de prueba" })).toHaveCount(0);
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await expect(page.getByRole("heading", { name: "Contenido autorizado de prueba" })).toBeVisible();
+  status = 401;
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(page.getByRole("link", { name: "Iniciar sesión" })).toHaveAttribute("href", "/cuenta?callbackUrl=%2Fselecciones%2Fprivate%3Fregistro%3D2");
+  status = 200; fingerprint = "authorized-v2";
+  await page.getByRole("button", { name: "Volver a comprobar" }).click();
+  await expect(page.getByRole("status")).toContainText("contenido o los permisos cambiaron");
+  await expect(page.getByRole("heading", { name: "Contenido autorizado de prueba" })).toHaveCount(0);
+  fingerprint = "authorized-v1";
+  await page.clock.install({ time: new Date("2030-01-01T12:00:00Z") });
+  await page.goto("http://localhost:3190/acceso?expiry=1");
+  await expect(page.getByRole("heading", { name: "Contenido autorizado de prueba" })).toBeVisible();
+  await page.clock.fastForward(1500);
+  await expect(page.getByRole("status")).toHaveText("Esta selección no está disponible.");
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+  await page.screenshot({ path: "output/selection-expired-375.png" });
+  await page.close();
+  console.log("PASS: revalidation preserves state, revocation hides content, unavailable/offline retry, login destination, scope changes, exact expiry.");
+} finally { await browser.close(); }

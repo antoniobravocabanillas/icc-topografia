@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BriefcaseBusiness, ChevronDown, Link2, Trash2 } from "lucide-react";
+import { BriefcaseBusiness, ImageIcon, Link2, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type WorklogOption = {
@@ -12,6 +12,7 @@ type WorklogOption = {
   workspaceId: string | null;
   projectId: string | null;
   workCaseId: string | null;
+  imageHref?: string | null;
 };
 
 type WorkCaseSummary = {
@@ -41,10 +42,10 @@ export function WorkCaseOrganizer({
   initialCases: WorkCaseSummary[];
 }) {
   const router = useRouter();
-  const [expanded, setExpanded] = useState(false);
+  const [query, setQuery] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [selected, setSelected] = useState<Record<string, keyof typeof phaseLabels>>({});
+  const [selected, setSelected] = useState<Record<string, keyof typeof phaseLabels | "">>({});
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -81,7 +82,7 @@ export function WorkCaseOrganizer({
           projectId: anchor?.projectId || undefined,
           records: selectedIds.map((worklogId) => ({
             worklogId,
-            phase: selected[worklogId],
+            phase: selected[worklogId] || undefined,
           })),
         }),
       });
@@ -121,109 +122,60 @@ export function WorkCaseOrganizer({
     }
   }
 
+  const visible = available.filter(worklog => worklog.title.toLocaleLowerCase("es").includes(query.trim().toLocaleLowerCase("es")));
+  const control = "min-h-11 w-full min-w-0 rounded-lg border border-[#355471] bg-[#08131f] px-3 py-2 text-base text-white placeholder:text-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:opacity-50";
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-technical">
-      <button
-        type="button"
-        aria-expanded={expanded}
-        aria-controls="work-case-panel"
-        onClick={() => setExpanded((value) => !value)}
-        className="flex min-h-16 w-full items-center justify-between gap-4 px-5 py-4 text-left sm:px-6"
-      >
-        <span className="flex min-w-0 items-center gap-3">
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-cyan-50 text-cyan-800">
-            <BriefcaseBusiness className="h-5 w-5" />
-          </span>
-          <span>
-            <span className="block font-display text-lg font-bold text-slate-950">Organizar por trabajo</span>
-            <span className="block text-sm text-slate-600">Relaciona bitácoras solo cuando formen parte del mismo trabajo.</span>
-          </span>
-        </span>
-        <ChevronDown className={`h-5 w-5 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`} />
-      </button>
-
-      {expanded ? (
-        <div id="work-case-panel" className="grid gap-6 border-t border-slate-200 p-5 sm:p-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(18rem,.9fr)]">
-          <div className="grid content-start gap-4">
-            <div className="rounded-xl border border-cyan-100 bg-cyan-50/60 p-4 text-sm leading-6 text-slate-700">
-              Terraqo no agrupa registros automáticamente. Selecciona los relacionados y confirma su fase. Las bitácoras permanecen independientes y auditables.
-            </div>
-            <label className="grid gap-2 text-sm font-semibold">
-              Nombre del trabajo
-              <input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={180} className="h-11 rounded-md border bg-white px-3 font-normal" placeholder="Ej. Levantamiento topográfico del sector B" />
-            </label>
-            <label className="grid gap-2 text-sm font-semibold">
-              Descripción <span className="font-normal text-slate-500">(opcional)</span>
-              <textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={1200} className="min-h-24 rounded-md border bg-white px-3 py-3 font-normal" placeholder="Objetivo y alcance del trabajo documentado." />
-            </label>
-            <div className="grid gap-2">
-              <span className="text-sm font-semibold">Bitácoras relacionadas</span>
-              {available.length ? available.map((worklog) => {
-                const checked = Boolean(selected[worklog.id]);
-                const compatible = isCompatible(worklog);
-                return (
-                  <div key={worklog.id} className={`grid gap-3 rounded-xl border p-3 sm:grid-cols-[minmax(0,1fr)_10rem] sm:items-center ${!compatible ? "bg-slate-50 opacity-60" : "bg-white"}`}>
-                    <label className="flex min-h-11 items-start gap-3 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        disabled={!compatible || submitting}
-                        onChange={(event) => setSelected((current) => {
-                          const next = { ...current };
-                          if (event.target.checked) next[worklog.id] = "EXECUTION";
-                          else delete next[worklog.id];
-                          return next;
-                        })}
-                        className="mt-1 h-5 w-5"
-                      />
-                      <span>
-                        <span className="block font-semibold text-slate-900">{worklog.title}</span>
-                        <span className="block text-xs text-slate-500">{new Intl.DateTimeFormat("es-PE", { dateStyle: "medium" }).format(new Date(worklog.occurredAt))}</span>
-                      </span>
-                    </label>
-                    <select
-                      aria-label={`Fase de ${worklog.title}`}
-                      disabled={!checked || submitting}
-                      value={selected[worklog.id] || "EXECUTION"}
-                      onChange={(event) => setSelected((current) => ({ ...current, [worklog.id]: event.target.value as keyof typeof phaseLabels }))}
-                      className="h-11 rounded-md border bg-white px-3 text-sm"
-                    >
-                      {Object.entries(phaseLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                    </select>
-                  </div>
-                );
-              }) : <p className="rounded-xl border border-dashed p-4 text-sm text-slate-600">No hay bitácoras independientes disponibles.</p>}
-            </div>
-            <Button type="button" onClick={() => void createCase()} disabled={submitting || !selectedIds.length} className="min-h-11 sm:w-fit">
-              <Link2 className="mr-2 h-4 w-4" /> Confirmar relaciones
-            </Button>
-          </div>
-
-          <div className="grid content-start gap-3">
-            <h3 className="font-display text-lg font-bold text-slate-950">Trabajos organizados</h3>
-            {initialCases.length ? initialCases.map((workCase) => (
-              <article key={workCase.id} className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
-                <h4 className="font-bold text-slate-950">{workCase.title}</h4>
-                {workCase.description ? <p className="mt-1 text-sm leading-6 text-slate-600">{workCase.description}</p> : null}
-                <ul className="mt-3 grid gap-2">
-                  {workCase.records.map((record) => (
-                    <li key={record.id} className="flex min-h-11 items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-sm">
-                      <span className="min-w-0">
-                        <span className="block truncate font-semibold text-slate-900">{record.worklog.title}</span>
-                        <span className="block text-xs text-slate-500">{record.phase ? phaseLabels[record.phase] : "Sin fase"}</span>
-                      </span>
-                      <button type="button" disabled={submitting} onClick={() => void removeRecord(workCase, record.worklogId)} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-red-50 hover:text-red-700" aria-label={`Desvincular ${record.worklog.title}`}>
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </article>
-            )) : <p className="rounded-xl border border-dashed p-4 text-sm text-slate-600">Todavía no organizaste bitácoras en un trabajo.</p>}
-          </div>
-          <p role="status" aria-live="polite" className="text-sm font-medium text-slate-700 lg:col-span-2">{message}</p>
+    <section aria-labelledby="organizar-trabajo" className="rounded-xl border border-[#294057] bg-[#07111e] p-5 text-white sm:p-7">
+      <header className="mb-6">
+        <h2 id="organizar-trabajo" className="flex items-center gap-3 text-2xl font-semibold text-white"><BriefcaseBusiness aria-hidden="true" className="h-6 w-6 text-sky-400" />Organizar un trabajo</h2>
+        <p className="mt-2 max-w-3xl text-base leading-7 text-slate-300">Selecciona las bitácoras que pertenecen al mismo trabajo. La agrupación conserva los registros originales y no cambia su visibilidad.</p>
+      </header>
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(280px,1fr)]">
+        <div className="min-w-0">
+          {anchor?.imageHref ? <div className="mb-5 overflow-hidden rounded-xl border border-[#294057]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={anchor.imageHref} alt={`Imagen de ${anchor.title}`} className="aspect-[16/9] w-full object-contain bg-[#08131f]" />
+          </div> : null}
+          <h3 className="text-lg font-semibold text-white">Registros para agrupar</h3>
+          <p className="mt-1 text-sm text-slate-400">{selectedIds.length} seleccionados · {available.length} disponibles entre las últimas 200 bitácoras</p>
+          <label className="relative my-4 block"><span className="sr-only">Buscar bitácoras para agrupar</span><Search aria-hidden="true" className="absolute left-3 top-3 h-5 w-5 text-slate-400" /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar por título" className={`${control} pl-10`} /></label>
+          <div className="space-y-3">{visible.map(worklog => {
+            const checked = Object.hasOwn(selected, worklog.id);
+            const compatible = isCompatible(worklog);
+            return <div key={worklog.id} className={`rounded-xl border p-3 ${checked ? "border-sky-400 bg-[#102a3c]" : "border-[#294057] bg-[#101d2d]"}`}>
+              <label className="flex min-h-11 cursor-pointer items-center gap-3">
+                <input type="checkbox" aria-label={`Seleccionar ${worklog.title}`} checked={checked} disabled={!compatible || submitting} onChange={event => setSelected(current => { const next = { ...current }; if (event.target.checked) next[worklog.id] = ""; else delete next[worklog.id]; return next; })} className="h-5 w-5 shrink-0 accent-sky-500" />
+                {worklog.imageHref ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={worklog.imageHref} alt="" loading="lazy" className="h-16 w-20 shrink-0 rounded-lg object-cover" />
+                ) : <ImageIcon aria-hidden="true" className="h-8 w-8 shrink-0 text-slate-500" />}
+                <span className="min-w-0"><span className="block text-sm font-semibold text-white">{worklog.title}</span><span className="mt-1 block text-[13px] text-slate-400">{new Intl.DateTimeFormat("es-PE", { timeZone: "America/Lima", dateStyle: "medium" }).format(new Date(worklog.occurredAt))}</span></span>
+              </label>
+              {!compatible ? <p className="mt-2 text-[13px] text-amber-200">Pertenece a otra empresa o proyecto. Mantén este registro separado.</p> : null}
+              {checked ? <label className="mt-3 grid gap-2 text-sm text-slate-300">Fase (opcional)<select aria-label={`Fase de ${worklog.title}`} value={selected[worklog.id]} disabled={submitting} onChange={event => setSelected(current => ({ ...current, [worklog.id]: event.target.value as keyof typeof phaseLabels | "" }))} className={control}><option value="">Sin clasificar</option>{Object.entries(phaseLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label> : null}
+            </div>;
+          })}</div>
+          {!visible.length ? <p className="rounded-xl border border-[#294057] p-5 text-slate-300">{query ? "No hay coincidencias. Prueba otro título." : "No hay bitácoras independientes disponibles."}</p> : null}
         </div>
-      ) : null}
+        <form onSubmit={event => { event.preventDefault(); void createCase(); }} className="grid gap-5 rounded-xl border border-[#294057] bg-[#101d2d] p-5">
+          <h3 className="text-xl font-semibold text-white">Confirma el trabajo</h3>
+          <label className="grid gap-2 text-sm text-slate-300">Nombre del trabajo<input required minLength={4} maxLength={180} disabled={submitting} value={title} onChange={event => setTitle(event.target.value)} className={control} placeholder="Ej. Control de niveles del sector B" /></label>
+          <label className="grid gap-2 text-sm text-slate-300">Descripción (opcional)<textarea maxLength={1200} disabled={submitting} value={description} onChange={event => setDescription(event.target.value)} className={`${control} min-h-32`} placeholder="Objetivo y alcance del trabajo." /></label>
+          <p className="text-sm leading-6 text-slate-300">Revisa las fechas y el contexto antes de confirmar. Preparación, ejecución y resultado son fases opcionales; no representan un porcentaje de avance.</p>
+          <Button type="submit" disabled={submitting || !selectedIds.length || title.trim().length < 4} className="min-h-11 bg-[#2869c7] text-white hover:bg-[#347bdc]"><Link2 aria-hidden="true" className="mr-2 h-4 w-4" />{submitting ? "Guardando…" : "Confirmar agrupación"}</Button>
+          <button type="button" disabled={submitting || !selectedIds.length} onClick={() => { setSelected({}); setMessage("Los registros permanecen separados. No se modificó su contenido."); }} className="min-h-11 rounded-lg border border-[#355471] px-4 text-sm text-slate-200 disabled:opacity-50">Mantener separados</button>
+          <p role="status" aria-live="polite" className="text-sm leading-6 text-sky-200">{message}</p>
+        </form>
+      </div>
+      <section aria-label="Trabajos organizados" className="mt-8 border-t border-[#294057] pt-6">
+        <h3 className="mb-4 text-xl font-semibold text-white">Trabajos organizados</h3>
+        <div className="grid gap-4 lg:grid-cols-2">{initialCases.map(workCase => <article key={workCase.id} className="rounded-xl border border-[#294057] bg-[#101d2d] p-5">
+          <h4 className="text-lg font-semibold text-white">{workCase.title}</h4>
+          {workCase.description ? <p className="mt-2 text-sm leading-6 text-slate-300">{workCase.description}</p> : null}
+          <ul className="mt-3 divide-y divide-[#294057]">{workCase.records.map(record => <li key={record.id} className="flex items-center justify-between gap-3 py-3"><div className="min-w-0"><p className="text-sm font-semibold text-white">{record.worklog.title}</p><p className="mt-1 text-[13px] text-slate-400">{record.phase ? phaseLabels[record.phase] : "Sin fase"}</p></div><button type="button" disabled={submitting} onClick={() => void removeRecord(workCase, record.worklogId)} aria-label={`Desvincular ${record.worklog.title}`} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[#355471] text-slate-300 hover:bg-red-950 hover:text-red-200"><Trash2 aria-hidden="true" className="h-4 w-4" /></button></li>)}</ul>
+        </article>)}</div>
+        {!initialCases.length ? <p className="text-sm text-slate-400">Todavía no organizaste bitácoras en un trabajo.</p> : null}
+      </section>
     </section>
   );
 }

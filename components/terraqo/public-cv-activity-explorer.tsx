@@ -9,25 +9,23 @@ import {
   BriefcaseBusiness,
   CalendarDays,
   ClipboardCheck,
-  Clock3,
   Copy,
   ExternalLink,
   FileCheck2,
   FileText,
   FolderKanban,
-  ImageIcon,
+  List,
   Lightbulb,
   LoaderCircle,
   MapPin,
   Milestone,
   Search,
-  ShieldCheck,
   Sparkles,
   Wrench,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { EvidenceGallery } from "@/components/terraqo/evidence-gallery";
+
 import {
   publicCvEvidenceHref,
   requestedPublicCvRecordId,
@@ -267,8 +265,8 @@ export function PublicCvActivityExplorer({
   const [days, setDays] = useState<Record<string, number>>({});
   const [calendarError, setCalendarError] = useState<string | null>(null);
   const [calendarBusy, setCalendarBusy] = useState(false);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const dialog = useRef<HTMLDialogElement>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const generation = useRef(0);
   const pending = useRef(false);
   const pages = useRef(1);
@@ -406,7 +404,7 @@ export function PublicCvActivityExplorer({
   }, [ready, query, filters, profileId, detailId, retry, restorationKey]);
 
   useEffect(() => {
-    if (!dialogOpen) return;
+    if (!calendarOpen || detailId) return;
     const controller = new AbortController();
     setCalendarBusy(true);
     setCalendarError(null);
@@ -442,7 +440,7 @@ export function PublicCvActivityExplorer({
         if (!controller.signal.aborted) setCalendarBusy(false);
       });
     return () => controller.abort();
-  }, [dialogOpen, month, draft, profileId]);
+  }, [calendarOpen, month, draft, profileId, detailId]);
 
   function apply(next: PublicArchiveFilters) {
     const href = publicArchivePath(username, next);
@@ -469,8 +467,6 @@ export function PublicCvActivityExplorer({
     } catch {}
     setFilters(next);
     setDraft(next);
-    dialog.current?.close();
-    setDialogOpen(false);
   }
   function remember(id: string) {
     try {
@@ -571,8 +567,29 @@ export function PublicCvActivityExplorer({
     timeZone: "America/Lima",
   }).format(new Date());
   return (
-    <main className="min-h-screen bg-[#07111e] text-[#f4f7fb]">
-      <div className="mx-auto max-w-6xl px-4 py-7 sm:px-8 sm:py-10">
+    <main
+      style={{ colorScheme: "dark" }}
+      className="min-h-screen bg-[#07111e] text-[#f4f7fb]"
+    >
+      <div className="mx-auto max-w-[1440px] px-4 py-7 sm:px-8 sm:py-10">
+        <nav
+          aria-label="Navegación del perfil público"
+          className="mb-6 flex gap-6 border-b border-[#294057] text-sm"
+        >
+          <Link
+            href={`/cv/${encodeURIComponent(username)}`}
+            className="flex min-h-12 items-center text-[#b8c9da] hover:text-white"
+          >
+            CV vivo
+          </Link>
+          <Link
+            href={archiveHref}
+            aria-current={!detailId ? "page" : undefined}
+            className="flex min-h-12 items-center border-b-2 border-[#539bff] font-semibold"
+          >
+            Evidencias
+          </Link>
+        </nav>
         <Link
           onClick={() => {
             if (detailId) {
@@ -592,7 +609,7 @@ export function PublicCvActivityExplorer({
           {detailId ? "Volver a las bitácoras" : "Volver al CV"}
         </Link>
         {detailId ? (
-          <div className="mx-auto mt-6 max-w-4xl">
+          <div className="mt-6">
             {selected ? (
               <ActivityDetail record={selected} copied={copied} onCopy={copy} />
             ) : (
@@ -613,7 +630,7 @@ export function PublicCvActivityExplorer({
                   {profileName} · Trabajo documentado
                 </p>
                 <h1 className="mt-2 text-3xl font-bold sm:text-4xl">
-                  Bitácoras públicas
+                  Archivo de evidencias
                 </h1>
               </div>
               <p aria-live="polite" className="text-sm text-[#afbdcd]">
@@ -643,7 +660,7 @@ export function PublicCvActivityExplorer({
                   placeholder="Buscar por trabajo, proyecto o habilidad"
                 />
               </label>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button type="submit" className={`${button} bg-[#255a97]`}>
                   <Search size={18} />
                   Buscar
@@ -651,16 +668,224 @@ export function PublicCvActivityExplorer({
                 <button
                   type="button"
                   className={button}
+                  aria-expanded={filtersOpen}
                   onClick={() => {
-                    setDialogOpen(true);
-                    dialog.current?.showModal();
+                    setFiltersOpen(!filtersOpen);
                   }}
                 >
                   <CalendarDays size={18} />
-                  Fechas y filtros
+                  Filtros
                 </button>
+                <div
+                  className="flex rounded-lg border border-[#35506e]"
+                  aria-label="Vista del archivo"
+                >
+                  <button
+                    type="button"
+                    aria-pressed={!calendarOpen}
+                    onClick={() => setCalendarOpen(false)}
+                    className={`${button} border-0 ${!calendarOpen ? "bg-[#2563eb]" : ""}`}
+                  >
+                    <List size={18} />
+                    Lista
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={calendarOpen}
+                    onClick={() => setCalendarOpen(true)}
+                    className={`${button} border-0 ${calendarOpen ? "bg-[#2563eb]" : ""}`}
+                  >
+                    <CalendarDays size={18} />
+                    Calendario
+                  </button>
+                </div>
               </div>
             </form>
+            {(filtersOpen || calendarOpen) && (
+              <form
+                className="my-5 rounded-xl border border-[#294057] bg-[#0b1b2b] p-4 sm:p-5"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  apply(draft);
+                }}
+              >
+                <div
+                  className={`${filtersOpen ? "grid" : "hidden"} grid-cols-2 gap-4 lg:grid-cols-5`}
+                >
+                  <label className="text-sm">
+                    Tipo
+                    <select
+                      aria-label="Tipo"
+                      className={`${control} mt-2`}
+                      value={draft.type}
+                      onChange={(e) =>
+                        setDraft({ ...draft, type: e.target.value })
+                      }
+                    >
+                      <option value="">Todos los tipos</option>
+                      {[
+                        "FIELD_UPDATE",
+                        "DELIVERABLE",
+                        "PROBLEM_SOLVED",
+                        "LEARNING",
+                        "MILESTONE",
+                      ].map((type) => (
+                        <option value={type} key={type}>
+                          {typeMeta(type).label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-sm">
+                    Estado
+                    <select
+                      aria-label="Estado"
+                      className={`${control} mt-2`}
+                      value={draft.state}
+                      onChange={(e) =>
+                        setDraft({ ...draft, state: e.target.value })
+                      }
+                    >
+                      <option value="">Todos los estados</option>
+                      <option value="DECLARED">Declarado</option>
+                      <option value="LINKED">Vinculado</option>
+                      <option value="CONFIRMED">Confirmado</option>
+                      <option value="VERIFIED">Validado</option>
+                    </select>
+                  </label>
+                  <label className="col-span-2 text-sm lg:col-span-1">
+                    Proyecto
+                    <select
+                      aria-label="Proyecto"
+                      className={`${control} mt-2`}
+                      value={draft.projectId}
+                      onChange={(e) =>
+                        setDraft({ ...draft, projectId: e.target.value })
+                      }
+                    >
+                      <option value="">Todos los proyectos</option>
+                      {draft.projectId &&
+                      !projectOptions.some(([id]) => id === draft.projectId) ? (
+                        <option value={draft.projectId}>
+                          Proyecto seleccionado
+                        </option>
+                      ) : null}
+                      {projectOptions.map(([id, title]) => (
+                        <option key={id} value={id}>
+                          {title}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-sm">
+                    Desde
+                    <input
+                      className={`${control} mt-2`}
+                      type="date"
+                      value={draft.from}
+                      onChange={(e) =>
+                        setDraft({ ...draft, from: e.target.value })
+                      }
+                    />
+                  </label>
+                  <label className="text-sm">
+                    Hasta
+                    <input
+                      className={`${control} mt-2`}
+                      type="date"
+                      min={draft.from || undefined}
+                      value={draft.to}
+                      onChange={(e) =>
+                        setDraft({ ...draft, to: e.target.value })
+                      }
+                    />
+                  </label>
+                </div>
+                <div hidden={!calendarOpen} className="max-w-xl">
+                  <label className="text-sm">
+                    Actividad del mes
+                    <input
+                      className={`${control} mt-2`}
+                      type="month"
+                      required
+                      value={month}
+                      onChange={(e) => setMonth(e.target.value)}
+                    />
+                  </label>
+                  <p className="my-3 text-sm text-[#afbdcd]">
+                    Cada punto indica trabajo público registrado. Selecciona un
+                    día o escribe un rango.
+                  </p>
+                  {calendarError ? (
+                    <p role="alert" className="text-sm text-[#e9bd63]">
+                      {calendarError}
+                    </p>
+                  ) : null}
+                  {calendarBusy ? (
+                    <p role="status" className="text-sm text-[#afbdcd]">
+                      Consultando actividad…
+                    </p>
+                  ) : null}
+                  <div
+                    className="grid grid-cols-7 gap-1"
+                    aria-label="Calendario de actividad"
+                  >
+                    {["L", "M", "X", "J", "V", "S", "D"].map((label, i) => (
+                      <span
+                        key={i}
+                        className="py-2 text-center text-sm text-[#afbdcd]"
+                        aria-hidden="true"
+                      >
+                        {label}
+                      </span>
+                    ))}
+                    {Array.from({ length: firstDay }, (_, i) => (
+                      <span key={`blank-${i}`} />
+                    ))}
+                    {Array.from({ length: dayCount }, (_, i) => {
+                      const date = `${month}-${String(i + 1).padStart(2, "0")}`;
+                      const chosen =
+                        date >= draft.from && date <= (draft.to || draft.from);
+                      return (
+                        <button
+                          type="button"
+                          key={date}
+                          aria-label={`${date}${date === today ? ", hoy" : ""}: ${days[date] || 0} registros públicos`}
+                          aria-pressed={chosen}
+                          className={`flex min-h-11 flex-col items-center justify-center rounded-lg border text-sm ${chosen ? "border-[#8ecfff] bg-[#255a97]" : date === today ? "border-[#8ecfff]" : "border-transparent hover:bg-[#243d56]"}`}
+                          onClick={() =>
+                            apply({ ...draft, from: date, to: date })
+                          }
+                        >
+                          {i + 1}
+                          <span
+                            className={`h-1.5 w-1.5 rounded-full ${days[date] ? "bg-[#8ecfff]" : "bg-transparent"}`}
+                            aria-hidden="true"
+                          />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div
+                  className={`${filtersOpen ? "flex" : "hidden"} mt-4 flex-wrap gap-3`}
+                >
+                  <button
+                    type="submit"
+                    className={`${button} flex-1 bg-[#255a97]`}
+                  >
+                    Aplicar filtros
+                  </button>
+                  <button
+                    type="button"
+                    className={button}
+                    onClick={() => apply(readPublicArchiveFilters(""))}
+                  >
+                    Limpiar
+                  </button>
+                </div>
+              </form>
+            )}
             <div className="my-4 flex flex-wrap items-center gap-2 text-sm text-[#afbdcd]">
               <span>Más recientes primero · Hora de Perú</span>
               {archiveFilterKeys
@@ -684,10 +909,11 @@ export function PublicCvActivityExplorer({
                 </button>
               ) : null}
             </div>
-            <div
-              aria-busy={loading}
-              className="divide-y divide-[#294057] border-y border-[#294057]"
-            >
+            <div className="mb-2 hidden items-center justify-between rounded-lg border border-[#294057] bg-[#0b1b2b] px-6 py-3 text-sm text-[#b8c9da] sm:flex">
+              <span>Evidencia · más recientes primero</span>
+              <span>Acciones</span>
+            </div>
+            <div aria-busy={loading} className="space-y-3">
               {items.map((item) => {
                 const thumbnail = item.media.find((media) =>
                   media.contentType.startsWith("image/"),
@@ -700,15 +926,15 @@ export function PublicCvActivityExplorer({
                     href={href}
                     prefetch={false}
                     onClick={() => remember(item.id)}
-                    className="group flex items-start gap-4 py-5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#7fa8ff] sm:gap-6"
+                    className="group flex items-start gap-4 rounded-xl border border-[#294057] bg-[#0b1b2b] p-3 hover:border-[#5986b5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#7fa8ff] sm:items-center sm:gap-6"
                   >
-                    <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-[#101d2d] sm:h-28 sm:w-40">
+                    <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-lg bg-[#101d2d] sm:h-28 sm:w-52">
                       {thumbnail ? (
                         <Image
                           src={`/api/public/cv/${encodeURIComponent(username)}/worklogs/${encodeURIComponent(thumbnail.id)}`}
                           alt=""
                           fill
-                          sizes="(max-width:640px) 80px,160px"
+                          sizes="(max-width:640px) 96px,208px"
                           unoptimized
                           className="object-cover"
                         />
@@ -727,7 +953,7 @@ export function PublicCvActivityExplorer({
                       <h2 className="mt-2 text-lg font-semibold group-hover:text-[#8ecfff] sm:text-xl">
                         {item.title}
                       </h2>
-                      <p className="mt-2 line-clamp-2 text-sm leading-6 text-[#afbdcd]">
+                      <p className="mt-2 line-clamp-1 text-sm leading-6 text-[#afbdcd]">
                         {item.summary}
                       </p>
                       <p className="mt-2 text-sm text-[#afbdcd]">
@@ -735,7 +961,19 @@ export function PublicCvActivityExplorer({
                           .filter(Boolean)
                           .join(" · ")}
                       </p>
-                      <span className="mt-2 inline-block text-sm text-[#8ecfff]">
+                      {item.skills.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {item.skills.slice(0, 3).map((skill) => (
+                            <span
+                              key={skill}
+                              className="rounded-full border border-[#35506e] px-2 py-1 text-xs text-[#b8c9da]"
+                            >
+                              {skill}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <span className="mt-2 inline-flex items-center gap-2 rounded-full border border-[#8f6a28] bg-[#372b16] px-3 py-1 text-xs text-[#f5cc7c]">
                         {item.evidenceStatus === "VERIFIED"
                           ? "Validado"
                           : item.evidenceStatus === "CONFIRMED"
@@ -745,10 +983,10 @@ export function PublicCvActivityExplorer({
                               : "Declarado"}
                       </span>
                     </div>
-                    <ArrowRight
-                      className="mt-2 hidden shrink-0 text-[#8ecfff] sm:block"
-                      size={20}
-                    />
+                    <span className="hidden min-h-11 shrink-0 items-center gap-2 rounded-lg bg-[#2563eb] px-5 text-sm font-semibold sm:inline-flex">
+                      <ExternalLink size={17} />
+                      Abrir
+                    </span>
                   </Link>
                 );
               })}
@@ -809,189 +1047,6 @@ export function PublicCvActivityExplorer({
           </>
         )}
       </div>
-      <dialog
-        style={{ colorScheme: "dark" }}
-        ref={dialog}
-        aria-labelledby="archive-filters-title"
-        onClose={() => setDialogOpen(false)}
-        className="fixed inset-x-0 bottom-0 top-auto m-0 max-h-[90dvh] w-full max-w-none overflow-auto rounded-t-2xl border border-[#294057] bg-[#101d2d] p-5 text-[#f4f7fb] backdrop:bg-black/60 sm:inset-0 sm:m-auto sm:max-w-xl sm:rounded-2xl sm:p-7"
-      >
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            apply(draft);
-          }}
-        >
-          <div className="sticky top-0 z-10 mb-5 flex items-center justify-between gap-3 bg-[#101d2d] py-2">
-            <h2 id="archive-filters-title" className="text-2xl font-bold">
-              Fechas y filtros
-            </h2>
-            <button
-              type="button"
-              className={button}
-              onClick={() => dialog.current?.close()}
-            >
-              Cerrar
-            </button>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="text-sm">
-              Tipo
-              <select
-                aria-label="Tipo"
-                className={`${control} mt-2`}
-                value={draft.type}
-                onChange={(e) => setDraft({ ...draft, type: e.target.value })}
-              >
-                <option value="">Todos los tipos</option>
-                {[
-                  "FIELD_UPDATE",
-                  "DELIVERABLE",
-                  "PROBLEM_SOLVED",
-                  "LEARNING",
-                  "MILESTONE",
-                ].map((type) => (
-                  <option value={type} key={type}>
-                    {typeMeta(type).label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-sm">
-              Estado
-              <select
-                aria-label="Estado"
-                className={`${control} mt-2`}
-                value={draft.state}
-                onChange={(e) => setDraft({ ...draft, state: e.target.value })}
-              >
-                <option value="">Todos los estados</option>
-                <option value="DECLARED">Declarado</option>
-                <option value="LINKED">Vinculado</option>
-                <option value="CONFIRMED">Confirmado</option>
-                <option value="VERIFIED">Validado</option>
-              </select>
-            </label>
-            <label className="text-sm sm:col-span-2">
-              Proyecto
-              <select
-                aria-label="Proyecto"
-                className={`${control} mt-2`}
-                value={draft.projectId}
-                onChange={(e) =>
-                  setDraft({ ...draft, projectId: e.target.value })
-                }
-              >
-                <option value="">Todos los proyectos</option>
-                {draft.projectId &&
-                !projectOptions.some(([id]) => id === draft.projectId) ? (
-                  <option value={draft.projectId}>Proyecto seleccionado</option>
-                ) : null}
-                {projectOptions.map(([id, title]) => (
-                  <option key={id} value={id}>
-                    {title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-sm">
-              Desde
-              <input
-                className={`${control} mt-2`}
-                type="date"
-                value={draft.from}
-                onChange={(e) => setDraft({ ...draft, from: e.target.value })}
-              />
-            </label>
-            <label className="text-sm">
-              Hasta
-              <input
-                className={`${control} mt-2`}
-                type="date"
-                min={draft.from || undefined}
-                value={draft.to}
-                onChange={(e) => setDraft({ ...draft, to: e.target.value })}
-              />
-            </label>
-          </div>
-          <div className="mt-5 border-t border-[#294057] pt-5">
-            <label className="text-sm">
-              Actividad del mes
-              <input
-                className={`${control} mt-2`}
-                type="month"
-                required
-                value={month}
-                onChange={(e) => setMonth(e.target.value)}
-              />
-            </label>
-            <p className="my-3 text-sm text-[#afbdcd]">
-              Cada punto indica trabajo público registrado. Selecciona un día o
-              escribe un rango.
-            </p>
-            {calendarError ? (
-              <p role="alert" className="text-sm text-[#e9bd63]">
-                {calendarError}
-              </p>
-            ) : null}
-            {calendarBusy ? (
-              <p role="status" className="text-sm text-[#afbdcd]">
-                Consultando actividad…
-              </p>
-            ) : null}
-            <div
-              className="grid grid-cols-7 gap-1"
-              aria-label="Calendario de actividad"
-            >
-              {["L", "M", "X", "J", "V", "S", "D"].map((label, i) => (
-                <span
-                  key={i}
-                  className="py-2 text-center text-sm text-[#afbdcd]"
-                  aria-hidden="true"
-                >
-                  {label}
-                </span>
-              ))}
-              {Array.from({ length: firstDay }, (_, i) => (
-                <span key={`blank-${i}`} />
-              ))}
-              {Array.from({ length: dayCount }, (_, i) => {
-                const date = `${month}-${String(i + 1).padStart(2, "0")}`;
-                const chosen =
-                  date >= draft.from && date <= (draft.to || draft.from);
-                return (
-                  <button
-                    type="button"
-                    key={date}
-                    aria-label={`${date}${date === today ? ", hoy" : ""}: ${days[date] || 0} registros públicos`}
-                    aria-pressed={chosen}
-                    className={`flex min-h-11 flex-col items-center justify-center rounded-lg border text-sm ${chosen ? "border-[#8ecfff] bg-[#255a97]" : date === today ? "border-[#8ecfff]" : "border-transparent hover:bg-[#243d56]"}`}
-                    onClick={() => setDraft({ ...draft, from: date, to: date })}
-                  >
-                    {i + 1}
-                    <span
-                      className={`h-1.5 w-1.5 rounded-full ${days[date] ? "bg-[#8ecfff]" : "bg-transparent"}`}
-                      aria-hidden="true"
-                    />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <div className="sticky bottom-0 mt-5 flex flex-wrap gap-3 bg-[#101d2d] py-3">
-            <button type="submit" className={`${button} flex-1 bg-[#255a97]`}>
-              Aplicar filtros
-            </button>
-            <button
-              type="button"
-              className={button}
-              onClick={() => setDraft(readPublicArchiveFilters(""))}
-            >
-              Limpiar
-            </button>
-          </div>
-        </form>
-      </dialog>
     </main>
   );
 }
@@ -1005,311 +1060,265 @@ function ActivityDetail({
   copied: boolean;
   onCopy: () => void;
 }) {
-  const meta = typeMeta(record.type);
-  const Icon = meta.icon;
-  const validation = record.validations[0] || null;
-  const validated = Boolean(validation) || record.evidenceStatus === "VERIFIED";
-  const image = evidenceImage(record);
-  const galleryItems = record.media
-    .filter((media) => media.contentType.startsWith("image/"))
-    .map((media, index) => ({
-      id: media.id,
-      src: media.href,
-      downloadHref: media.downloadHref,
-      alt: `${record.title}, evidencia ${index + 1}`,
-    }));
-
+  const [active, setActive] = useState(0);
+  const [tab, setTab] = useState("evidence");
+  const images = record.media.filter((media) =>
+    media.contentType.startsWith("image/"),
+  );
+  const fallback = evidenceImage(record);
+  const current = images[active]?.href || fallback;
+  const status =
+    record.evidenceStatus === "VERIFIED"
+      ? "Validado"
+      : record.evidenceStatus === "CONFIRMED"
+        ? "Confirmado"
+        : record.evidenceStatus === "LINKED"
+          ? "Vinculado"
+          : "Declarado";
+  const panel = "rounded-xl border border-[#294057] bg-[#0b1b2b]";
   return (
-    <article className="overflow-hidden rounded-2xl border border-[#28425e] bg-[linear-gradient(150deg,rgba(15,31,52,0.98),rgba(7,17,31,0.98))] shadow-[0_30px_80px_rgba(0,0,0,0.32)]">
-      <header className="border-b border-[#243b55] p-5 sm:p-7">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <span
-              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 font-mono text-[10px] font-black uppercase tracking-[0.1em] ${meta.tone}`}
-            >
-              <Icon className="h-3.5 w-3.5" />
-              {meta.label}
-            </span>
-            <h1 className="mt-4 font-display text-2xl font-black leading-tight sm:text-3xl">
+    <article>
+      <header className="mb-6">
+        <div className="flex flex-wrap items-start justify-between gap-5">
+          <div className="max-w-4xl">
+            <h1 className="text-2xl font-semibold leading-tight sm:text-4xl">
               {record.title}
             </h1>
-            <p className="mt-2 text-sm text-[#91a5b9]">
-              Registro generado el {formatLongDate(record.createdAt)},{" "}
-              {formatTime(record.createdAt)}.
-            </p>
+            <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-[#b8c9da]">
+              <span className="inline-flex items-center gap-2">
+                <CalendarDays size={17} />
+                {formatDay(record.occurredAt)} · {formatTime(record.occurredAt)}
+              </span>
+              {record.locationLabel && (
+                <span className="inline-flex items-center gap-2">
+                  <MapPin size={17} />
+                  {record.locationLabel}
+                </span>
+              )}
+              <span className="rounded-full border border-[#8f6a28] bg-[#372b16] px-3 py-1 text-[#f5cc7c]">
+                {status}
+              </span>
+            </div>
           </div>
           <button
-            type="button"
             onClick={onCopy}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-[#35506e] px-4 py-2.5 text-xs font-black text-[#dbe6f2] transition hover:border-[#488ac9] hover:bg-[#4374ba]/15"
+            className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[#35506e] px-5 text-sm font-semibold"
           >
-            <Copy className="h-4 w-4" />{" "}
+            <Copy size={17} />
             {copied ? "Enlace copiado" : "Compartir registro"}
           </button>
         </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <span
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-black ${validated ? "bg-[#143e36] text-[#6be0b2]" : "bg-[#4a3519] text-[#f5c36f]"}`}
-          >
-            {validated ? (
-              <BadgeCheck className="h-3.5 w-3.5" />
-            ) : (
-              <Clock3 className="h-3.5 w-3.5" />
-            )}
-            {validated ? "Validado" : "Declarado"}
-          </span>
-          <span className="rounded-full border border-[#304963] px-3 py-1 text-[11px] font-black text-[#aebed0]">
-            Público
-          </span>
-        </div>
       </header>
-
-      <div className="p-5 sm:p-7">
-        <section>
-          <h3 className="font-mono text-xs font-black uppercase tracking-[0.16em] text-[#7fa8ff]">
-            Resumen del registro
-          </h3>
-          <div className="mt-4 flex flex-wrap gap-x-8 gap-y-5 border-y border-[#243b55] py-5">
-            <DetailMetric
-              icon={CalendarDays}
-              label="Fecha"
-              value={formatDay(record.occurredAt)}
-            />
-            <DetailMetric
-              icon={Clock3}
-              label="Hora"
-              value={formatTime(record.occurredAt)}
-            />
-            <DetailMetric
-              icon={ShieldCheck}
-              label="Estado"
-              value={validated ? "Validado" : "Declarado"}
-              accent={validated}
-            />
-            {record.project ? (
-              <DetailMetric
-                icon={FolderKanban}
-                label="Proyecto"
-                value={record.project.title}
-              />
-            ) : null}
-            {record.locationLabel ? (
-              <DetailMetric
-                icon={MapPin}
-                label="Lugar"
-                value={record.locationLabel}
-              />
-            ) : null}
-          </div>
-          {record.locationLabel ? (
-            <p className="mt-2 text-right text-[10px] font-medium text-[#60778e]">
-              Ubicación aproximada · © OpenStreetMap contributors
-            </p>
-          ) : null}
-        </section>
-
-        <section className="mt-7">
-          <h3 className="font-mono text-xs font-black uppercase tracking-[0.16em] text-[#7fa8ff]">
-            Detalle profesional
-          </h3>
-          <p className="mt-4 text-[15px] leading-7 text-[#d7e1ec]">
-            {record.summary}
-          </p>
-          {record.outcome ? (
-            <div className="mt-5 border-l-2 border-[#25c0d5] bg-[#0d2533] px-5 py-4">
-              <p className="text-xs font-black uppercase tracking-[0.12em] text-[#25c0d5]">
-                Resultado registrado
-              </p>
-              <p className="mt-2 text-sm leading-6 text-[#c5d2df]">
-                {record.outcome}
-              </p>
-            </div>
-          ) : null}
-        </section>
-
-        {record.project || record.workspace ? (
-          <section className="mt-7 border-y border-[#243b55] py-5">
-            <div className="flex items-start gap-4">
-              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-[#4374ba]/15 text-[#7fa8ff]">
-                <BriefcaseBusiness className="h-5 w-5" />
-              </span>
-              <div className="min-w-0">
-                <p className="text-xs font-black uppercase tracking-[0.12em] text-[#71869b]">
-                  Contexto del trabajo
-                </p>
-                <h3 className="mt-1 text-base font-black">
-                  {record.project?.title || record.workspace}
-                </h3>
-                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#91a5b9]">
-                  {record.project?.clientName ? (
-                    <span>{record.project.clientName}</span>
-                  ) : null}
-                  {record.project?.location ? (
-                    <span className="inline-flex items-center gap-1">
-                      <MapPin className="h-3.5 w-3.5" />
-                      {record.project.location}
-                    </span>
-                  ) : null}
-                  {record.project?.category ? (
-                    <span>{record.project.category}</span>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          </section>
-        ) : null}
-
-        <section className="mt-7">
-          <div className="flex items-center justify-between gap-4">
-            <h3 className="font-mono text-xs font-black uppercase tracking-[0.16em] text-[#7fa8ff]">
-              Evidencia pública
-            </h3>
-            {galleryItems.length > 1 ? (
-              <span className="text-xs font-bold text-[#91a5b9]">
-                {galleryItems.length} imágenes
-              </span>
-            ) : null}
-          </div>
-          {galleryItems.length ? (
-            <EvidenceGallery
-              items={galleryItems}
-              tone="dark"
-              className="mt-4"
-            />
-          ) : image ? (
-            <a
-              href={image}
-              target="_blank"
-              rel="noreferrer"
-              className="group relative mt-4 block aspect-[16/10] overflow-hidden rounded-xl border border-[#2a4561] bg-[#0e1a26]"
-            >
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
+        <section
+          className={`${panel} overflow-hidden p-2`}
+          aria-label="Galería de evidencias"
+        >
+          {current ? (
+            <div className="relative aspect-[16/9] overflow-hidden rounded-lg bg-[#050d16]">
               <Image
-                src={image}
-                alt={`Evidencia de ${record.title}`}
+                src={current}
+                alt={`${record.title}, evidencia ${active + 1}`}
                 fill
-                sizes="(max-width: 1280px) 100vw, 680px"
                 unoptimized
-                className="object-cover transition duration-500 group-hover:scale-[1.015]"
+                sizes="(min-width:1024px) 900px,100vw"
+                className="object-contain"
               />
-              <span className="absolute bottom-3 right-3 inline-flex items-center gap-2 rounded-lg border border-white/20 bg-[#07111f]/85 px-3 py-2 text-xs font-black backdrop-blur">
-                <ExternalLink className="h-3.5 w-3.5" />
-                Abrir evidencia
-              </span>
-            </a>
+            </div>
           ) : (
-            <div className="mt-4 flex min-h-[180px] items-center justify-center rounded-xl border border-dashed border-[#304963] bg-[#0e1a26]/55 px-8 text-center">
-              <div>
-                <ImageIcon className="mx-auto h-8 w-8 text-[#597087]" />
-                <p className="mt-3 text-sm font-black">
-                  Registro documentado sin imagen pública
-                </p>
-                <p className="mt-1 text-xs leading-5 text-[#71869b]">
-                  El detalle profesional y su estado de revisión permanecen
-                  visibles.
-                </p>
-              </div>
+            <div className="flex aspect-[16/9] flex-col items-center justify-center gap-3 text-[#b8c9da]">
+              <FileText size={36} />
+              <p>Este registro no incluye imágenes públicas.</p>
             </div>
           )}
-          {record.evidenceUrls.length ? (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {record.evidenceUrls.map((url, index) => (
-                <a
-                  key={url}
-                  href={url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 rounded-lg border border-[#304963] px-3 py-2 text-xs font-bold text-[#aebed0] hover:border-[#488ac9] hover:text-white"
+          {images.length > 1 && (
+            <div
+              className="mt-2 flex gap-2 overflow-x-auto pb-1"
+              aria-label="Elegir imagen"
+            >
+              {images.map((media, index) => (
+                <button
+                  key={media.id}
+                  type="button"
+                  onClick={() => setActive(index)}
+                  aria-label={`Ver evidencia ${index + 1}`}
+                  aria-pressed={active === index}
+                  className={`relative h-24 min-w-28 flex-1 overflow-hidden rounded-lg border-2 ${active === index ? "border-[#67afff]" : "border-transparent"}`}
                 >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  Referencia {index + 1}
-                </a>
+                  <Image
+                    src={media.href}
+                    alt=""
+                    fill
+                    unoptimized
+                    sizes="200px"
+                    className="object-cover"
+                  />
+                </button>
               ))}
             </div>
-          ) : null}
+          )}
         </section>
-
-        {record.skills.length ? (
-          <section className="mt-7">
-            <h3 className="font-mono text-xs font-black uppercase tracking-[0.16em] text-[#7fa8ff]">
-              Capacidades vinculadas
-            </h3>
-            <div className="mt-3 flex flex-wrap gap-2">
+        <aside
+          className={`${panel} p-5 sm:p-6`}
+          aria-label="Resumen del registro"
+        >
+          <h2 className="text-xl font-semibold">Resumen del registro</h2>
+          <dl className="mt-5 divide-y divide-[#294057] border-t border-[#294057]">
+            <div className="py-5">
+              <dt className="text-sm text-[#b8c9da]">Tipo de trabajo</dt>
+              <dd className="mt-2 font-medium">
+                {typeMeta(record.type).label}
+              </dd>
+            </div>
+            <div className="py-5">
+              <dt className="text-sm text-[#b8c9da]">Resultado declarado</dt>
+              <dd className="mt-2 leading-7">
+                {record.outcome || "No indicado"}
+              </dd>
+            </div>
+            <div className="py-5">
+              <dt className="text-sm text-[#b8c9da]">Trabajo relacionado</dt>
+              <dd className="mt-2 leading-7">
+                {record.project?.title ||
+                  record.workspace ||
+                  "Sin trabajo vinculado"}
+              </dd>
+            </div>
+          </dl>
+          {record.skills.length > 0 && (
+            <div className="flex flex-wrap gap-2">
               {record.skills.map((skill) => (
                 <span
                   key={skill}
-                  className="rounded-full border border-[#2e4660] bg-[#102238] px-3 py-1.5 text-xs font-bold text-[#bdcada]"
+                  className="rounded-full border border-[#35506e] px-3 py-1 text-xs text-[#b8c9da]"
                 >
                   {skill}
                 </span>
               ))}
             </div>
-          </section>
-        ) : null}
-
-        {validation ? (
-          <section className="mt-7 rounded-xl border border-[#285366] bg-[#0b2731] p-5">
-            <div className="flex items-start gap-4">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#25c0d5]/12 text-[#25c0d5]">
-                <BadgeCheck className="h-5 w-5" />
-              </span>
-              <div>
-                <p className="font-black text-[#e7f6f5]">
-                  Validación profesional
-                </p>
-                <p className="mt-1 text-xs text-[#8eabb4]">
-                  {validation.validatorName
-                    ? `Revisado por ${validation.validatorName}`
-                    : "Revisado por un responsable autorizado"}{" "}
-                  ·{" "}
-                  {formatLongDate(
-                    validation.resolvedAt || validation.createdAt,
-                  )}
-                </p>
-                {validation.responseNote ? (
-                  <p className="mt-3 text-sm leading-6 text-[#bfd0d5]">
-                    {validation.responseNote}
-                  </p>
-                ) : null}
-              </div>
+          )}
+        </aside>
+      </div>
+      <div
+        role="tablist"
+        aria-label="Información del registro"
+        className="mt-7 flex gap-3 border-b border-[#294057]"
+      >
+        {[
+          ["evidence", "Evidencias"],
+          ["validation", "Respaldo"],
+          ["history", "Historial"],
+        ].map(([id, label]) => (
+          <button
+            key={id}
+            id={`tab-${id}`}
+            type="button"
+            role="tab"
+            tabIndex={tab === id ? 0 : -1}
+            onKeyDown={(event) => {
+              const ids = ["evidence", "validation", "history"];
+              const offset = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+              if (!offset && event.key !== "Home" && event.key !== "End") return;
+              event.preventDefault();
+              const next = event.key === "Home" ? ids[0] : event.key === "End" ? ids[2] : ids[(ids.indexOf(tab) + offset + ids.length) % ids.length];
+              setTab(next);
+              document.getElementById(`tab-${next}`)?.focus();
+            }}
+            aria-selected={tab === id}
+            aria-controls={`panel-${id}`}
+            onClick={() => setTab(id)}
+            className={`min-h-12 border-b-2 px-4 text-sm font-semibold ${tab === id ? "border-[#539bff] text-white" : "border-transparent text-[#b8c9da]"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <section
+        role="tabpanel"
+        id={`panel-${tab}`}
+        aria-labelledby={`tab-${tab}`}
+        className={`${panel} mt-4 p-5 sm:p-6`}
+      >
+        {tab === "evidence" && (
+          <>
+            <h2 className="text-lg font-semibold">Evidencias del registro</h2>
+            <p className="mt-3 max-w-3xl leading-7 text-[#c6d3e1]">
+              {record.summary}
+            </p>
+            <div className="mt-5 flex flex-wrap gap-3">
+              {record.media.map((media) => (
+                <a
+                  key={media.id}
+                  href={media.downloadHref}
+                  className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[#35506e] px-4 text-sm"
+                >
+                  <FileText size={16} />
+                  {media.fileName}
+                </a>
+              ))}
             </div>
-          </section>
-        ) : null}
-
-        <p className="mt-6 flex items-start gap-2 border-t border-[#243b55] pt-5 text-xs leading-5 text-[#71869b]">
-          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
-          Este registro forma parte de la actividad pública seleccionada por el
-          profesional. Terraqo distingue entre información declarada y contenido
-          validado.
-        </p>
-      </div>
+            {record.evidenceUrls.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-3">
+                {record.evidenceUrls.map((url, index) => (
+                  <a
+                    key={url}
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex min-h-11 items-center gap-2 text-sm text-[#8ecfff]"
+                  >
+                    <ExternalLink size={16} />
+                    Referencia {index + 1}
+                  </a>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+        {tab === "validation" && (
+          <>
+            <h2 className="text-lg font-semibold">Respaldo del registro</h2>
+            {record.validations.length ? (
+              record.validations.map((validation) => (
+                <div
+                  key={validation.id}
+                  className="mt-4 border-t border-[#294057] pt-4"
+                >
+                  <p className="font-medium">
+                    {validation.validatorName || "Responsable autorizado"}
+                  </p>
+                  <p className="mt-1 text-sm text-[#b8c9da]">
+                    {formatLongDate(
+                      validation.resolvedAt || validation.createdAt,
+                    )}
+                  </p>
+                  {validation.responseNote && (
+                    <p className="mt-3 leading-7">{validation.responseNote}</p>
+                  )}
+                </div>
+              ))
+            ) : (
+              <p className="mt-3 text-[#b8c9da]">
+                Este registro no tiene respaldos públicos disponibles. Su estado
+                es {status.toLowerCase()}.
+              </p>
+            )}
+          </>
+        )}
+        {tab === "history" && (
+          <>
+            <h2 className="text-lg font-semibold">Historial público</h2>
+            <p className="mt-3 text-[#b8c9da]">
+              Registro creado el {formatLongDate(record.createdAt)},{" "}
+              {formatTime(record.createdAt)}.
+            </p>
+            <p className="mt-3 text-sm text-[#b8c9da]">
+              Solo se muestra la información que el profesional ha hecho
+              pública.
+            </p>
+          </>
+        )}
+      </section>
     </article>
-  );
-}
-
-function DetailMetric({
-  icon: Icon,
-  label,
-  value,
-  accent = false,
-}: {
-  icon: LucideIcon;
-  label: string;
-  value: string;
-  accent?: boolean;
-}) {
-  return (
-    <div className="flex min-w-[128px] items-start gap-3">
-      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-[#7fa8ff]" />
-      <div>
-        <span className="block text-[10px] font-black uppercase tracking-[0.12em] text-[#71869b]">
-          {label}
-        </span>
-        <strong
-          className={`mt-1 block text-xs ${accent ? "text-[#57d9a6]" : "text-[#dbe6f2]"}`}
-        >
-          {value}
-        </strong>
-      </div>
-    </div>
   );
 }

@@ -1025,6 +1025,8 @@ model User {
   terraqoShareCollections             TerraqoShareCollection[]          @relation("TerraqoShareCollectionCreator")
   terraqoGrantsIssued                 TerraqoAccessGrant[]              @relation("TerraqoAccessGrantIssuer")
   terraqoGrantsReceived               TerraqoAccessGrant[]              @relation("TerraqoAccessGrantSubject")
+  selectionAccessRequests            TerraqoSelectionAccessRequest[]   @relation("SelectionAccessRequester")
+  selectionAccessDecisions           TerraqoSelectionAccessRequest[]   @relation("SelectionAccessDecider")
   terraqoEndorsementsRequested        TerraqoEndorsementRequest[]       @relation("TerraqoEndorsementRequester")
   terraqoEndorsementsAssigned         TerraqoEndorsementRequest[]       @relation("TerraqoEndorsementReviewer")
   terraqoEndorsementDecisions         TerraqoEndorsementDecision[]      @relation("TerraqoEndorsementDecisionReviewer")
@@ -3691,6 +3693,7 @@ model TerraqoWorklogRevision {
 }
 
 model TerraqoShareCollection {
+  accessRequests        TerraqoSelectionAccessRequest[]
   publicationReviews    TerraqoPublicationReview[]
   id                    String                          @id @default(cuid())
   professionalProfileId String
@@ -3733,6 +3736,7 @@ model TerraqoShareCollectionItem {
 }
 
 model TerraqoAccessGrant {
+  accessRequest        TerraqoSelectionAccessRequest?
   id                   String                      @id @default(cuid())
   collectionId         String
   collection           TerraqoShareCollection      @relation(fields: [collectionId], references: [id], onDelete: Cascade)
@@ -4715,5 +4719,30 @@ model TerraqoPublicationReview {
 
   @@unique([collectionId, workspaceId, collectionVersion])
   @@index([workspaceId, decision, createdAt])
+  @@schema("icc")
+}
+
+model TerraqoSelectionAccessRequest {
+  id                String @id @default(cuid())
+  requesterId       String
+  requester         User @relation("SelectionAccessRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  targetHash        String
+  collectionId      String?
+  collection        TerraqoShareCollection? @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  collectionVersion Int?
+  message           String?
+  status            String @default("PENDING")
+  version           Int @default(1)
+  requestedAt       DateTime @default(now())
+  decidedById       String?
+  decidedBy         User? @relation("SelectionAccessDecider", fields: [decidedById], references: [id], onDelete: Restrict)
+  decidedAt         DateTime?
+  decisionHash      String?
+  grantId           String? @unique
+  grant             TerraqoAccessGrant? @relation(fields: [grantId], references: [id], onDelete: Restrict)
+
+  @@unique([requesterId, targetHash])
+  @@index([requesterId, requestedAt])
+  @@index([collectionId, status, requestedAt])
   @@schema("icc")
 }

@@ -140,6 +140,7 @@ export default async function WorklogPage({ searchParams }: WorklogPageProps) {
           previousWorklogId: true,
           nextWorklog: { select: { id: true } },
           workCaseLinks: { select: { workCaseId: true }, take: 1 },
+          media: { where: { contentType: "image/webp" }, select: { id: true }, orderBy: { sortOrder: "asc" }, take: 1 },
         },
         orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
         take: 200,
@@ -249,6 +250,7 @@ export default async function WorklogPage({ searchParams }: WorklogPageProps) {
             workspaceId: worklog.workspaceId,
             projectId: worklog.projectId,
             workCaseId: worklog.workCaseLinks[0]?.workCaseId || null,
+            imageHref: worklog.media[0] ? `/api/terraqo/worklog/evidence/${encodeURIComponent(worklog.media[0].id)}` : null,
           }))}
           initialCases={workCases.map((workCase) => ({
             id: workCase.id,

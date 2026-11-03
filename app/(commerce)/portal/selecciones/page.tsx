@@ -1,3 +1,5 @@
+import { SelectionAccessInbox } from "@/components/terraqo/selection-access-inbox";
+import { listSelectionAccessRequests, selectionAccessRequestsEnabled } from "@/lib/terraqo/selection-access-request";
 import { PublicationReviewConsole } from "@/components/terraqo/publication-review-console";
 import { listPublicationReviews, publicationReviewEnabled } from "@/lib/terraqo/publication-review";
 import { notFound } from "next/navigation";
@@ -27,10 +29,12 @@ export default async function SelectionsPage() {
     listShareCollections(session.user.id),
   ]);
 
+  const accessRequests = selectionAccessRequestsEnabled() ? await listSelectionAccessRequests(session.user.id) : [];
   const reviews = publicationReviewEnabled() ? (await listPublicationReviews(session.user.id)).filter(review => review.requestedByMe) : [];
   return (
     <div className="space-y-8">
       <PortalPageHeading eyebrow="Privacidad y alcance" title="Selecciones compartidas" description="Construye una vista precisa de tu trayectoria, decide campo por campo y revoca el acceso cuando quieras. Una selección nace privada." />
+      {selectionAccessRequestsEnabled() ? <SelectionAccessInbox requests={accessRequests} /> : null}
       <ScopedSharingConsole
         publicationReviewEnabled={publicationReviewEnabled()}
         candidates={revisions.map((revision) => ({ revisionId: revision.id, title: revision.title, summary: revision.summary, occurredAt: revision.worklog.occurredAt.toISOString(), locationLabel: revision.worklog.locationLabel, mediaCount: revision.worklog.media.length }))}

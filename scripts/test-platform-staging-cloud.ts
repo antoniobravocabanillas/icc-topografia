@@ -141,3 +141,8 @@ Object.assign(pluginProcess.env, { NEXT_PUBLIC_PORTAL_URL: stagingCloudOrigin })
 pluginModule.exports.onPreBuild(context);
 assert.equal(failures, 2); assert.equal(spawns, 2);
 console.log("Staging cloud contract PASS: exact site/branch/commit/deploy, per-phase consent, isolated credentials, candidate readback and production destination guard.");
+
+const s23 = { ...env, PLATFORM_STAGING_CLOUD_PHASE: "s23", PLATFORM_STAGING_CLOUD_CONFIRM: "mghdpciewbsowjrjwmwk:s23:synthetic-only", TERRAQO_SELECTION_ACCESS_REQUESTS_V1: "true" };
+assert.deepEqual(stagingCloudEnvironment(s23, head).gates, ["s23"]);
+assert.throws(() => stagingCloudEnvironment({ ...s23, TERRAQO_SELECTION_ACCESS_REQUESTS_V1: "false" }, head));
+assert.throws(() => stagingCloudEnvironment({ ...env, TERRAQO_SELECTION_ACCESS_REQUESTS_V1: "true" }, head));

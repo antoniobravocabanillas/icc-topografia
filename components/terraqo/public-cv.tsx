@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PublicCvWorkShowcase } from "@/components/terraqo/public-cv-work-showcase";
 import Image from "next/image";
 import {
   ArrowRight,
@@ -24,7 +25,6 @@ import {
   MessageSquare,
   Plus,
   ShieldCheck,
-  Sparkles,
   Target,
   UserRoundCheck,
   type LucideIcon
@@ -192,35 +192,12 @@ function uniqueProjects(profile: PublicCvProfile, limit: number | null = 3): Pro
   return typeof limit === "number" ? projects.slice(0, limit) : projects;
 }
 
-function computeCompleteness(profile: PublicCvProfile) {
-  const checks = [
-    Boolean(profile.user.name),
-    Boolean(profile.user.image),
-    Boolean(profile.headline),
-    Boolean(profile.bio),
-    Boolean(profile.city),
-    profile.specialties.length > 0,
-    profile.software.length > 0,
-    profile.equipment.length > 0,
-    profile.experiences.length > 0,
-    profile.documents.length > 0,
-    profile.worklogs.length > 0
-  ];
-  return Math.max(18, Math.round((checks.filter(Boolean).length / checks.length) * 100));
-}
-
 function verifiedDocumentCount(profile: PublicCvProfile) {
   return profile.documents.filter((document) => document.reviewStatus === "VERIFIED").length;
 }
 
 function publicEvidenceCount(profile: PublicCvProfile) {
   return profile.worklogs.reduce((total, worklog) => total + 1 + worklog.evidenceUrls.length + worklog.media.length, 0);
-}
-
-function validationScore(profile: PublicCvProfile) {
-  const total = Math.max(1, profile.experiences.length + profile.worklogs.length);
-  const validated = profile.experiences.filter((item) => item.verifiedByTerraqo).length + profile.worklogs.filter((item) => item.validations.length > 0 || item.evidenceStatus === "VERIFIED").length;
-  return Math.round((validated / total) * 100);
 }
 
 function latestActivity(profile: PublicCvProfile) {
@@ -278,8 +255,7 @@ export function PublicCVPage({ profile }: PublicCVPageProps) {
   const name = profile.user.name || profile.username || "Profesional Terraqo";
   const username = profile.username || "perfil";
   const isPublicCv = profile.liveCvEnabled && profile.liveCvVisibility === "PUBLIC";
-  const completeness = computeCompleteness(profile);
-  const projects = uniqueProjects(profile);
+  const projects = uniqueProjects(profile, null);
   const specialties = profileCapabilities(profile, 12);
   const evidence = profile.worklogs.slice(0, 3);
   const lastActivity = latestActivity(profile);
@@ -290,29 +266,28 @@ export function PublicCVPage({ profile }: PublicCVPageProps) {
     <div className="terraqo-brand-surface tq-cv-v3 min-h-screen bg-[#07111f] text-white">
       <TerraqoPublicHeader tone="dark" />
       <main>
-        <section className="relative isolate overflow-hidden border-b border-white/10 bg-[#07111f] text-white">
-          <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_15%_10%,rgba(67,116,186,0.28),transparent_30%),radial-gradient(circle_at_86%_28%,rgba(37,192,213,0.13),transparent_28%),linear-gradient(180deg,#07111f_0%,#040b15_100%)]" />
-          <div className="mx-auto grid w-[min(100%-24px,1480px)] gap-6 py-6 sm:w-[min(100%-40px,1480px)] sm:py-9 lg:py-10">
-            <div className="overflow-hidden rounded-[24px] border border-[#488ac9]/35 bg-[#0e1a26]/88 p-5 shadow-[0_32px_100px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-7 lg:p-8">
-              <div className="grid gap-7 lg:grid-cols-[1fr_290px] lg:gap-9">
-                <ProfileHero profile={profile} name={name} username={username} specialties={specialties} isPublicCv={isPublicCv} />
-                <VerificationPanel profile={profile} verifiedDocs={verifiedDocs} username={username} />
-              </div>
-              <div className="mt-7 border-t border-white/10 pt-7">
-                <MetricStrip
-                  experienceLabel={formatExperienceDuration(totalExperienceMonths)}
-                  projects={projects.length || profile.experiences.length}
-                  validation={validationScore(profile)}
-                  evidence={publicEvidenceCount(profile)}
-                  lastActivity={lastActivity}
-                />
-              </div>
-            </div>
+        <section className="mx-auto w-[min(100%-32px,1440px)] py-8 text-white sm:w-[min(100%-80px,1440px)] sm:py-10">
+          <ProfileHero profile={profile} name={name} username={username} specialties={specialties} isPublicCv={isPublicCv} />
+          <div className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,2.2fr)_minmax(280px,1fr)]">
             <LiveCvPulse profile={profile} username={username} />
+            <aside className="rounded-xl border border-[#294259] bg-[#0a1927] p-6 lg:mt-16">
+              <h2 className="text-xl font-semibold text-white">Antes de colaborar</h2>
+              <p className="mt-2 text-[13px] text-slate-400">Perfil actualizado el {formatDate(profile.updatedAt)}</p>
+              <dl className="mt-5 divide-y divide-white/10 border-y border-white/10 text-sm text-white">
+                <div className="grid gap-2 py-5"><dt className="flex items-center gap-2 text-slate-400"><CalendarDays className="h-5 w-5 text-sky-400" />Disponibilidad</dt><dd>{STATUS_COPY[profile.status] || "Por confirmar"}</dd></div>
+                <div className="grid gap-2 py-5"><dt className="flex items-center gap-2 text-slate-400"><MapPin className="h-5 w-5 text-sky-400" />Ubicación declarada</dt><dd>{profile.city || "No indicada"}</dd></div>
+              </dl>
+              <Link href={publicCvCallback(username)} prefetch={false} className="mt-5 flex min-h-11 items-center justify-center gap-3 rounded-lg bg-[#2869c7] px-4 text-sm font-semibold text-white">Contactar<ArrowRight className="h-4 w-4" /></Link>
+              <a href={`/api/terraqo/cv/${encodeURIComponent(username)}/pdf`} className="mt-3 flex min-h-11 items-center justify-center gap-3 rounded-lg border border-[#294259] px-4 text-sm text-white">Descargar CV<Download className="h-4 w-4" /></a>
+            </aside>
           </div>
         </section>
-
-        <section className="mx-auto grid w-[min(100%-24px,1480px)] gap-5 py-8 sm:w-[min(100%-40px,1480px)] sm:py-10">
+        <section id="respaldo" aria-label="Trayectoria y respaldo" className="mx-auto grid w-[min(100%-32px,1440px)] scroll-mt-24 gap-5 pb-10">
+          <h2 className="text-2xl font-semibold text-white">Trayectoria y respaldo</h2>
+          <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <MetricStrip experienceLabel={formatExperienceDuration(totalExperienceMonths)} projects={projects.length} validation={profile.experiences.filter(item => item.verifiedByTerraqo).length} evidence={publicEvidenceCount(profile)} lastActivity={lastActivity} />
+            <VerificationPanel profile={profile} verifiedDocs={verifiedDocs} username={username} />
+          </div>
           <ExperienceTimeline profile={profile} username={username} />
           <EducationTimeline profile={profile} username={username} />
           <FeaturedProjects projects={projects} profile={profile} username={username} />
@@ -321,7 +296,7 @@ export function PublicCVPage({ profile }: PublicCVPageProps) {
             <SkillsAndTools profile={profile} username={username} />
             <DocumentsPanel profile={profile} username={username} />
           </div>
-          <PublicCVCTA username={username} isPublicCv={isPublicCv} completeness={completeness} />
+          <PublicCVCTA username={username} isPublicCv={isPublicCv} />
         </section>
       </main>
       <PublicCVFooter updatedAt={profile.updatedAt} />
@@ -608,7 +583,7 @@ export function PublicCVSectionPage({
         <section className="mx-auto grid w-[min(100%-24px,1480px)] gap-5 pb-10 sm:w-[min(100%-40px,1480px)]">
           {section === "capacidades" ? <SkillsAndTools profile={profile} username={username} extended /> : null}
           {section === "documentos" ? <DocumentsPanel profile={profile} username={username} extended /> : null}
-          <PublicCVCTA username={username} isPublicCv={profile.liveCvEnabled && profile.liveCvVisibility === "PUBLIC"} completeness={computeCompleteness(profile)} />
+          <PublicCVCTA username={username} isPublicCv={profile.liveCvEnabled && profile.liveCvVisibility === "PUBLIC"} />
         </section>
       </main>
       <PublicCVFooter updatedAt={profile.updatedAt} />
@@ -616,62 +591,20 @@ export function PublicCVSectionPage({
   );
 }
 
-function ProfileHero({ profile, name, username, specialties, isPublicCv }: { profile: PublicCvProfile; name: string; username: string; specialties: string[]; isPublicCv: boolean }) {
-  const visibleSpecialties = specialties.slice(0, 5);
-  const remainingSpecialties = Math.max(0, specialties.length - visibleSpecialties.length);
-
+function ProfileHero({ profile, name, username, isPublicCv }: { profile: PublicCvProfile; name: string; username: string; specialties: string[]; isPublicCv: boolean }) {
   return (
-    <div id="cv-vivo" className="relative grid gap-6 text-center text-white sm:grid-cols-[150px_1fr] sm:text-left lg:grid-cols-[164px_1fr] lg:gap-7">
-      <div className="relative mx-auto h-[142px] w-[142px] sm:mx-0 sm:h-[150px] sm:w-[150px] lg:h-[164px] lg:w-[164px]">
-        <span className="absolute -inset-2 rounded-full bg-[conic-gradient(from_180deg,#25c0d5,#4374ba,#488ac9,#25c0d5)] opacity-90 blur-[1px]" />
-        <span className="absolute -inset-5 rounded-full bg-[#4374ba]/20 blur-2xl" />
-        <TerraqoAvatar src={profile.user.image} name={name} className="relative h-full w-full rounded-full border-[5px] border-[#07111f] text-5xl shadow-[0_0_0_2px_rgba(72,138,201,0.9),0_18px_45px_rgba(0,0,0,0.42)]" textClassName="text-[#488ac9]" />
-        <span className="absolute bottom-2 right-2 grid h-7 w-7 place-items-center rounded-full border-[4px] border-[#0e1a26] bg-[#25c0d5] shadow-[0_0_18px_rgba(37,192,213,0.7)]" />
-      </div>
-
-      <div className="flex min-w-0 flex-col justify-center">
-        <div className="mb-4 flex flex-wrap items-center justify-center gap-2 sm:justify-start">
-          <TrustBadge icon={Sparkles} label={isPublicCv ? "Vista pública" : "Perfil público"} />
+    <div id="cv-vivo" className="flex flex-col gap-5 sm:flex-row sm:items-center sm:gap-7">
+      <TerraqoAvatar src={profile.user.image} name={name} className="h-24 w-24 shrink-0 rounded-full border border-[#294259] text-3xl sm:h-32 sm:w-32 sm:text-4xl" />
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-3xl font-semibold leading-tight text-white sm:text-4xl lg:text-5xl">{name}</h1>
+          <span className="rounded-full border border-[#294259] px-3 py-1 text-xs text-slate-300">{isPublicCv ? "Perfil público" : "CV vivo"}</span>
+          {profile.identityVerificationStatus === "VERIFIED" ? <BadgeCheck aria-label="Identidad verificada" className="h-6 w-6 text-sky-400" /> : null}
         </div>
-        <div className="flex flex-wrap items-center justify-center gap-3 sm:justify-start">
-          <h1 className="max-w-[760px] font-display text-[2.05rem] font-black leading-[0.98] tracking-[-0.035em] sm:text-4xl lg:text-[2.75rem]">{name}</h1>
-          {profile.identityVerificationStatus === "VERIFIED" ? (
-            <span title="Identidad verificada por Terraqo" className="text-[#25c0d5]"><BadgeCheck className="h-7 w-7 fill-[#25c0d5] text-[#07111f]" /></span>
-          ) : null}
-        </div>
-        <p className="mt-3 font-display text-lg font-black text-[#488ac9] sm:text-xl">{currentHeadline(profile)}</p>
-        <div className="mt-4 flex flex-wrap justify-center gap-x-4 gap-y-2 text-xs font-semibold text-white/70 sm:justify-start sm:text-sm">
-          <span className="inline-flex items-center gap-2"><MapPin className="h-4 w-4 text-[#25c0d5]" />{profile.city || "Ubicación por completar"}</span>
-          <span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-[#25c0d5]" />{STATUS_COPY[profile.status] || "Disponibilidad no indicada"}</span>
-          <span className="inline-flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${profile.user.onlineUntil && profile.user.onlineUntil > new Date() ? "bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.65)]" : "bg-slate-400"}`} />{profile.user.onlineUntil && profile.user.onlineUntil > new Date() ? "En línea" : "Fuera de línea"}</span>
-          <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-white/50">@{username}</span>
-        </div>
-        {profile.socialLinks.length ? (
-          <div className="mt-4 flex flex-wrap justify-center gap-2 sm:justify-start">
-            {profile.socialLinks.slice(0, 6).map((link) => {
-              const meta = socialMeta(link.platform);
-              return (
-                <a key={link.id} href={link.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.06] px-3 py-2 text-xs font-black text-white transition hover:-translate-y-0.5 hover:border-[#25c0d5]/55 hover:bg-[#25c0d5]/10">
-                  <span className={`grid h-6 min-w-6 place-items-center rounded-full px-1.5 font-mono text-[10px] font-black ${meta.className}`}>{meta.mark}</span>
-                  {link.label || meta.label}
-                </a>
-              );
-            })}
-          </div>
-        ) : null}
-        <p className="mt-5 line-clamp-5 max-w-3xl text-sm leading-7 text-white/70 sm:line-clamp-6 sm:text-[15px]">{profileSummary(profile)}</p>
-        <div className="mt-6 flex flex-wrap justify-center gap-2 sm:justify-start">
-          {visibleSpecialties.length ? visibleSpecialties.map((item) => <ToolChip key={item} label={item} tone="dark" />) : <ToolChip label="Perfil en actualización" tone="dark" />}
-          {remainingSpecialties ? <span className="inline-flex items-center gap-1 rounded-full border border-[#488ac9]/25 bg-[#4374ba]/10 px-3 py-1.5 text-xs font-black text-[#9fc4ff]"><Plus className="h-3.5 w-3.5" />{remainingSpecialties}</span> : null}
-        </div>
-        <div className="mt-6 grid grid-cols-2 gap-2 sm:hidden">
-          <Link href={publicCvCallback(username)} prefetch={false} className="rounded-xl bg-[#4374ba] px-4 py-3 text-sm font-black text-white shadow-[0_18px_40px_rgba(67,116,186,0.28)]">
-            Contactar
-          </Link>
-          <Link href={publicCvPath(username, "experiencias")} className="rounded-xl border border-white/14 bg-white/8 px-4 py-3 text-sm font-black text-white">
-            Ver experiencia
-          </Link>
-        </div>
+        <p className="mt-3 text-lg text-slate-200 sm:text-xl">{currentHeadline(profile)}</p>
+        <p className="mt-2 max-w-3xl line-clamp-2 text-sm leading-6 text-slate-400">{profile.bio ? profileSummary(profile) : "Trabajo que puedes conocer con contexto."}</p>
+        <span className="sr-only">@{username}</span>
+        {profile.socialLinks.length ? <div className="mt-3 flex flex-wrap gap-3">{profile.socialLinks.slice(0, 6).map(link => <a key={link.id} href={link.url} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center text-sm text-sky-300 underline-offset-4 hover:underline">{link.label || socialMeta(link.platform).label}</a>)}</div> : null}
       </div>
     </div>
   );
@@ -856,29 +789,16 @@ function VerificationPanel({ profile, verifiedDocs, username }: { profile: Publi
     { label: "Experiencia validada", detail: `${verifiedExperiences} experiencias`, done: verifiedExperiences > 0, icon: BriefcaseBusiness },
     { label: "Actividad comprobada", detail: `${approvedWorklogs} registros y evidencias`, done: approvedWorklogs > 0, icon: ClipboardCheck }
   ];
-  const completed = items.filter((item) => item.done).length;
-  const trustScore = Math.round((completed / items.length) * 100);
-  const trustLevel = trustScore === 100 ? "Verificado" : trustScore >= 75 ? "Avanzado" : trustScore >= 50 ? "En desarrollo" : "Inicial";
-
   return (
     <aside className="rounded-[18px] border border-[#488ac9]/35 bg-[#07111f]/82 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_18px_45px_rgba(0,0,0,0.22)]">
       <h2 className="flex items-center gap-3 font-mono text-[11px] font-black uppercase tracking-[0.12em] text-white/80"><ShieldCheck className="h-5 w-5 text-[#488ac9]" />Confianza y verificación</h2>
-      <div className="mt-5 text-center">
-        <p className="text-xs font-semibold text-white/50">Tu nivel de confianza</p>
-        <p className="mt-1 font-display text-sm font-black uppercase tracking-[0.12em] text-[#25c0d5]">{trustLevel}</p>
-        <div className="relative mx-auto mt-4 grid h-28 w-28 place-items-center rounded-full" role="img" aria-label={`${trustScore}% de nivel de confianza`} style={{ background: `conic-gradient(#25c0d5 ${trustScore * 3.6}deg, rgba(72,138,201,0.18) 0deg)` }}>
-          <span className="absolute inset-[9px] rounded-full border border-white/[0.06] bg-[#07111f]" />
-          <strong className="relative font-display text-3xl font-black text-white">{trustScore}%</strong>
-        </div>
-        <p className="mt-3 text-xs font-semibold text-white/60">{completed} de {items.length} áreas completadas</p>
-      </div>
       <div className="mt-5 space-y-2 border-t border-white/10 pt-4">
         {items.map((item) => (
           <div key={item.label} className="grid grid-cols-[22px_1fr_20px] items-center gap-2.5 rounded-lg px-1 py-1.5" title={item.detail}>
             <span className={item.done ? "text-[#25c0d5]" : "text-[#d99a2b]"}><item.icon className="h-4 w-4" /></span>
-            <strong className="text-xs font-bold text-white/70">{item.label}</strong>
+            <div><strong className="text-sm font-semibold text-white/80">{item.label}</strong><p className="mt-1 text-xs text-slate-400">{item.detail}</p></div>
             <span className={item.done ? "text-[#25c0d5]" : "text-[#d99a2b]"} title={item.done ? "Validado" : "Pendiente"}>
-              <CheckCircle2 className="h-4 w-4" />
+              {item.done ? <CheckCircle2 className="h-4 w-4" /> : <Clock3 className="h-4 w-4" />}
             </span>
           </div>
         ))}
@@ -891,12 +811,12 @@ function VerificationPanel({ profile, verifiedDocs, username }: { profile: Publi
 function MetricStrip({ experienceLabel, projects, validation, evidence, lastActivity }: { experienceLabel: string; projects: number; validation: number; evidence: number; lastActivity: Date }) {
   const metrics = [
     { label: "Experiencia acumulada", value: experienceLabel, icon: UserRoundCheck },
-    { label: "Proyectos completados", value: projects, icon: FolderKanban },
-    { label: "Experiencias validadas", value: `${validation}%`, icon: Grid2X2 },
+    { label: "Proyectos vinculados", value: projects, icon: FolderKanban },
+    { label: "Experiencias validadas", value: validation, icon: Grid2X2 },
     { label: "Evidencias públicas", value: evidence, icon: ClipboardCheck }
   ];
   return (
-    <div className="grid grid-cols-2 overflow-hidden rounded-[16px] border border-white/10 bg-[#07111f]/72 md:grid-cols-[repeat(4,1fr)_190px]">
+    <div className="grid grid-cols-2 overflow-hidden rounded-[16px] border border-white/10 bg-[#07111f]/72 xl:grid-cols-[repeat(4,minmax(0,1fr))]">
       {metrics.map((metric) => (
         <div key={metric.label} className="flex min-h-[92px] items-center gap-3 border-b border-r border-white/10 px-4 even:border-r-0 md:border-b-0 md:border-r md:px-5 md:even:border-r">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[11px] border border-[#488ac9]/20 bg-[#4374ba]/10 text-[#488ac9]"><metric.icon className="h-5 w-5" /></span>
@@ -1008,98 +928,18 @@ function FeaturedProjects({ projects, profile, username }: { projects: ProjectSn
 }
 
 function LiveCvPulse({ profile, username }: { profile: PublicCvProfile; username: string }) {
-  const updates = profile.worklogs.slice(0, 3);
-  const last = latestActivity(profile);
-  return (
-    <section className="relative isolate min-h-[270px] overflow-hidden rounded-[22px] border border-[#488ac9]/30 bg-[#0e1a26]/82 text-white shadow-[0_24px_70px_rgba(0,0,0,0.24)]">
-      <div className="absolute inset-0 -z-20 bg-[radial-gradient(circle_at_78%_48%,rgba(67,116,186,0.24),transparent_38%),linear-gradient(115deg,#0e1a26_0%,#07111f_58%,#08182a_100%)]" />
-      <div className="pointer-events-none absolute inset-y-0 right-[-8%] -z-10 w-[92%] opacity-40 [mask-image:linear-gradient(90deg,transparent_0%,#000_30%,#000_100%)] sm:right-[-4%] sm:w-[76%] sm:opacity-70 lg:w-[66%] lg:opacity-100">
-        <LiveNetworkGraphic />
-      </div>
-      <div className="pointer-events-none absolute inset-y-0 left-0 -z-10 w-[62%] bg-gradient-to-r from-[#0e1a26] via-[#0e1a26]/95 to-transparent" />
-      <div className="grid min-h-[270px] gap-8 p-6 sm:p-8 lg:grid-cols-[0.72fr_1.28fr] lg:items-center lg:px-10 lg:py-9">
-        <div className="relative z-10 max-w-xl">
-          <div className="inline-flex items-center gap-2 rounded-full border border-[#25c0d5]/30 bg-[#25c0d5]/[0.08] px-3 py-1.5 text-xs font-black text-[#25c0d5]">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#25c0d5] opacity-60" />
-              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#25c0d5]" />
-            </span>
-            En vivo
-          </div>
-          <h2 className="mt-4 font-display text-2xl font-black uppercase tracking-[-0.02em] sm:text-3xl">Actividad profesional reciente</h2>
-          <p className="mt-3 max-w-lg text-sm leading-7 text-white/60">Este CV evoluciona con experiencias, evidencias, documentos y actividad vinculada al trabajo real.</p>
-          <p className="mt-4 font-mono text-[11px] font-black uppercase tracking-[0.14em] text-white/40">Última actualización · {formatDate(last, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
-          <Link href={publicCvPath(username, "evidencias")} className="mt-6 inline-flex items-center gap-2 text-sm font-black text-[#9fc4ff] transition hover:text-[#25c0d5]">Ver toda la actividad <ArrowRight className="h-4 w-4" /></Link>
-        </div>
-        <div className="relative hidden min-h-[190px] sm:block">
-          {updates[0] ? (
-            <div className="absolute bottom-0 right-0 max-w-[330px] text-right">
-              <p className="font-mono text-[10px] font-black uppercase tracking-[0.18em] text-[#25c0d5]">Último registro incorporado</p>
-              <p className="mt-2 truncate text-sm font-black text-white/90">{updates[0].title}</p>
-              <p className="mt-1 truncate text-xs font-semibold text-white/40">{updates[0].project?.title || updates[0].workspace?.brandName || updates[0].workspace?.name || "Actividad profesional"}</p>
-            </div>
-          ) : null}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function LiveNetworkGraphic() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 760 300" className="absolute inset-0 h-full w-full" preserveAspectRatio="xMidYMid slice">
-      <defs>
-        <radialGradient id="cv-network-glow" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#25c0d5" stopOpacity="0.9" />
-          <stop offset="42%" stopColor="#4374ba" stopOpacity="0.42" />
-          <stop offset="100%" stopColor="#0e1a26" stopOpacity="0" />
-        </radialGradient>
-        <linearGradient id="cv-network-line" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#4374ba" stopOpacity="0.08" />
-          <stop offset="52%" stopColor="#488ac9" stopOpacity="0.7" />
-          <stop offset="100%" stopColor="#25c0d5" stopOpacity="0.12" />
-        </linearGradient>
-        <filter id="cv-node-blur"><feGaussianBlur stdDeviation="12" /></filter>
-      </defs>
-      <ellipse cx="490" cy="150" rx="260" ry="138" fill="url(#cv-network-glow)" opacity="0.2" />
-      <g fill="none" stroke="url(#cv-network-line)" strokeWidth="1.2">
-        <path d="M54 206C190 28 470 12 724 126" />
-        <path d="M38 252C230 132 492 104 742 178" />
-        <path d="M146 292C252 86 524 34 692 240" />
-        <path d="M264 292C330 126 480 74 642 38" />
-        <path d="M176 86C346 214 526 230 752 146" />
-        <path d="M112 158L302 94L452 174L612 88L708 208" />
-        <path d="M178 264L302 94L382 278L452 174L592 286L612 88" />
-      </g>
-      <g fill="#4374ba" opacity="0.35" filter="url(#cv-node-blur)">
-        <circle cx="302" cy="94" r="22" /><circle cx="452" cy="174" r="28" /><circle cx="612" cy="88" r="20" />
-      </g>
-      <g stroke="#9fc4ff" strokeWidth="1.2">
-        <circle cx="112" cy="158" r="5" fill="#4374ba" />
-        <circle cx="178" cy="264" r="4" fill="#25c0d5" />
-        <circle cx="302" cy="94" r="8" fill="#488ac9" />
-        <circle cx="382" cy="278" r="5" fill="#4374ba" />
-        <circle cx="452" cy="174" r="10" fill="#25c0d5" />
-        <circle cx="592" cy="286" r="4" fill="#488ac9" />
-        <circle cx="612" cy="88" r="7" fill="#4374ba" />
-        <circle cx="708" cy="208" r="5" fill="#25c0d5" />
-      </g>
-      <g fill="#ffffff">
-        <circle cx="452" cy="174" r="2.4" /><circle cx="302" cy="94" r="1.8" /><circle cx="612" cy="88" r="1.8" />
-      </g>
-      <g className="motion-reduce:hidden">
-        <circle r="3.5" fill="#25c0d5" filter="url(#cv-node-blur)" opacity="0.72">
-          <animateMotion dur="7s" repeatCount="indefinite" path="M54 206C190 28 470 12 724 126" />
-        </circle>
-        <circle r="2.8" fill="#9fc4ff" opacity="0.9">
-          <animateMotion dur="8.5s" begin="-2.5s" repeatCount="indefinite" path="M38 252C230 132 492 104 742 178" />
-        </circle>
-        <circle r="3" fill="#488ac9" opacity="0.92">
-          <animateMotion dur="6.4s" begin="-4s" repeatCount="indefinite" path="M178 264L302 94L382 278L452 174L592 286L612 88" />
-        </circle>
-      </g>
-    </svg>
-  );
+  return <PublicCvWorkShowcase username={username} records={profile.worklogs.slice(0, 2).map(worklog => ({
+    id: worklog.id,
+    title: normalizeSpanishCopy(worklog.title) || worklog.title,
+    summary: worklog.summary,
+    date: new Intl.DateTimeFormat("es-PE", { timeZone: "America/Lima", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(worklog.occurredAt),
+    location: worklog.locationLabel,
+    image: worklog.media.find(media => media.contentType.startsWith("image/"))
+      ? `/api/public/cv/${encodeURIComponent(username)}/worklogs/${encodeURIComponent(worklog.media.find(media => media.contentType.startsWith("image/"))!.id)}`
+      : null,
+    skills: worklog.skills,
+    status: worklog.evidenceStatus === "VERIFIED" ? "Evidencia verificada" : worklog.evidenceStatus === "CONFIRMED" ? "Participación confirmada" : worklog.evidenceStatus === "LINKED" ? "Participación vinculada" : "Participación declarada",
+  }))} />;
 }
 
 function ProjectsSection({ projects, profile, username, extended = false }: { projects: ProjectSnapshot[]; profile: PublicCvProfile; username?: string; extended?: boolean }) {
@@ -1224,7 +1064,7 @@ function DocumentsPanel({ profile, username, extended = false }: { profile: Publ
   );
 }
 
-function PublicCVCTA({ username, isPublicCv, completeness }: { username: string; isPublicCv: boolean; completeness: number }) {
+function PublicCVCTA({ username, isPublicCv }: { username: string; isPublicCv: boolean }) {
   return (
     <section className="relative isolate grid gap-5 overflow-hidden rounded-[22px] border border-[#488ac9]/32 bg-[#0e1a26]/82 p-6 shadow-[0_22px_70px_rgba(0,0,0,0.25)] md:grid-cols-[1fr_auto] md:items-center">
       <div className="pointer-events-none absolute inset-y-0 right-0 -z-10 w-1/2 bg-[radial-gradient(circle_at_100%_50%,rgba(37,192,213,0.16),transparent_55%)]" />
@@ -1232,7 +1072,7 @@ function PublicCVCTA({ username, isPublicCv, completeness }: { username: string;
         <span className="grid h-16 w-16 shrink-0 place-items-center rounded-full border border-[#488ac9]/30 bg-[#4374ba]/12 text-[#9fc4ff]"><LockKeyhole className="h-7 w-7" /></span>
         <div>
           <h2 className="font-display text-xl font-black text-white">¿Quieres conocer más sobre mi experiencia?</h2>
-          <p className="mt-1 text-sm leading-6 text-white/50">{isPublicCv ? "Solicita acceso a mi CV completo para ver información detallada, documentos y evidencia adicional." : `Este CV muestra una vista pública resumida. Perfil completo al ${completeness}%.`}</p>
+          <p className="mt-1 text-sm leading-6 text-white/50">{isPublicCv ? "Solicita acceso a mi CV completo para ver información detallada, documentos y evidencia adicional." : "Este CV muestra únicamente la información que el profesional ha compartido."}</p>
         </div>
       </div>
       <div className="flex flex-wrap gap-3">
@@ -1284,10 +1124,6 @@ function ValidationBadge({ checks, verified }: { checks: number; verified: boole
     return <span className="inline-flex items-center gap-2 rounded-[8px] border border-[#25c0d5]/20 bg-[#25c0d5]/10 px-3 py-2 text-xs font-black text-[#25c0d5]"><ShieldCheck className="h-4 w-4" />Experiencia validada</span>;
   }
   return <span className="inline-flex items-center gap-2 rounded-[8px] border border-[#d99a28]/20 bg-[#d99a28]/10 px-3 py-2 text-xs font-black text-[#f0b84b]"><Clock3 className="h-4 w-4" />{checks ? "Parcialmente validada" : "Pendiente de validación"}</span>;
-}
-
-function TrustBadge({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
-  return <span className="inline-flex items-center gap-2 rounded-full border border-[#25c0d5]/25 bg-[#25c0d5]/[0.08] px-3 py-1.5 font-mono text-[11px] font-black uppercase tracking-[0.08em] text-[#25c0d5]"><Icon className="h-3.5 w-3.5" />{label}</span>;
 }
 
 function ToolChip({ label, tone = "light" }: { label: string; tone?: "light" | "dark" }) {

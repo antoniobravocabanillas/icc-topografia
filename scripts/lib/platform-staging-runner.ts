@@ -7,6 +7,7 @@ export const stagingGateScripts = {
   "b1-b2": "test-platform-staging-http.ts",
   b3: "test-platform-staging-b3-http.ts",
   s24: "test-platform-staging-s24-http.ts",
+  s23: "test-platform-staging-s23-http.ts",
   b4: "test-platform-staging-b4-http.ts",
   "b5-readiness": "test-platform-staging-b5-readiness.ts",
   "b5-dispatch": "test-platform-staging-b5-dispatch.ts",
@@ -15,6 +16,7 @@ export const stagingGateScripts = {
 export const stagingRunnerKeys = [
   ...platformFlags,
   "TERRAQO_WORKSPACE_PUBLICATION_V1",
+  "TERRAQO_SELECTION_ACCESS_REQUESTS_V1",
   "PLATFORM_STAGING_CONFIRM", "PLATFORM_STAGING_ALLOW_REMOTE",
   "PLATFORM_STAGING_DATABASE_PROVIDER", "PLATFORM_STAGING_RESOURCE_NAME",
   "PLATFORM_STAGING_SUPABASE_PROJECT_REF", "PLATFORM_STAGING_DATABASE_ROLE",
