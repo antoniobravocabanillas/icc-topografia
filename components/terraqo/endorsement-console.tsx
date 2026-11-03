@@ -2,7 +2,8 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { BadgeCheck, CheckCircle2, Clock3, LoaderCircle, MessageSquareText, Send, ShieldAlert, UserCheck, XCircle } from "lucide-react";
+import { EndorsementReviewForm } from "./endorsement-review-form";
+import { BadgeCheck, Clock3, LoaderCircle, MessageSquareText, Send, UserCheck } from "lucide-react";
 
 const aspects = [
   ["title", "Título"], ["summary", "Descripción"], ["outcome", "Resultado"],
@@ -11,7 +12,7 @@ const aspects = [
   ["locationLabel", "Lugar"],
 ] as const;
 type Aspect = (typeof aspects)[number][0];
-type Decision = "CONFIRMED" | "UNABLE_TO_CONFIRM" | "CHANGES_REQUESTED";
+
 type Revision = {
   id: string;
   revisionNo: number;
@@ -79,8 +80,6 @@ export function EndorsementConsole({ currentUserId, revisions, requests }: { cur
   const [sendNow, setSendNow] = useState(false);
   const [confirmedSend, setConfirmedSend] = useState<string | null>(null);
   const [confirmedDrafts, setConfirmedDrafts] = useState<Record<string, string>>({});
-  const [answers, setAnswers] = useState<Record<string, Record<string, { decision?: Decision; comment: string }>>>({});
-  const [summary, setSummary] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState<{ error: boolean; text: string } | null>(null);
   const selectedRevision = useMemo(() => revisions.find((revision) => revision.id === revisionId), [revisionId, revisions]);
 
@@ -135,16 +134,10 @@ export function EndorsementConsole({ currentUserId, revisions, requests }: { cur
         const incoming = request.requesterId !== currentUserId;
         const actionable = incoming && ["PENDING", "IN_REVIEW"].includes(request.status) && new Date(request.expiresAt) > new Date();
         const draftFingerprint = JSON.stringify([request.version, request.reviewerEmail, request.reviewerUserId, request.revisionHash, request.requestedScope, request.expiresAt]);
-        const requestAnswers = answers[request.id] || {};
-        const complete = request.requestedScope.every((field) => requestAnswers[field]?.decision && (requestAnswers[field].decision !== "CHANGES_REQUESTED" || requestAnswers[field].comment.trim()));
         return <article key={request.id} className="rounded-2xl border bg-white p-5 shadow-technical sm:p-6">
           <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{incoming ? "Para revisar" : "Solicitada por ti"}</p><h3 className="mt-1 font-display text-xl font-bold">{request.revision.title || "Solicitud de respaldo"}</h3><p className="mt-1 text-sm text-slate-500">{request.relationshipLabel} · v{request.revision.revisionNo}</p></div><span className={`rounded-full px-3 py-1 text-xs font-bold ${request.status === "CONFIRMED" ? "bg-emerald-100 text-emerald-800" : request.status === "CHANGES_REQUESTED" ? "bg-amber-100 text-amber-900" : "bg-slate-100 text-slate-700"}`}>{statusLabels[request.status] || request.status}</span></div>
           <div className="mt-4 rounded-lg border bg-slate-50 p-3 text-sm"><p className="line-clamp-3 leading-6 text-slate-600">{request.revision.summary || "Solo se muestran los aspectos incluidos por quien solicitó el respaldo."}</p><p className="mt-2 font-mono text-[10px] text-slate-400">Huella {request.revisionHash.slice(0, 16)}</p></div>
-          {actionable ? <div className="mt-5 space-y-4 border-t pt-5"><p className="text-sm font-bold">Responde cada aspecto</p>{request.requestedScope.map((field) => {
-            const answer = requestAnswers[field] || { comment: "" };
-            const value = requestedValue(request.revision, field);
-            return <fieldset key={field} className="rounded-xl border p-4"><legend className="px-1 text-sm font-bold">{aspects.find(([value]) => value === field)?.[1] || field}</legend>{value ? <p className="mb-3 rounded-lg bg-slate-50 p-3 text-sm leading-6 text-slate-700">{value}</p> : null}<div className="mt-2 grid gap-2 sm:grid-cols-3">{[["CONFIRMED", "Confirmar", CheckCircle2], ["UNABLE_TO_CONFIRM", "No puedo", XCircle], ["CHANGES_REQUESTED", "Aclarar", ShieldAlert]].map(([value, label, Icon]) => <label key={value as string} className={`cursor-pointer rounded-lg border px-3 py-2 text-center text-xs font-semibold ${answer.decision === value ? "border-primary bg-primary text-white" : "bg-white"}`}><input type="radio" name={`${request.id}-${field}`} className="sr-only" checked={answer.decision === value} onChange={() => setAnswers((current) => ({ ...current, [request.id]: { ...(current[request.id] || {}), [field]: { ...answer, decision: value as Decision } } }))} /><Icon className="mx-auto mb-1 h-4 w-4" />{label as string}</label>)}</div>{answer.decision === "CHANGES_REQUESTED" ? <textarea value={answer.comment} onChange={(event) => setAnswers((current) => ({ ...current, [request.id]: { ...(current[request.id] || {}), [field]: { ...answer, comment: event.target.value } } }))} placeholder="Indica qué debe aclararse" maxLength={1200} rows={2} className="mt-3 w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-primary" /> : null}</fieldset>;
-          })}<textarea value={summary[request.id] || ""} onChange={(event) => setSummary((current) => ({ ...current, [request.id]: event.target.value }))} placeholder="Comentario general opcional" maxLength={1200} rows={2} className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-primary" /><button disabled={!complete || pending} onClick={() => run(async () => { await api(`/api/v1/endorsement-requests/${request.id}/decisions`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": key() }, body: JSON.stringify({ expectedVersion: request.version, responses: request.requestedScope.map((field) => ({ field, decision: requestAnswers[field].decision, comment: requestAnswers[field].comment || undefined })), summaryComment: summary[request.id] || undefined }) }); setNotice({ error: false, text: "Revisión registrada sobre la versión solicitada." }); })} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-white disabled:opacity-45"><UserCheck className="h-4 w-4" /> Registrar revisión</button></div> : null}
+          {actionable ? <EndorsementReviewForm key={`${request.id}:${request.version}:${request.revisionHash}`} requestId={request.id} version={request.version} fields={request.requestedScope.map(field => ({ field, label: aspects.find(([value]) => value === field)?.[1] || field, value: requestedValue(request.revision, field) }))} /> : null}
           {!incoming && !["REVOKED", "CANCELLED", "EXPIRED"].includes(request.status) ? <button disabled={pending} onClick={() => run(async () => { await api(`/api/v1/endorsement-requests/${request.id}/decisions`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedVersion: request.version }) }); setNotice({ error: false, text: "Solicitud revocada; el historial de decisiones se conserva." }); })} className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-lg border px-3 text-xs font-bold text-red-700 hover:bg-red-50">Revocar solicitud</button> : null}
           {!incoming && request.status === "DRAFT" ? <label className="mt-4 flex min-h-11 items-start gap-3 rounded-lg border p-3 text-sm break-words"><input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-primary" checked={confirmedDrafts[request.id] === draftFingerprint} onChange={(event) => setConfirmedDrafts(current => ({ ...current, [request.id]: event.target.checked ? draftFingerprint : "" }))} /><span className="min-w-0">Confirmo enviar este borrador a <strong>{request.reviewerEmail || request.reviewerUser?.email || "la persona asignada"}</strong> con {request.requestedScope.length} aspectos.</span></label> : null}
           {!incoming && request.status === "DRAFT" ? <button disabled={pending || confirmedDrafts[request.id] !== draftFingerprint} onClick={() => run(async () => { await api(`/api/v1/endorsement-requests/${request.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedVersion: request.version }) }); setNotice({ error: false, text: "Solicitud enviada; el alcance y la versión quedaron fijados." }); })} className="ml-2 mt-4 inline-flex min-h-10 items-center gap-2 rounded-lg bg-primary px-3 text-xs font-bold text-white hover:bg-primary/90"><Send className="h-4 w-4" /> Enviar borrador</button> : null}

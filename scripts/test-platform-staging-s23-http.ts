@@ -25,6 +25,8 @@ async function main() {
       const user = await prisma.user.create({ data: { email: `s23-${i}-${suffix}@example.invalid`, name: `S23 Actor ${i}`, role: "CUSTOMER", emailVerified: new Date(), passwordHash: await bcrypt.hash(password, 12), terraqoProfessionalProfile: { create: { username: `s23-${i}-${suffix}`, visibility: "PRIVATE", liveCvEnabled: false } } }, include: { terraqoProfessionalProfile: true } });
       ids.push(user.id); users.push(user);
       const context = await browser.newContext(); contexts.push(context);
+      context.setDefaultTimeout(30_000);
+      context.setDefaultNavigationTimeout(60_000);
       const page = await context.newPage();
       await page.goto(`${origin}/cuenta`, { waitUntil: "networkidle" });
       await page.locator("#email").fill(user.email!); await page.locator("#password").fill(password);
@@ -60,10 +62,18 @@ async function main() {
     const shared = await requesterContext.request.get(privateApi); assert.equal(shared.status(), 200);
     const item = (await shared.json()).data.items[0]; assert.equal(item.summary, "Allowed summary S23"); assert.equal(item.title, undefined);
     assert.equal((await outsiderContext.request.get(privateApi)).status(), 404);
+    // Shorten only this synthetic grant. Exercise the hosted server's expiry check,
+    // rather than emulating client time or weakening authorization.
+    const grantWhere = { collectionId: collection.id, subjectUserId: requester.id };
+    assert.equal((await prisma.terraqoAccessGrant.updateMany({ where: grantWhere, data: { expiresAt: new Date(Date.now() - 60_000) } })).count, 1);
+    assert.equal((await requesterContext.request.get(privateApi)).status(), 404);
+    assert.deepEqual((await (await requesterContext.request.get(lookup)).json()).data, { available: false });
+    assert.equal((await prisma.terraqoAccessGrant.updateMany({ where: grantWhere, data: { expiresAt: new Date(Date.now() + 3_600_000) } })).count, 1);
+    assert.equal((await requesterContext.request.get(privateApi)).status(), 200);
     await prisma.terraqoAccessGrant.updateMany({ where: { collectionId: collection.id, subjectUserId: requester.id }, data: { lifecycle: "REVOKED", revokedAt: new Date() } });
     assert.equal((await requesterContext.request.get(privateApi)).status(), 404);
     assert.deepEqual((await (await requesterContext.request.get(lookup)).json()).data, { available: false });
-    console.log(JSON.stringify({ passed: true, authenticatedUsers: 3, uiRequestAndApproval: true, scopedProjection: true, outsiderDenied: true, revokedReadDenied: true }));
+    console.log(JSON.stringify({ passed: true, authenticatedUsers: 3, uiRequestAndApproval: true, scopedProjection: true, outsiderDenied: true, expiredReadDenied: true, revokedReadDenied: true }));
   } finally {
     await Promise.all(contexts.map(context => context.close())); await browser.close();
     if (ids.length) {
