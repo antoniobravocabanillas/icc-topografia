@@ -33,6 +33,11 @@ type Candidate = {
   revisionId: string;
   title: string;
   summary: string;
+  outcome?: string | null;
+  contributionRole?: string | null;
+  responsibilities?: string[];
+  methods?: string[];
+  tools?: string[];
   occurredAt: string;
   locationLabel: string | null;
   mediaCount: number;
@@ -206,8 +211,8 @@ export function ScopedSharingConsole({
                       <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Campos permitidos</p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         {fieldOptions.map(([value, label]) => (
-                          <label key={value} className={`cursor-pointer rounded-full border px-3 py-2 text-xs font-semibold transition ${selected.fields.includes(value) ? "border-primary bg-primary text-white" : "border-slate-200 bg-white text-slate-700 hover:border-primary/40"}`}>
-                            <input className="sr-only" type="checkbox" checked={selected.fields.includes(value)} onChange={() => toggleField(candidate.revisionId, value)} />
+                          <label key={value} className={`inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold transition focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2 ${selected.fields.includes(value) ? "border-primary bg-primary text-white" : "border-slate-200 bg-white text-slate-700 hover:border-primary/40"}`}>
+                            <input className="h-4 w-4 accent-primary" type="checkbox" checked={selected.fields.includes(value)} onChange={() => toggleField(candidate.revisionId, value)} />
                             {label}
                           </label>
                         ))}
@@ -237,10 +242,18 @@ export function ScopedSharingConsole({
             </label>
             <div className="mt-5 space-y-3">
               {selectedCandidates.map((candidate) => (
-                <div key={candidate.revisionId} className="rounded-lg border bg-white p-3 text-sm">
-                  <strong>{candidate.title}</strong>
-                  <p className="mt-1 text-xs text-slate-500">{selection[candidate.revisionId].fields.length} campos · {selection[candidate.revisionId].includeMedia ? `${candidate.mediaCount} archivos` : "sin archivos"}</p>
-                </div>
+                <article aria-label="Contenido que se compartirá" key={candidate.revisionId} className="min-w-0 rounded-lg border bg-white p-4 text-sm">
+                  <p className="text-xs font-semibold text-primary">Vista previa · Aún no compartido</p>
+                  <dl className="mt-3 space-y-3 break-words">
+                    {fieldOptions.filter(([field]) => selection[candidate.revisionId].fields.includes(field)).map(([field, label]) => {
+                      const value = candidate[field];
+                      const text = Array.isArray(value) ? value.join(" · ") : value;
+                      return <div key={field}><dt className="text-xs font-semibold text-slate-500">{label}</dt><dd className="mt-1 whitespace-pre-wrap text-slate-900">{field === "occurredAt" && text ? new Intl.DateTimeFormat("es-PE", { dateStyle: "medium", timeZone: "America/Lima" }).format(new Date(text)) : text || "Sin información registrada"}</dd></div>;
+                    })}
+                  </dl>
+                  {!selection[candidate.revisionId].fields.length ? <p className="mt-3 text-slate-600">Elige los campos que podrá ver el destinatario.</p> : null}
+                  <p className="mt-4 border-t pt-3 text-xs text-slate-600">{selection[candidate.revisionId].includeMedia ? `${candidate.mediaCount} archivos incluidos; su publicación depende de la autorización correspondiente.` : "Archivos excluidos de esta selección."}</p>
+                </article>
               ))}
               {!selectedCandidates.length ? <p className="text-sm leading-6 text-slate-500">Selecciona registros y define sus campos. Terraqo no asumirá permisos por ti.</p> : null}
             </div>

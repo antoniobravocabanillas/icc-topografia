@@ -23,6 +23,11 @@ export default async function SelectionsPage() {
         id: true,
         title: true,
         summary: true,
+        outcome: true,
+        contributionRole: true,
+        responsibilities: true,
+        methods: true,
+        tools: true,
         worklog: { select: { occurredAt: true, locationLabel: true, media: { select: { id: true } } } },
       },
     }),
@@ -37,7 +42,7 @@ export default async function SelectionsPage() {
       {selectionAccessRequestsEnabled() ? <SelectionAccessInbox requests={accessRequests} /> : null}
       <ScopedSharingConsole
         publicationReviewEnabled={publicationReviewEnabled()}
-        candidates={revisions.map((revision) => ({ revisionId: revision.id, title: revision.title, summary: revision.summary, occurredAt: revision.worklog.occurredAt.toISOString(), locationLabel: revision.worklog.locationLabel, mediaCount: revision.worklog.media.length }))}
+        candidates={revisions.map((revision) => ({ revisionId: revision.id, title: revision.title, summary: revision.summary, outcome: revision.outcome, contributionRole: revision.contributionRole, responsibilities: revision.responsibilities, methods: revision.methods, tools: revision.tools, occurredAt: revision.worklog.occurredAt.toISOString(), locationLabel: revision.worklog.locationLabel, mediaCount: revision.worklog.media.length }))}
         collections={collections.map((collection) => ({
           id: collection.id,
           title: collection.title,
