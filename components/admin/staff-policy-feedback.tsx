@@ -1,5 +1,6 @@
 export function StaffPolicyFeedback({status}: {status?: string}) {
   const messages: Record<string, string> = {
+    "last-admin": "No se retiró el acceso: es el último administrador activo del workspace. Asigna otro administrador antes de continuar.",
     saved: "Política guardada correctamente.",
     review: "Revisa los importes: hasta dos decimales, porcentaje entre 0 y 100 y moneda explícita para una comisión fija positiva.",
     conflict: "El perfil cambió o la versión no es válida. Recarga y revisa los valores antes de guardar."

@@ -14,6 +14,8 @@ Use with visual-reconciliation-2026-11-02.md. This is an ordered execution queue
 
 ## External evidence gaps
 
+S22 progress: local last-admin guard, atomic staff unlink and preservation of existing authority during professional-affiliation approval are implemented and tested against disposable PostgreSQL. See s22-workspace-administration-2026-11-03.md. Invitation lifecycle and hosted/admin browser acceptance remain open; item 3 is not complete.
+
 - Three historical missing media blobs need original bytes or external copies. A reference or URL cannot reconstruct the files.
 - Physical-device/screen-reader acceptance is distinct from desktop browser viewport testing.
 - Real email receipt requires its own authorized delivery test; mocked HTTP and UI messages are not delivery proof.

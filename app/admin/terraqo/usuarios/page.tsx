@@ -1,3 +1,4 @@
+import { guardWorkspaceMembershipChange, LastWorkspaceAdministratorError } from "@/lib/terraqo/workspace-membership-guard";
 import bcrypt from "bcryptjs";
 import type { Role, TerraqoMemberRole, TerraqoPlanTier } from "@prisma/client";
 import { revalidatePath } from "next/cache";
@@ -115,6 +116,11 @@ async function resetPasswordAction(formData: FormData) {
   revalidatePath("/admin/terraqo/usuarios");
 }
 
+function handleMembershipFailure(error: unknown): never {
+  if (error instanceof LastWorkspaceAdministratorError) redirect("/admin/terraqo/usuarios?status=last-admin");
+  throw error;
+}
+
 async function upsertMembershipAction(formData: FormData) {
   "use server";
   await requireAdminPage(["SUPER_ADMIN"]);
@@ -123,6 +129,7 @@ async function upsertMembershipAction(formData: FormData) {
   const role = field(formData, "memberRole") as TerraqoMemberRole;
   if (!userId || !workspaceId || !memberRoles.includes(role)) return;
   await prisma.$transaction(async (tx) => {
+    await guardWorkspaceMembershipChange(tx, workspaceId, userId, { role, active: true });
     await tx.terraqoWorkspaceMember.upsert({
       where: { workspaceId_userId: { workspaceId, userId } },
       update: { role, active: true, joinedAt: new Date() },
@@ -175,7 +182,7 @@ async function upsertMembershipAction(formData: FormData) {
         startedAt: new Date(),
       },
     });
-  });
+  }, { isolationLevel: "ReadCommitted" }).catch(handleMembershipFailure);
   revalidatePath("/admin/terraqo/usuarios");
   revalidatePath("/portal/perfil");
   redirect("/admin/terraqo/usuarios?status=workspace-assigned");
@@ -188,10 +195,12 @@ async function updateMembershipAction(formData: FormData) {
   const role = field(formData, "memberRole") as TerraqoMemberRole;
   const active = field(formData, "active") === "true";
   if (!membershipId || !memberRoles.includes(role)) return;
-  await prisma.terraqoWorkspaceMember.update({
-    where: { id: membershipId },
-    data: { role, active },
-  });
+  await prisma.$transaction(async tx => {
+    const member = await tx.terraqoWorkspaceMember.findUnique({ where: { id: membershipId } });
+    if (!member) throw new Error("Membresía no encontrada.");
+    await guardWorkspaceMembershipChange(tx, member.workspaceId, member.userId, { role, active });
+    await tx.terraqoWorkspaceMember.update({ where: { id: membershipId }, data: { role, active } });
+  }, { isolationLevel: "ReadCommitted" }).catch(handleMembershipFailure);
   revalidatePath("/admin/terraqo/usuarios");
 }
 
@@ -395,6 +404,7 @@ export default async function TerraqoUsersPage({ searchParams }: PageProps) {
         </p>
       </header>
 
+      {params?.status === "last-admin" ? <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">No se modificó la membresía: es el último administrador activo. Asigna otro administrador antes de continuar.</p> : null}
       {params?.status === "workspace-assigned" ? (
         <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
           Workspace asignado correctamente. Si el usuario es profesional, su

@@ -107,7 +107,7 @@ export async function reviewProfessionalAffiliationAction(formData: FormData) {
     if (approved) {
       await tx.terraqoWorkspaceMember.upsert({
         where: { workspaceId_userId: { workspaceId: workspace.id, userId: affiliation.professionalProfile.userId } },
-        update: { role: "PROFESSIONAL", title: roleTitle || affiliation.roleTitle, active: true, joinedAt: new Date() },
+        update: { title: roleTitle || affiliation.roleTitle, active: true, joinedAt: new Date() },
         create: {
           workspaceId: workspace.id,
           userId: affiliation.professionalProfile.userId,

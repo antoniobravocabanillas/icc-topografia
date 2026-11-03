@@ -1,6 +1,7 @@
 "use server";
 
 import bcrypt from "bcryptjs";
+import { LastWorkspaceAdministratorError, unlinkStaffWorkspaceAccess } from "@/lib/terraqo/workspace-membership-guard";
 import {randomUUID} from "node:crypto";
 import type {StaffPolicyState} from "@/lib/staff-policy-state";
 import {QuoteStatus} from "@prisma/client";
@@ -1865,17 +1866,11 @@ export async function upsertStaffAccessAction(profileId: string, formData: FormD
 
 export async function unlinkStaffAccessAction(profileId: string) {
   const { workspaceId } = await requireActionRole(["ADMIN"]);
-  const profile = await prisma.staffProfile.findFirst({ where: { id: profileId, terraqoWorkspaceId: workspaceId }, select: { id: true, userId: true } });
-  if (!profile) throw new Error("Perfil no pertenece al workspace activo.");
-  await prisma.staffProfile.update({
-    where: { id: profileId },
-    data: { userId: null }
-  });
-  if (profile.userId) {
-    await prisma.terraqoWorkspaceMember.updateMany({
-      where: { workspaceId, userId: profile.userId },
-      data: { active: false }
-    });
+  try {
+    await prisma.$transaction(tx => unlinkStaffWorkspaceAccess(tx, workspaceId, profileId), { isolationLevel: "ReadCommitted" });
+  } catch (error) {
+    if (error instanceof LastWorkspaceAdministratorError) redirect("/admin/equipo?policy=last-admin");
+    throw error;
   }
   revalidatePath("/admin/equipo");
   revalidatePath("/admin/chat");
