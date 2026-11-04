@@ -1,3 +1,4 @@
+import { createChatRecoveryLink } from "../lib/terraqo/chat-recovery-link";
 import { assertAttentionTestTarget } from "./lib/customer-attention-test-target";
 import assert from "node:assert/strict";
 import { randomUUID, randomBytes } from "node:crypto";
@@ -184,6 +185,21 @@ export async function verifyAuthenticatedAttention(db: PrismaClient, origin: str
     assert.equal(await db.activityLog.count({ where: { entityId: contactResult.conversationId, title: "Contacto compartido por visitante" } }), 1);
     const hiddenContactResponse = await visitorContext.request.post(`${origin}/api/chat/contact?workspace=${workspace.slug}&conversationId=${contactResult.conversationId}`, { headers: { "x-chat-access": contactResult.accessToken }, data: { operationKey: randomUUID(), phone: "123456789" } });
     assert.equal(hiddenContactResponse.status(), 422);
+    phase = "recovery-link";
+    const recoveredContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    try {
+      const recoveredPage = await recoveredContext.newPage();
+      const leakedRequests: string[] = [];
+      recoveredPage.on("request", request => { if (request.url().includes(contactResult.accessToken) || request.url().includes("#terraqo-chat=")) leakedRequests.push("credential-in-url"); });
+      await recoveredPage.goto(createChatRecoveryLink(contactResult.conversationId, contactResult.accessToken, origin + "/atencion/" + workspace.slug));
+      await recoveredPage.getByRole("log").getByText("Consulta con datos configurados", { exact: true }).waitFor();
+      assert.equal(new URL(recoveredPage.url()).hash, "");
+      assert.equal(await recoveredPage.evaluate(key => localStorage.getItem(key), "terraqo-chat:" + workspace.slug), contactResult.conversationId);
+      assert.deepEqual(leakedRequests, []);
+      await recoveredPage.getByText("Continuar después", { exact: true }).click();
+      await recoveredPage.getByRole("button", { name: "Copiar enlace privado", exact: true }).waitFor();
+      await recoveredPage.screenshot({ path: "output/attention-recovery-link-mobile.png" });
+    } finally { await recoveredContext.close(); }
     await visitorContext.close();
     phase = "revocation";
     await db.terraqoWorkspaceMember.updateMany({ where: { userId: advisor.id, workspaceId }, data: { active: false } });

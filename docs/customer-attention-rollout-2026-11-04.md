@@ -199,3 +199,44 @@ Esta sección sustituye las listas antiguas de pendientes anteriores.
 - PostgreSQL/HTTP/Chrome completo PASS (sesión 67714): capability ausente/alterada y otra empresa rechazadas; JSON desconocido/vacío rechazado; stream sobredimensionado 413; concurrencia crea un recibo, cambio de payload 409, actualización parcial conserva el otro dato, historial sin contactos, cierre protegido. E2E móvil comprueba datos ocultos, offline conserva borrador y reintento único exitoso. Fixtures eliminados; cluster local detenido.
 - TypeScript PASS (sesión 85070), ESLint focalizado PASS, detector Impeccable sin hallazgos. Captura attention-progressive-contact-mobile.png inspeccionada a 390 px, sin overflow. No migración requerida ni mutación productiva.
 - Alcance restante: campos personalizados y su solicitud por etapas, verificación/avisos externos, reglas y retención, adjuntos, candidato ICC y publicación final. Esta fase comparte datos; no prueba ni promete entrega de mensajes por otro canal.
+
+### Gate remoto de contacto progresivo aprobado
+- Candidato 9012e06da0ab16e04acf818da1950961ee1512fb; build 6aeb856bb6297fe239ae8077; deploy 6aeb856bb6297fe239ae8079. Plugin onSuccess success, PASS customer-attention para el mismo SHA/deploy. Marcador público HTTP 200 coincide.
+- Supabase MCP, consulta independiente de solo lectura: cero workspaces attentiongate-% creados en la última hora tras el gate. Fixtures limpiados.
+- Producción plataforma sigue 6ae7ec06e99b195a657aa8be; ICC sigue 6a7458e58755414196df9ea7. Verificado por API Netlify; no actualización productiva en esta fase.
+- Preparado worktree ICC C:/Users/Binv/Documents/icc-attention-release, rama codex/icc-attention-release-20261104, base 3b66f56. Nueve archivos del chat copiados con comprobación SHA256; trabajo móvil original intacto. npm ci y build:next PASS, 69 páginas. Nota detallada docs/attention-release-2026-11-04.md en ese worktree.
+- Siguiente bloque: integrar contacto por motivo/progresivo en candidato ICC y pruebas de proxy/continuidad/UX. Antes de desplegar, confirmar paridad del sitio ICC publicado (commit_ref null). Siguen pendientes campos personalizados, avisos externos, reglas/retención y adjuntos; aprobación de esta fase no equivale a lanzamiento completo.
+
+### Candidato ICC integrado localmente — ecf4c8d
+- Worktree C:/Users/Binv/Documents/icc-attention-release, rama codex/icc-attention-release-20261104. Commit local ecf4c8d con continuidad, configuración por motivo, contacto progresivo y proxy acotado. Sin push/deploy; checkout móvil preservado.
+- TypeScript y build Next PASS (70 páginas), pruebas HTTP/navegador sintéticas PASS, offline conserva borrador y reintento confirma envío. Revisión visual móvil/escritorio y detector Impeccable sin hallazgos. Handoff detallado docs/attention-release-2026-11-04.md en ese worktree.
+- Pendiente concreto: recorrido ICC al backend staging con fixture aislado; paridad del sitio ICC publicado, cuyo deploy tiene commit_ref null. No confundir prueba sintética del proxy con persistencia/validación real del backend. Candidato plataforma aprobado sigue 9012e06.
+
+## Publicación de atención completada — 2026-11-04
+Esta sección sustituye el estado anterior de producción sin cambios. El usuario indicó continuar sin nuevas confirmaciones hasta desplegar.
+
+### Identidades publicadas
+- Plataforma: sitio 2d38524a-44f9-4473-8a1f-9270e03bc2bf, commit 9012e06da0ab16e04acf818da1950961ee1512fb, build 6aeb8b63e9b70e319e507e71, deploy 6aeb8b63e9b70e319e507e73 ready. Rama codex/icc-production-preview avanzó por fast-forward desde c623ec8, sin S22. Sin modificar variables productivas.
+- ICC: sitio 5e1adf1c-580a-46e3-8854-e6a795cc7c73, commit fuente 31a3e1103b4766fc379657128e6028d7e2f72079, deploy 6aeb8d271c577caa292450a9 ready/publicado. Rama codex/icc-attention-release-20261104 enviada a origen. Publicación del mismo artefacto que pasó smoke de preview.
+
+### Base de datos y reversión
+- Backup fresco privado C:/Users/Binv/.terraqo-private/attention-2026-11-04T19-38-59-965Z/icc.dump, SHA256 16ea0072c6bced230ea0355f452f47e33a7fb2ce1270e049efedc4e75ecb0854, 828062 bytes. Restauración PostgreSQL18 y ensayo de migración PASS, hashes de filas preservados.
+- Aplicada únicamente 20261104000200_customer_attention_followup en producción, 2026-11-04T19:45:23Z; checksum a7f498f903d18ce459c2f12e32cb4dde3a36006e6a92480831f9b787ba8cde57. Ledger idéntico al respaldo antes de mutar; transacción y lock_timeout 5s. Tres columnas nullable y un índice, ledger escrito en la misma transacción. Sin cambios a filas de clientes ni pagos.
+- Rollback de código: plataforma deploy 6ae7ec06e99b195a657aa8be; ICC deploy 6a7458e58755414196df9ea7. Conservar columnas aditivas al revertir código; no eliminar datos ni restaurar backup encima de actividad nueva por rutina.
+
+### Validación de integración y publicación
+- ICC local hacia backend staging real: workspace sintético attention-icc-release-20261104, inicio de consulta, actualización progresiva de email, teléfono oculto y recuperación tras recargar PASS. Readback SQL confirma contacto actualizado, estado WAITING, un mensaje. Fixture y auditoría/notificaciones propias eliminados; remaining=0.
+- Prueba sintética ampliada para configuración legacy publicada=null PASS. Componente espera respuesta de configuración y mantiene contacto progresivo opcional para empresas legacy.
+- ICC empaquetado con CLI local fijado 26.0.1, build --offline; proceso de build sin token ni secretos de DB/Auth, solo variables públicas permitidas. Runtime Next Netlify 5.16.6. Compilación/TypeScript PASS, 70 páginas.
+- Paridad ICC: contenido main de /, /contacto, /servicios, /tienda, /nosotros, /checkout y /cuenta coincide exactamente con producción anterior, HTTP200. 55 assets idénticos por SHA1, dos SVG equivalentes tras normalizar saltos de línea. No equivalencia byte a byte del bundle (compilación diferente); commit_ref previo era null.
+- Dos drafts ICC incorrectos por publishDir .next no cargaban CSS/JS: no llegaron a producción. Corregido a .netlify/static del adaptador; nuevo preview pasó y ambos drafts rechazados fueron eliminados por ID después de publicar. No se borraron deploys de rollback.
+- Smoke ICC preview y dominio real: config200, contacto sin token401, apertura chat/formulario móvil390px, sin overflow horizontal ni pageerror. Cero mensajes reales enviados. Capturas output/icc-draft-mobile.png y output/icc-live-mobile.png.
+- Plataforma real: terraqoglobal.com200, portal.terraqoglobal.com/cuenta200, admin.terraqoglobal.com/admin/chat307 al acceso, api.terraqoglobal.com/api/chat/config200. E2E autenticado certificado en staging del mismo SHA; no se entró a una cuenta cliente real durante smoke productivo.
+- Evidencia resumida output/attention-production-release.json y output/attention-production-migration.json. Handoffs y cambios ajenos originales preservados.
+
+### Alcance y pendientes no ocultados
+Publicado: bandeja, asignación/transferencia, notas privadas, seguimiento, configuración por workspace, instalación/enlace, continuidad/recuperación, contacto por motivo/progresivo, vínculo y resultados comerciales, métricas existentes. Cada empresa publica sus propias reglas; no se sobrescribieron configuraciones de clientes.
+Pendientes del documento completo: campos personalizados, adjuntos, avisos externos con verificación/outbox/entrega, escalamiento/retención y automatizaciones avanzadas. No afirmar 100% del documento ni prometer correo/WhatsApp. Pagos y mensajería bidireccional siguen fase posterior. S22 permanece pausado.
+
+## Continuidad mediante enlace privado
+Sustituido código JSON visible por Copiar enlace privado y Compartir nativo. Fragmento retirado antes de recuperar; no viaja en URL HTTP. Apertura automática en contexto nuevo y compatibilidad JSON anterior. Sin migraciones ni uso de credenciales reales. Harness PostgreSQL local completo PASS: permisos, tenants, idempotencia, contactos y recuperación Chromium móvil. Primera prueba detectó falta de role log en historial; corregida semántica accesible y repetición completa PASS. TypeScript y pruebas parser PASS. Captura output/attention-recovery-link-mobile.png revisada.

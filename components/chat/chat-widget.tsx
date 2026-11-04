@@ -1,6 +1,6 @@
 "use client";
 
-import { ChatContinuity } from "@/components/chat/chat-continuity";
+import { ChatContinuity, useChatRecoveryLink } from "@/components/chat/chat-continuity";
 import { ChatContact } from "@/components/chat/chat-contact";
 import { FormEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
 import { attentionAccentText, attentionContactRule, type AttentionConfig } from "@/lib/terraqo/customer-attention-config";
@@ -133,6 +133,8 @@ export function ChatWidget({ workspaceSlug, inline = false, initialPresentation 
     setConversationId(stored || "");
     setConversation(null);
   }, [storageKey]);
+
+  useChatRecoveryLink(restoreConversation, () => setOpen(true), setError);
 
   const resetConversation = useCallback((notice?: string) => {
     window.localStorage.removeItem(storageKey);
@@ -384,7 +386,7 @@ export function ChatWidget({ workspaceSlug, inline = false, initialPresentation 
             {conversationId ? (
               <>
                 {conversation?.hasEarlier && <button type="button" disabled={historyLoading} onClick={loadEarlier} className="min-h-11 rounded-md border px-3 text-sm">{historyLoading ? "Cargando…" : "Ver mensajes anteriores"}</button>}
-                <div ref={messagesRef} className="max-h-72 space-y-3 overflow-auto rounded-lg bg-muted/40 p-3">
+                <div ref={messagesRef} role="log" aria-label="Mensajes de la conversación" className="max-h-72 space-y-3 overflow-auto rounded-lg bg-muted/40 p-3">
                   {conversation?.messages.map((message) => (
                     <div key={message.id} className={message.sender !== "customer" ? "flex items-end gap-2" : "flex justify-end"}>
                       {message.sender !== "customer" ? <UserAvatar name={assignedName || displayName} image={assignedImage} size="sm" /> : null}
