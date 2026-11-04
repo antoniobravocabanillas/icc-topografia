@@ -71,6 +71,7 @@ async function main() {
       await db.terraqoWorkspace.deleteMany({ where: { id: { in: workspaceIds } } });
       assert.equal(await db.terraqoWorkspace.count({ where: { id: { in: workspaceIds } } }), 0);
       await writeFile("output/attention-staging-cleanup.json", JSON.stringify({ ...marker, remainingWorkspaces: 0 }));
+      console.log(JSON.stringify({ attentionCleanup: "verified" }));
     } finally { await db.$disconnect(); }
   }
   console.log(`PASS attention staging verified: commit=${commit}; deploy=${marker.deployId}; fixtures removed.`);

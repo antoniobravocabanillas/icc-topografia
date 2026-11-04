@@ -130,7 +130,28 @@ export async function verifyAuthenticatedAttention(db: PrismaClient, origin: str
     phase = "revocation";
     await db.terraqoWorkspaceMember.updateMany({ where: { userId: advisor.id, workspaceId }, data: { active: false } });
     await advisorPage.goto(url);
-    await advisorPage.waitForURL(value => value.pathname === "/cuenta");
+    await advisorPage.waitForURL(value => value.origin === origin && value.pathname === "/cuenta");
+    await advisorPage.getByRole("heading", { name: "Tu acceso a la empresa no está activo", exact: true }).waitFor();
+    assert.equal((await advisorPage.locator("body").innerText()).includes(`Private attention ${suffix}`), false);
+    await advisorPage.setViewportSize({ width: 390, height: 844 });
+    assert.equal(await advisorPage.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    await advisorPage.screenshot({ path: "output/attention-access-revoked-mobile.png", fullPage: true });
+    await Promise.all([
+      advisorPage.waitForNavigation({ waitUntil: "domcontentloaded" }),
+      advisorPage.getByRole("button", { name: "Volver a comprobar", exact: true }).click(),
+    ]);
+    await advisorPage.getByRole("heading", { name: "Tu acceso a la empresa no está activo", exact: true }).waitFor();
+    await Promise.all([
+      advisorPage.waitForNavigation({ waitUntil: "domcontentloaded" }),
+      advisorPage.getByRole("button", { name: "Cerrar sesión", exact: true }).click(),
+    ]);
+    await advisorPage.waitForURL(value => value.origin === origin && value.pathname === "/cuenta" && !value.search);
+    const signedOutSession = await advisorContext.request.get(`${origin}/api/auth/session`);
+    assert.equal(signedOutSession.status(), 200);
+    assert.ok(!(await signedOutSession.json())?.user, "Sign-out must remove the authenticated session");
+    await advisorPage.screenshot({ path: "output/attention-signed-out-mobile.png", fullPage: true });
+    assert.equal(await advisorPage.getByRole("heading", { name: "Tu acceso a la empresa no está activo", exact: true }).count(), 0);
+    await advisorPage.getByRole("region", { name: "Iniciar sesión", exact: true }).waitFor();
     console.log("PASS authenticated attention: credentials, admin assignment, advisor reply, tenant exclusion, private note, stale permission, draft preservation, mobile context and revoked membership.");
   } catch (error) {
     console.error(JSON.stringify({ authenticatedAttentionFailedAt: phase }));
