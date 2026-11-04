@@ -12,7 +12,10 @@ export function ChatActionForm({ action, label, children }: {
   const busy = useRef(false);
   const operation = useRef<{ signature: string; key: string } | null>(null);
   const router = useRouter();
-  return <form className="space-y-2" action={data => {
+  const formRef = useRef<HTMLFormElement>(null);
+  return <form ref={formRef} className="space-y-2" onSubmit={event => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
     if (busy.current) return;
     busy.current = true;
     const signature = JSON.stringify([...data.entries()]);
@@ -20,7 +23,7 @@ export function ChatActionForm({ action, label, children }: {
     data.set("operationKey", operation.current.key);
     setFeedback("");
     start(async () => {
-      try { await action(data); setFeedback("Cambio guardado."); router.refresh(); }
+      try { await action(data); formRef.current?.reset(); setFeedback("Cambio guardado."); router.refresh(); }
       catch { setFeedback("No se pudo guardar. Actualiza la conversación y vuelve a intentarlo."); }
       finally { busy.current = false; }
     });

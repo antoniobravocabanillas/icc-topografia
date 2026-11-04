@@ -111,7 +111,7 @@ try {
     baseSql,
   ]);
   await run(path.join(bin, "psql.exe"), [...psqlArgs, "--single-transaction", "-f", "prisma/migrations/20261104000200_customer_attention_followup/migration.sql"]);
-  console.log(await run(process.execPath, ["--import", "tsx", "scripts/test-customer-chat-postgres.ts"]));
+  console.log(await run(process.execPath, ["--import", "tsx", "scripts/test-customer-chat-postgres.ts"], 300000));
   if (process.argv.includes("--build-verify")) {
     delete env.NETLIFY_AUTH_TOKEN;
     console.log(await run(process.execPath, ["node_modules/next/dist/bin/next", "build"], 600000));

@@ -13,7 +13,9 @@ function run(stage, { utils }) {
     if (process.env.PLATFORM_STAGING_CLOUD_CONFIRM) utils.build.failBuild("Staging gate configured on a different site.");
     return;
   }
-  const result = spawnSync(process.execPath, ["--import", "tsx", resolve("scripts/run-platform-staging-cloud.ts"), stage], {
+  const attention = process.env.PLATFORM_STAGING_CLOUD_PHASE === "customer-attention";
+  const runner = attention ? "scripts/run-customer-attention-staging.ts" : "scripts/run-platform-staging-cloud.ts";
+  const result = spawnSync(process.execPath, ["--import", "tsx", resolve(runner), stage], {
     cwd: process.cwd(), env: process.env, encoding: "utf8", timeout: 1_100_000, shell: false,
   });
   // The runner emits structural diagnostics only; retain them in the plugin

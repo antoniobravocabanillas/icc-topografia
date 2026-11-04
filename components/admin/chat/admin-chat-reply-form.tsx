@@ -44,7 +44,7 @@ export function AdminChatReplyForm({ replyAction }: AdminChatReplyFormProps) {
   }
 
   return (
-    <form ref={formRef} action={submit} className="grid gap-3 md:grid-cols-[1fr_auto]">
+    <form ref={formRef} onSubmit={event => { event.preventDefault(); submit(new FormData(event.currentTarget)); }} className="grid gap-3 md:grid-cols-[1fr_auto]">
       <Textarea
         ref={textareaRef}
         name="body"

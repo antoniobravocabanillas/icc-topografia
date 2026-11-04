@@ -1,0 +1,116 @@
+import { assertAttentionTestTarget } from "./lib/customer-attention-test-target";
+import assert from "node:assert/strict";
+import { randomUUID, randomBytes } from "node:crypto";
+import bcrypt from "bcryptjs";
+import type { PrismaClient } from "@prisma/client";
+import { chromium, type BrowserContext } from "playwright";
+
+async function login(context: BrowserContext, origin: string, email: string, password: string) {
+  const csrf = await context.request.get(`${origin}/api/auth/csrf`);
+  assert.equal(csrf.status(), 200);
+  const { csrfToken } = await csrf.json();
+  assert.equal(typeof csrfToken, "string");
+  await context.request.post(`${origin}/api/auth/callback/credentials`, {
+    form: { csrfToken, email, password, callbackUrl: `${origin}/admin/chat` },
+    headers: { "X-Auth-Return-Redirect": "1" },
+  });
+  const session = await context.request.get(`${origin}/api/auth/session`);
+  assert.equal(session.status(), 200);
+  assert.equal((await session.json()).user?.email, email, "Real credential sign-in failed");
+}
+
+/** Executes real authentication and Server Actions. Never runs against production. */
+export async function verifyAuthenticatedAttention(db: PrismaClient, origin: string, workspaceId: string, otherWorkspaceId: string) {
+  assertAttentionTestTarget(process.env, origin);
+  const suffix = randomUUID();
+  const password = randomBytes(24).toString("base64url");
+  const passwordHash = await bcrypt.hash(password, 10);
+  const users: string[] = [], profiles: string[] = [], conversations: string[] = [];
+  const browser = await chromium.launch({ ...(process.platform === "win32" ? { channel: "chrome" } : {}), headless: true });
+  let phase = "fixtures";
+  try {
+    const admin = await db.user.create({ data: { name: "Attention admin fixture", email: `attention-admin-${suffix}@example.invalid`, role: "ADMIN", emailVerified: new Date(), passwordHash } }); users.push(admin.id);
+    const advisor = await db.user.create({ data: { name: "Attention advisor fixture", email: `attention-advisor-${suffix}@example.invalid`, role: "SALES", emailVerified: new Date(), passwordHash } }); users.push(advisor.id);
+    const outsider = await db.user.create({ data: { name: "Attention outsider fixture", email: `attention-other-${suffix}@example.invalid`, role: "ADMIN", emailVerified: new Date(), passwordHash } }); users.push(outsider.id);
+    await db.terraqoWorkspaceMember.createMany({ data: [
+      { workspaceId, userId: admin.id, role: "OWNER", active: true },
+      { workspaceId, userId: advisor.id, role: "MANAGER", active: true },
+      { workspaceId: otherWorkspaceId, userId: outsider.id, role: "OWNER", active: true },
+    ] });
+    const profile = await db.staffProfile.create({ data: { terraqoWorkspaceId: workspaceId, userId: advisor.id, displayName: "Asesor E2E", roleTitle: "Atención", tools: {} } }); profiles.push(profile.id);
+    const chat = await db.chatConversation.create({ data: { terraqoWorkspaceId: workspaceId, customerName: `Visitor ${suffix}`, messages: { create: { sender: "customer", body: `Private attention ${suffix}` } } } }); conversations.push(chat.id);
+    const adminContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    const advisorContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    const outsiderContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    phase = "login";
+    await login(adminContext, origin, admin.email!, password);
+    await login(advisorContext, origin, advisor.email!, password);
+    await login(outsiderContext, origin, outsider.email!, password);
+    const url = `${origin}/admin/chat?conversation=${chat.id}`;
+    const outsiderPage = await outsiderContext.newPage();
+    await outsiderPage.goto(url);
+    await outsiderPage.getByText("Conversación no disponible", { exact: true }).waitFor();
+    assert.equal((await outsiderPage.locator("body").innerText()).includes(`Private attention ${suffix}`), false);
+    const advisorPage = await advisorContext.newPage();
+    await advisorPage.goto(url);
+    await advisorPage.getByText("Conversación no disponible", { exact: true }).waitFor();
+    phase = "assignment";
+    const adminPage = await adminContext.newPage(); await adminPage.goto(url);
+    await adminPage.getByLabel("Persona del equipo").selectOption(profile.id);
+    await adminPage.getByRole("button", { name: "Asignar responsable", exact: true }).click();
+    await adminPage.getByText("Cambio guardado.", { exact: true }).waitFor();
+    assert.equal((await db.chatConversation.findUniqueOrThrow({ where: { id: chat.id } })).assignedToId, advisor.id);
+    await advisorPage.reload();
+    await advisorPage.getByLabel("Respuesta al cliente").waitFor();
+    assert.equal(await advisorPage.getByRole("button", { name: "Asignar responsable", exact: true }).count(), 0);
+    phase = "reply";
+    const body = `Authorized reply ${suffix}`;
+    await advisorPage.getByLabel("Respuesta al cliente").fill(body);
+    await advisorPage.getByRole("button", { name: "Responder", exact: true }).click();
+    await advisorPage.getByRole("log").getByText(body, { exact: true }).waitFor();
+    assert.equal(await db.chatMessage.count({ where: { conversationId: chat.id, body } }), 1);
+    phase = "private-note";
+    await advisorPage.getByLabel("Nota interna").fill(`Private note ${suffix}`);
+    await advisorPage.getByRole("button", { name: "Guardar nota", exact: true }).click();
+    await advisorPage.getByText(`Private note ${suffix}`, { exact: true }).waitFor();
+    assert.equal(await db.chatMessage.count({ where: { conversationId: chat.id, body: `Private note ${suffix}` } }), 0);
+    phase = "stale-permission";
+    await db.chatConversation.update({ where: { id: chat.id }, data: { assignedToId: null, assignedProfileId: null } });
+    await advisorPage.getByLabel("Respuesta al cliente").fill(`Rejected reply ${suffix}`);
+    await advisorPage.getByRole("button", { name: "Responder", exact: true }).click();
+    await advisorPage.getByRole("alert").filter({ hasText: "No se confirmó" }).waitFor();
+    assert.equal(await advisorPage.getByLabel("Respuesta al cliente").inputValue(), `Rejected reply ${suffix}`);
+    assert.equal(await db.chatMessage.count({ where: { conversationId: chat.id, body: `Rejected reply ${suffix}` } }), 0);
+    await advisorPage.getByLabel("Nota interna").fill(`Rejected note ${suffix}`);
+    await advisorPage.getByRole("button", { name: "Guardar nota", exact: true }).click();
+    await advisorPage.getByText("No se pudo guardar. Actualiza la conversación y vuelve a intentarlo.", { exact: true }).waitFor();
+    assert.equal(await advisorPage.getByLabel("Nota interna").inputValue(), `Rejected note ${suffix}`);
+    assert.equal(await db.activityLog.count({ where: { entityId: chat.id, body: `Rejected note ${suffix}` } }), 0);
+    phase = "mobile";
+    await adminPage.setViewportSize({ width: 390, height: 844 });
+    await adminPage.goto(url);
+    await adminPage.getByRole("link", { name: "Contacto, seguimiento y oportunidades →" }).click();
+    await adminPage.getByLabel("Contexto de la solicitud").waitFor();
+    assert.equal(await adminPage.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    await adminPage.screenshot({ path: "output/attention-authenticated-mobile.png", fullPage: true });
+    phase = "revocation";
+    await db.terraqoWorkspaceMember.updateMany({ where: { userId: advisor.id, workspaceId }, data: { active: false } });
+    await advisorPage.goto(url);
+    await advisorPage.waitForURL(value => value.pathname === "/cuenta");
+    console.log("PASS authenticated attention: credentials, admin assignment, advisor reply, tenant exclusion, private note, stale permission, draft preservation, mobile context and revoked membership.");
+  } catch (error) {
+    console.error(JSON.stringify({ authenticatedAttentionFailedAt: phase }));
+    throw error;
+  } finally {
+    await browser.close();
+    // Delete only tracked synthetic IDs, never a workspace-wide predicate.
+    await db.activityLog.deleteMany({ where: { entityType: "ChatConversation", entityId: { in: conversations } } });
+    await db.chatConversation.deleteMany({ where: { id: { in: conversations } } });
+    await db.staffProfile.deleteMany({ where: { id: { in: profiles } } });
+    await db.terraqoWorkspaceMember.deleteMany({ where: { userId: { in: users } } });
+    await db.user.deleteMany({ where: { id: { in: users } } });
+    assert.equal(await db.user.count({ where: { id: { in: users } } }), 0);
+    assert.equal(await db.chatConversation.count({ where: { id: { in: conversations } } }), 0);
+    console.log("PASS authenticated fixtures cleaned by exact IDs.");
+  }
+}

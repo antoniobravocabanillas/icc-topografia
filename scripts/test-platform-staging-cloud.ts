@@ -112,12 +112,13 @@ assert.equal(JSON.stringify(diagnostic).includes("private"), false);
 assert.deepEqual(cloudFailureDiagnostic("El worker termino en SOURCE_REVOKED/SOURCE_REVOKED. private-token"), { locations: [], codes: ["SOURCE_REVOKED"] });
 
 let spawns = 0;
+const runners: string[] = [];
 let failures = 0;
 const pluginProcess = { env: { SITE_ID: "production", PLATFORM_STAGING_CLOUD_CONFIRM: "" }, execPath: "node", cwd: () => "/repo" };
 const pluginModule = { exports: {} as { onPreBuild: (context: unknown) => void; onSuccess: (context: unknown) => void } };
 runInNewContext(readFileSync("plugins/terraqo-staging-gate/index.cjs", "utf8"), {
   module: pluginModule, process: pluginProcess,
-  require: (name: string) => name === "./production-environment.cjs" ? productionGuard : name === "node:child_process" ? { spawnSync: () => { spawns++; return { status: 0 }; } } : { resolve: (value: string) => value },
+  require: (name: string) => name === "./production-environment.cjs" ? productionGuard : name === "node:child_process" ? { spawnSync: (_file: string, args: string[]) => { spawns++; runners.push(args[2]); return { status: 0 }; } } : { resolve: (value: string) => value },
 });
 const context = { utils: { build: { failBuild: () => { failures++; } } } };
 pluginModule.exports.onPreBuild(context); pluginModule.exports.onSuccess(context);
@@ -134,4 +135,12 @@ assert.equal(failures, 1); assert.equal(spawns, 2);
 Object.assign(pluginProcess.env, { NEXT_PUBLIC_PORTAL_URL: stagingCloudOrigin });
 pluginModule.exports.onPreBuild(context);
 assert.equal(failures, 2); assert.equal(spawns, 2);
+assert.throws(() => productionGuard.assertProductionEnvironment({ ...productionEnvironment, ATTENTION_STAGING_CANDIDATE_SHA: "synthetic" }));
+assert.throws(() => productionGuard.assertProductionEnvironment({ ...productionEnvironment, TERRAQO_ATTENTION_STAGING_CONFIRM: "synthetic" }));
+Object.assign(pluginProcess.env, { SITE_ID: stagingCloudSite, PLATFORM_STAGING_CLOUD_PHASE: "customer-attention" });
+pluginModule.exports.onPreBuild(context);
+assert.equal(runners.at(-1), "scripts/run-customer-attention-staging.ts");
+Object.assign(pluginProcess.env, { PLATFORM_STAGING_CLOUD_PHASE: "b4" });
+pluginModule.exports.onPreBuild(context);
+assert.equal(runners.at(-1), "scripts/run-platform-staging-cloud.ts");
 console.log("Staging cloud contract PASS: exact site/branch/commit/deploy, per-phase consent, isolated credentials, candidate readback and production destination guard.");

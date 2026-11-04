@@ -1,3 +1,4 @@
+import { verifyAuthenticatedAttention } from "./test-customer-attention-authenticated";
 import assert from "node:assert/strict";
 import { createServer } from "node:net";
 import { spawn, execFile } from "node:child_process";
@@ -16,7 +17,7 @@ export async function verifyChatHttp(db: PrismaClient, workspace: { id: string; 
   const port = address.port;
   await new Promise<void>(resolve => probe.close(() => resolve()));
   const origin = `http://127.0.0.1:${port}`;
-  const server = spawn(process.execPath, [path.resolve("node_modules/next/dist/bin/next"), "dev", "--hostname", "127.0.0.1", "--port", String(port)], { env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1", NEXT_PUBLIC_SITE_URL: origin }, windowsHide: true, stdio: "ignore" });
+  const server = spawn(process.execPath, [path.resolve("node_modules/next/dist/bin/next"), "dev", "--hostname", "127.0.0.1", "--port", String(port)], { env: { ...process.env, AUTH_TRUST_HOST: "true", NEXT_TELEMETRY_DISABLED: "1", NEXT_PUBLIC_SITE_URL: origin }, windowsHide: true, stdio: "ignore" });
   try {
     let ready = false;
     for (let attempt = 0; attempt < 60; attempt++) {
@@ -87,6 +88,7 @@ export async function verifyChatHttp(db: PrismaClient, workspace: { id: string; 
     assert.equal(botReply.status, 200);
     const handoff = await botReply.json(); assert.ok(handoff.accessToken); assert.ok(handoff.botAccessToken);
     assert.equal((await fetch(`${endpoint}&conversationId=${handoff.escalatedChatId}`, { headers: { "x-chat-access": handoff.accessToken } })).status, 200);
+    await verifyAuthenticatedAttention(db, origin, workspace.id, other.id);
     console.log("PASS live loopback HTTP: v2 access, replay, tenant boundary, published-only config, origin rejection, bounded chunked body and bot handoff.");
   } finally {
     if (server.pid && server.exitCode === null) {
