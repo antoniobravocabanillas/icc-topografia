@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
 import { customerChatSelect, chronologicalChat } from "./customer-chat-projection";
 import { routeNewCustomerChat } from "./customer-attention-routing";
+import { attentionState, attentionContactRule } from "../terraqo/customer-attention-config";
 export class PublicChatError extends Error { constructor(message: string, readonly status: number) { super(message); } }
 const inputSchema = z.object({
  conversationId: z.string().max(160).optional(), operationKey: z.string().uuid().optional(),
@@ -25,6 +26,19 @@ export async function postCustomerChat(db: PrismaClient, workspaceId: string, in
    if (prior) {
     if (prior.customerName !== data.name || (prior.customerEmail || "") !== (data.email || "") || (prior.customerPhone || "") !== (data.phone || "") || (prior.topic || "") !== (data.topic || "") || prior.messages[0]?.body !== data.body) throw new PublicChatError("La operación corresponde a otra consulta.", 409);
     return { conversationId: id, conversation: chronologicalChat(await tx.chatConversation.findUniqueOrThrow({ where: { id }, select: customerChatSelect })) };
+   }
+   // The workspace lock serializes publication with intake. Replays above keep
+   // their original receipt even when the company publishes a new policy.
+   const company = await tx.terraqoWorkspace.findUniqueOrThrow({ where: { id: workspaceId }, select: { name: true, settings: true } });
+   const published = attentionState(company.settings, company.name).published;
+   if (published?.contactRules.length) {
+    if (!data.topic || !published.topics.includes(data.topic)) throw new PublicChatError("Selecciona un motivo de contacto vigente.", 422);
+    const rule = attentionContactRule(published, data.topic);
+    for (const field of ["email", "phone"] as const) {
+     const label = field === "email" ? "correo electrónico" : "teléfono";
+     if (rule[field] === "required" && !data[field]) throw new PublicChatError(`Completa el ${label} para este motivo.`, 422);
+     if (rule[field] === "hidden" && data[field]) throw new PublicChatError(`Este motivo no solicita ${label}. Actualiza el formulario.`, 422);
+    }
    }
    const recent = await tx.chatConversation.count({ where: { terraqoWorkspaceId: workspaceId, createdAt: { gte: new Date(Date.now() - 60000) } } });
    if (recent >= 30) throw new PublicChatError("Estamos recibiendo muchas consultas. Inténtalo en un minuto.", 429);

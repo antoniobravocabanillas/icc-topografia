@@ -188,6 +188,29 @@ async function main() {
   assert.equal(attentionOriginAllowed("https://evil-company.example", "https://api.example", ["company.example"]), false);
   assert.equal(attentionOriginAllowed("http://company.example", "https://api.example", ["company.example"]), false);
   assert.equal(attentionOriginAllowed("null", "https://api.example", ["company.example"]), false);
+  const contactConfig = { ...config, contactRules: [{ topic: config.topics[0], email: "required" as const, phone: "hidden" as const }] };
+  assert.equal(attentionConfigSchema.safeParse({ ...contactConfig, contactRules: [...contactConfig.contactRules, ...contactConfig.contactRules] }).success, false);
+  assert.equal(attentionConfigSchema.safeParse({ ...contactConfig, contactRules: [{ ...contactConfig.contactRules[0], topic: "Unknown topic" }] }).success, false);
+  const contactDraft = await saveAttentionSettings(db, w.id, a.id, rollback.revision, "draft", contactConfig);
+  const draftInput = { name: "Draft contact fixture", body: "Draft must not require contact", topic: config.topics[0], operationKey: randomUUID() };
+  const draftChat = await postCustomerChat(db, w.id, draftInput);
+  const contactPublished = await saveAttentionSettings(db, w.id, a.id, contactDraft.revision, "publish");
+  assert.equal((await postCustomerChat(db, w.id, draftInput)).conversationId, draftChat.conversationId, "A published policy must not invalidate an earlier receipt");
+  const countBefore = await db.chatConversation.count({ where: { terraqoWorkspaceId: w.id } });
+  for (const values of [{}, { topic: "Unknown topic", email: "fixture@example.invalid" }, { topic: config.topics[0] }, { topic: config.topics[0], email: "fixture@example.invalid", phone: "123456789" }]) {
+   await assert.rejects(postCustomerChat(db, w.id, { name: "Rejected contact fixture", body: "Not stored", operationKey: randomUUID(), ...values }), (error: unknown) => error instanceof PublicChatError && error.status === 422);
+  }
+  assert.equal(await db.chatConversation.count({ where: { terraqoWorkspaceId: w.id } }), countBefore);
+  const validInput = { name: "Contact fixture", body: "Requested contact", topic: config.topics[0], email: "fixture@example.invalid", operationKey: randomUUID() };
+  const validChats = await Promise.all([postCustomerChat(db, w.id, validInput), postCustomerChat(db, w.id, validInput)]);
+  assert.equal(validChats[0].conversationId, validChats[1].conversationId);
+  const storedContact = await db.chatConversation.findUniqueOrThrow({ where: { id: validChats[0].conversationId } });
+  assert.equal(storedContact.customerEmail, validInput.email);
+  assert.equal(storedContact.customerPhone, null);
+  await assert.rejects(postCustomerChat(db, w.id, { ...validInput, email: "changed@example.invalid" }), (error: unknown) => error instanceof PublicChatError && error.status === 409);
+  await postCustomerChat(db, w.id, { conversationId: draftChat.conversationId, body: "Continue without recollecting contact", operationKey: randomUUID() });
+  await saveAttentionSettings(db, w.id, a.id, contactPublished.revision, "rollback");
+  console.log("PASS contact rules: published-only enforcement, missing/hidden/unknown rejection, no rejected writes, compatible replay, concurrent idempotency and existing conversation continuity.");
   await verifyAttentionRouting(db);
   await verifyChatHttp(db, w, other);
   await db.terraqoWorkspace.update({ where: { id: w.id }, data: { active: false } });

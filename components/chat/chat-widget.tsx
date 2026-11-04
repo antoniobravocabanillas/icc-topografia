@@ -2,7 +2,7 @@
 
 import { ChatContinuity } from "@/components/chat/chat-continuity";
 import { FormEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
-import { attentionAccentText, type AttentionConfig } from "@/lib/terraqo/customer-attention-config";
+import { attentionAccentText, attentionContactRule, type AttentionConfig } from "@/lib/terraqo/customer-attention-config";
 import { MessageCircle, Send, X } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -83,6 +83,9 @@ export function ChatWidget({ workspaceSlug, inline = false, initialPresentation 
   }, [query]);
   const displayName = presentation?.displayName || "Atención Terraqo";
   const contactTopics = presentation?.topics || topics;
+  const [selectedTopic, setSelectedTopic] = useState("");
+  const activeTopic = contactTopics.includes(selectedTopic) ? selectedTopic : contactTopics[0];
+  const contactRule = attentionContactRule(presentation, activeTopic);
   const pathname = usePathname();
   const [open, setOpen] = useState(inline);
   const historyExpanded = useRef(false);
@@ -435,13 +438,13 @@ export function ChatWidget({ workspaceSlug, inline = false, initialPresentation 
                       Inicia una conversacion comercial. Tu consulta se conserva aunque cierres la ventana. Puedes volver desde este navegador.
                     </p>
                     <p className="text-xs leading-5 text-muted-foreground">{presentation?.privacyNotice || "Usamos tus datos para atender esta consulta, no para enviarte publicidad."}</p>
-                    <Input required name="name" placeholder="Nombre y apellido" autoComplete="name" />
-                    <Input name="email" type="email" placeholder="Correo corporativo" autoComplete="email" />
-                    <Input name="phone" placeholder="Telefono / WhatsApp" autoComplete="tel" />
-                    <select name="topic" key={contactTopics.join("|")} defaultValue={contactTopics[0]} className="h-11 rounded-md border bg-background px-3 text-sm">
+                    <label className="grid gap-2 text-sm">Motivo de contacto<select aria-label="Motivo de contacto" name="topic" value={activeTopic} onChange={event => setSelectedTopic(event.target.value)} className="h-11 min-w-0 rounded-md border bg-background px-3 text-sm">
                       {contactTopics.map((topic) => <option key={topic} value={topic}>{topic}</option>)}
-                    </select>
-                    <Textarea required name="body" placeholder="Cuentanos que equipo, servicio o soporte necesitas" onKeyDown={submitOnEnter} />
+                    </select></label>
+                    <label className="grid gap-2 text-sm">Nombre y apellido<Input required maxLength={160} name="name" autoComplete="name" /></label>
+                    {contactRule.email !== "hidden" && <label className="grid gap-2 text-sm">Correo electrónico · {contactRule.email === "required" ? "obligatorio" : "opcional"}<Input required={contactRule.email === "required"} maxLength={254} name="email" type="email" autoComplete="email" /></label>}
+                    {contactRule.phone !== "hidden" && <label className="grid gap-2 text-sm">Teléfono · {contactRule.phone === "required" ? "obligatorio" : "opcional"}<Input required={contactRule.phone === "required"} maxLength={40} name="phone" type="tel" autoComplete="tel" /></label>}
+                    <label className="grid gap-2 text-sm">Tu consulta<Textarea required maxLength={8000} name="body" placeholder="Cuéntanos qué necesitas resolver" onKeyDown={submitOnEnter} /></label>
                     <Button type="submit" disabled={loading}>{loading ? "Iniciando..." : "Iniciar chat"}</Button>
                   </form>
                 ) : null}
