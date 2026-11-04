@@ -240,3 +240,14 @@ Pendientes del documento completo: campos personalizados, adjuntos, avisos exter
 
 ## Continuidad mediante enlace privado
 Sustituido código JSON visible por Copiar enlace privado y Compartir nativo. Fragmento retirado antes de recuperar; no viaja en URL HTTP. Apertura automática en contexto nuevo y compatibilidad JSON anterior. Sin migraciones ni uso de credenciales reales. Harness PostgreSQL local completo PASS: permisos, tenants, idempotencia, contactos y recuperación Chromium móvil. Primera prueba detectó falta de role log en historial; corregida semántica accesible y repetición completa PASS. TypeScript y pruebas parser PASS. Captura output/attention-recovery-link-mobile.png revisada.
+
+### Enlace privado publicado · 2026-11-04 20:26 UTC
+- Plataforma SHA a57924a397bc51fb138f5170ad26120a8d615afe, deploy 6aeb942372db345983596d91. Staging 6aeb91ad6dc01fd30d05510e: onSuccess success y SHA exacto.
+- ICC SHA 3e0a7f160e28d248eeea11b40b98a2f27f529b06, deploy 6aeb919764f7a2f4f37e319e. Preview validado antes de promoción.
+- Copiar/Compartir comprobados sobre build ICC con interceptación HTTP y credenciales sintéticas, sin portapapeles real. Interfaz de recuperación visible en dominio ICC publicado; smoke móvil sin pageerror/overflow. Terraqo público y portal200, admin/chat307 al login, API config200. No mensajes reales enviados.
+- Rollback de código: plataforma 6aeb8b63e9b70e319e507e73; ICC 6aeb8d271c577caa292450a9. Sin migraciones en esta mejora. JSON anterior aceptado; no se utilizó ni repitió la credencial pegada por el usuario.
+- Evidencia local: output/attention-production-release.json, recovery-live-http.json y recovery-staging-approved.json. No confundir esta entrega con cierre del backlog completo del módulo.
+
+## UX empresas · dashboard y bandeja
+Referencia del usuario: panel limpio, prioridades legibles, chat completo, resolver directo. Dashboard con prioridades filtrables y agenda real de seguimientos por workspace/hora Perú; cotizaciones aceptadas por moneda, sin mezclarlas ni llamarlas pagos. Bandeja con identidad por iniciales (sin fotos ficticias), selección destacada, columnas desplazables, Resolver en cabecera y editor Respuesta/Nota interna con borradores conservados. Acceso flotante sujeto a navegación autorizada, abre /admin/chat y se oculta dentro del módulo. Sin migraciones.
+Validación: harness PostgreSQL local completo PASS, incluyendo resolución a CLOSED, nota privada, permisos revocados, navegación del icono, dashboard móvil sin overflow. TypeScript/lint PASS; revisión visual escritorio/móvil en output/attention-refined-*.png y company-dashboard-*.png. Se ajustó selector de test para distinguir textbox de tabpanel; después PASS. Segunda revisión detectó sombra heredada de Card; paneles del dashboard reemplazados por section neutra sin cambiar componente global. Detector Impeccable sin hallazgos. Pendiente promoción del candidato exacto mediante gate staging.

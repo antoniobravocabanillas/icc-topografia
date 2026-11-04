@@ -4,8 +4,8 @@ import { useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
-export function ChatActionForm({ action, label, children }: {
-  action: (data: FormData) => Promise<void>; label: string; children?: ReactNode;
+export function ChatActionForm({ action, label, children, primary = false }: {
+  action: (data: FormData) => Promise<void>; label: string; children?: ReactNode; primary?: boolean;
 }) {
   const [pending, start] = useTransition();
   const [feedback, setFeedback] = useState("");
@@ -28,7 +28,7 @@ export function ChatActionForm({ action, label, children }: {
       finally { busy.current = false; }
     });
   }}>
-    <fieldset disabled={pending} className="space-y-2">{children}<Button variant="outline" type="submit" className="w-full" disabled={pending}>{pending ? "Guardando…" : label}</Button></fieldset>
+    <fieldset disabled={pending} className="space-y-2">{children}<Button variant={primary ? "default" : "outline"} type="submit" className="min-h-11 w-full" disabled={pending}>{pending ? (primary ? "Resolviendo…" : "Guardando…") : label}</Button></fieldset>
     {feedback && <p role="status" className="text-sm leading-5 text-muted-foreground">{feedback}</p>}
   </form>;
 }

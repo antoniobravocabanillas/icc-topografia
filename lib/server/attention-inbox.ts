@@ -11,7 +11,7 @@ export async function loadAttentionInbox(params: Record<string, string | string[
 
   const param = (key: string) => typeof params[key] === "string" ? params[key] as string : "";
   const q = param("q").trim().slice(0, 120);
-  const filter = ["open", "unassigned", "resolved", "all"].includes(param("filter")) ? param("filter") : "open";
+  const filter = ["open", "unassigned", "resolved", "all", "overdue"].includes(param("filter")) ? param("filter") : "open";
   const page = Math.min(10000, Math.max(1, Number.parseInt(param("page"), 10) || 1));
   const panel = param("panel") === "context" ? "context" : "conversation";
   const selectedId = param("conversation").slice(0, 160);
@@ -21,6 +21,7 @@ export async function loadAttentionInbox(params: Record<string, string | string[
   const where: Prisma.ChatConversationWhereInput = { AND: [scope,
     filter === "resolved" ? { status: "CLOSED" } : filter === "all" ? {} : { status: { not: "CLOSED" } },
     filter === "unassigned" ? { assignedToId: null, assignedProfileId: null } : {},
+    filter === "overdue" ? { nextActionCompletedAt: null, nextActionAt: { lt: new Date() } } : {},
     q ? { OR: ["customerName", "customerEmail", "customerPhone", "topic"].map(field => ({ [field]: { contains: q, mode: "insensitive" } })) } : {},
   ] };
   const [conversations, total, open, unassigned, profiles] = await Promise.all([

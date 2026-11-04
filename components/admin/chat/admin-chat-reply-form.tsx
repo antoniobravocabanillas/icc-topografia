@@ -44,7 +44,7 @@ export function AdminChatReplyForm({ replyAction }: AdminChatReplyFormProps) {
   }
 
   return (
-    <form ref={formRef} onSubmit={event => { event.preventDefault(); submit(new FormData(event.currentTarget)); }} className="grid gap-3 md:grid-cols-[1fr_auto]">
+    <form ref={formRef} onSubmit={event => { event.preventDefault(); submit(new FormData(event.currentTarget)); }} className="grid gap-3">
       <Textarea
         ref={textareaRef}
         name="body"
@@ -52,12 +52,12 @@ export function AdminChatReplyForm({ replyAction }: AdminChatReplyFormProps) {
         maxLength={8000}
         required
         readOnly={pending}
-        placeholder="Escribe una respuesta para el cliente. Enter envia, Shift+Enter salta linea."
-        className="min-h-20"
+        placeholder="Escribe tu respuesta…"
+        className="min-h-28 resize-y"
         onKeyDown={handleKeyDown}
       />
       {error && <p role="alert" className="text-sm text-destructive md:col-span-2">{error}</p>}
-      <Button type="submit" disabled={pending}>{pending ? "Enviando..." : "Responder"}</Button>
+      <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-muted-foreground">Enter para enviar · Mayús + Enter para una nueva línea</p><Button type="submit" disabled={pending}>{pending ? "Enviando..." : "Responder"}</Button></div>
     </form>
   );
 }
