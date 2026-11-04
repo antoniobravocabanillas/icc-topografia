@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { handleApiError } from "@/lib/server/api";
 import { requireUser } from "@/lib/server/authz";
-import { getSessionTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
+import type { Role } from "@prisma/client";
+import { getWorkspaceForUser } from "@/lib/terraqo/workspace-access";
 
 const adminRoles = new Set(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"]);
 
@@ -14,7 +15,9 @@ export async function GET() {
   }
 
   try {
-    const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
+    const workspace = await getWorkspaceForUser(session.user.id, session.user.role as Role);
+    if (!workspace?.active) return NextResponse.json({ error: "Ya no tienes acceso a un workspace." }, { status: 403, headers: { "Cache-Control": "private, no-store" } });
+    const terraqoWorkspaceId = workspace.id;
     const unreadNotifications = await prisma.notification.count({
       where: {
         terraqoWorkspaceId,

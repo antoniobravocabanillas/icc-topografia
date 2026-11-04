@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdtemp, writeFile, open, unlink } from "node:fs/promises";
+import { mkdtemp, writeFile, readFile, open, unlink } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import net from "node:net";
 import os from "node:os";
@@ -30,13 +30,13 @@ const env = {
   TERRAQO_WORKSPACE_PUBLICATION_V1: "true",
   TERRAQO_LOCAL_S22_TEST: "synthetic-only",
 };
-async function run(file, args) {
+async function run(file, args, timeout = 120000) {
   return (
     await execute(file, args, {
       cwd: root,
       env,
       windowsHide: true,
-      timeout: 120000,
+      timeout,
       maxBuffer: 32 * 1024 * 1024,
     })
   ).stdout;
@@ -80,7 +80,15 @@ try {
   assert.ok(ready, "Disposable local database did not start");
   const cli = path.join(root, "node_modules/prisma/build/index.js");
   const baseSql = path.join(directory, "schema.sql");
-  await run(process.execPath, [cli, "migrate", "diff", "--from-empty", "--to-schema-datamodel", "prisma/schema.prisma", "--script", "--output", baseSql]);
+  // Rehearse the committed additive SQL against the schema before invitations.
+  const currentSchema = await readFile(path.join(root, "prisma/schema.prisma"), "utf8");
+  assert.ok(currentSchema.includes("model TerraqoWorkspaceInvitation {"));
+  const baseline = currentSchema
+    .replace(/model TerraqoWorkspaceInvitation \{[\s\S]*?\n\}/, "")
+    .replace(/^.*TerraqoWorkspaceInvitation\[\].*\r?\n/gm, "");
+  const baselinePath = path.join(directory, "before.prisma");
+  await writeFile(baselinePath, baseline);
+  await run(process.execPath, [cli, "migrate", "diff", "--from-empty", "--to-schema-datamodel", baselinePath, "--script", "--output", baseSql]);
   const psqlArgs = [
     "-h",
     "127.0.0.1",
@@ -99,7 +107,11 @@ try {
     "-f",
     baseSql,
   ]);
+  await run(path.join(bin, "psql.exe"), [...psqlArgs, "--single-transaction", "-f", "prisma/migrations/20261104000100_workspace_invitations/migration.sql"]);
   console.log(await run(process.execPath, ["--import", "tsx", "scripts/test-workspace-membership-postgres.ts"]));
+  console.log(await run(process.execPath, ["--import", "tsx", "scripts/test-workspace-invitations-postgres.ts"]));
+  console.log(await run(process.execPath, ["--import", "tsx", "scripts/test-workspace-member-management-postgres.ts"]));
+  if (process.argv.includes("--http-e2e")) console.log(await run(process.execPath, ["--import", "tsx", "scripts/check-s22-authenticated-local.ts"], 600000));
 } catch (error) {
   console.error(
     String(error.message).replaceAll(password, "[redacted]").slice(0, 3500),

@@ -1,0 +1,79 @@
+"use client";
+
+import { useRef, useState } from "react";
+import { Copy, Plus, ShieldCheck } from "lucide-react";
+import styles from "./workspace-members.module.css";
+import { WorkspaceMemberRow } from "./workspace-member-row";
+
+export type WorkspaceMemberView = { id: string; name: string | null; email: string | null; role: string; active: boolean; updatedAt?: string; allowedRoles?: string[]; isSelf?: boolean };
+export type WorkspaceInvitationView = { id: string; email: string; role: string; status: string; expiresAt: string };
+const roles: Record<string, string> = { OWNER: "Propietario", ADMIN: "Administrador", MANAGER: "Gestor", VIEWER: "Lector", MEMBER: "Miembro", PROFESSIONAL: "Profesional", CLIENT: "Cliente" };
+
+export function WorkspaceMembers({ workspaceId, name, members: initialMembers, invitations: initialInvitations }: { workspaceId: string; name: string; members: WorkspaceMemberView[]; invitations: WorkspaceInvitationView[] }) {
+  const [members, setMembers] = useState(initialMembers);
+  const [invitations, setInvitations] = useState(initialInvitations);
+  const [query, setQuery] = useState("");
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState("VIEWER");
+  const [busy, setBusy] = useState(false);
+  const lock = useRef(false);
+  const operation = useRef<{ signature: string; key: string } | null>(null);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [link, setLink] = useState("");
+  const [confirmation, setConfirmation] = useState<{ id: string; action: "cancel" | "rotate" } | null>(null);
+
+  async function mutate(action: "create" | "cancel" | "rotate", invitationId?: string) {
+    if (lock.current) return;
+    lock.current = true;
+    setBusy(true); setError(""); setMessage(""); setLink("");
+    try {
+      // Keep the operation key after transport failure: retry must not create twice.
+      const signature = JSON.stringify([workspaceId, email.trim().toLowerCase(), role]);
+      if (!operation.current || operation.current.signature !== signature) operation.current = { signature, key: crypto.randomUUID() };
+      const response = await fetch("/api/terraqo/workspace-invitations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(action === "create" ? { action, workspaceId, email, role, operationKey: operation.current.key } : { action, workspaceId, invitationId }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "No se pudo guardar. Vuelve a intentarlo.");
+      if (result.token) setLink(`${window.location.origin}/invitacion-workspace#${result.token}`);
+      setMessage(action === "cancel" ? "Invitación cancelada. El enlace ya no permite ingresar." : result.replayed ? "La invitación ya se creó. Renueva su enlace si no llegaste a copiarlo." : "Enlace preparado. Compártelo con la persona invitada; no se ha enviado un correo.");
+      setConfirmation(null);
+      if (action === "create") { operation.current = null; setEmail(""); }
+      const refresh = await fetch(`/api/terraqo/workspace-invitations?workspaceId=${encodeURIComponent(workspaceId)}`, { cache: "no-store" });
+      if (!refresh.ok) throw new Error("El cambio se guardó, pero no pudimos actualizar la lista. Recarga la página.");
+      setInvitations((await refresh.json()).invitations);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "No se pudo conectar. Vuelve a intentarlo."); }
+    finally { lock.current = false; setBusy(false); }
+  }
+  const matches = (text: string) => text.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase());
+  return <section className={styles.surface} aria-busy={busy}>
+    <header className={styles.header}><h1>Equipo del workspace</h1><p>Gestiona quién puede acceder a {name}. Revisa los miembros y prepara nuevas invitaciones.</p></header>
+    <div className={styles.grid}>
+      <div className={styles.list}>
+        <div className={styles.toolbar}><h2>Miembros ({members.length})</h2><input aria-label="Buscar por nombre o correo" placeholder="Buscar por nombre o correo" value={query} onChange={event => setQuery(event.target.value)} /></div>
+        {members.filter(member => matches(`${member.name || ""} ${member.email || ""}`)).map(member => <WorkspaceMemberRow key={member.id} member={member} workspaceId={workspaceId} labels={roles} onSaved={updated => setMembers(previous => previous.map(item => item.id === updated.id ? updated : item))} />)}
+        {!members.some(member => matches(`${member.name || ""} ${member.email || ""}`)) && <p className={styles.empty}>No hay miembros que coincidan con tu búsqueda.</p>}
+        <section className={styles.section} aria-labelledby="invitations-heading"><h2 id="invitations-heading">Invitaciones</h2><p>Las 50 más recientes. Los enlaces vencen a los 7 días.</p>
+          {invitations.filter(invite => matches(invite.email)).map(invite => {
+            const pending = invite.status === "PENDING" && new Date(invite.expiresAt).getTime() > Date.now();
+            const state = invite.status === "ACCEPTED" ? "Aceptada" : invite.status === "CANCELLED" ? "Cancelada" : pending ? "Pendiente" : "Vencida";
+            return <div key={invite.id}><div className={styles.row}><div className={styles.person}><strong>{invite.email}</strong><div className={styles.meta}><span>{roles[invite.role] || invite.role}</span><span className={`${styles.badge} ${pending ? styles.pending : ""}`}>{state}</span></div></div>
+              {pending && <div className={styles.actions}><button disabled={busy} onClick={() => setConfirmation({ id: invite.id, action: "rotate" })}>Renovar enlace</button><button disabled={busy} onClick={() => setConfirmation({ id: invite.id, action: "cancel" })}>Cancelar</button></div>}
+            </div>{confirmation?.id === invite.id && <div className={styles.confirm}><p>{confirmation.action === "cancel" ? "¿Cancelar esta invitación? La persona ya no podrá aceptar el enlace." : "El enlace anterior dejará de funcionar. El nuevo conserva la fecha de vencimiento."}</p><div className={styles.actions}><button disabled={busy} onClick={() => void mutate(confirmation.action, invite.id)}>Confirmar</button><button disabled={busy} onClick={() => setConfirmation(null)}>Volver</button></div></div>}</div>;
+          })}
+          {!invitations.some(invite => matches(invite.email)) && <p className={styles.empty}>No hay invitaciones para mostrar.</p>}
+        </section>
+      </div>
+      <aside className={styles.panel} aria-labelledby="invite-heading"><h2 id="invite-heading">Invitar miembro</h2><p>El enlace solo podrá aceptarse con el correo verificado de la persona invitada.</p>
+        <form onSubmit={event => { event.preventDefault(); void mutate("create"); }}><label>Correo electrónico<input type="email" required maxLength={254} autoComplete="email" value={email} disabled={busy} onChange={event => setEmail(event.target.value)} placeholder="nombre@empresa.com" /></label>
+          <label>Rol<select value={role} disabled={busy} onChange={event => setRole(event.target.value)}>{["VIEWER", "MEMBER", "PROFESSIONAL", "CLIENT"].map(value => <option key={value} value={value}>{roles[value]}</option>)}</select></label>
+          <p>La invitación no concede administración ni modifica un rol que la persona ya tenga.</p>
+          <button className={styles.primary} disabled={busy} type="submit"><Plus size={18} aria-hidden="true" />{busy ? "Guardando…" : "Crear enlace de invitación"}</button>
+        </form>
+        <div role="status" aria-live="polite">{message && <div className={styles.notice}>{message}</div>}</div>
+        {error && <div role="alert" className={`${styles.notice} ${styles.error}`}>{error}</div>}
+        {link && <div className={styles.link}><label htmlFor="invitation-link">Enlace privado</label><input id="invitation-link" readOnly value={link} onFocus={event => event.currentTarget.select()} /><button onClick={async () => { try { await navigator.clipboard.writeText(link); setMessage("Enlace copiado. Compártelo únicamente con la persona invitada."); } catch { setError("No pudimos copiarlo. Selecciona el enlace y cópialo manualmente."); } }}><Copy size={16} aria-hidden="true" />Copiar enlace</button></div>}
+        <p className={styles.notice}><ShieldCheck size={18} aria-hidden="true" /> El workspace debe conservar al menos un administrador activo.</p>
+      </aside>
+    </div>
+  </section>;
+}

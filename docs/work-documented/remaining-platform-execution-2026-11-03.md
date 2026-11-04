@@ -1,5 +1,7 @@
 # Remaining platform execution — 3 November 2026
 
+Latest S22 local gate: authenticated Next.js + PostgreSQL + Chromium now passes without hydration/runtime/500 diagnostics. Hydration warning was caused by screenshot caret mutation; corrected the harness. Lost workspace access returns notification-pulse 403 and stops client polling, verified beyond both polling intervals. Next: reconcile released attention changes and prepare staging preflight; Evaluator/granular permissions and email delivery remain unfinished S22 requirements. Details at the top of s22-workspace-administration-2026-11-03.md. No hosted environment changed.
+
 Use with visual-reconciliation-2026-11-02.md. This is an ordered execution queue, not a percentage or a release declaration. S06/S07/S08 interaction fixes are in staging candidate 2ece409; S18 inline revocation is local commit 1427d37. The candidate's postdeploy S23 acceptance PASSED, including hosted expiry and revocation. Independent readback confirmed zero synthetic users/requests/collections/worklogs.
 
 ## Next executable blocks
@@ -21,3 +23,5 @@ S22 progress: local last-admin guard, atomic staff unlink and preservation of ex
 - Real email receipt requires its own authorized delivery test; mocked HTTP and UI messages are not delivery proof.
 
 No new production operation, migration, payment or customer mutation is performed by this document. Daybreak remains excluded.
+
+4 November S22 update: invitation model/service, bounded authenticated routes, page-23 members/invitations UI and shared recipient acceptance implemented locally. Workspace-scoped role/suspend/reactivate controls now include authority hierarchy, last-admin guard, stale-version rejection, atomic audit and inline confirmation. Disposable PostgreSQL lifecycle/concurrency tests and synthetic Chromium component tests pass. Remaining: Evaluator/granular-permission semantics, delivery integration and real authenticated/hosted acceptance. Next executable block is local authenticated Next.js E2E with disposable PostgreSQL. See latest S22 checkpoint; item 3 remains open. Active isolated tree: `icc-topografia-s22`, branch `codex/s22-workspace-admin-20261104`; reconcile live attention release before any deployment.

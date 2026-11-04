@@ -981,6 +981,7 @@ enum TerraqoFileCategory {
 }
 
 model User {
+  workspaceInvitationsCreated TerraqoWorkspaceInvitation[] @relation("WorkspaceInvitationCreator")
   requestedPublicationReviews         TerraqoPublicationReview[]        @relation("PublicationRequester")
   decidedPublicationReviews           TerraqoPublicationReview[]        @relation("PublicationDecider")
   revokedPublicationReviews           TerraqoPublicationReview[]        @relation("PublicationRevoker")
@@ -2490,6 +2491,7 @@ model ActivityLog {
 }
 
 model TerraqoWorkspace {
+  invitations TerraqoWorkspaceInvitation[]
   publicationReviews       TerraqoPublicationReview[]
   nativeWorklogOperations  TerraqoNativeWorklogOperation[]
   billingAccounts          TerraqoBillingAccount[]
@@ -3117,6 +3119,32 @@ model TerraqoUsageBucket {
   used     Int    @default(0)
 
   @@unique([ownerKey, period, metric])
+  @@schema("icc")
+}
+
+model TerraqoWorkspaceInvitation {
+  id String @id @default(cuid())
+  workspaceId String
+  workspace TerraqoWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdById String
+  createdBy User @relation("WorkspaceInvitationCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  email String
+  role TerraqoMemberRole @default(VIEWER)
+  tokenHash String @unique
+  status String @default("PENDING")
+  expiresAt DateTime
+  acceptedById String?
+  acceptedAt DateTime?
+  cancelledAt DateTime?
+  resendCount Int @default(0)
+  lastIssuedAt DateTime @default(now())
+  operationKey String
+  operationFingerprint String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workspaceId, operationKey])
+  @@index([workspaceId, email, status])
   @@schema("icc")
 }
 

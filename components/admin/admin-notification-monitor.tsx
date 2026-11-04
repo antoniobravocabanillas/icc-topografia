@@ -31,6 +31,7 @@ export function AdminNotificationMonitor() {
   const [event, setEvent] = useState<PulseEvent | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
+  const [hasAccess, setHasAccess] = useState(true);
   const initializedRef = useRef(false);
   const snapshotRef = useRef("");
 
@@ -39,6 +40,13 @@ export function AdminNotificationMonitor() {
       cache: "no-store",
       signal,
     });
+    if (response.status === 401 || response.status === 403) {
+      setHasAccess(false);
+      setUnreadCount(0);
+      setEvent(null);
+      setIsVisible(false);
+      return false;
+    }
     if (!response.ok) return false;
     const payload = await response.json() as PulsePayload;
     const nextSnapshot = JSON.stringify([
@@ -72,7 +80,7 @@ export function AdminNotificationMonitor() {
     installTerraqoAudioUnlock();
   }, []);
 
-  useAdaptivePolling(poll, { policy: ALERT_POLLING_POLICY });
+  useAdaptivePolling(poll, { policy: ALERT_POLLING_POLICY, enabled: hasAccess });
 
   return (
     <aside aria-label="Avisos y preferencias de sonido" className="mb-6 flex flex-wrap items-center justify-end gap-3">

@@ -32,6 +32,7 @@ function isSharedRoute(pathname: string) {
     "/cuenta",
     "/registro",
     "/reuniones",
+    "/invitacion-workspace",
     "/_next",
     "/favicon.ico",
     "/robots.txt",
