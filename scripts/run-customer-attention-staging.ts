@@ -7,6 +7,7 @@ import { PrismaClient } from "@prisma/client";
 import { assertAttentionTestTarget, attentionStagingOrigin, attentionStagingSite } from "./lib/customer-attention-test-target";
 import { verifyAuthenticatedAttention } from "./test-customer-attention-authenticated";
 
+let step = "environment";
 async function main() {
   const stage = process.argv[2]; assert.ok(["prepare", "verify"].includes(stage));
   assert.equal(process.env.NETLIFY, "true");
@@ -36,16 +37,19 @@ async function main() {
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), marker);
   };
+  step = "served-candidate";
   await assertServed();
   const db = new PrismaClient();
   const workspaceIds: string[] = [];
   try {
+    step = "migration-ledger";
     const ledger = await db.$queryRaw<Array<{ checksum: string }>>`SELECT checksum FROM icc._prisma_migrations WHERE migration_name = '20261104000200_customer_attention_followup' AND finished_at IS NOT NULL AND rolled_back_at IS NULL`;
     assert.equal(ledger.length, 1);
     const sql = await readFile("prisma/migrations/20261104000200_customer_attention_followup/migration.sql");
     assert.equal(ledger[0].checksum, createHash("sha256").update(sql).digest("hex"));
     const columns = await db.$queryRaw<Array<{ column_name: string }>>`SELECT column_name FROM information_schema.columns WHERE table_schema='icc' AND table_name='ChatConversation' AND column_name IN ('nextAction','nextActionAt','nextActionCompletedAt')`;
     assert.equal(columns.length, 3);
+    step = "fixtures";
     const suffix = randomUUID();
     await mkdir("output", { recursive: true });
     for (const label of ["a", "b"]) {
@@ -55,7 +59,9 @@ async function main() {
       await writeFile("output/attention-staging-fixtures.json", JSON.stringify({ ...marker, workspaceIds }));
       await db.terraqoWorkspace.create({ data: { id, name: `Attention gate ${label} ${suffix}`, slug: `attention-gate-${label}-${suffix}`, modules: { create: { code: "CUSTOMER_CHAT", active: true } } } });
     }
+    step = "authenticated-browser";
     await verifyAuthenticatedAttention(db, attentionStagingOrigin, workspaceIds[0], workspaceIds[1]);
+    step = "final-candidate";
     await assertServed();
   } finally {
     try {
@@ -68,6 +74,7 @@ async function main() {
   console.log(`PASS attention staging verified: commit=${commit}; deploy=${marker.deployId}; fixtures removed.`);
 }
 main().catch(error => {
+  console.error(JSON.stringify({ attentionStep: step, errorType: /^[A-Za-z]{1,40}$/.test(error?.name || "") ? error.name : "Error" }));
   // Errors can contain synthetic credentials/cookies; emit only a category.
   console.error(JSON.stringify({ attentionStagingFailed: true, code: typeof error?.code === "string" && /^[A-Z0-9_]{1,32}$/.test(error.code) ? error.code : "GATE_REJECTED" }));
   process.exitCode = 1;
