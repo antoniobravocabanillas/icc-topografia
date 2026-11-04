@@ -10,7 +10,7 @@ import { PrismaClient } from "@prisma/client";
 import { mutateCustomerChat, ChatOperationError } from "../lib/server/customer-chat-operations";
 import { postCustomerChat, PublicChatError } from "../lib/server/public-customer-chat";
 import { saveAttentionSettings } from "../lib/server/customer-attention-settings";
-import { defaultAttentionConfig, attentionAvailability, attentionAccentText } from "../lib/terraqo/customer-attention-config";
+import { attentionConfigSchema, defaultAttentionConfig, attentionAvailability, attentionAccentText } from "../lib/terraqo/customer-attention-config";
 import { customerChatSelect } from "../lib/server/customer-chat-projection";
 async function main() {
  const url = new URL(process.env.DATABASE_URL || "");
@@ -117,6 +117,14 @@ async function main() {
   await assert.rejects(mutateCustomerChat(db, commercial, visitorId, { ...outcome, status: "LOST" }), ChatOperationError);
   await assert.rejects(mutateCustomerChat(db, commercial, chat.id, { ...outcome, status: "LOST", operationKey: randomUUID() }), ChatOperationError);
   const config = defaultAttentionConfig("Synthetic company");
+  config.domains = ["company.example"];
+  config.installation = { position: "left", label: "Consultar disponibilidad", pages: ["/servicios"] };
+  const legacyConfig: Partial<typeof config> = { ...config }; delete legacyConfig.installation;
+  assert.equal(attentionConfigSchema.parse(legacyConfig).installation.position, "right");
+  for (const invalid of ["//evil.example", "/foo?token=secret", "/foo#fragment", "https://evil.example"]) {
+    assert.equal(attentionConfigSchema.safeParse({ ...config, installation: { ...config.installation, pages: [invalid] } }).success, false);
+  }
+
   await assert.rejects(saveAttentionSettings(db, w.id, a.id, 0, "draft", config));
   await db.terraqoWorkspaceMember.create({ data: { workspaceId: w.id, userId: a.id, role: "OWNER" } });
   await db.terraqoWorkspace.update({ where: { id: w.id }, data: { settings: { unrelatedSetting: "preserve" } } });

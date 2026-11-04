@@ -104,3 +104,19 @@ Esta sección sustituye las listas antiguas de pendientes anteriores.
 4. Avisos externos, adjuntos, estados de entrega verificables y medición de recuperación/fiabilidad no están completos. No prometer correo/WhatsApp ni inventar tasas/costos. Integración de pagos y mensajería bidireccional siguen como fase posterior explícita del documento.
 5. Preparar migración productiva EXACTA con ledger y backup fresco/readback, rollback del código compatible con columnas aditivas; publicar ambos sitios y verificar dominios reales. Autorización del usuario para esta actualización ya existe; no volver a pedirla por rutina.
 6. Aún NO se aplicó migración en producción ni se desplegó atención. No declarar 100% ni entrega publicada.
+
+
+## Continuación: instalación web configurable — 2026-11-04
+- Añadido `public/terraqo-attention.js`: botón flotante con Shadow DOM, contraste calculado, texto/posición/rutas desde la configuración publicada. Abre la atención en otra pestaña con noopener/noreferrer. No es un iframe ni un chat incrustado; la interfaz lo explica expresamente.
+- Configuración incluye código copiable, posición izquierda/derecha, texto y rutas permitidas. Vacío permite todas las páginas; prefijos respetan límites de segmentos. Cambios siguen borrador/publicación/rollback. Configuraciones antiguas reciben defaults sin migración.
+- CORS habilitado únicamente para configuración pública después de comprobar origen y publicación. Sin credenciales, sin habilitar CORS en historial privado. Dominios no autorizados: 403 sin cabecera permisiva.
+- Navegación SPA revisa visibilidad sin sustituir history del sitio anfitrión. Previene instalaciones duplicadas y recupera el temporizador con pageshow/bfcache.
+- Pruebas PostgreSQL/HTTP/Chrome reales PASS: compatibilidad de configuración anterior, rechazo de rutas ambiguas, origen permitido/rechazado, no exposición de historial, instalación duplicada, posición, móvil 390px, filtro al navegar y pestaña sin opener.
+- Captura inspeccionada: `output/customer-attention-install-mobile.png` en candidato aislado.
+- Build completo PASS (101 páginas), ESLint focalizado PASS, encoding PASS y diff check PASS. Primer build detectó sombreado TypeScript de history en el test; corregido con window.history y repetido el gate completo exitosamente. Artefactos sintéticos NO desplegables.
+- Readback Netlify: producción plataforma y staging siguen exactamente los commits/deploys documentados; ICC sigue sin commit_ref. Ningún despliegue ni migración remota en esta continuación.
+
+### Próximo bloque
+- Preparar gate remoto de atención separado: el runner del candidato solo conoce b1-b3/b4/b5; no desactivar el plugin para pasar. Necesita identidad de candidato y pruebas autenticadas administrador/asesor con limpieza de fixtures.
+- Avisos: Notification actual solo cubre bandeja interna, no tiene estados/reintentos de entrega. `sendTransactionalEmail` confirma aceptación del proveedor, no recepción. Implementar contacto verificado/opt-in transaccional, outbox persistente, worker idempotente y estados verificables antes de prometer avisos al visitante; no reutilizar Notification como prueba de email entregado.
+- Siguen pendientes los restantes campos/reglas/retención/adjuntos del documento y publicación de ambos sitios. Este avance no equivale al alcance completo ni a lanzamiento.

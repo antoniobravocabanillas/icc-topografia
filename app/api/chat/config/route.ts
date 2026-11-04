@@ -6,7 +6,13 @@ import { fail, handleApiError } from "@/lib/server/api";
 
 export async function GET(request: Request) {
   try {
-    return NextResponse.json({ config: publicAttentionPresentation(await resolveAttentionRequest(request)) }, { headers: { "Cache-Control": "no-store" } });
+    const context = await resolveAttentionRequest(request);
+    const headers: Record<string, string> = { "Cache-Control": "no-store", Vary: "Origin" };
+    // Resolve and authorize the exact origin before exposing public installation data.
+    // Never enable credentials or CORS on private chat-history endpoints.
+    const origin = request.headers.get("origin");
+    if (context.published && origin) headers["Access-Control-Allow-Origin"] = origin;
+    return NextResponse.json({ config: publicAttentionPresentation(context) }, { headers });
   } catch (error) {
     if (error instanceof PublicChatError) return fail(error.message, error.status);
     return handleApiError(error);
