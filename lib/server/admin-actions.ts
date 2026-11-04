@@ -1,6 +1,7 @@
 "use server";
 
 import bcrypt from "bcryptjs";
+import { mutateCustomerChat } from "./customer-chat-operations";
 import {randomUUID} from "node:crypto";
 import type {StaffPolicyState} from "@/lib/staff-policy-state";
 import {QuoteStatus} from "@prisma/client";
@@ -1130,63 +1131,71 @@ export async function deleteCmsPageAction(id: string) {
   revalidatePath("/admin/contenidos");
 }
 
-export async function takeChatConversationAction(id: string) {
-  const { session, workspaceId } = await requireActionRole(["EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
-  await requireOwnedEntity("Conversacion", prisma.chatConversation.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
-  const [profile, userId] = await Promise.all([
-    session?.user?.id ? prisma.staffProfile.findFirst({ where: { userId: session.user.id, terraqoWorkspaceId: workspaceId } }) : null,
-    existingUserId(session.user.id)
-  ]);
+async function requireChatActionRole(roles: Role[]) {
+  const context = await requireActionRole(roles);
+  await requireWorkspaceModule("CUSTOMER_CHAT", context.workspaceId);
+  return context;
+}
 
-  await prisma.chatConversation.update({
-    where: { id },
-    data: {
-      assignedToId: userId,
-      assignedProfileId: profile?.id || undefined
-    }
-  });
+export async function linkChatOpportunityAction(id: string, form: FormData) {
+  const { session, role, workspaceId } = await requireChatActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  await requireWorkspaceModule("CRM", workspaceId);
+  await mutateCustomerChat(prisma, { workspaceId, userId: session.user.id, canManage: role !== "SALES", canCommercial: true }, id, { kind: "linkOpportunity", opportunityId: value(form, "opportunityId") || "" });
+  revalidatePath("/admin/chat");
+}
+export async function recordChatOutcomeAction(id: string, form: FormData) {
+  const { session, role, workspaceId } = await requireChatActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  await requireWorkspaceModule("CRM", workspaceId);
+  await mutateCustomerChat(prisma, { workspaceId, userId: session.user.id, canManage: role !== "SALES", canCommercial: true }, id, { kind: "outcome", opportunityId: value(form, "opportunityId") || "", expectedStatus: value(form, "expectedStatus") || "", status: value(form, "status") || "", reason: value(form, "reason") || "", operationKey: value(form, "operationKey") || "" });
+  revalidatePath("/admin/chat"); revalidatePath("/admin/chat/resultados"); revalidatePath("/admin/oportunidades");
+}
+export async function createChatOpportunityAction(id: string, form: FormData) {
+  const { session, role, workspaceId } = await requireChatActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  await requireWorkspaceModule("CRM", workspaceId);
+  await mutateCustomerChat(prisma, { workspaceId, userId: session.user.id, canManage: role !== "SALES", canCommercial: true }, id, { kind: "createOpportunity", companyId: value(form, "companyId") || "", title: value(form, "title") || "", operationKey: value(form, "operationKey") || "" });
+  revalidatePath("/admin/chat"); revalidatePath("/admin/oportunidades");
+}
+
+export async function addChatInternalNoteAction(id: string, formData: FormData) {
+  const { session, role, workspaceId } = await requireChatActionRole(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SUPPORT"]);
+  await mutateCustomerChat(prisma, { workspaceId, userId: session.user.id, canManage: ["EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"].includes(role) }, id, { kind: "note", body: value(formData, "note") || "", operationKey: value(formData, "operationKey") || "" });
+  revalidatePath("/admin/chat");
+}
+
+export async function scheduleChatFollowupAction(id: string, formData: FormData) {
+  const { session, role, workspaceId } = await requireChatActionRole(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SUPPORT"]);
+  const date = value(formData, "dueAt") || "";
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(date)) throw new Error("Indica una fecha válida.");
+  await mutateCustomerChat(prisma, { workspaceId, userId: session.user.id, canManage: ["EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"].includes(role) }, id, { kind: "followup", title: value(formData, "nextAction") || "", dueAt: new Date(`${date}:00-05:00`) });
+  revalidatePath("/admin/chat");
+}
+
+export async function completeChatFollowupAction(id: string, formData: FormData) {
+  const { session, role, workspaceId } = await requireChatActionRole(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SUPPORT"]);
+  await mutateCustomerChat(prisma, { workspaceId, userId: session.user.id, canManage: ["EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"].includes(role) }, id, { kind: "completeFollowup", expectedAt: new Date(value(formData, "expectedAt") || "") });
+  revalidatePath("/admin/chat");
+}
+
+export async function takeChatConversationAction(id: string) {
+  const { session, workspaceId } = await requireChatActionRole(["EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  await mutateCustomerChat(prisma, { workspaceId, userId: session.user.id, canManage: true }, id, { kind: "take" });
   revalidatePath("/admin/chat");
 }
 
 export async function assignChatProfileAction(id: string, formData: FormData) {
-  const { workspaceId } = await requireActionRole(["EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
-  await requireOwnedEntity("Conversacion", prisma.chatConversation.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
-  const profileId = value(formData, "profileId");
-  if (profileId) {
-    await requireOwnedEntity("Perfil", prisma.staffProfile.findFirst({ where: { id: profileId, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
-  }
-
-  await prisma.chatConversation.update({
-    where: { id },
-    data: {
-      assignedProfileId: profileId || null,
-      assignedToId: undefined
-    }
-  });
+  const { session, workspaceId } = await requireChatActionRole(["EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  await mutateCustomerChat(prisma, { workspaceId, userId: session.user.id, canManage: true }, id, { kind: "assign", profileId: value(formData, "profileId") || "", expectedAssignment: value(formData, "expectedAssignment") || "" });
   revalidatePath("/admin/chat");
 }
 
 export async function closeChatConversationAction(id: string) {
-  const { session, role, workspaceId } = await requireActionRole(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SUPPORT"]);
-  await requireOwnedEntity("Conversacion", prisma.chatConversation.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
-  if (!["ADMIN", "EDITOR", "SUPER_ADMIN", "COMMERCIAL_ADMIN"].includes(role)) {
-    const profile = await prisma.staffProfile.findFirst({ where: { userId: session.user.id, terraqoWorkspaceId: workspaceId } });
-    const conversation = await prisma.chatConversation.findUnique({
-      where: { id },
-      select: { assignedProfileId: true, assignedToId: true }
-    });
-    const canClose = conversation?.assignedToId === session.user.id || (profile?.id && conversation?.assignedProfileId === profile.id);
-    if (!canClose) throw new Error("Este chat no esta asignado a tu perfil.");
-  }
-  await prisma.chatConversation.update({
-    where: { id },
-    data: { status: "CLOSED" }
-  });
+  const { session, role, workspaceId } = await requireChatActionRole(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SUPPORT"]);
+  await mutateCustomerChat(prisma, { workspaceId, userId: session.user.id, canManage: ["EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"].includes(role) }, id, { kind: "close" });
   revalidatePath("/admin/chat");
 }
 
 export async function deleteChatConversationAction(id: string) {
-  const { workspaceId } = await requireActionRole(["EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  const { workspaceId } = await requireChatActionRole(["EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
   await requireOwnedEntity("Conversacion", prisma.chatConversation.findFirst({ where: { id, terraqoWorkspaceId: workspaceId }, select: { id: true } }));
   await prisma.chatConversation.delete({ where: { id } });
   revalidatePath("/admin/chat");
@@ -1194,39 +1203,9 @@ export async function deleteChatConversationAction(id: string) {
 }
 
 export async function sendAdminChatMessageAction(id: string, formData: FormData) {
-  const body = value(formData, "body");
-  if (!body) return;
-  const { session, role, workspaceId } = await requireActionRole(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SUPPORT"]);
-  const [profile, userId] = await Promise.all([
-    prisma.staffProfile.findFirst({ where: { userId: session.user.id, terraqoWorkspaceId: workspaceId } }),
-    existingUserId(session.user.id)
-  ]);
-  const conversation = await prisma.chatConversation.findFirst({
-    where: { id, terraqoWorkspaceId: workspaceId },
-    select: { assignedProfileId: true, assignedToId: true }
-  });
-  if (!conversation) throw new Error("Conversacion no pertenece al workspace activo.");
-  const canManageAnyChat = ["ADMIN", "EDITOR", "SUPER_ADMIN", "COMMERCIAL_ADMIN"].includes(role);
-  const canReply =
-    canManageAnyChat ||
-    conversation?.assignedToId === session.user.id ||
-    (profile?.id && conversation?.assignedProfileId === profile.id);
-
-  if (!canReply) throw new Error("Este chat no esta asignado a tu perfil.");
-
-  await prisma.chatConversation.update({
-    where: { id },
-    data: {
-      status: "ACTIVE",
-      assignedToId: userId || conversation?.assignedToId || null,
-      assignedProfileId: conversation?.assignedProfileId || profile?.id || undefined,
-      messages: {
-        create: {
-          sender: "admin",
-          body
-        }
-      }
-    }
+  const { session, role, workspaceId } = await requireChatActionRole(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SUPPORT"]);
+  await mutateCustomerChat(prisma, { workspaceId, userId: session.user.id, canManage: ["EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"].includes(role) }, id, {
+    kind: "reply", body: value(formData, "body") || "", operationKey: value(formData, "operationKey") || "",
   });
   revalidatePath("/admin/chat");
 }

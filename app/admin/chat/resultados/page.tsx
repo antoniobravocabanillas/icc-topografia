@@ -1,0 +1,26 @@
+import Link from "next/link";
+import { requireAdminPage } from "@/lib/server/admin-page-auth";
+import { getSessionTerraqoWorkspaceId, requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
+import { prisma } from "@/lib/prisma";
+import { attentionMetrics } from "@/lib/server/customer-attention-metrics";
+export const dynamic = "force-dynamic";
+const labels: Record<string, string> = { OPEN: "Abierta", DISCOVERY: "Exploración", PROPOSAL: "Propuesta", NEGOTIATION: "Negociación", WON: "Ganada declarada", LOST: "Perdida", ARCHIVED: "Archivada", PENDING: "Venta pendiente", CONFIRMED: "Venta confirmada", INVOICED: "Facturada", PARTIALLY_PAID: "Pago parcial registrado", PAID: "Pagada según registro", CANCELLED: "Cancelada" };
+export default async function Page({ searchParams }: { searchParams: Promise<{ days?: string }> }) {
+  await requireAdminPage(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  const workspaceId = await getSessionTerraqoWorkspaceId();
+  await requireWorkspaceModule("CUSTOMER_CHAT", workspaceId); await requireWorkspaceModule("CRM", workspaceId);
+  const requested = Number((await searchParams).days);
+  const days = [7, 30, 90].includes(requested) ? requested : 30;
+  const report = await attentionMetrics(prisma, workspaceId, days);
+  const { counts } = report;
+  const percent = (n: number) => counts.total ? `${(n / counts.total * 100).toFixed(1)}%` : "—";
+  const date = (value: Date) => value.toLocaleString("es-PE", { timeZone: "America/Lima", dateStyle: "medium", timeStyle: "short" });
+  return <section className="space-y-7">
+    <Link href="/admin/chat" className="inline-flex min-h-11 items-center text-sm">← Atención</Link>
+    <header className="flex flex-wrap items-end justify-between gap-4"><div><h1 className="font-display text-3xl font-semibold">De la consulta al resultado</h1><p className="mt-2 text-sm text-muted-foreground">Conversaciones iniciadas del {date(report.since)} al {date(report.until)} · hora de Perú.</p></div><nav aria-label="Período del informe" className="flex gap-2">{[7, 30, 90].map(value => <Link key={value} aria-current={value === days ? "page" : undefined} className={`inline-flex min-h-11 items-center rounded-md border px-4 text-sm ${value === days ? "bg-primary text-primary-foreground" : "bg-background"}`} href={`/admin/chat/resultados?days=${value}`}>{value} días</Link>)}</nav></header>
+    <div className="grid gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-2 xl:grid-cols-4">{[["Consultas iniciadas", String(counts.total), "Base del período"], ["Con respuesta humana", percent(counts.answered), `${counts.answered} de ${counts.total} consultas`], ["Con oportunidad vinculada", percent(counts.linked), `${counts.linked} de ${counts.total} consultas`], ["Seguimientos vencidos", String(report.overdue), "Todas las consultas abiertas, ahora"]].map(([label, value, detail]) => <div className="space-y-3 bg-background p-5" key={label}><h2 className="text-sm text-muted-foreground">{label}</h2><p className="text-3xl font-semibold tabular-nums">{value}</p><p className="text-xs text-muted-foreground">{detail}</p></div>)}</div>
+    <p className="text-sm leading-6 text-muted-foreground">Primera respuesta humana: {counts.averageMinutes === null ? "sin respuestas para calcular" : `${counts.averageMinutes.toFixed(1)} minutos de promedio sobre ${counts.answered} consultas respondidas`}. {counts.resolved} consultas resueltas. El tiempo incluye horas fuera del horario comercial.</p>
+    <div className="grid gap-6 lg:grid-cols-2"><section className="rounded-xl border bg-background p-6"><h2 className="text-xl font-semibold">Oportunidades únicas</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">Estado actual de las oportunidades relacionadas con las consultas del período. Cada oportunidad se cuenta una sola vez.</p><dl className="mt-5 divide-y">{report.opportunities.map(item => <div className="flex justify-between py-3 text-sm" key={item.status}><dt>{labels[item.status] || item.status}</dt><dd className="font-semibold tabular-nums">{item.count}</dd></div>)}</dl>{!report.opportunities.length && <p className="mt-6 text-sm text-muted-foreground">Todavía no hay oportunidades vinculadas.</p>}</section>
+    <section className="rounded-xl border bg-background p-6"><h2 className="text-xl font-semibold">Ventas relacionadas</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">Importes separados por moneda y estado. Una venta aparece una vez aunque participe en varias conversaciones.</p><div className="mt-5 divide-y">{report.sales.map(item => <div key={`${item.currency}:${item.status}`} className="flex flex-wrap justify-between gap-2 py-3 text-sm"><span>{labels[item.status] || item.status} · {item.count}</span><strong className="tabular-nums">{item.currency} {item.amount}</strong></div>)}</div>{!report.sales.length && <p className="mt-6 text-sm text-muted-foreground">Sin ventas registradas para estas oportunidades.</p>}<p className="mt-5 border-t pt-4 text-xs leading-5 text-muted-foreground">El estado pagada refleja el registro comercial, no confirma un abono bancario. Las canceladas se muestran por separado. La vinculación documenta una relación y no prueba que la atención causó la venta.</p></section></div>
+  </section>;
+}

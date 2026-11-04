@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getDefaultTerraqoWorkspaceId } from "@/lib/terraqo/workspace-scope";
 
@@ -10,13 +11,14 @@ type BotAnswer = {
 
 const humanIntent = ["asesor", "humano", "persona", "vendedor", "cotizar", "llamar", "whatsapp", "comprar", "precio"];
 
-export async function answerWithLocalKnowledge(question: string): Promise<BotAnswer> {
-  const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
+export async function answerWithLocalKnowledge(question: string, workspaceId?: string, transaction?: Prisma.TransactionClient): Promise<BotAnswer> {
+  const terraqoWorkspaceId = workspaceId || await getDefaultTerraqoWorkspaceId();
+  const db = transaction || prisma;
   const normalized = normalize(question);
   const wantsHuman = humanIntent.some((word) => normalized.includes(word));
   if (wantsHuman) {
     return {
-      answer: "Puedo derivarte con un asesor para ayudarte mejor. Iniciaremos una conversacion humana para que el equipo ICC tome tu caso.",
+      answer: "Puedo derivarte con un asesor para ayudarte mejor. Iniciaremos una conversacion humana para que el equipo tome tu caso.",
       source: "human-handoff",
       confidence: 1,
       shouldEscalate: true
@@ -24,10 +26,10 @@ export async function answerWithLocalKnowledge(question: string): Promise<BotAns
   }
 
   const [faqs, services, products, projects] = await Promise.all([
-    prisma.faq.findMany({ where: { active: true, approved: true, terraqoWorkspaceId }, orderBy: [{ usageCount: "desc" }, { position: "asc" }], take: 80 }),
-    prisma.service.findMany({ where: { isPublished: true, terraqoWorkspaceId }, take: 80 }),
-    prisma.product.findMany({ where: { isActive: true, isVisible: true, terraqoWorkspaceId }, include: { category: true }, take: 80 }),
-    prisma.project.findMany({ where: { isPublic: true, terraqoWorkspaceId }, take: 40 })
+    db.faq.findMany({ where: { active: true, approved: true, terraqoWorkspaceId }, orderBy: [{ usageCount: "desc" }, { position: "asc" }], take: 80 }),
+    db.service.findMany({ where: { isPublished: true, terraqoWorkspaceId }, take: 80 }),
+    db.product.findMany({ where: { isActive: true, isVisible: true, terraqoWorkspaceId }, include: { category: true }, take: 80 }),
+    db.project.findMany({ where: { isPublic: true, terraqoWorkspaceId }, take: 40 })
   ]);
 
   const candidates = [
@@ -43,7 +45,7 @@ export async function answerWithLocalKnowledge(question: string): Promise<BotAns
 
   if (scored && scored.score >= 0.2) {
     if (scored.candidate.type === "faq") {
-      await prisma.faq.update({ where: { id: scored.candidate.id }, data: { usageCount: { increment: 1 } } });
+      await db.faq.update({ where: { id: scored.candidate.id }, data: { usageCount: { increment: 1 } } });
     }
     return {
       answer: scored.candidate.answer,
@@ -53,13 +55,8 @@ export async function answerWithLocalKnowledge(question: string): Promise<BotAns
     };
   }
 
-  const existingQuestion = await prisma.botUnansweredQuestion.findFirst({ where: { question, terraqoWorkspaceId } });
-  if (existingQuestion) {
-    await prisma.botUnansweredQuestion.update({ where: { id: existingQuestion.id }, data: { frequency: { increment: 1 } } });
-  } else {
-    await prisma.botUnansweredQuestion.create({ data: { question, source: "web-chatbot", terraqoWorkspaceId } });
-  }
-  await prisma.notification.create({
+  await db.botUnansweredQuestion.upsert({ where: { terraqoWorkspaceId_question: { question, terraqoWorkspaceId } }, create: { question, source: "web-chatbot", terraqoWorkspaceId }, update: { frequency: { increment: 1 } } });
+  await db.notification.create({
     data: {
       type: "FAQ",
       title: "Pregunta sin respuesta del chatbot",
@@ -70,7 +67,7 @@ export async function answerWithLocalKnowledge(question: string): Promise<BotAns
   });
 
   return {
-    answer: "No quiero darte una respuesta imprecisa. Puedo derivarte con un asesor ICC para revisar tu consulta con contexto tecnico.",
+    answer: "No quiero darte una respuesta imprecisa. Puedo derivarte con un asesor para revisar tu consulta con contexto tecnico.",
     source: "unanswered",
     confidence: scored?.score || 0,
     shouldEscalate: true

@@ -127,6 +127,7 @@ export default async function TerraqoGlobalControlPage() {
 
   return (
     <section className="space-y-6 sm:space-y-8">
+      <Link href="/admin/terraqo/atencion" className="inline-flex min-h-11 items-center text-sm font-semibold">Adopción del módulo de atención</Link>
       <header className="relative overflow-hidden rounded-3xl bg-[linear-gradient(120deg,#071d2a_0%,#0b3442_58%,#176b75_100%)] px-5 py-6 text-white shadow-[0_28px_70px_-48px_rgba(7,29,42,0.95)] sm:px-7 sm:py-8 lg:px-9">
         <div className="pointer-events-none absolute -right-24 -top-28 h-72 w-72 rounded-full border border-white/10" aria-hidden="true" />
         <div className="pointer-events-none absolute -right-8 top-8 h-48 w-48 rounded-full border border-[#7cd8d0]/20" aria-hidden="true" />

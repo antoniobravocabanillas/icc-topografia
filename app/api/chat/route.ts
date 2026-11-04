@@ -1,77 +1,34 @@
+import { issueCustomerChatAccess, requireCustomerChatAccess } from "@/lib/server/customer-chat-access";
+import { postCustomerChat, PublicChatError } from "@/lib/server/public-customer-chat";
+import { readBoundedRequestBytes, BoundedRequestBodyError } from "@/lib/server/bounded-request-body";
+import { assertMultipartPartLimits } from "@/lib/server/bounded-multipart";
 import { NextResponse } from "next/server";
+import { customerChatHistory } from "@/lib/server/customer-chat-history";
 import { prisma } from "@/lib/prisma";
 import { fail, handleApiError } from "@/lib/server/api";
-import { getDefaultTerraqoWorkspaceId, hasWorkspaceModule } from "@/lib/terraqo/workspace-scope";
+import { resolveAttentionRequest } from "@/lib/server/resolve-attention-request";
 
 export async function POST(request: Request) {
   try {
-    const formData = await request.formData();
-    const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
-    const chatEnabled = await hasWorkspaceModule("CUSTOMER_CHAT", terraqoWorkspaceId);
-    if (!chatEnabled) return fail("Chat no disponible para este workspace", 403);
-
-    const conversationId = String(formData.get("conversationId") || "");
-    const body = String(formData.get("body") || "").trim();
-
-    if (!body) return fail("Mensaje requerido", 422);
-
-    if (conversationId) {
-      const conversation = await prisma.chatConversation.findFirst({
-        where: { id: conversationId, terraqoWorkspaceId },
-        select: { status: true }
-      });
-      if (!conversation) return fail("Conversacion no encontrada", 404);
-      if (conversation.status === "CLOSED") return fail("La conversacion fue cerrada. Inicia un nuevo chat.", 409);
-
-      const message = await prisma.chatMessage.create({
-        data: { conversationId, sender: "customer", body }
-      });
-      await prisma.notification.create({
-        data: {
-          type: "CHAT",
-          title: "Nuevo mensaje de cliente",
-          body,
-          href: "/admin/chat",
-          terraqoWorkspaceId
-        }
-      });
-      return NextResponse.json({ conversationId, message }, { status: 201 });
+    const { workspaceId: terraqoWorkspaceId } = await resolveAttentionRequest(request);
+    const bytes = await readBoundedRequestBytes(request, 40000);
+    const contentType = request.headers.get("content-type") || "";
+    try { assertMultipartPartLimits(bytes, contentType, 8); } catch { return fail("Formulario no válido", 400); }
+    const form = await new Response(Buffer.from(bytes), { headers: { "content-type": contentType } }).formData();
+    const input: Record<string, string> = {};
+    for (const [key, value] of form.entries()) {
+      if (typeof value !== "string" || key in input) return fail("Formulario no válido", 400);
+      input[key] = value;
     }
-
-    const customerName = String(formData.get("name") || "").trim();
-    const customerEmail = String(formData.get("email") || "").trim() || undefined;
-    const customerPhone = String(formData.get("phone") || "").trim() || undefined;
-    const topic = String(formData.get("topic") || "").trim() || undefined;
-    if (!customerName) return fail("Nombre requerido", 422);
-
-    const conversation = await prisma.chatConversation.create({
-      data: {
-        customerName,
-        customerEmail,
-        customerPhone,
-        topic,
-        terraqoWorkspace: { connect: { id: terraqoWorkspaceId } },
-        status: "WAITING",
-        messages: { create: { sender: "customer", body } }
-      },
-      include: {
-        assignedProfile: true,
-        assignedTo: true,
-        messages: { orderBy: { createdAt: "asc" } }
-      }
-    });
-    await prisma.notification.create({
-      data: {
-        type: "CHAT",
-        title: "Nuevo chat web",
-        body: `${customerName}${topic ? ` - ${topic}` : ""}`,
-        href: "/admin/chat",
-        terraqoWorkspaceId
-      }
-    });
-
-    return NextResponse.json({ conversationId: conversation.id, conversation }, { status: 201 });
+    const secureVisitor = request.headers.get("x-chat-protocol") === "2";
+    if (input.conversationId) requireCustomerChatAccess(request, terraqoWorkspaceId, input.conversationId);
+    // Check signing configuration before committing a new conversation.
+    if (!input.conversationId && secureVisitor) issueCustomerChatAccess(terraqoWorkspaceId, "preflight");
+    const result = await postCustomerChat(prisma, terraqoWorkspaceId, input, secureVisitor);
+    return NextResponse.json({ ...result, ...(!input.conversationId && secureVisitor ? { accessToken: issueCustomerChatAccess(terraqoWorkspaceId, result.conversationId) } : {}) }, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {
+    if (error instanceof PublicChatError) return fail(error.message, error.status);
+    if (error instanceof BoundedRequestBodyError) return fail("El mensaje supera el tamaño permitido o no se pudo leer.", error.status);
     return handleApiError(error);
   }
 }
@@ -79,24 +36,16 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const terraqoWorkspaceId = await getDefaultTerraqoWorkspaceId();
-    const chatEnabled = await hasWorkspaceModule("CUSTOMER_CHAT", terraqoWorkspaceId);
-    if (!chatEnabled) return fail("Chat no disponible para este workspace", 403);
+    const { workspaceId: terraqoWorkspaceId } = await resolveAttentionRequest(request);
 
     const id = searchParams.get("conversationId");
-    if (!id) return fail("conversationId requerido", 422);
+    if (!id || id.length > 160) return fail("conversationId requerido", 422);
+    requireCustomerChatAccess(request, terraqoWorkspaceId, id);
 
-    const conversation = await prisma.chatConversation.findFirst({
-      where: { id, terraqoWorkspaceId },
-      include: {
-        assignedProfile: true,
-        assignedTo: true,
-        messages: { orderBy: { createdAt: "asc" } }
-      }
-    });
-    if (!conversation) return fail("Conversacion no encontrada", 404);
-    return NextResponse.json({ conversation });
+    const conversation = await customerChatHistory(prisma, terraqoWorkspaceId, id, searchParams.get("before"));
+    return NextResponse.json({ conversation }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
+    if (error instanceof PublicChatError) return fail(error.message, error.status);
     return handleApiError(error);
   }
 }
