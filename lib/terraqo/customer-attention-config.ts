@@ -16,6 +16,7 @@ export const attentionConfigSchema = z.object({
     pages: z.array(z.string().trim().max(200).regex(/^\/(?!\/)[^?#\\\s]*$/)).max(20).default([]),
   }).strict().default({ position: "right", label: "Habla con nosotros", pages: [] }),
   privacyNotice: z.string().trim().min(15).max(500),
+  routing: z.object({ defaultProfileId: z.string().min(1).max(160).nullable().default(null) }).strict().default({ defaultProfileId: null }),
 }).strict().refine(v => v.opensAt < v.closesAt, { message: "La hora de cierre debe ser posterior a la apertura." });
 export type AttentionConfig = z.infer<typeof attentionConfigSchema>;
 export type AttentionObjective = "sales" | "support" | "appointments";
@@ -32,7 +33,7 @@ export function attentionObjectiveDraft(config: AttentionConfig, objective: Atte
 export const attentionConfigStateSchema = z.object({ version: z.literal(1), revision: z.number().int().nonnegative(), draft: attentionConfigSchema, published: attentionConfigSchema.nullable(), previous: attentionConfigSchema.nullable(), publishedAt: z.string().datetime().nullable() });
 export type AttentionConfigState = z.infer<typeof attentionConfigStateSchema>;
 export function defaultAttentionConfig(name: string): AttentionConfig {
- return { installation: { position: "right", label: "Habla con nosotros", pages: [] }, displayName: name.slice(0, 100), greeting: "Hola. Cuéntanos qué necesitas y nuestro equipo te ayudará.", topics: ["Ventas", "Servicios", "Soporte", "Otra consulta"], domains: [], timezone: "America/Lima", workingDays: [1, 2, 3, 4, 5], opensAt: "08:00", closesAt: "18:00", accent: "#006b63", offlineMessage: "En este momento estamos fuera de horario. Puedes dejar tu consulta y volver para revisar la respuesta.", privacyNotice: "Usamos los datos que compartes para atender esta consulta. Dejar un medio de contacto no implica aceptar comunicaciones publicitarias." };
+ return { routing: { defaultProfileId: null }, installation: { position: "right", label: "Habla con nosotros", pages: [] }, displayName: name.slice(0, 100), greeting: "Hola. Cuéntanos qué necesitas y nuestro equipo te ayudará.", topics: ["Ventas", "Servicios", "Soporte", "Otra consulta"], domains: [], timezone: "America/Lima", workingDays: [1, 2, 3, 4, 5], opensAt: "08:00", closesAt: "18:00", accent: "#006b63", offlineMessage: "En este momento estamos fuera de horario. Puedes dejar tu consulta y volver para revisar la respuesta.", privacyNotice: "Usamos los datos que compartes para atender esta consulta. Dejar un medio de contacto no implica aceptar comunicaciones publicitarias." };
 }
 export function attentionState(settings: unknown, name: string): AttentionConfigState {
  const raw = settings && typeof settings === "object" && !Array.isArray(settings) ? (settings as Record<string, unknown>).customerAttention : undefined;

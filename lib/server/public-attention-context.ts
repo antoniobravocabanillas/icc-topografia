@@ -29,5 +29,5 @@ export function publicAttentionPresentation(context: Awaited<ReturnType<typeof l
   const { installation, displayName, greeting, topics, timezone, workingDays, opensAt, closesAt, accent, offlineMessage, privacyNotice } = context.config;
   // Draft edits must not change the legacy widget before the first publication.
   if (!context.published) return null;
-  return { installation, slug: context.slug, logoUrl: context.logoUrl, displayName, greeting, topics, timezone, workingDays, opensAt, closesAt, accent, offlineMessage, privacyNotice, withinHours: attentionAvailability(context.config) } satisfies Omit<AttentionConfig, "domains"> & { slug: string; logoUrl: string | null; withinHours: boolean };
+  return { installation, slug: context.slug, logoUrl: context.logoUrl, displayName, greeting, topics, timezone, workingDays, opensAt, closesAt, accent, offlineMessage, privacyNotice, withinHours: attentionAvailability(context.config) } satisfies Omit<AttentionConfig, "domains" | "routing"> & { slug: string; logoUrl: string | null; withinHours: boolean };
 }

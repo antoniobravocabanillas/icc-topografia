@@ -3,7 +3,7 @@ import { useRef, useState, useTransition } from "react";
 import { MessageCircle, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { attentionAccentText, attentionObjectiveDraft, type AttentionObjective, type AttentionConfig, type AttentionConfigState } from "@/lib/terraqo/customer-attention-config";
-export function AttentionSettings({ initial, saveAction, publicUrl }: { publicUrl?: string; initial: AttentionConfigState; saveAction: (data: FormData) => Promise<{ state?: AttentionConfigState; error?: string }> }) {
+export function AttentionSettings({ initial, saveAction, publicUrl, recipients = [] }: { recipients?: { id: string; displayName: string; roleTitle: string }[]; publicUrl?: string; initial: AttentionConfigState; saveAction: (data: FormData) => Promise<{ state?: AttentionConfigState; error?: string }> }) {
  const [state, setState] = useState(initial);
  const [draft, setDraft] = useState(initial.draft);
  const [feedback, setFeedback] = useState("");
@@ -28,6 +28,16 @@ export function AttentionSettings({ initial, saveAction, publicUrl }: { publicUr
  return <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(340px,440px)]">
   <form onSubmit={e => { e.preventDefault(); submit("draft"); }} className="space-y-8 rounded-xl border bg-background p-5 md:p-7">
    <fieldset disabled={pending} className="space-y-8">
+    <section className="space-y-3" aria-labelledby="attention-routing-title">
+     <h2 id="attention-routing-title" className="text-lg font-semibold">Quién recibe las consultas</h2>
+     <p className="text-sm leading-6 text-muted-foreground">Elige un responsable inicial para las consultas nuevas y las que deriva el asistente. Tu equipo podrá transferirlas después.</p>
+     <label className="block text-sm">Responsable inicial<select aria-label="Responsable inicial" className={inputClass} value={draft.routing.defaultProfileId || ""} onChange={e => update("routing", { defaultProfileId: e.target.value || null })}>
+      <option value="">Bandeja general · asignación manual</option>
+      {draft.routing.defaultProfileId && !recipients.some(p => p.id === draft.routing.defaultProfileId) && <option disabled value={draft.routing.defaultProfileId}>Responsable anterior no disponible · selecciona otro</option>}
+      {recipients.map(person => <option key={person.id} value={person.id}>{person.displayName} · {person.roleTitle}</option>)}
+     </select></label>
+     <p className="text-xs leading-5 text-muted-foreground">Solo aparecen personas disponibles con acceso activo a esta empresa. Si dejan de estar disponibles, las nuevas consultas permanecen sin asignar. Esta regla se aplica al publicar; no cambia conversaciones existentes.</p>
+    </section>
     {starterVisible && !dirty && <section className="space-y-4 border-b pb-6" aria-labelledby="attention-start-title">
      <div><h2 id="attention-start-title" className="text-lg font-semibold">¿Cómo quieres atender?</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">Elige un punto de partida para el saludo y los motivos. Después puedes ajustar cada detalle.</p></div>
      <div className="grid gap-3 sm:grid-cols-3">{([

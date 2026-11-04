@@ -1,3 +1,4 @@
+import { verifyAttentionRouting } from "./test-attention-routing-postgres";
 import { verifyChatHttp } from "./test-customer-chat-http";
 import { customerChatHistory } from "../lib/server/customer-chat-history";
 import { attentionMetrics } from "../lib/server/customer-attention-metrics";
@@ -187,6 +188,7 @@ async function main() {
   assert.equal(attentionOriginAllowed("https://evil-company.example", "https://api.example", ["company.example"]), false);
   assert.equal(attentionOriginAllowed("http://company.example", "https://api.example", ["company.example"]), false);
   assert.equal(attentionOriginAllowed("null", "https://api.example", ["company.example"]), false);
+  await verifyAttentionRouting(db);
   await verifyChatHttp(db, w, other);
   await db.terraqoWorkspace.update({ where: { id: w.id }, data: { active: false } });
   await assert.rejects(loadPublicAttentionContext(db, w.slug), PublicChatError);

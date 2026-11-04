@@ -62,7 +62,7 @@ const topics = [
   "Capacitacion"
 ];
 
-type PublicPresentation = Omit<AttentionConfig, "domains"> & { withinHours: boolean; logoUrl: string | null };
+type PublicPresentation = Omit<AttentionConfig, "domains" | "routing"> & { withinHours: boolean; logoUrl: string | null };
 export function ChatWidget({ workspaceSlug, inline = false, initialPresentation = null }: { workspaceSlug?: string; inline?: boolean; initialPresentation?: PublicPresentation | null } = {}) {
   const storageKey = workspaceSlug ? `terraqo-chat:${workspaceSlug}` : legacyStorageKey;
   const query = workspaceSlug ? `?workspace=${encodeURIComponent(workspaceSlug)}` : "";

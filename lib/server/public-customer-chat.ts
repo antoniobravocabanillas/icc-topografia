@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
 import { customerChatSelect, chronologicalChat } from "./customer-chat-projection";
+import { routeNewCustomerChat } from "./customer-attention-routing";
 export class PublicChatError extends Error { constructor(message: string, readonly status: number) { super(message); } }
 const inputSchema = z.object({
  conversationId: z.string().max(160).optional(), operationKey: z.string().uuid().optional(),
@@ -29,7 +30,8 @@ export async function postCustomerChat(db: PrismaClient, workspaceId: string, in
    if (recent >= 30) throw new PublicChatError("Estamos recibiendo muchas consultas. Inténtalo en un minuto.", 429);
    const conversation = await tx.chatConversation.create({ data: { id, terraqoWorkspaceId: workspaceId, customerName: data.name, customerEmail: data.email || null, customerPhone: data.phone || null, topic: data.topic || null, messages: { create: { id: messageId, sender: "customer", body: data.body } } }, select: customerChatSelect });
    await tx.notification.create({ data: { terraqoWorkspaceId: workspaceId, type: "CHAT", title: "Nueva consulta", body: data.name, href: `/admin/chat?conversation=${id}` } });
-   return { conversationId: id, conversation: chronologicalChat(conversation) };
+   await routeNewCustomerChat(tx, workspaceId, id);
+   return { conversationId: id, conversation: chronologicalChat(await tx.chatConversation.findUniqueOrThrow({ where: { id: conversation.id }, select: customerChatSelect })) };
   }
   const locked = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM icc."ChatConversation" WHERE id = ${id} AND "terraqoWorkspaceId" = ${workspaceId} FOR UPDATE`;
   if (!locked.length) throw new PublicChatError("Conversación no encontrada", 404);

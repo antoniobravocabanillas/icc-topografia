@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { attentionConfigSchema, attentionState, type AttentionConfig } from "@/lib/terraqo/customer-attention-config";
 import { workspaceAdminMemberRoles } from "@/lib/terraqo/workspace-roles";
+import { eligibleAttentionRecipient } from "./customer-attention-routing";
 export async function saveAttentionSettings(db: PrismaClient, workspaceId: string, actorId: string, expectedRevision: number, action: "draft" | "publish" | "rollback", input?: AttentionConfig) {
  if (!["draft", "publish", "rollback"].includes(action) || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0) throw new Error("Operación no válida.");
  const config = action === "draft" ? attentionConfigSchema.parse(input) : null;
@@ -13,6 +14,8 @@ export async function saveAttentionSettings(db: PrismaClient, workspaceId: strin
   const previous = attentionState(workspace.settings, workspace.brandName || workspace.name);
   if (previous.revision !== expectedRevision) throw new Error("La configuración cambió. Actualiza antes de guardar.");
   if (action === "rollback" && !previous.previous) throw new Error("Todavía no hay una publicación anterior.");
+  const targetConfig = action === "draft" ? config! : action === "publish" ? previous.draft : previous.previous!;
+  if (targetConfig.routing.defaultProfileId && !await eligibleAttentionRecipient(tx, workspaceId, targetConfig.routing.defaultProfileId)) throw new Error("El responsable debe estar disponible y tener acceso activo a la atención de esta empresa.");
   const next = { ...previous, revision: previous.revision + 1,
     ...(action === "draft" ? { draft: config! } : action === "publish" ? { published: previous.draft, previous: previous.published, publishedAt: new Date().toISOString() } : { published: previous.previous!, previous: previous.published, draft: previous.previous!, publishedAt: new Date().toISOString() }),
   };

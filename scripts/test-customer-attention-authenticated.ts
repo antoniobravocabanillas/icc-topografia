@@ -109,6 +109,24 @@ export async function verifyAuthenticatedAttention(db: PrismaClient, origin: str
     await adminPage.getByLabel("Contexto de la solicitud").waitFor();
     assert.equal(await adminPage.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await adminPage.screenshot({ path: "output/attention-authenticated-mobile.png", fullPage: true });
+    phase = "automatic-routing";
+    await adminPage.goto(`${origin}/admin/chat/configuracion`);
+    await adminPage.getByLabel("Responsable inicial", { exact: true }).selectOption(profile.id);
+    await adminPage.screenshot({ path: "output/attention-routing-mobile.png", fullPage: true });
+    await adminPage.setViewportSize({ width: 1440, height: 1000 });
+    await adminPage.screenshot({ path: "output/attention-routing-desktop.png", fullPage: true });
+    await adminPage.getByRole("button", { name: "Guardar borrador", exact: true }).click();
+    await adminPage.getByRole("status").filter({ hasText: "Borrador guardado" }).waitFor();
+    await adminPage.getByRole("button", { name: "Publicar configuración", exact: true }).click();
+    await adminPage.getByRole("status").filter({ hasText: "Configuración publicada" }).waitFor();
+    const workspace = await db.terraqoWorkspace.findUniqueOrThrow({ where: { id: workspaceId } });
+    const configResponse = await adminContext.request.get(`${origin}/api/chat/config?workspace=${workspace.slug}`);
+    assert.equal(configResponse.status(), 200);
+    assert.equal("routing" in (await configResponse.json()).config, false);
+    const routedResponse = await adminContext.request.post(`${origin}/api/chat?workspace=${workspace.slug}`, { headers: { "x-chat-protocol": "2" }, multipart: { name: "Routing browser fixture", body: "Consulta dirigida", operationKey: randomUUID() } });
+    assert.equal(routedResponse.status(), 201);
+    const routed = await routedResponse.json(); conversations.push(routed.conversationId);
+    assert.equal((await db.chatConversation.findUniqueOrThrow({ where: { id: routed.conversationId } })).assignedToId, advisor.id);
     phase = "revocation";
     await db.terraqoWorkspaceMember.updateMany({ where: { userId: advisor.id, workspaceId }, data: { active: false } });
     await advisorPage.goto(url);
@@ -122,6 +140,7 @@ export async function verifyAuthenticatedAttention(db: PrismaClient, origin: str
     // Delete only tracked synthetic IDs, never a workspace-wide predicate.
     await db.activityLog.deleteMany({ where: { OR: [{ entityType: "ChatConversation", entityId: { in: conversations } }, { actorId: { in: users } }] } });
     await db.chatConversation.deleteMany({ where: { id: { in: conversations } } });
+    await db.notification.deleteMany({ where: { href: { in: conversations.map(id => `/admin/chat?conversation=${id}`) } } });
     await db.staffProfile.deleteMany({ where: { id: { in: profiles } } });
     await db.terraqoWorkspaceMember.deleteMany({ where: { userId: { in: users } } });
     await db.user.deleteMany({ where: { id: { in: users } } });

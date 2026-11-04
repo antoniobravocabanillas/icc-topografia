@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { PublicChatError } from "./public-customer-chat";
+import { routeNewCustomerChat } from "./customer-attention-routing";
 export const customerBotInputSchema = z.object({ question: z.string().trim().min(1).max(8000), conversationId: z.string().max(160).optional(), operationKey: z.string().uuid().optional(), name: z.string().max(160).optional(), email: z.union([z.string().email().max(254), z.literal("")]).optional(), phone: z.string().max(40).optional() }).strict();
 type Answer = { answer: string; source: string; confidence: number; shouldEscalate: boolean };
 const hash = (...parts: string[]) => createHash("sha256").update(JSON.stringify(parts)).digest("hex");
@@ -45,6 +46,7 @@ export async function postCustomerBot(db: PrismaClient, workspaceId: string, inp
         id: escalatedChatId, terraqoWorkspaceId: workspaceId, customerName: bot.customerName || data.name || "Visitante web", customerEmail: bot.customerEmail || data.email || null, customerPhone: data.phone || null, topic: "Consulta iniciada con el asistente",
         messages: { create: messages.map(message => ({ id: `handoff_${hash(workspaceId, message.id)}`, sender: message.sender, body: message.body, createdAt: message.createdAt })) },
       } });
+      await routeNewCustomerChat(tx, workspaceId, escalatedChatId);
       await tx.notification.create({ data: { terraqoWorkspaceId: workspaceId, type: "CHAT", title: "Consulta derivada al equipo", body: data.question.slice(0, 240), href: `/admin/chat?conversation=${escalatedChatId}` } });
       await tx.botConversation.update({ where: { id }, data: { status: "human_handoff", escalatedChatId } });
     }
