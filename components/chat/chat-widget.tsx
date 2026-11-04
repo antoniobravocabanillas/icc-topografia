@@ -1,6 +1,7 @@
 "use client";
 
 import { ChatContinuity } from "@/components/chat/chat-continuity";
+import { ChatContact } from "@/components/chat/chat-contact";
 import { FormEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
 import { attentionAccentText, attentionContactRule, type AttentionConfig } from "@/lib/terraqo/customer-attention-config";
 import { MessageCircle, Send, X } from "lucide-react";
@@ -410,6 +411,7 @@ export function ChatWidget({ workspaceSlug, inline = false, initialPresentation 
                     <Send className="h-4 w-4" />
                   </Button>
                 </form>
+                {conversation?.status !== "CLOSED" && <ChatContact key={conversationId} conversationId={conversationId} token={accessToken.current} workspaceSlug={workspaceSlug} topic={conversation?.topic || ""} config={presentation} />}
               </>
             ) : (
               <div className="grid gap-4">
