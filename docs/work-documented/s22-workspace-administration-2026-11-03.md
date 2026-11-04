@@ -1,5 +1,9 @@
 # S22 — workspace authority safety
 
+## Latest checkpoint — reconciled customer-attention release
+
+Integrated released attention commit `285b20a` into the isolated S22 candidate after saving implementation checkpoint `d8c8601`. Both atomic last-admin protection and released chat operations/navigation remain. S22 authenticated browser and attention authenticated browser/PostgreSQL suites pass when run sequentially; they share `.next` and must not run in parallel. Desktop/mobile captures inspected. See `s22-release-reconciliation-2026-11-04.md` for candidate scope, exact schema delta and hosted gate gaps. No remote environment changed. Next: dedicated hosted S22 verifier and staging flag/migration readiness; Evaluator permissions and email delivery remain open.
+
 ## Latest checkpoint — clean authenticated local gate
 
 Resolved both findings from the previous authenticated run. Notifications pulse now uses the nullable current workspace resolver and returns private/no-store 403 for a session without workspace access, instead of throwing into a 500. Database errors still follow the normal error handler. Notification monitor clears existing event/count and disables adaptive polling on 401/403; it does not continue displaying stale notifications after losing authority.

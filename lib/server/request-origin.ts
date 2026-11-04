@@ -45,7 +45,7 @@ export function publicRequestOrigin(
 ) {
   const host = requestHost(request.headers.get("x-forwarded-host")) || requestHost(request.headers.get("host"));
   if (!host || !allowedHosts().has(host.hostname)) return fallback;
-  const local = host.hostname === "localhost";
+  const local = host.hostname === "localhost" || (process.env.NODE_ENV !== "production" && host.hostname === "127.0.0.1");
   const authority = `${host.hostname}${local && host.port ? `:${host.port}` : ""}`;
   return `${local ? "http" : "https"}://${authority}`;
 }

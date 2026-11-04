@@ -1,0 +1,75 @@
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import type { PrismaClient } from "@prisma/client";
+import { defaultAttentionConfig } from "../lib/terraqo/customer-attention-config";
+import { saveAttentionSettings } from "../lib/server/customer-attention-settings";
+import { postCustomerChat } from "../lib/server/public-customer-chat";
+import { postCustomerBot } from "../lib/server/customer-chatbot";
+
+export async function verifyAttentionRouting(db: PrismaClient) {
+ assert.equal(process.env.TERRAQO_LOCAL_ATTENTION_TEST, "synthetic-only");
+ assert.equal(new URL(process.env.DATABASE_URL!).hostname, "127.0.0.1");
+ const suffix = randomUUID();
+ const w = await db.terraqoWorkspace.create({ data: { name: "Routing fixture", slug: `routing-${suffix}` } });
+ const other = await db.terraqoWorkspace.create({ data: { name: "Foreign routing fixture", slug: `routing-other-${suffix}` } });
+ const userIds: string[] = [];
+ try {
+  const owner = await db.user.create({ data: { email: `owner-${suffix}@example.invalid`, role: "ADMIN" } }); userIds.push(owner.id);
+  const advisor = await db.user.create({ data: { email: `advisor-${suffix}@example.invalid`, role: "SALES" } }); userIds.push(advisor.id);
+  await db.terraqoWorkspaceMember.createMany({ data: [owner, advisor].map(user => ({ workspaceId: w.id, userId: user.id, role: "MANAGER", active: true })) });
+  const profile = await db.staffProfile.create({ data: { terraqoWorkspaceId: w.id, userId: advisor.id, displayName: "Routing advisor", roleTitle: "Sales", tools: {} } });
+  const foreign = await db.staffProfile.create({ data: { terraqoWorkspaceId: other.id, userId: advisor.id, displayName: "Foreign", roleTitle: "Sales", tools: {} } });
+  const config = { ...defaultAttentionConfig(w.name), routing: { defaultProfileId: profile.id } };
+  await assert.rejects(saveAttentionSettings(db, w.id, owner.id, 0, "draft", { ...config, routing: { defaultProfileId: foreign.id } }));
+  await saveAttentionSettings(db, w.id, owner.id, 0, "draft", config);
+  const create = () => ({ name: "Routing visitor", body: "Routing test", operationKey: randomUUID() });
+  const draftOnly = await postCustomerChat(db, w.id, create());
+  assert.equal(draftOnly.conversation?.assignedProfile, null);
+  await saveAttentionSettings(db, w.id, owner.id, 1, "publish");
+  const input = create();
+  const [first, replay] = await Promise.all([postCustomerChat(db, w.id, input), postCustomerChat(db, w.id, input)]);
+  assert.equal(first.conversationId, replay.conversationId);
+  const saved = await db.chatConversation.findUniqueOrThrow({ where: { id: first.conversationId } });
+  assert.equal(saved.assignedProfileId, profile.id); assert.equal(saved.assignedToId, advisor.id);
+  assert.equal(saved.status, "WAITING");
+  assert.equal(await db.activityLog.count({ where: { entityId: saved.id } }), 1);
+  await db.chatConversation.update({ where: { id: saved.id }, data: { assignedToId: owner.id, assignedProfileId: null } });
+  await postCustomerChat(db, w.id, input);
+  assert.equal((await db.chatConversation.findUniqueOrThrow({ where: { id: saved.id } })).assignedToId, owner.id);
+  const botInput = { question: "Necesito un asesor", operationKey: randomUUID() };
+  const answer = async () => ({ answer: "Te atiende el equipo", source: "fixture", confidence: 1, shouldEscalate: true });
+  const bot = await postCustomerBot(db, w.id, botInput, true, answer);
+  assert.equal((await db.chatConversation.findUniqueOrThrow({ where: { id: bot.escalatedChatId! } })).assignedToId, advisor.id);
+  await postCustomerBot(db, w.id, botInput, true, answer);
+  assert.equal(await db.activityLog.count({ where: { entityId: bot.escalatedChatId! } }), 1);
+  await db.staffProfile.update({ where: { id: profile.id }, data: { availability: "OFFLINE" } });
+  const offline = await postCustomerChat(db, w.id, create());
+  assert.equal((await db.chatConversation.findUniqueOrThrow({ where: { id: offline.conversationId } })).assignedToId, null);
+  await db.staffProfile.update({ where: { id: profile.id }, data: { availability: "AVAILABLE" } });
+  await db.user.update({ where: { id: advisor.id }, data: { role: "CUSTOMER" } });
+  const wrongRole = await postCustomerChat(db, w.id, create());
+  assert.equal((await db.chatConversation.findUniqueOrThrow({ where: { id: wrongRole.conversationId } })).assignedToId, null);
+  await db.user.update({ where: { id: advisor.id }, data: { role: "SALES" } });
+  await db.terraqoWorkspaceMember.update({ where: { workspaceId_userId: { workspaceId: w.id, userId: advisor.id } }, data: { active: false } });
+  const unassigned = await postCustomerChat(db, w.id, create());
+  assert.equal((await db.chatConversation.findUniqueOrThrow({ where: { id: unassigned.conversationId } })).assignedToId, null);
+  assert.equal(await db.activityLog.count({ where: { entityId: unassigned.conversationId, title: "Asignación automática pendiente de revisión" } }), 1);
+  await assert.rejects(saveAttentionSettings(db, w.id, owner.id, 2, "publish"));
+  await saveAttentionSettings(db, w.id, owner.id, 2, "draft", { ...config, routing: { defaultProfileId: null } });
+  await saveAttentionSettings(db, w.id, owner.id, 3, "publish");
+  await assert.rejects(saveAttentionSettings(db, w.id, owner.id, 4, "rollback"));
+  assert.equal((await db.chatConversation.findUniqueOrThrow({ where: { id: saved.id } })).assignedToId, owner.id);
+  console.log("PASS routing: draft isolation, tenant rejection, concurrent idempotency, human assignment preservation, bot handoff, revoked recipient fallback and safe rollback rejection.");
+ } finally {
+  const ids = [w.id, other.id];
+  await db.activityLog.deleteMany({ where: { terraqoWorkspaceId: { in: ids } } });
+  await db.notification.deleteMany({ where: { terraqoWorkspaceId: { in: ids } } });
+  await db.botConversation.deleteMany({ where: { terraqoWorkspaceId: { in: ids } } });
+  await db.chatConversation.deleteMany({ where: { terraqoWorkspaceId: { in: ids } } });
+  await db.staffProfile.deleteMany({ where: { terraqoWorkspaceId: { in: ids } } });
+  await db.terraqoWorkspaceMember.deleteMany({ where: { workspaceId: { in: ids } } });
+  await db.user.deleteMany({ where: { id: { in: userIds } } });
+  await db.terraqoWorkspace.deleteMany({ where: { id: { in: ids } } });
+  assert.equal(await db.terraqoWorkspace.count({ where: { id: { in: ids } } }), 0);
+ }
+}

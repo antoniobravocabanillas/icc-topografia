@@ -15,12 +15,13 @@ import { formatCurrency } from "@/lib/utils";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export default async function OpportunitiesPage() {
+export default async function OpportunitiesPage({ searchParams }: { searchParams: Promise<{ opportunity?: string }> }) {
+  const selectedId = (await searchParams).opportunity?.slice(0, 160);
   await requireAdminPage(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
   const terraqoWorkspaceId = await getSessionTerraqoWorkspaceId();
   await requireWorkspaceModule("CRM", terraqoWorkspaceId);
   const opportunities = await prisma.opportunity.findMany({
-    where: { deletedAt: null, terraqoWorkspaceId },
+    where: { deletedAt: null, terraqoWorkspaceId, ...(selectedId ? { id: selectedId } : {}) },
     include: {
       company: true,
       contact: true,
@@ -52,6 +53,8 @@ export default async function OpportunitiesPage() {
       </div>
 
       <div className="grid gap-5">
+        {selectedId && <Link href="/admin/oportunidades" className="inline-flex min-h-11 items-center text-sm font-medium">Ver todas las oportunidades →</Link>}
+        {selectedId && !opportunities.length && <p className="rounded-lg border p-5">Esta oportunidad no está disponible en tu empresa.</p>}
         {opportunities.map((opportunity) => (
           <Card key={opportunity.id}>
             <CardHeader className="gap-3 md:flex-row md:items-start md:justify-between">

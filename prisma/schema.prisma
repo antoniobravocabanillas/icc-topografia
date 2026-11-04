@@ -2004,6 +2004,9 @@ model ContactMessage {
 }
 
 model ChatConversation {
+  nextAction String?
+  nextActionAt DateTime?
+  nextActionCompletedAt DateTime?
   id                 String           @id @default(cuid())
   customerName       String
   customerEmail      String?
@@ -2025,6 +2028,7 @@ model ChatConversation {
   @@index([assignedProfileId])
   @@index([terraqoWorkspaceId])
   @@schema("icc")
+  @@index([terraqoWorkspaceId, nextActionAt], map: "ChatConversation_workspace_followup_idx")
 }
 
 model ChatMessage {

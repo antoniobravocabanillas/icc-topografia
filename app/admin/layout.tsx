@@ -5,6 +5,7 @@ import { SignOutButton } from "@/components/auth/sign-out-button";
 import type { Role } from "@prisma/client";
 import { auth } from "@/auth";
 import { SessionPresence } from "@/components/auth/session-presence";
+import { AttentionShortcut } from "@/components/admin/chat/attention-shortcut";
 import { AdminNavigation } from "@/components/admin/admin-navigation";
 import { AdminNotificationMonitor } from "@/components/admin/admin-notification-monitor";
 import { WorkspaceWritingAssistant } from "@/components/portal/workspace-writing-assistant";
@@ -91,6 +92,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <AdminNotificationMonitor />
         {children}
       </main>
+      {navItems.some(item => item.href === "/admin/chat") && <AttentionShortcut />}
       {modules.some((module) => module.code === "AI_WRITING_ASSISTANT") ? <ClientFeatureBoundary feature="writing-assistant"><WorkspaceWritingAssistant /></ClientFeatureBoundary> : null}
     </div>
     </>

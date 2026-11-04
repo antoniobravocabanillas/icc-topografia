@@ -36,7 +36,14 @@ async function main() {
     "http://localhost:3000",
   );
 
-  console.log("Public request origin: OK (configured staging host, trusted production hosts, HTTPS enforcement and safe fallback).");
+  Object.assign(process.env, { NODE_ENV: "development", NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:4321" });
+  const loopback = new Request("http://127.0.0.1:4321/api/chat", { headers: { host: "127.0.0.1:4321" } });
+  assert.equal(publicRequestOrigin(loopback), "http://127.0.0.1:4321");
+  Object.assign(process.env, { NODE_ENV: "production" });
+  assert.equal(publicRequestOrigin(loopback), "https://127.0.0.1", "Production must not gain the development HTTP exception");
+  process.env.NEXT_PUBLIC_SITE_URL = stagingOrigin;
+  assert.equal(publicRequestOrigin(loopback), stagingOrigin, "Unconfigured loopback is still outside the allowlist");
+  console.log("Public request origin: OK (configured staging host, trusted production hosts, HTTPS enforcement, configured development loopback and safe fallback).");
 }
 
 main().catch((error: unknown) => {
