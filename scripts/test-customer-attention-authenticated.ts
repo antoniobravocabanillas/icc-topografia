@@ -131,6 +131,7 @@ export async function verifyAuthenticatedAttention(db: PrismaClient, origin: str
     assert.equal(await adminPage.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await adminPage.setViewportSize({ width: 1440, height: 1000 });
     await adminPage.screenshot({ path: "output/company-dashboard-desktop.png", fullPage: true });
+    phase = "floating-shortcut";
     await adminPage.getByRole("link", { name: "Abrir bandeja de atención", exact: true }).click();
     await adminPage.getByLabel("Bandeja de conversaciones").waitFor();
     assert.equal(await adminPage.getByRole("link", { name: "Abrir bandeja de atención", exact: true }).count(), 0);
