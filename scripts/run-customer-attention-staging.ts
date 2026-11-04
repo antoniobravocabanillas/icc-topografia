@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { randomUUID, createHash } from "node:crypto";
+import { randomUUID } from "node:crypto";
+import { migrationSourceChecksums } from "./lib/migration-source-checksums";
 import { existsSync } from "node:fs";
 import { PrismaClient } from "@prisma/client";
 import { assertAttentionTestTarget, attentionStagingOrigin, attentionStagingSite } from "./lib/customer-attention-test-target";
@@ -41,12 +42,13 @@ async function main() {
   await assertServed();
   const db = new PrismaClient();
   const workspaceIds: string[] = [];
+  await mkdir("output", { recursive: true });
   try {
     step = "migration-ledger";
     const ledger = await db.$queryRaw<Array<{ checksum: string }>>`SELECT checksum FROM icc._prisma_migrations WHERE migration_name = '20261104000200_customer_attention_followup' AND finished_at IS NOT NULL AND rolled_back_at IS NULL`;
     assert.equal(ledger.length, 1);
     const sql = await readFile("prisma/migrations/20261104000200_customer_attention_followup/migration.sql");
-    assert.equal(ledger[0].checksum, createHash("sha256").update(sql).digest("hex"));
+    assert.ok(migrationSourceChecksums(sql).has(ledger[0].checksum), "Migration source differs from the applied ledger");
     const columns = await db.$queryRaw<Array<{ column_name: string }>>`SELECT column_name FROM information_schema.columns WHERE table_schema='icc' AND table_name='ChatConversation' AND column_name IN ('nextAction','nextActionAt','nextActionCompletedAt')`;
     assert.equal(columns.length, 3);
     step = "fixtures";

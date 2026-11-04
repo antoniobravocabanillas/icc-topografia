@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { migrationSourceChecksums } from "./lib/migration-source-checksums";
+const path = "prisma/migrations/20261104000200_customer_attention_followup/migration.sql";
+const committed = execFileSync("git", ["show", `HEAD:${path}`]);
+assert.deepEqual(migrationSourceChecksums(committed), migrationSourceChecksums(readFileSync(path)));
+assert.ok(migrationSourceChecksums(committed).has("a7f498f903d18ce459c2f12e32cb4dde3a36006e6a92480831f9b787ba8cde57"));
+assert.ok(!migrationSourceChecksums(Buffer.concat([committed, Buffer.from("\nSELECT 1;")])).has("a7f498f903d18ce459c2f12e32cb4dde3a36006e6a92480831f9b787ba8cde57"));
+console.log("PASS source checksums: LF/CRLF equivalent, actual SQL changes rejected.");
