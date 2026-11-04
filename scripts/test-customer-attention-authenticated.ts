@@ -51,6 +51,22 @@ export async function verifyAuthenticatedAttention(db: PrismaClient, origin: str
     await outsiderPage.goto(url);
     await outsiderPage.getByText("Conversación no disponible", { exact: true }).waitFor();
     assert.equal((await outsiderPage.locator("body").innerText()).includes(`Private attention ${suffix}`), false);
+    phase = "initial-configuration";
+    await outsiderPage.setViewportSize({ width: 390, height: 844 });
+    await outsiderPage.goto(`${origin}/admin/chat/configuracion`);
+    await outsiderPage.getByRole("heading", { name: "¿Cómo quieres atender?" }).waitFor();
+    assert.equal(await outsiderPage.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    await outsiderPage.screenshot({ path: "output/attention-objectives-mobile.png", fullPage: true });
+    await outsiderPage.getByRole("button", { name: /^Agendar/ }).click();
+    assert.match(await outsiderPage.getByLabel("Mensaje de bienvenida", { exact: true }).inputValue(), /confirmará la disponibilidad/);
+    await outsiderPage.getByRole("button", { name: "Guardar borrador", exact: true }).click();
+    await outsiderPage.getByRole("status").filter({ hasText: "Borrador guardado" }).waitFor();
+    const settings = (await db.terraqoWorkspace.findUniqueOrThrow({ where: { id: otherWorkspaceId } })).settings as { customerAttention?: { published: unknown; revision: number } };
+    assert.equal(settings.customerAttention?.published, null);
+    assert.equal(settings.customerAttention?.revision, 1);
+    await outsiderPage.reload();
+    await outsiderPage.getByLabel("Mensaje de bienvenida", { exact: true }).waitFor();
+    assert.equal(await outsiderPage.getByRole("heading", { name: "¿Cómo quieres atender?" }).count(), 0);
     const advisorPage = await advisorContext.newPage();
     await advisorPage.goto(url);
     await advisorPage.getByText("Conversación no disponible", { exact: true }).waitFor();
@@ -104,7 +120,7 @@ export async function verifyAuthenticatedAttention(db: PrismaClient, origin: str
   } finally {
     await browser.close();
     // Delete only tracked synthetic IDs, never a workspace-wide predicate.
-    await db.activityLog.deleteMany({ where: { entityType: "ChatConversation", entityId: { in: conversations } } });
+    await db.activityLog.deleteMany({ where: { OR: [{ entityType: "ChatConversation", entityId: { in: conversations } }, { actorId: { in: users } }] } });
     await db.chatConversation.deleteMany({ where: { id: { in: conversations } } });
     await db.staffProfile.deleteMany({ where: { id: { in: profiles } } });
     await db.terraqoWorkspaceMember.deleteMany({ where: { userId: { in: users } } });

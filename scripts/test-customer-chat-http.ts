@@ -88,6 +88,9 @@ export async function verifyChatHttp(db: PrismaClient, workspace: { id: string; 
     assert.equal(botReply.status, 200);
     const handoff = await botReply.json(); assert.ok(handoff.accessToken); assert.ok(handoff.botAccessToken);
     assert.equal((await fetch(`${endpoint}&conversationId=${handoff.escalatedChatId}`, { headers: { "x-chat-access": handoff.accessToken } })).status, 200);
+    // The installer checks above used a published clone. Start the owner onboarding
+    // check from a fresh configuration in this disposable synthetic workspace.
+    await db.terraqoWorkspace.update({ where: { id: other.id }, data: { settings: {} } });
     await verifyAuthenticatedAttention(db, origin, workspace.id, other.id);
     console.log("PASS live loopback HTTP: v2 access, replay, tenant boundary, published-only config, origin rejection, bounded chunked body and bot handoff.");
   } finally {

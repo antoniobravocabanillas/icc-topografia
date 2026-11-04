@@ -129,3 +129,17 @@ Esta sección sustituye las listas antiguas de pendientes anteriores.
 - Readback inicial de staging: fase s23 y rama codex/platform-staging-release. Netlify devuelve secretos enmascarados: no tratarlos como URLs válidas ni reescribirlos. La comprobación final de secretos se realizará dentro del build cloud.
 - Preparada publicación de candidato en staging con cambios limitados a tres variables no secretas y rama; respaldo de metadatos anterior en output. El resultado remoto debe registrarse por separado: este párrafo NO certifica un despliegue ni un gate remoto exitosos.
 - Continúan pendientes los campos por motivo, reglas/retención/adjuntos, avisos externos verificables, aislamiento de release ICC y publicación productiva. S22 sigue pausado.
+
+### Resultado del intento remoto
+- Candidato `8ca0aed5afa0195d318b264bea5fda356884606d` publicado en la rama remota aislada. No es un deploy de plataforma.
+- API Netlify permite actualizar la variable existente de fase, pero rechaza crear `ATTENTION_STAGING_CANDIDATE_SHA` con HTTP 403. Cambiar scopes o utilizar account_id no resolvió el rechazo. No continuar reintentando sin resolver acceso de creación de variables.
+- La fase se restauró explícitamente a `s23` y se leyó de vuelta. Rama staging `codex/platform-staging-release`, deploy `6aea2a045ee12c88f761c44c` y secretos sin cambios. Producción continúa `6ae7ec06e99b195a657aa8be`. No se inició build ni se ejecutaron fixtures remotos.
+- Script de intento y restauración en `output/publish-attention-staging.mjs` y `output/restore-attention-staging-phase.mjs`. Los snapshots de intentos repetidos pueden reflejar la fase transitoria customer-attention; el estado anterior y restaurado comprobado es s23.
+- Para desbloquear: acceso Netlify que permita crear variables en el sitio staging exacto, o crear manualmente las dos variables nuevas con el SHA final revisado. Mantener secretos existentes. No eliminar ni saltar el gate.
+
+### Configuración inicial por objetivo
+- Implementados Vender / Atender / Agendar para empresas sin configuración guardada. Se ocultan después de elegir o guardar; no aparecen sobre una configuración vigente ni sobrescriben cambios del usuario.
+- Solo modifican saludo y motivos. Preservan identidad, horario, privacidad, dominios y posición. Agendar solicita disponibilidad y deja explícita la confirmación del equipo; no finge una integración de calendario.
+- Prueba unitaria PASS: schema, invariantes y ausencia de mutación. E2E autenticado PASS: elegir Agendar, guardar borrador, published=null, revision=1 y ausencia del selector inicial tras recargar. Vista móvil 390px inspeccionada, sin overflow; captura output/attention-objectives-mobile.png.
+- Dos fallos iniciales de prueba corregidos: el fixture heredaba una configuración publicada del recorrido de instalación, y el label implícito del textarea incluía su contenido. Fixture inicial explícito y nombre accesible estable resuelven ambos. Repetición completa PostgreSQL/HTTP/Chrome PASS; fixtures y auditoría sintéticos eliminados por IDs propios.
+- Pendientes de alcance y bloqueo remoto anteriores siguen vigentes. La selección de objetivos no sustituye los campos por motivo ni las reglas automáticas.

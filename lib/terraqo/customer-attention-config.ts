@@ -18,6 +18,17 @@ export const attentionConfigSchema = z.object({
   privacyNotice: z.string().trim().min(15).max(500),
 }).strict().refine(v => v.opensAt < v.closesAt, { message: "La hora de cierre debe ser posterior a la apertura." });
 export type AttentionConfig = z.infer<typeof attentionConfigSchema>;
+export type AttentionObjective = "sales" | "support" | "appointments";
+const objectiveCopy: Record<AttentionObjective, Pick<AttentionConfig, "greeting" | "topics">> = {
+ sales: { greeting: "Hola. Cuéntanos qué buscas y te ayudaremos a encontrar la opción adecuada.", topics: ["Solicitar cotización", "Consultar un producto", "Contratar un servicio", "Otra consulta"] },
+ support: { greeting: "Hola. Cuéntanos qué necesitas resolver y nuestro equipo revisará tu consulta.", topics: ["Soporte técnico", "Estado de mi solicitud", "Garantía o mantenimiento", "Otra consulta"] },
+ appointments: { greeting: "Hola. Cuéntanos qué atención necesitas y qué horario prefieres. Nuestro equipo confirmará la disponibilidad.", topics: ["Solicitar una cita", "Cambiar una cita", "Consultar disponibilidad", "Otra consulta"] },
+};
+/** A starting point for copy only: never enables channels, payments or calendar integrations. */
+export function attentionObjectiveDraft(config: AttentionConfig, objective: AttentionObjective): AttentionConfig {
+ const copy = objectiveCopy[objective];
+ return { ...config, greeting: copy.greeting, topics: [...copy.topics] };
+}
 export const attentionConfigStateSchema = z.object({ version: z.literal(1), revision: z.number().int().nonnegative(), draft: attentionConfigSchema, published: attentionConfigSchema.nullable(), previous: attentionConfigSchema.nullable(), publishedAt: z.string().datetime().nullable() });
 export type AttentionConfigState = z.infer<typeof attentionConfigStateSchema>;
 export function defaultAttentionConfig(name: string): AttentionConfig {
