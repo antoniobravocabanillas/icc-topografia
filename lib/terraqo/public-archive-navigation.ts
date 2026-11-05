@@ -32,7 +32,7 @@ export function publicArchiveApiQuery(
   const params = new URLSearchParams(publicArchiveQuery(filters));
   params.set("audience", "public");
   params.set("timezone", "America/Lima");
-  params.set("period", "all");
+  if (!filters.from && !filters.to) params.set("period", "all");
   params.set("limit", "20");
   if (cursor) params.set("cursor", cursor);
   return params;

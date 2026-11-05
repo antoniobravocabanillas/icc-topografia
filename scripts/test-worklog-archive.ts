@@ -5,6 +5,7 @@ import {
   formatWorklogDay,
   localDateStartUtc,
   parseWorklogArchiveFilters,
+  worklogArchivePeriod,
   WorklogArchiveError,
 } from "../lib/terraqo/worklog-archive-contract";
 
@@ -31,7 +32,18 @@ assert.equal(filters.evidenceStatus, "VERIFIED");
 assert.equal(filters.from, "2026-10-10");
 assert.equal(filters.to, "2026-10-20");
 assert.equal(filters.limit, 50);
-assert.equal(filters.allTime, true);
+assert.equal(filters.allTime, false);
+assert.deepEqual(worklogArchivePeriod(filters), {
+  gte: new Date("2026-10-10T05:00:00.000Z"), lt: new Date("2026-10-21T05:00:00.000Z"),
+});
+const period = (input: Parameters<typeof parseWorklogArchiveFilters>[0]) =>
+  worklogArchivePeriod(parseWorklogArchiveFilters({ tz: "America/Lima", alcance: "all", ...input }));
+assert.equal(period({}), undefined);
+assert.deepEqual(period({ desde: "2026-10-27" }), { gte: new Date("2026-10-27T05:00:00Z") });
+assert.deepEqual(period({ hasta: "2026-10-28" }), { lt: new Date("2026-10-29T05:00:00Z") });
+assert.deepEqual(period({ fecha: "2026-10-28" }), {
+  gte: new Date("2026-10-28T05:00:00Z"), lt: new Date("2026-10-29T05:00:00Z"),
+});
 assert.equal(
   localDateStartUtc("2026-10-15", "America/Lima").toISOString(),
   "2026-10-15T05:00:00.000Z",

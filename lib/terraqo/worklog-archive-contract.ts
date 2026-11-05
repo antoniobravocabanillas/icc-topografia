@@ -195,7 +195,7 @@ export function parseWorklogArchiveFilters(
   const limit = Number.isInteger(requestedLimit)
     ? Math.min(Math.max(requestedLimit, 1), MAX_PAGE_SIZE)
     : DEFAULT_PAGE_SIZE;
-  const allTime = input.alcance === "all";
+  const allTime = input.alcance === "all" && !date && !from && !to;
   return {
     query,
     type,

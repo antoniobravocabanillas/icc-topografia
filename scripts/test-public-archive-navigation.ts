@@ -17,7 +17,8 @@ assert.equal(
   "valid-cursor",
 );
 assert.equal(publicArchiveApiQuery(filters).get("audience"), "public");
-assert.equal(publicArchiveApiQuery(filters).get("period"), "all");
+assert.equal(publicArchiveApiQuery(filters).has("period"), false);
+assert.equal(publicArchiveApiQuery(readPublicArchiveFilters("")).get("period"), "all");
 assert.equal(publicArchiveApiQuery(filters).get("limit"), "20");
 assert.equal(
   readPublicArchiveFilters(publicArchivePath("ana", filters).split("?")[1]).q,

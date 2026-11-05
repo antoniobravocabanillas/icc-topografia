@@ -57,7 +57,7 @@ async function main() {
     assert.deepEqual(await marker.json(), { kind: "workspace-administration", siteId, commit: live.commit_ref, deployId: live.id });
     // Only diagnostic, documentation and staging plugin changes may be tested against an older live build.
     const changed = execFileSync("git", ["diff", "--name-only", live.commit_ref, candidate], { encoding: "utf8" }).trim();
-    assert.ok(changed.split(/\r?\n/).every(file => /^(scripts\/|docs\/|plugins\/terraqo-staging-gate\/)/.test(file)));
+    assert.ok(!changed || changed.split(/\r?\n/).every(file => /^(scripts\/|docs\/|plugins\/terraqo-staging-gate\/)/.test(file)));
     probeTarget = live.commit_ref + "/" + live.id;
   }
   const recover = process.argv[4] ?? "off";
