@@ -39,7 +39,8 @@ export async function verifyHostedPublication(source: NodeJS.ProcessEnv) {
     const failure = error as { stdout?: string; stderr?: string };
     const diagnostic = cloudFailureDiagnostic(`${failure.stdout ?? ""}\n${failure.stderr ?? ""}`);
     const stage = /Hosted WorkCase check failed during ([a-z ,/-]{1,80})\./.exec(failure.stderr ?? "")?.[1];
-    console.error(JSON.stringify({ ...diagnostic, workCaseStage: stage }));
+    const reads = failure.stdout?.match(/^S24_READ (owner|reviewer|stranger|anonymous) (download|media|selection) [1-5]\d\d$/gm) ?? [];
+    console.log(JSON.stringify({ ...diagnostic, workCaseStage: stage, recentGrantReads: reads.slice(-5) }));
     throw new Error("Hosted publication acceptance failed");
   }
 

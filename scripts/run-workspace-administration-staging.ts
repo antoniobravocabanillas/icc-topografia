@@ -46,6 +46,24 @@ async function main() {
       await writeFile("public/__terraqo_s22_candidate.json", JSON.stringify(marker));
       const env: NodeJS.ProcessEnv = { NODE_ENV: "production", ...Object.fromEntries(Object.entries(process.env).filter(([key]) => /^(PATH|HOME|TMPDIR|TEMP|TMP|SYSTEMROOT|WINDIR|USERPROFILE|LOCALAPPDATA)$/i.test(key))) };
       execFileSync(process.execPath, ["node_modules/playwright/cli.js", "install", "chromium"], { env, timeout: 180000, windowsHide: true, stdio: "pipe" });
+      const target = process.env.S24_STAGING_DIAGNOSTIC_TARGET;
+      if (target && target !== "off") {
+        assert.match(target, /^[a-f0-9]{40}\/[a-f0-9]{24}$/);
+        const [servedCommit, servedDeploy] = target.split("/");
+        const expected = { ...marker, commit: servedCommit, deployId: servedDeploy };
+        async function confirmLiveTarget() {
+          const reply = await fetch(origin + "/__terraqo_s22_candidate.json?probe=" + marker.deployId,
+            { cache: "no-store", redirect: "error", signal: AbortSignal.timeout(30_000) });
+          assert.equal(reply.status, 200);
+          assert.deepEqual(await reply.json(), expected);
+        }
+        step = "live-publication-probe";
+        await confirmLiveTarget();
+        await verifyHostedPublication(process.env);
+        await confirmLiveTarget();
+        console.log("PASS S24 diagnostic against served commit " + servedCommit);
+        return;
+      }
       console.log("PASS S22 staging preflight: target, commit and migration ledger verified; no fixtures written.");
       return;
     }

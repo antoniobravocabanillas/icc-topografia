@@ -8,7 +8,9 @@ const siteId = "6b8c43fb-6083-450a-9b85-46a820fb6358";
 const origin = "https://terraqo-platform-staging.netlify.app";
 const branch = "codex/s22-evaluator-local";
 async function main() {
-  const mode = process.argv[2];
+  const requested = process.argv[2];
+  const probe = ["probe-configure", "probe-trigger"].includes(requested);
+  const mode = probe ? requested.slice(6) : requested;
   assert.ok(["inspect", "configure", "trigger", "status"].includes(mode));
   const require = createRequire(new URL("../node_modules/netlify-cli/package.json", import.meta.url));
   const { getAPIToken } = await import(pathToFileURL(require.resolve("@netlify/dev-utils")).href);
@@ -45,7 +47,21 @@ async function main() {
   const probeReady = mailKey?.is_secret === true && mailKey.scopes?.length === 1 &&
     mailKey.scopes[0] === "functions" && Boolean(values().RESEND_API_KEY) &&
     values().TERRAQO_EMAIL_FROM === "Terraqo <noreply@terraqoglobal.com>";
+  let probeTarget = "off";
+  if (probe) {
+    const live = site.published_deploy;
+    assert.match(live?.commit_ref ?? "", /^[0-9a-f]{40}$/);
+    assert.match(live.id, /^[0-9a-f]{24}$/);
+    const marker = await fetch(origin + "/__terraqo_s22_candidate.json", { cache: "no-store", redirect: "error" });
+    assert.equal(marker.status, 200);
+    assert.deepEqual(await marker.json(), { kind: "workspace-administration", siteId, commit: live.commit_ref, deployId: live.id });
+    // Only diagnostic, documentation and staging plugin changes may be tested against an older live build.
+    const changed = execFileSync("git", ["diff", "--name-only", live.commit_ref, candidate], { encoding: "utf8" }).trim();
+    assert.ok(changed.split(/\r?\n/).every(file => /^(scripts\/|docs\/|plugins\/terraqo-staging-gate\/)/.test(file)));
+    probeTarget = live.commit_ref + "/" + live.id;
+  }
   const expected = {
+    S24_STAGING_DIAGNOSTIC_TARGET: probeTarget,
     S22_STAGING_CANDIDATE_SHA: candidate,
     PLATFORM_STAGING_CLOUD_PHASE: "workspace-administration",
     TERRAQO_S22_STAGING_CONFIRM: "mghdpciewbsowjrjwmwk:s22-fixtures",

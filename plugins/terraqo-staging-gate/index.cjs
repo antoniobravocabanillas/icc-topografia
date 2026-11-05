@@ -37,6 +37,8 @@ function run(stage, { utils }) {
   if (result.status !== 0) {
     const fail = stage === "verify" ? utils.build.failPlugin : utils.build.failBuild;
     fail(`Staging ${stage} failed; production release remains blocked. ${JSON.stringify({ locations, codes, attentionSteps: attentionSteps.slice(0, 8) })}`);
+  } else if (s22 && stage === "prepare" && process.env.S24_STAGING_DIAGNOSTIC_TARGET && process.env.S24_STAGING_DIAGNOSTIC_TARGET !== "off") {
+    utils.build.cancelBuild("S24 staging diagnostic completed; the existing deploy remains active.");
   } else if (stage === "verify" && utils.status?.show) {
     utils.status.show({ title: "Staging gate verified", summary: `PASS ${process.env.PLATFORM_STAGING_CLOUD_PHASE}; commit=${process.env.COMMIT_REF}; deploy=${process.env.DEPLOY_ID}` });
   }

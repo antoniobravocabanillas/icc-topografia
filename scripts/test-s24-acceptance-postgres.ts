@@ -12,7 +12,7 @@ async function main() {
   const url = new URL(process.env.DATABASE_URL ?? "");
   assert.equal(process.env.TERRAQO_LOCAL_S24_TEST, "synthetic-only");
   assert.equal(url.hostname, "127.0.0.1");
-  assert.equal(url.username, "terraqo_s24_test");
+  assert.equal(url.username, "terraqo_s24_runtime");
   const directory = path.resolve(process.env.S24_BLOB_DIRECTORY!);
   assert.equal(path.dirname(path.dirname(directory)), path.resolve(os.tmpdir()));
   assert.match(path.basename(path.dirname(directory)), /^terraqo-s24-local-/);
@@ -41,6 +41,9 @@ async function main() {
     },
   }) });
   const { prisma: db } = await import("../lib/prisma");
+  const [role] = await db.$queryRaw<{ name: string; canCreate: boolean }[]>`SELECT current_user AS name,
+    has_schema_privilege(current_user, 'icc', 'CREATE') AS "canCreate"`;
+  assert.deepEqual(role, { name: "terraqo_s24_runtime", canCreate: false });
   const reviewMedia = await import("../app/api/v1/publication-reviews/[reviewId]/media/[mediaId]/route");
   const publicMedia = await import("../app/api/v1/public/selections/[slug]/media/[mediaId]/route");
   const publicJson = await import("../app/api/v1/public/selections/[slug]/route");

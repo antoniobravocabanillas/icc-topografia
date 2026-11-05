@@ -160,6 +160,10 @@ async function main() {
     const read: ReadAs = async (actor, path) => {
       const context = { anonymous, reviewer: reviewerContext, owner: ownerContext, stranger: strangerContext }[actor];
       const result = await context.request.get(new URL(path, origin).href, { maxRedirects: 0 });
+      if (path.startsWith("/api/v1/shared-selections/")) {
+        const operation = path.includes("download=1") ? "download" : path.includes("/media/") ? "media" : "selection";
+        console.log(`S24_READ ${actor} ${operation} ${result.status()}`);
+      }
       return new Response(new Uint8Array(await result.body()), { status: result.status(), headers: result.headers() });
     };
     const first = await ownerContext.request.post(reviewsUrl, { headers, data: { collectionId: collection.id, expectedVersion: 1 } });
@@ -260,5 +264,9 @@ async function main() {
     staleRequestDecisionPublish: 409, explicitUiApproval: true, expiredGrantDenied: true,
     publicAndReviewBytesRevoked: true, databaseReaders: ["discovery", "dossier", "context", "analysis"] }));
 }
-void main().catch(error => { console.error(error instanceof Error ? error.stack : "S24 gate failed"); process.exitCode = 1; })
+void main().catch(error => {
+  if (typeof error?.code === "string" && /^[A-Z0-9_]{1,45}$/.test(error.code)) console.error(error.code);
+  console.error(error instanceof Error ? error.stack : "S24 gate failed");
+  process.exitCode = 1;
+})
   .finally(async () => { await prisma?.$disconnect(); });

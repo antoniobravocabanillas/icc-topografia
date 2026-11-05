@@ -158,7 +158,31 @@ try {
   }
   await mkdir(env.S24_BLOB_DIRECTORY);
   await mkdir("output", { recursive: true });
-  const expanded = JSON.parse((await run(process.execPath, ["--import", "tsx", "scripts/test-s24-acceptance-postgres.ts"])).trim());
+  // Run the acceptance suite as a DML-only actor; keep schema setup in the disposable cluster.
+  const runtimeRole = "terraqo_s24_runtime";
+  const runtimePassword = randomBytes(24).toString("hex");
+  const roleSql = path.join(directory, "local-runtime.sql");
+  try {
+    await writeFile(roleSql, `CREATE ROLE ${runtimeRole} LOGIN PASSWORD '${runtimePassword}';
+      GRANT USAGE ON SCHEMA icc TO ${runtimeRole};
+      GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA icc TO ${runtimeRole};
+      GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA icc TO ${runtimeRole};`, { flag: "wx", mode: 0o600 });
+    await run(path.join(bin, "psql.exe"), [...psqlArgs, "--single-transaction", "-f", roleSql]);
+  } finally { await unlink(roleSql).catch(() => {}); }
+  const runtimeUrl = new URL(url);
+  runtimeUrl.username = runtimeRole;
+  runtimeUrl.password = runtimePassword;
+  let expanded;
+  try {
+    const result = await execute(process.execPath, ["--conditions=react-server", "--import", "tsx", "scripts/test-s24-acceptance-postgres.ts"], {
+      cwd: root, env: { ...env, NODE_ENV: "production", DATABASE_URL: runtimeUrl.href, DIRECT_URL: runtimeUrl.href,
+        PGPASSWORD: runtimePassword }, timeout: 120000, windowsHide: true,
+    });
+    expanded = JSON.parse(result.stdout.trim());
+  } catch (error) {
+    const location = String(error.stderr).match(/[\w-]+\.ts:\d+:\d+/g) ?? [];
+    throw new Error(`Local restricted-role S24 failed: ${location.join(", ")}`);
+  }
   assert.equal(expanded.localOnly, true);
   assert.equal(expanded.cleanup, "matched");
   console.log(JSON.stringify(expanded));

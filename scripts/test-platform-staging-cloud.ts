@@ -149,7 +149,11 @@ assert.throws(() => productionGuard.assertProductionEnvironment({ ...productionE
 Object.assign(pluginProcess.env, { SITE_ID: stagingCloudSite, PLATFORM_STAGING_CLOUD_PHASE: "customer-attention" });
 pluginModule.exports.onPreBuild(context);
 assert.equal(runners.at(-1), "scripts/run-customer-attention-staging.ts");
-Object.assign(pluginProcess.env, { PLATFORM_STAGING_CLOUD_PHASE: "b4" });
+Object.assign(pluginProcess.env, { PLATFORM_STAGING_CLOUD_PHASE: "workspace-administration", S24_STAGING_DIAGNOSTIC_TARGET: head + "/" + deployId });
+let cancelled = 0;
+pluginModule.exports.onPreBuild({ utils: { build: { cancelBuild: () => { cancelled++; } } } });
+assert.equal(cancelled, 1);
+Object.assign(pluginProcess.env, { PLATFORM_STAGING_CLOUD_PHASE: "b4", S24_STAGING_DIAGNOSTIC_TARGET: "off" });
 pluginModule.exports.onPreBuild(context);
 assert.equal(runners.at(-1), "scripts/run-platform-staging-cloud.ts");
 console.log("Staging cloud contract PASS: exact site/branch/commit/deploy, per-phase consent, isolated credentials, candidate readback and production destination guard.");
