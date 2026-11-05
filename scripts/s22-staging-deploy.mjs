@@ -6,7 +6,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 
 const siteId = "6b8c43fb-6083-450a-9b85-46a820fb6358";
 const origin = "https://terraqo-platform-staging.netlify.app";
-const branch = "codex/s22-workspace-admin-20261104";
+const branch = "codex/s22-evaluator-local";
 async function main() {
   const mode = process.argv[2];
   assert.ok(["inspect", "configure", "trigger", "status"].includes(mode));
@@ -41,6 +41,7 @@ async function main() {
     PLATFORM_STAGING_CLOUD_PHASE: "workspace-administration",
     TERRAQO_S22_STAGING_CONFIRM: "mghdpciewbsowjrjwmwk:s22-fixtures",
     TERRAQO_WORKSPACE_INVITATIONS_V1: "true",
+    TERRAQO_WORKSPACE_EVALUATORS_V1: "true",
     TERRAQO_TRANSACTIONAL_EMAIL_ENABLED: "false",
   };
   // Netlify deliberately masks secrets returned by its management API. This

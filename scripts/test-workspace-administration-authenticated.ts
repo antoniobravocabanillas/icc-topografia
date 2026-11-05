@@ -6,6 +6,7 @@ import type { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { chromium, type BrowserContext } from "playwright";
 import { assertWorkspaceAdministrationTestTarget } from "./lib/workspace-administration-test-target";
+import { verifyEvaluatorBrowser } from "./verify-s22-evaluator-browser";
 
 /** Same browser contract runs locally and on the explicitly isolated staging target. */
 export async function verifyWorkspaceAdministration(db: PrismaClient, base: string, env: Record<string, string | undefined> = process.env) {
@@ -14,7 +15,9 @@ export async function verifyWorkspaceAdministration(db: PrismaClient, base: stri
   const workspaceId = `s22gate-${suffix}`;
   const otherWorkspaceId = `s22gate-other-${suffix}`;
   const workspaceIds = [workspaceId, otherWorkspaceId];
-  const userIds = ["owner", "recipient", "staff"].map(role => `s22gate-${role}-${suffix}`);
+  const roles = ["owner", "recipient", "staff"];
+  if (env.TERRAQO_WORKSPACE_EVALUATORS_V1 === "true") roles.push("evaluator");
+  const userIds = roles.map(role => `s22gate-${role}-${suffix}`);
   const out = path.resolve("output/s22/authenticated", suffix);
   await mkdir(out, { recursive: true });
   // Persist exact ownership before any write; no credentials enter this manifest.
@@ -124,6 +127,13 @@ export async function verifyWorkspaceAdministration(db: PrismaClient, base: stri
     await page.screenshot({ path: path.join(out, "members-mobile.png"), fullPage: true, caret: "initial" });
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "Mobile must not overflow");
     // A valid session cookie must not preserve revoked workspace authority.
+    if (userIds[3]) {
+      phase = "evaluator-assignment";
+      const evaluator = await db.user.create({ data: { id: userIds[3], email: `evaluator-${suffix}@s22.invalid`, passwordHash, emailVerified: new Date() } });
+      const reviewer = await context();
+      await login(reviewer, evaluator.email);
+      await verifyEvaluatorBrowser({ db, owner: admin, reviewer, origin: base, workspaceId, ownerId: owner.id, reviewerId: evaluator.id, email: evaluator.email });
+    }
     let pulseRequests = 0;
     phase = "revoked-authority";
     page.on("request", request => { if (new URL(request.url()).pathname === "/api/admin/notifications/pulse") pulseRequests++; });
@@ -160,6 +170,10 @@ export async function verifyWorkspaceAdministration(db: PrismaClient, base: stri
       assert.equal(await db.user.count({ where: { id: { in: userIds } } }), 0);
       assert.equal(await db.terraqoWorkspaceInvitation.count({ where: { workspaceId: { in: workspaceIds } } }), 0);
       assert.equal(await db.terraqoWorkspaceMember.count({ where: { workspaceId: { in: workspaceIds } } }), 0);
+      if (env.TERRAQO_WORKSPACE_EVALUATORS_V1 === "true") {
+        assert.equal(await db.terraqoWorkspaceEvaluator.count({ where: { workspaceId: { in: workspaceIds } } }), 0);
+        assert.equal(await db.terraqoWorkspaceEvaluatorAssignment.count({ where: { workspaceId: { in: workspaceIds } } }), 0);
+      }
       assert.equal(await db.activityLog.count({ where: { actorId: { in: userIds } } }), 0);
       await writeFile(path.join(out, "cleanup.json"), JSON.stringify({ workspaceIds, userIds, remaining: 0 }));
       console.log("PASS S22 exact-fixture cleanup and zero-row readback.");

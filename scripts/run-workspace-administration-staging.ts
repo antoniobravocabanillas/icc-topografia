@@ -14,7 +14,8 @@ async function main() {
   assert.ok(stage === "prepare" || stage === "verify");
   assert.equal(process.env.NETLIFY, "true");
   assert.equal(process.env.CONTEXT, "production"); // Production context of the isolated staging site only.
-  assert.equal(process.env.BRANCH, "codex/s22-workspace-admin-20261104");
+  assert.equal(process.env.BRANCH, "codex/s22-evaluator-local");
+  assert.equal(process.env.TERRAQO_WORKSPACE_EVALUATORS_V1, "true");
   assert.equal(process.env.PLATFORM_STAGING_CLOUD_PHASE, "workspace-administration");
   for (const file of [".env", ".env.local", ".env.production", ".env.production.local"]) assert.ok(!existsSync(file));
   step = "target";
@@ -32,7 +33,7 @@ async function main() {
     assert.deepEqual(identity, [{ role: "terraqo_staging_runtime", database: "postgres", exposed: false }]);
     // Read-only preflight in both stages: never apply migrations from a deploy hook.
     step = "migration-ledger";
-    for (const name of ["20261101000100_enterprise_publication_review", "20261102000100_selection_access_requests", "20261104000100_workspace_invitations", "20261104000200_customer_attention_followup"]) {
+    for (const name of ["20261101000100_enterprise_publication_review", "20261102000100_selection_access_requests", "20261104000100_workspace_invitations", "20261104000200_customer_attention_followup", "20261104000300_workspace_evaluators"]) {
       const rows = await db.$queryRaw<Array<{ checksum: string }>>`SELECT checksum FROM icc._prisma_migrations WHERE migration_name=${name} AND finished_at IS NOT NULL AND rolled_back_at IS NULL`;
       assert.equal(rows.length, 1);
       assert.ok(migrationSourceChecksums(await readFile(`prisma/migrations/${name}/migration.sql`)).has(rows[0].checksum));

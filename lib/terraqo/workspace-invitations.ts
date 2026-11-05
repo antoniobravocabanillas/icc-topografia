@@ -4,9 +4,11 @@ import { z } from "zod";
 import { lockWorkspaceMemberships } from "./workspace-membership-guard";
 import { workspaceAdminMemberRoles } from "./workspace-roles";
 
-const schema = z.object({
+const ordinaryInvitationRole = z.enum(["VIEWER", "MEMBER", "PROFESSIONAL", "CLIENT"]);
+export const workspaceInvitationCreateSchema = z.object({
   workspaceId: z.string().min(1).max(160), email: z.string().trim().email().max(254).transform(v => v.toLowerCase()),
-  role: z.enum(["VIEWER", "MEMBER", "PROFESSIONAL", "CLIENT"]).default("VIEWER"),
+  role: z.enum([...ordinaryInvitationRole.options, "EVALUATOR"]).default("VIEWER"),
+  canReadEvaluations: z.boolean().default(false),
   operationKey: z.string().uuid(),
 }).strict();
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
@@ -32,16 +34,22 @@ export async function listWorkspaceInvitations(db: PrismaClient, actorId: string
     await lockWorkspaceMemberships(tx, workspaceId);
     await authorize(tx, workspaceId, actorId);
     return tx.terraqoWorkspaceInvitation.findMany({
-      where: { workspaceId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 50,
-      select: { id: true, email: true, role: true, status: true, createdAt: true, expiresAt: true, lastIssuedAt: true, resendCount: true, acceptedAt: true, cancelledAt: true },
+      where: { workspaceId, ...(process.env.TERRAQO_WORKSPACE_EVALUATORS_V1 === "true" ? {} : { role: { not: "EVALUATOR" as const } }) }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 50,
+      select: { id: true, email: true, role: true, canReadEvaluations: true, status: true, createdAt: true, expiresAt: true, lastIssuedAt: true, resendCount: true, acceptedAt: true, cancelledAt: true },
     });
   }, { isolationLevel: "ReadCommitted" });
 }
 
 /** Raw tokens are returned only on explicit creation/rotation. No delivery occurs here. */
 export async function createWorkspaceInvitation(db: PrismaClient, actorId: string, input: unknown) {
-  const data = schema.parse(input);
-  const fingerprint = hash(JSON.stringify([data.email, data.role]));
+  const data = workspaceInvitationCreateSchema.parse(input);
+  if (data.role === "EVALUATOR" && process.env.TERRAQO_WORKSPACE_EVALUATORS_V1 !== "true") throw unavailable();
+  if (data.role !== "EVALUATOR" && data.canReadEvaluations) {
+    throw new WorkspaceInvitationError("El permiso de lectura requiere una invitación de evaluador.", 422);
+  }
+  // Preserve the fingerprint of invitations issued before the evaluator migration.
+  const fingerprint = hash(JSON.stringify(data.role === "EVALUATOR"
+    ? [data.email, data.role, data.canReadEvaluations] : [data.email, data.role]));
   return db.$transaction(async tx => {
     await lockWorkspaceMemberships(tx, data.workspaceId);
     await authorize(tx, data.workspaceId, actorId);
@@ -67,7 +75,7 @@ export async function manageWorkspaceInvitation(db: PrismaClient, actorId: strin
     await lockWorkspaceMemberships(tx, workspaceId);
     await authorize(tx, workspaceId, actorId);
     const invitation = await tx.terraqoWorkspaceInvitation.findFirst({ where: { id: invitationId, workspaceId } });
-    if (!invitation) throw unavailable();
+    if (!invitation || (invitation.role === "EVALUATOR" && process.env.TERRAQO_WORKSPACE_EVALUATORS_V1 !== "true")) throw unavailable();
     if (action === "cancel" && invitation.status === "CANCELLED") return { token: null };
     if (invitation.status !== "PENDING") throw unavailable();
     if (action === "cancel") {
@@ -96,16 +104,28 @@ export async function acceptWorkspaceInvitation(db: PrismaClient, actorId: strin
     await lockWorkspaceMemberships(tx, invitation.workspaceId);
     // Re-read after the lock: cancellation/rotation/acceptance cannot race past this point.
     const current = await tx.terraqoWorkspaceInvitation.findUnique({ where: { tokenHash: hash(token) } });
+    await tx.$queryRaw`SELECT id FROM icc."User" WHERE id=${actorId} FOR SHARE`;
     const user = await tx.user.findUnique({ where: { id: actorId }, select: { email: true, emailVerified: true } });
     if (!current || !user?.emailVerified || user.email?.toLowerCase() !== current.email) throw unavailable();
+    if (current.role === "EVALUATOR") {
+      if (process.env.TERRAQO_WORKSPACE_EVALUATORS_V1 !== "true") throw unavailable();
+    } else if (!ordinaryInvitationRole.safeParse(current.role).success) throw unavailable();
     await authorize(tx, current.workspaceId, current.createdById);
-    if (current.status === "ACCEPTED" && current.acceptedById === actorId) return { workspaceId: current.workspaceId, replayed: true };
+    const destination = current.role === "EVALUATOR" ? { access: "EVALUATOR" as const } : {};
+    if (current.status === "ACCEPTED" && current.acceptedById === actorId) return { workspaceId: current.workspaceId, replayed: true, ...destination };
     if (current.status !== "PENDING" || current.expiresAt <= new Date()) throw unavailable();
     const member = await tx.terraqoWorkspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId: current.workspaceId, userId: actorId } } });
     if (member && !member.active) throw new WorkspaceInvitationError("La membresía está suspendida. Solicita revisión al administrador.", 409);
     // An invitation does not replace an existing role or reactivate a suspended member.
-    if (!member) await tx.terraqoWorkspaceMember.create({ data: { workspaceId: current.workspaceId, userId: actorId, role: current.role, active: true, invitedAt: current.createdAt, joinedAt: new Date() } });
+    if (current.role === "EVALUATOR") {
+      const identity = { workspaceId: current.workspaceId, userId: actorId };
+      const evaluator = await tx.terraqoWorkspaceEvaluator.findUnique({ where: { workspaceId_userId: identity } });
+      if (evaluator && !evaluator.active) throw new WorkspaceInvitationError("El acceso de evaluador está suspendido.", 409);
+      if (!evaluator) await tx.terraqoWorkspaceEvaluator.create({ data: { ...identity, canReadEvaluations: current.canReadEvaluations } });
+    } else if (!member) {
+      await tx.terraqoWorkspaceMember.create({ data: { workspaceId: current.workspaceId, userId: actorId, role: current.role, active: true, invitedAt: current.createdAt, joinedAt: new Date() } });
+    }
     await tx.terraqoWorkspaceInvitation.update({ where: { id: current.id }, data: { status: "ACCEPTED", acceptedById: actorId, acceptedAt: new Date() } });
-    return { workspaceId: current.workspaceId, replayed: false };
+    return { workspaceId: current.workspaceId, replayed: false, ...destination };
   }, { isolationLevel: "ReadCommitted" });
 }

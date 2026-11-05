@@ -4,11 +4,11 @@ import { readBoundedJson, BoundedRequestBodyError } from "./bounded-request-body
 import { isSameOriginMutation } from "./same-origin-mutation";
 import type { sendWorkspaceInvitationEmail } from "./workspace-invitation-email";
 import type { WorkspaceInvitationIssue } from "../terraqo/workspace-invitations";
-import { createWorkspaceInvitation, manageWorkspaceInvitation, acceptWorkspaceInvitation, listWorkspaceInvitations, WorkspaceInvitationError } from "../terraqo/workspace-invitations";
+import { createWorkspaceInvitation, manageWorkspaceInvitation, acceptWorkspaceInvitation, listWorkspaceInvitations, WorkspaceInvitationError, workspaceInvitationCreateSchema } from "../terraqo/workspace-invitations";
 
 const id = z.string().min(1).max(160);
 const mutation = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("create"), workspaceId: id, email: z.string().trim().email().max(254), role: z.enum(["VIEWER", "MEMBER", "PROFESSIONAL", "CLIENT"]).default("VIEWER"), operationKey: z.string().uuid() }).strict(),
+  workspaceInvitationCreateSchema.extend({ action: z.literal("create") }),
   z.object({ action: z.literal("cancel"), workspaceId: id, invitationId: id }).strict(),
   z.object({ action: z.literal("rotate"), workspaceId: id, invitationId: id, expectedResendCount: z.number().int().min(0).max(5).default(0) }).strict(),
   z.object({ action: z.literal("accept"), token: z.string().regex(/^[A-Za-z0-9_-]{43}$/) }).strict(),
@@ -42,7 +42,7 @@ export function workspaceInvitationHandlers(deps: { db: PrismaClient; actor: (re
       if (data.action === "create") {
         const result = await createWorkspaceInvitation(deps.db, actorId, {
           workspaceId: data.workspaceId, email: data.email,
-          role: data.role, operationKey: data.operationKey,
+          role: data.role, canReadEvaluations: data.canReadEvaluations, operationKey: data.operationKey,
         });
         if (result.token === null) return json({ id: result.id, token: null, replayed: true, delivery: "skipped" });
         return json({ id: result.id, token: result.token, replayed: false, delivery: await deliver(result) }, 201);

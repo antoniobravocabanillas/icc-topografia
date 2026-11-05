@@ -26,6 +26,7 @@ async function main() {
   for (const [key, value] of Object.entries(process.env)) if (/^(path|systemroot|windir|temp|tmp|userprofile|appdata|localappdata|comspec|pathext|programfiles|programfiles\(x86\)|programdata)$/i.test(key)) env[key] = value;
   Object.assign(env, { NODE_ENV: "development", DATABASE_URL: database.toString(), DIRECT_URL: database.toString(), AUTH_SECRET: randomBytes(32).toString("hex"), AUTH_TRUST_HOST: "true", AUTH_URL: base, NEXT_PUBLIC_SITE_URL: base, TERRAQO_WORKSPACE_INVITATIONS_V1: "true", NEXT_TELEMETRY_DISABLED: "1" });
   Object.assign(env, { TERRAQO_TRANSACTIONAL_EMAIL_ENABLED: "false", TERRAQO_LOCAL_S22_TEST: "synthetic-only" });
+  env.TERRAQO_WORKSPACE_EVALUATORS_V1 = "true";
   const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "--hostname", "127.0.0.1", "--port", String(port)], { cwd: process.cwd(), env, windowsHide: true, stdio: ["ignore", log.fd, log.fd] });
   try {
     let ready = false;

@@ -534,6 +534,21 @@ enum TerraqoMemberRole {
   @@schema("icc")
 }
 
+// Invitation records preserve historical role values. Only explicitly issuable
+// roles may be accepted; EVALUATOR cannot be stored as a membership role.
+enum TerraqoWorkspaceInvitationRole {
+  OWNER
+  ADMIN
+  MANAGER
+  MEMBER
+  VIEWER
+  CLIENT
+  PROFESSIONAL
+  EVALUATOR
+
+  @@schema("icc")
+}
+
 enum TerraqoProfessionalStatus {
   AVAILABLE
   WORKING
@@ -981,6 +996,7 @@ enum TerraqoFileCategory {
 }
 
 model User {
+  workspaceEvaluators TerraqoWorkspaceEvaluator[]
   workspaceInvitationsCreated TerraqoWorkspaceInvitation[] @relation("WorkspaceInvitationCreator")
   requestedPublicationReviews         TerraqoPublicationReview[]        @relation("PublicationRequester")
   decidedPublicationReviews           TerraqoPublicationReview[]        @relation("PublicationDecider")
@@ -2495,6 +2511,7 @@ model ActivityLog {
 }
 
 model TerraqoWorkspace {
+  evaluators TerraqoWorkspaceEvaluator[]
   invitations TerraqoWorkspaceInvitation[]
   publicationReviews       TerraqoPublicationReview[]
   nativeWorklogOperations  TerraqoNativeWorklogOperation[]
@@ -3133,7 +3150,8 @@ model TerraqoWorkspaceInvitation {
   createdById String
   createdBy User @relation("WorkspaceInvitationCreator", fields: [createdById], references: [id], onDelete: Restrict)
   email String
-  role TerraqoMemberRole @default(VIEWER)
+  role TerraqoWorkspaceInvitationRole @default(VIEWER)
+  canReadEvaluations Boolean @default(false)
   tokenHash String @unique
   status String @default("PENDING")
   expiresAt DateTime
@@ -3149,6 +3167,35 @@ model TerraqoWorkspaceInvitation {
 
   @@unique([workspaceId, operationKey])
   @@index([workspaceId, email, status])
+  @@schema("icc")
+}
+
+model TerraqoWorkspaceEvaluator {
+  id                 String @id @default(cuid())
+  workspaceId        String
+  workspace          TerraqoWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId             String
+  user               User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  active             Boolean @default(true)
+  canReadEvaluations Boolean @default(false)
+  updatedAt          DateTime @updatedAt
+  assignments        TerraqoWorkspaceEvaluatorAssignment[]
+
+  @@unique([workspaceId, userId])
+  @@unique([workspaceId, id])
+  @@index([userId, active])
+  @@schema("icc")
+}
+
+model TerraqoWorkspaceEvaluatorAssignment {
+  workspaceId String
+  evaluatorId String
+  dossierId   String
+  evaluator   TerraqoWorkspaceEvaluator @relation(fields: [workspaceId, evaluatorId], references: [workspaceId, id], onDelete: Cascade, onUpdate: Restrict)
+  dossier     TerraqoEvaluationDossier @relation(fields: [workspaceId, dossierId], references: [workspaceId, id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@id([workspaceId, evaluatorId, dossierId])
+  @@index([workspaceId, dossierId])
   @@schema("icc")
 }
 
@@ -3934,6 +3981,7 @@ model TerraqoNeedRequirement {
 }
 
 model TerraqoEvaluationDossier {
+  evaluatorAssignments  TerraqoWorkspaceEvaluatorAssignment[]
   id                    String                            @id @default(cuid())
   workspaceId           String
   workspace             TerraqoWorkspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -3961,6 +4009,7 @@ model TerraqoEvaluationDossier {
   updatedAt             DateTime                          @updatedAt
   archivedAt            DateTime?
 
+  @@unique([workspaceId, id])
   @@unique([workspaceId, needRevisionId, professionalProfileId])
   @@unique([createdById, operationKey])
   @@index([workspaceId, lifecycle, updatedAt])

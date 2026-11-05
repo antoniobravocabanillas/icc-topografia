@@ -8,6 +8,9 @@ import os from 'node:os';
 import path from 'node:path';
 
 assert.ok(process.argv.includes('--confirm=local-restore-only'));
+const evaluators = process.argv.includes('--evaluators');
+const baseline = evaluators ? 47 : 46;
+const artifact = path.resolve(evaluators ? 'output/s22/evaluator-migration.sql' : 'output/s22/staging-migration.sql');
 const backup = path.resolve(process.argv[2]);
 const manifest = JSON.parse(await readFile(path.join(backup, 'manifest.json'), 'utf8'));
 assert.equal(manifest.projectRef, 'mghdpciewbsowjrjwmwk');
@@ -44,7 +47,7 @@ try {
   assert.ok(ready, 'Local cluster unavailable');
   await run('pg_restore', ['--exit-on-error', '--single-transaction', '--no-owner', '--no-acl', '--dbname=postgres', dump]);
   const count = await query('select count(*) from icc."_prisma_migrations" where finished_at is not null and rolled_back_at is null');
-  assert.equal(count, '46');
+  assert.equal(count, String(baseline));
   const countsSql = `select string_agg(t || ':' || n, ',' order by t) from (
     select 'users' t, count(*) n from icc."User" union all
     select 'workspaces', count(*) from icc."TerraqoWorkspace" union all
@@ -63,18 +66,19 @@ try {
     ALTER DEFAULT PRIVILEGES FOR ROLE terraqo_staging_migrator IN SCHEMA icc
       GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO terraqo_staging_runtime;
     GRANT SELECT, INSERT, UPDATE, DELETE ON icc."ChatConversation" TO terraqo_staging_runtime;`);
-  await run('psql', ['-X', '-v', 'ON_ERROR_STOP=1', '-c', 'SET SESSION AUTHORIZATION postgres', '-f', path.resolve('output/s22/staging-migration.sql')]);
-  assert.equal(await query('select count(*) from icc."_prisma_migrations" where finished_at is not null and rolled_back_at is null'), '47');
+  if (evaluators) await query('GRANT SELECT, INSERT, UPDATE, DELETE ON icc."TerraqoWorkspaceInvitation" TO terraqo_staging_runtime');
+  await run('psql', ['-X', '-v', 'ON_ERROR_STOP=1', '-c', 'SET SESSION AUTHORIZATION postgres', '-f', artifact]);
+  assert.equal(await query('select count(*) from icc."_prisma_migrations" where finished_at is not null and rolled_back_at is null'), String(baseline + 1));
   assert.equal(await query(countsSql), before);
   assert.equal(await query("select pg_has_role('postgres','terraqo_staging_migrator','SET')"), 'f');
   assert.equal(await query(`select has_table_privilege('terraqo_staging_runtime','icc."TerraqoWorkspaceInvitation"','SELECT')
     and not has_schema_privilege('anon','icc','USAGE') and not has_schema_privilege('authenticated','icc','USAGE')`), 't');
   let duplicateRejected = false;
-  try { await run('psql', ['-X', '-v', 'ON_ERROR_STOP=1', '-f', path.resolve('output/s22/staging-migration.sql')]); }
+  try { await run('psql', ['-X', '-v', 'ON_ERROR_STOP=1', '-c', 'SET SESSION AUTHORIZATION postgres', '-f', artifact]); }
   catch { duplicateRejected = true; }
   assert.ok(duplicateRejected, 'Duplicate installation must fail');
-  assert.equal(await query('select count(*) from icc."_prisma_migrations" where finished_at is not null and rolled_back_at is null'), '47');
-  manifest.migrationName = "20261104000100_workspace_invitations";
+  assert.equal(await query('select count(*) from icc."_prisma_migrations" where finished_at is not null and rolled_back_at is null'), String(baseline + 1));
+  manifest.migrationName = evaluators ? "20261104000300_workspace_evaluators" : "20261104000100_workspace_invitations";
   manifest.restoreVerified = true;
   manifest.localMigrationVerified = true;
   manifest.duplicateRejected = true;

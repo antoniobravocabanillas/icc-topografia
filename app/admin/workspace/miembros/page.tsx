@@ -5,6 +5,7 @@ import { getSessionTerraqoWorkspace } from "@/lib/terraqo/workspace-scope";
 import { listWorkspaceInvitations, WorkspaceInvitationError } from "@/lib/terraqo/workspace-invitations";
 import { WorkspaceMembers } from "@/components/admin/workspace-members";
 import { workspaceMemberCapabilities } from "@/lib/terraqo/workspace-member-management-policy";
+import { listWorkspaceEvaluators, WorkspaceEvaluatorError } from "@/lib/terraqo/workspace-evaluators";
 
 export const dynamic = "force-dynamic";
 export default async function WorkspaceMembersPage() {
@@ -29,9 +30,11 @@ export default async function WorkspaceMembersPage() {
       timeout: 15_000,
     });
     const invitations = await listWorkspaceInvitations(prisma, session.user.id, workspace.id);
-    return <WorkspaceMembers workspaceId={workspace.id} name={workspace.name} members={data} invitations={invitations.map(invite => ({ id: invite.id, email: invite.email, role: invite.role, status: invite.status, resendCount: invite.resendCount, expiresAt: invite.expiresAt.toISOString() }))} />;
+    const evaluatorsEnabled = process.env.TERRAQO_WORKSPACE_EVALUATORS_V1 === "true";
+    const evaluatorData = evaluatorsEnabled ? await listWorkspaceEvaluators(prisma, session.user.id, workspace.id) : { evaluators: [], dossiers: [] };
+    return <WorkspaceMembers workspaceId={workspace.id} name={workspace.name} members={data} invitations={invitations.map(invite => ({ id: invite.id, email: invite.email, role: invite.role, status: invite.status, resendCount: invite.resendCount, expiresAt: invite.expiresAt.toISOString() }))} evaluatorsEnabled={evaluatorsEnabled} evaluators={evaluatorData.evaluators} dossiers={evaluatorData.dossiers} />;
   } catch (error) {
-    if (error instanceof WorkspaceInvitationError) notFound();
+    if (error instanceof WorkspaceInvitationError || error instanceof WorkspaceEvaluatorError) notFound();
     throw error;
   }
 }

@@ -81,7 +81,9 @@ try {
   const cli = path.join(root, "node_modules/prisma/build/index.js");
   const baseSql = path.join(directory, "schema.sql");
   // Rehearse the committed additive SQL against the schema before invitations.
-  const currentSchema = await readFile(path.join(root, "prisma/schema.prisma"), "utf8");
+  // Pin the real schema immediately before the evaluator change. Deriving an
+  // old baseline from the new schema would silently skip the migration under test.
+  const currentSchema = await run("git", ["show", "5017b71c6dd25148d1695701ea5523563e18fbd0:prisma/schema.prisma"]);
   assert.ok(currentSchema.includes("model TerraqoWorkspaceInvitation {"));
   const baseline = currentSchema
     .replace(/model TerraqoWorkspaceInvitation \{[\s\S]*?\n\}/, "")
@@ -142,7 +144,28 @@ try {
   } else {
     await run(path.join(bin, "psql.exe"), [...psqlArgs, "--single-transaction", "-f", "prisma/migrations/20261104000100_workspace_invitations/migration.sql"]);
   }
-  if (process.argv.includes("--ordinary-access-only")) {
+  const legacyFixture = path.join(directory, "legacy-invitations.sql");
+  await writeFile(legacyFixture, `
+    INSERT INTO icc."User" (id,email,"updatedAt") VALUES ('legacy-owner','legacy@s22.invalid',now());
+    INSERT INTO icc."TerraqoWorkspace" (id,name,slug,"updatedAt") VALUES ('legacy-ws','Legacy','legacy-ws',now());
+    INSERT INTO icc."TerraqoWorkspaceInvitation"
+      (id,"workspaceId","createdById",email,role,"tokenHash","expiresAt","operationKey","operationFingerprint","updatedAt")
+    SELECT 'legacy-'||r,'legacy-ws','legacy-owner',lower(r)||'@s22.invalid',r::icc."TerraqoMemberRole",
+      'hash-'||r,now()+interval '1 day','op-'||r,'fingerprint-'||r,now()
+      FROM unnest(ARRAY['VIEWER','MEMBER','PROFESSIONAL','CLIENT']) r;`);
+  await run(path.join(bin, "psql.exe"), [...psqlArgs, "--single-transaction", "-f", legacyFixture]);
+  const evaluatorMigration = "prisma/migrations/20261104000300_workspace_evaluators/migration.sql";
+  await run(path.join(bin, "psql.exe"), [...psqlArgs, "-f", evaluatorMigration]);
+  const preserved = await run(path.join(bin, "psql.exe"), [...psqlArgs, "-At", "-c",
+    `SELECT count(*) FROM icc."TerraqoWorkspaceInvitation" WHERE id='legacy-'||role::text AND NOT "canReadEvaluations"`]);
+  assert.equal(preserved.trim(), "4");
+  await assert.rejects(run(path.join(bin, "psql.exe"), [...psqlArgs, "-f", evaluatorMigration]));
+  await run(path.join(bin, "psql.exe"), [...psqlArgs, "--single-transaction", "-c",
+    `DELETE FROM icc."TerraqoWorkspace" WHERE id='legacy-ws'; DELETE FROM icc."User" WHERE id='legacy-owner';`]);
+  env.TERRAQO_WORKSPACE_EVALUATORS_V1 = "true";
+  if (process.argv.includes("--evaluator-only")) {
+    console.log(await run(process.execPath, ["--import", "tsx", "scripts/test-s22-evaluator-postgres.ts"]));
+  } else if (process.argv.includes("--ordinary-access-only")) {
     env.NODE_ENV = "development";
     env.NETLIFY = "false";
     console.log(await run(process.execPath, ["--import", "tsx", "scripts/test-s22-ordinary-access-postgres.ts"]));
@@ -151,6 +174,7 @@ try {
     console.log(await run(process.execPath, ["--import", "tsx", "scripts/test-workspace-invitations-postgres.ts"]));
     console.log(await run(process.execPath, ["--import", "tsx", "scripts/test-workspace-member-management-postgres.ts"]));
     console.log(await run(process.execPath, ["--import", "tsx", "scripts/test-s22-dossier-authority-postgres.ts"]));
+    console.log(await run(process.execPath, ["--import", "tsx", "scripts/test-s22-evaluator-postgres.ts"]));
     if (process.argv.includes("--http-e2e")) console.log(await run(process.execPath, ["--import", "tsx", "scripts/check-s22-authenticated-local.ts"], 600000));
   }
 } catch (error) {

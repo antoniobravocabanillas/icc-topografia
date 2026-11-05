@@ -596,7 +596,7 @@ export async function createEvaluationDossier(input: {
   }, { isolationLevel: "Serializable" });
 }
 
-async function evaluationSourceIsAccessible(
+export async function evaluationSourceIsAccessible(
   tx: Prisma.TransactionClient,
   actorId: string,
   source: { accessKind: TerraqoEvaluationSourceAccessKind; accessReferenceId: string | null; worklogRevisionId: string; accessSnapshot: Prisma.JsonValue },

@@ -58,6 +58,7 @@ type PortalShellProps = {
   fieldVerificationEndpoint?: string | null;
   scopedSharingEnabled?: boolean;
   scopedEndorsementsEnabled?: boolean;
+  evaluatorsEnabled?: boolean;
 };
 
 type PortalNavItem = {
@@ -226,10 +227,11 @@ export function PortalShell({
   fieldVerificationEndpoint,
   scopedSharingEnabled = false,
   scopedEndorsementsEnabled = false,
+  evaluatorsEnabled = false,
 }: PortalShellProps) {
   const pathname = usePathname();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const items = portalType === "professional"
+  const baseItems = portalType === "professional"
     ? professionalItems.flatMap((item) => {
         if (item.href !== "/portal/bitacora") return [item];
         return [
@@ -243,6 +245,9 @@ export function PortalShell({
         ];
       })
     : clientItems;
+  const items: PortalNavItem[] = evaluatorsEnabled
+    ? [baseItems[0], { href: "/portal/evaluaciones", label: "Evaluaciones autorizadas", icon: FileCheck2, group: "Principal" }, ...baseItems.slice(1)]
+    : baseItems;
   const portalLabel =
     portalType === "professional"
       ? "Workspace personal"

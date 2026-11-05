@@ -15,6 +15,13 @@ export default async function PortalLayout({
   children: ReactNode;
 }) {
   const session = await auth();
+  const evaluatorNavigation = process.env.TERRAQO_WORKSPACE_EVALUATORS_V1 === "true" && session?.user?.id
+    ? await prisma.terraqoWorkspaceEvaluator.findFirst({
+        where: { userId: session.user.id, active: true, canReadEvaluations: true,
+          workspace: { active: true, deletedAt: null, members: { none: { userId: session.user.id, active: false } } } },
+        select: { id: true },
+      })
+    : null;
   const user = session?.user?.email
     ? await prisma.user.findUnique({
         where: { email: session.user.email },
@@ -102,6 +109,7 @@ export default async function PortalLayout({
         }
         scopedSharingEnabled={process.env.TERRAQO_SCOPED_SHARING_V1 === "true"}
         scopedEndorsementsEnabled={process.env.TERRAQO_SCOPED_ENDORSEMENTS_V1 === "true"}
+        evaluatorsEnabled={Boolean(evaluatorNavigation)}
       >
         {children}
       </PortalShell>
