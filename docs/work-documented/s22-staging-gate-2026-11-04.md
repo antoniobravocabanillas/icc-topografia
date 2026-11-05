@@ -1,5 +1,17 @@
 # S22 dedicated staging gate — 4 November 2026
 
+## Hosted deployment and acceptance investigation
+
+Authorized staging configuration now selects `codex/s22-workspace-admin-20261104`, phase `workspace-administration`, the exact candidate SHA, explicit S22 fixture consent and invitations enabled; transactional email remains disabled. Production was not modified. Management API secrets are masked: configuration validates nonsecret destination metadata and secret presence/scopes, while the hosted prebuild validates actual URLs, database authority and migration checksums before fixtures. The Netlify repository update requires the writable `repo` payload with its existing provider/path/URL/installation identity.
+
+First preflight attempts rejected an unsupported connection parameter before any fixture writes. The destination validator now accepts explicit Prisma `pgbouncer=true|false` and `sslaccept=strict`, while still rejecting certificate-validation bypass, duplicate parameters and target overrides. Its 146 negative tests pass; TypeScript, targeted lint and plugin dispatch pass.
+
+Candidate `d55e8106c119254172bf058f3737d06072c7c124`, deploy `6aebdb49de107fb695f5a07a`, passed hosted prepare and compiled/deployed successfully. Independent HTTP readback matched its exact commit/deploy marker and anonymous invitations returned 401. **Authenticated acceptance failed; ready deployment status is not a passing gate.** The verifier's exact-fixture cleanup passed, followed by independent provider readback confirming zero users/workspaces/invitations. Credential-free phase/location diagnostics were added for the next hosted run.
+
+Rollback metadata is retained in ignored `output/s22/netlify-before.json`: prior staging branch `codex/customer-attention-release-20261104`, deploy `6aeb9b79ca0426eb80b3521b`, phase `customer-attention`, invitations previously unset, email disabled. Do not reverse the additive invitation migration or replay it. Hosted browser acceptance remains required before any release decision.
+
+Diagnostic candidate `3182fef51ac12be8e146ac8738e343e69c099459`, deploy `6aebdd26c3520cf08526d453`, localized the failure to waiting for the members heading. The server function log independently identified Prisma P2028: unable to acquire a transaction in time. Authentication and invitation API lifecycle had already passed. The members page now uses bounded `maxWait: 20000` and `timeout: 15000` for its existing RepeatableRead transaction, matching the constrained serverless pool rather than changing authorization or consistency. Hosted verification of this correction is pending.
+
 ## Authorized remote schema application
 
 After explicit user authorization, refreshed hosted preflight confirmed the unchanged 46-entry ledger, absent invitation table, no unfinished migrations and zero users/workspaces/worklogs. Applied the previously restored/rehearsed artifact only to `mghdpciewbsowjrjwmwk` through the Supabase migration connector (`s22_workspace_invitations_guarded`). Independent post-read confirms 47 finished entries, zero unfinished, exact invitation source checksum `28d6588fe6dba24a47b7ac1592e96d84d1ba5e0db7775d70289d70d2199972cf`, empty invitation table, all runtime DML grants, no public schema exposure and `postgres` SET restored to false. Existing entity counts remain zero. Production untouched.

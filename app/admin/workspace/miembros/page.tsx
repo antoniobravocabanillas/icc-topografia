@@ -20,7 +20,14 @@ export default async function WorkspaceMembersPage() {
       const owner = await tx.terraqoWorkspace.findUniqueOrThrow({ where: { id: workspace.id }, select: { ownerUserId: true } });
       const members = await tx.terraqoWorkspaceMember.findMany({ where: { workspaceId: workspace.id }, orderBy: { joinedAt: "asc" }, select: { id: true, userId: true, role: true, active: true, updatedAt: true, user: { select: { name: true, email: true } } } });
       return members.map(member => ({ id: member.id, role: member.role, active: member.active, ...member.user, updatedAt: member.updatedAt.toISOString(), isSelf: member.userId === session.user.id, allowedRoles: workspaceMemberCapabilities({ ...membership, userId: session.user.id }, member, owner.ownerUserId).roles }));
-    }, { isolationLevel: "RepeatableRead" });
+    }, {
+      isolationLevel: "RepeatableRead",
+      // The serverless client shares a bounded pool with the admin layout.
+      // Allow queued reads to finish before acquiring this snapshot; do not
+      // weaken authorization or split the permission/member read transaction.
+      maxWait: 20_000,
+      timeout: 15_000,
+    });
     const invitations = await listWorkspaceInvitations(prisma, session.user.id, workspace.id);
     return <WorkspaceMembers workspaceId={workspace.id} name={workspace.name} members={data} invitations={invitations.map(invite => ({ id: invite.id, email: invite.email, role: invite.role, status: invite.status, expiresAt: invite.expiresAt.toISOString() }))} />;
   } catch (error) {
