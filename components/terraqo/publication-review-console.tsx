@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { ArrowLeft, LoaderCircle, ShieldCheck } from "lucide-react";
@@ -315,6 +315,8 @@ export function PublicationReviewConsole({
   canReview?: boolean;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
+  const [interactive, setInteractive] = useState(false);
+  useEffect(() => setInteractive(true), []);
   const current = reviews.find((review) => review.id === selected);
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5 text-slate-950 sm:p-7">
@@ -351,6 +353,7 @@ export function PublicationReviewConsole({
             <li key={review.id}>
               <button
                 className="flex min-h-20 w-full flex-col gap-2 py-5 text-left hover:text-primary focus-visible:outline-primary sm:flex-row sm:items-center sm:justify-between"
+                disabled={!interactive}
                 onClick={() => setSelected(review.id)}
               >
                 <span className="min-w-0">
