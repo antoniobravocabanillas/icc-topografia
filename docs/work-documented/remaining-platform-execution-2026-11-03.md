@@ -1,5 +1,13 @@
 # Remaining platform execution — 3 November 2026
 
+## 5 November — Resultado alojado
+
+Staging sirve `fa8c41257c53ec612904ff172f68be71d39203ff` (Netlify `6aecbb879405efadfb226e52`). S22 pasó con sesiones Auth.js, Evaluador, aislamiento por empresa y limpieza. La prueba S24 llegó a la aprobación en Chromium y a la publicación de dos imágenes autorizadas. Se verificaron los bytes seleccionados y las denegaciones de los adjuntos excluidos. Los dos ensayos previos corrigieron el clic antes de la hidratación y la comprobación de rutas de imagen en el despliegue.
+
+**S24 sigue abierto.** El tercer ensayo falló en `checkGrantBoundary` (runner, línea 230). El log alojado solo conserva la línea de llamada. Por ello no permite distinguir el fallo de la concesión del fallo en la lectura del expediente. El candidato no acredita todavía el vencimiento de la concesión, la revocación ni la navegación alojada del caso. Próximo paso: reproducir esa comprobación de forma aislada con los permisos del rol staging y la misma política de acceso, utilizando diagnósticos de línea acotados. Evitar reconstrucciones completas hasta aislar la discrepancia.
+
+Se retiraron los cuatro objetos de cada una de las tres ejecuciones y se verificó su ausencia. La lectura independiente en Supabase tras el último ensayo dio un usuario, un workspace, una membresía, la invitación histórica con el mismo checksum, 48 migraciones y cero casos, revisiones y medios de prueba. El marcador HTTP devolvió el commit esperado. Producción y el correo de clientes quedaron fuera de estos ensayos.
+
 ## 5 November — Candidato de casos públicos y permisos de evidencia
 
 S05/S09 ahora requiere que el titular elija publicar una selección como caso. Una agrupación privada por sí sola conserva su privacidad. En los casos de empresa, la autorización abarca el destino de publicación, la versión y los campos seleccionados. El CV, el índice, el detalle y las imágenes vuelven a comprobar el permiso al navegar. Las pruebas locales de PostgreSQL y Chromium cubren selección ordinaria, caso explícito, revocación y navegación en escritorio y móvil.

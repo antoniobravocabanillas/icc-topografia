@@ -117,6 +117,9 @@ assert.deepEqual(diagnostic, { locations: ["test-platform-staging-b3-http.ts:220
 assert.equal(JSON.stringify(diagnostic).includes("private"), false);
 assert.deepEqual(cloudFailureDiagnostic("El worker termino en SOURCE_REVOKED/SOURCE_REVOKED. private-token"), { locations: [], codes: ["SOURCE_REVOKED"] });
 
+assert.deepEqual(cloudFailureDiagnostic("secret=private at s24-acceptance.ts:109:15 at s24-readers.ts:26:8"),
+  { locations: ["s24-acceptance.ts:109:15", "s24-readers.ts:26:8"], codes: [] });
+
 let spawns = 0;
 const runners: string[] = [];
 let failures = 0;
