@@ -26,6 +26,10 @@ function rejectsDatabase(value: string) {
 }
 
 assert.equal(validate(staging, origin), "staging");
+for (const suffix of ["&pgbouncer=true", "&pgbouncer=false", "&sslaccept=strict", "&pgbouncer=true&sslaccept=strict"]) {
+  assert.equal(validate({ ...staging, DATABASE_URL: database + suffix, B5_GATE_DATABASE_URL: database + suffix }, origin), "staging");
+}
+for (const suffix of ["&pgbouncer=1", "&pgbouncer=", "&pgbouncer=true&pgbouncer=false", "&sslaccept=", "&sslaccept=strict&sslaccept=accept_invalid_certs"]) rejectsDatabase(database + suffix);
 assert.equal(validate({ ...staging, DIRECT_URL: database }, origin), "staging");
 for (const sslmode of ["require", "verify-ca", "verify-full"]) {
   const direct = `postgres://terraqo_staging_runtime:synthetic@db.${project}.supabase.co/postgres?schema=icc&sslmode=${sslmode}`;

@@ -36,7 +36,9 @@ export function assertWorkspaceAdministrationTestTarget(
   for (const [key, value] of db.searchParams) {
     assert.ok(!seen.has(key), "Duplicate database parameters forbidden");
     seen.add(key);
-    assert.ok(["schema", "sslmode", "connection_limit", "pool_timeout"].includes(key), "Unsupported database parameter");
+    assert.ok(["schema", "sslmode", "connection_limit", "pool_timeout", "pgbouncer", "sslaccept"].includes(key), "Unsupported database parameter");
+    if (key === "pgbouncer") assert.ok(value === "true" || value === "false", "Explicit pooler boolean required");
+    if (key === "sslaccept") assert.equal(value, "strict", "Certificate verification cannot be disabled");
     if (key === "connection_limit" || key === "pool_timeout") assert.match(value, /^[1-9]\d*$/);
   }
   assert.equal(db.searchParams.get("schema"), "icc", "Expected icc schema");
