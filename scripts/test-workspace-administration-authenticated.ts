@@ -33,12 +33,21 @@ export async function verifyWorkspaceAdministration(db: PrismaClient, base: stri
     phase = "browser-launch";
     browser = await chromium.launch({ headless: true });
     const browserErrors: string[] = [];
+    let revokingOwner = false;
     async function context() {
       const ctx = await browser!.newContext({ baseURL: base, viewport: { width: 1440, height: 1100 } });
       await ctx.route("**/*", route => new URL(route.request().url()).origin === base ? route.continue() : route.abort());
       ctx.on("page", page => {
         page.on("pageerror", error => browserErrors.push(error.message.split("\n")[0].slice(0, 180)));
-        page.on("console", message => { if (message.type() === "error") browserErrors.push(message.text().includes("hydrated") ? message.text() : message.text().split("\n")[0].slice(0, 180)); });
+        page.on("console", message => {
+          if (message.type() !== "error") return;
+          // HTTP/2 has no reason phrase: Netlify emits "403 ()". Match only
+          // the intentionally revoked polling resource, never every 403.
+          const resource = message.location().url;
+          const expectedRevocation = revokingOwner && resource === `${base}/api/admin/notifications/pulse` &&
+            /^Failed to load resource: the server responded with a status of 403 \((?:Forbidden)?\)$/.test(message.text());
+          if (!expectedRevocation) browserErrors.push(message.text().includes("hydrated") ? message.text() : message.text().split("\n")[0].slice(0, 180));
+        });
       });
       return ctx;
     }
@@ -118,6 +127,7 @@ export async function verifyWorkspaceAdministration(db: PrismaClient, base: stri
     phase = "revoked-authority";
     page.on("request", request => { if (new URL(request.url()).pathname === "/api/admin/notifications/pulse") pulseRequests++; });
     const lostAccessPulse = page.waitForResponse(response => new URL(response.url()).pathname === "/api/admin/notifications/pulse" && response.status() === 403);
+    revokingOwner = true;
     await db.terraqoWorkspaceMember.update({ where: { workspaceId_userId: { workspaceId: workspace.id, userId: owner.id } }, data: { active: false } });
     await page.bringToFront();
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
@@ -129,8 +139,8 @@ export async function verifyWorkspaceAdministration(db: PrismaClient, base: stri
     assert.equal((await admin.request.get("/api/admin/notifications/pulse")).status(), 403, "Notification polling must report lost access rather than a server failure");
     assert.equal((await admin.request.get(`/api/terraqo/workspace-invitations?workspaceId=${workspace.id}`)).status(), 403);
     assert.equal((await admin.request.patch("/api/terraqo/workspace-members", { headers: { Origin: base }, data: { workspaceId: workspace.id, memberId: accepted.id, role: "MEMBER", active: true, expectedUpdatedAt: accepted.updatedAt.toISOString() } })).status(), 403);
-    assert.deepEqual(browserErrors.filter(message => !message.includes("status of 403 (Forbidden)")), [], "No hydration/runtime/server errors; only expected access-revocation 403 is allowed");
-    console.log("PASS authenticated local Next.js + PostgreSQL + Chromium: real Auth.js credential sessions, anonymous 401, member-role UI persisted, invitation UI and verified recipient acceptance, viewer forbidden, revoked authority rejected with existing cookie, desktop/mobile. Synthetic data only; no external requests allowed in browser.");
+    assert.deepEqual(browserErrors, [], "No hydration/runtime/server errors; only expected access-revocation 403 is allowed");
+    console.log("PASS authenticated Next.js + PostgreSQL + Chromium: real Auth.js credential sessions, anonymous 401, member-role UI persisted, invitation UI and verified recipient acceptance, viewer forbidden, revoked authority rejected with existing cookie, desktop/mobile. Synthetic data only; no external requests allowed in browser.");
   } catch (error) {
     const location = error instanceof Error ? error.stack?.match(/test-workspace-administration-authenticated\.ts:\d+:\d+/)?.[0] : undefined;
     console.error(JSON.stringify({ s22Step: phase, errorType: error instanceof Error && /^[A-Za-z]+$/.test(error.name) ? error.name : "UnknownError", location }));
