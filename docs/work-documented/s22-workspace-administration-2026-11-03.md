@@ -1,5 +1,9 @@
 # S22 — workspace authority safety
 
+## Latest checkpoint — actual staging backup restored
+
+Fresh read-only staging backup (SHA256 `5301e98cb65b2a84fbe061ae7efda4e3a07e7adebfa6c16f993d7496e660aa7e`) restored locally; S22 artifact applied on the restored schema, ledger 46→47, existing entity counts preserved, duplicate rejected and migrator SET disabled again. Actual hosted role/default-grant audit matches the expected private schema boundary. See backup/restore section in `s22-staging-gate-2026-11-04.md`. Next: controlled staging migration and hosted acceptance; remote database still unchanged. Evaluator permissions/email and remaining platform reference gates remain open.
+
 ## Latest checkpoint — dedicated staging gate and migration rehearsal
 
 Dedicated S22 hosted runner, destination guards, shared authenticated browser/cleanup contract and migration preparation are implemented. Target rejection tests, local S22/attention real-session flows, exact fixture cleanup, migration wrapper rollback/replay checks and full Next.js production build pass. Read-only staging audit confirms 46 matching migrations, no unfinished ledger and absent invitation table. See `s22-staging-gate-2026-11-04.md`. Next: fresh staging backup/restore and role/default-grant audit before migration; then hosted acceptance. Evaluator permissions and delivery remain open. No remote writes.

@@ -1,5 +1,7 @@
 # Remaining platform execution — 3 November 2026
 
+Latest S22 backup phase: fresh actual staging dump restored and migration rehearsed locally with preserved entity counts; real provider role/default-grant audit checked read-only. Next: controlled staging schema application and hosted gate. Do not repeat the already completed synthetic/actual restore work unless the candidate or provider state changes. See `s22-staging-gate-2026-11-04.md`.
+
 Latest S22 gate: dedicated hosted verifier and local SQL-wrapper rehearsal implemented; full combined Next.js build and S22/attention authenticated regressions pass. Read-only staging audit verified 46 migration checksums and the missing invitation migration/table. Next executable phase: fresh staging backup/restore and actual role/default-grant audit, followed by controlled schema/hosted acceptance. Details: `s22-staging-gate-2026-11-04.md`. Synthetic build artifacts must not be deployed. Evaluator/granular permissions and real email integration are still open.
 
 Latest reconciliation: S22 now incorporates attention release `285b20a`; both authenticated local suites pass sequentially. Candidate also includes earlier S23/S24 changes. See `s22-release-reconciliation-2026-11-04.md`. Next executable gate is hosted S22 verifier/flag and migration-readiness preparation, not a blind deployment. Evaluator permissions, email delivery and hosted acceptance remain unfinished.

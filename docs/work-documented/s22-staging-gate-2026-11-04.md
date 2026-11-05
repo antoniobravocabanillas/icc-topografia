@@ -41,6 +41,16 @@ This is a point-in-time snapshot, not permission to skip fresh preflight later.
 
 ## Remaining gates and order
 
+### Backup/restore gate completed later in this run
+
+Fresh read-only provider backup captured with `backup-publication-staging.mjs --confirm=staging-backup-only` from the original checkout's existing protected configuration. Archive path: `C:/Users/Binv/Documents/New project/icc-topografia/output/s24-backup-1793838371470/icc.dump` (historical script prefix; this is the new S22 backup). Size 646318 bytes; SHA256 `5301e98cb65b2a84fbe061ae7efda4e3a07e7adebfa6c16f993d7496e660aa7e`. No connection secret or customer payload is committed.
+
+`restore-s22-staging-local.mjs` verified the archive checksum, restored the real staging schema/data into isolated loopback PostgreSQL, checked its 46-entry ledger, recreated the audited role boundary, applied the S22 artifact locally, verified 47 ledger entries, preserved existing users/workspaces/worklogs/projection counts, and rejected duplicate application. It also verified the migrator SET privilege was disabled again. Manifest records `restoreVerified`, `localMigrationVerified`, `duplicateRejected`, `existingCountsPreserved`: all true. Engine is PostgreSQL 18 restoring a PostgreSQL 17 source; this is not a hosted PostgreSQL 17 execution proof.
+
+Fresh read-only hosted role audit: runtime and migrator are neither superusers, role/database creators nor RLS bypass roles. `icc` owner is migrator; its default table privileges grant runtime SELECT/INSERT/UPDATE/DELETE. `postgres` SET privilege is false; anon/authenticated/service_role cannot use `icc`.
+
+Item 1 below is now complete for this snapshot; refresh if provider state changes. Next executable remote phase is item 2. No remote migration or deployment was executed.
+
 1. Fresh isolated staging backup and verified local restoration, including actual role/default-grant audit. Do not treat the synthetic artifact rehearsal as proof that a current provider backup restores.
 2. Recheck hosted ledger and review regenerated artifact; apply only through the approved isolated staging procedure, never the production target.
 3. Configure the exact candidate SHA/branch, S22 phase and explicit fixture consent on the isolated staging site, then run hosted prepare/deploy/verify and independent cleanup readback. Local passing results do not certify proxy-origin/cookie behavior on Netlify.
