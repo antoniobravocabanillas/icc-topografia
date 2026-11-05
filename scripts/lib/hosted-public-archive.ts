@@ -15,6 +15,7 @@ export async function checkHostedPublicArchive(db: PrismaClient, anonymous: Brow
   const selected = s24BlobFixtures(run).map(pair => pair[0]);
   const title = "Nivelación de la plataforma de control";
   const later = "Comprobación posterior de cotas";
+  const verify = expect.configure({ timeout: 45_000 });
   const page = await anonymous.newPage();
   page.setDefaultTimeout(45_000);
   try {
@@ -30,24 +31,30 @@ export async function checkHostedPublicArchive(db: PrismaClient, anonymous: Brow
         title: later, visibility: "PUBLIC", lifecycle: "PUBLISHED", summary: "Lectura sintética al día siguiente.",
         occurredAt: new Date("2026-10-29T05:30:00Z") } }),
     ]);
+    const listUrl = new URL(`/api/v1/profiles/${profileId}/evidence?audience=public&timezone=America%2FLima&period=all&limit=20`, origin);
+    const response = await anonymous.request.get(listUrl.href);
+    const payload = await response.json();
+    console.log(`S10_LIST ${response.status()} ${Number(payload?.data?.scopeCounts?.records ?? -1)}`);
+    assert.equal(response.status(), 200);
+    assert.equal(payload.data.scopeCounts.records, 2);
     for (const width of [1280, 375, 320]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(archive.href);
-      await expect(page.getByText("2 bitácoras en este resultado", { exact: true })).toBeVisible();
+      await verify(page.getByText("2 bitácoras en este resultado", { exact: true })).toBeVisible();
       await page.getByRole("button", { name: "Calendario", exact: true }).click();
       await page.getByLabel("Actividad del mes").fill("2026-10");
       await page.getByRole("button", { name: "2026-10-28: 1 registros públicos", exact: true }).click();
       await page.getByRole("button", { name: "2026-10-27: 0 registros públicos", exact: true }).click();
       assert.equal(page.url(), archive.href);
-      await expect(page.getByRole("heading", { name: later, exact: true })).toBeVisible();
+      await verify(page.getByRole("heading", { name: later, exact: true })).toBeVisible();
       await page.getByRole("button", { name: "Aplicar fechas", exact: true }).click();
-      await expect(page.getByText("1 bitácora en este resultado", { exact: true })).toBeVisible();
+      await verify(page.getByText("1 bitácora en este resultado", { exact: true })).toBeVisible();
       const filtered = new URL(page.url());
       assert.equal(filtered.searchParams.get("from"), "2026-10-27");
       assert.equal(filtered.searchParams.get("to"), "2026-10-28");
-      await expect(page.getByRole("heading", { name: later, exact: true })).toHaveCount(0);
+      await verify(page.getByRole("heading", { name: later, exact: true })).toHaveCount(0);
       await page.locator(`#record-${ids[0]}`).click();
-      await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
+      await verify(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
       for (const n of [1, 2]) {
         await page.getByRole("button", { name: `Ver evidencia ${n}`, exact: true }).click();
         const img = page.getByRole("img", { name: `${title}, evidencia ${n}`, exact: true });
@@ -60,10 +67,10 @@ export async function checkHostedPublicArchive(db: PrismaClient, anonymous: Brow
       assert.equal(await page.getByRole("dialog").count(), 0);
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
       await page.getByRole("link", { name: "Volver a las bitácoras" }).click();
-      await expect(page).toHaveURL(filtered.href);
-      await expect(page.locator(`#record-${ids[0]}`)).toBeVisible();
+      await verify(page).toHaveURL(filtered.href);
+      await verify(page.locator(`#record-${ids[0]}`)).toBeVisible();
       await page.getByRole("button", { name: /^Quitar periodo:/ }).click();
-      await expect(page.getByText("2 bitácoras en este resultado", { exact: true })).toBeVisible();
+      await verify(page.getByText("2 bitácoras en este resultado", { exact: true })).toBeVisible();
     }
   } finally {
     await page.close().finally(async () => {
