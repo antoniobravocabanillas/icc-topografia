@@ -142,10 +142,17 @@ try {
   } else {
     await run(path.join(bin, "psql.exe"), [...psqlArgs, "--single-transaction", "-f", "prisma/migrations/20261104000100_workspace_invitations/migration.sql"]);
   }
-  console.log(await run(process.execPath, ["--import", "tsx", "scripts/test-workspace-membership-postgres.ts"]));
-  console.log(await run(process.execPath, ["--import", "tsx", "scripts/test-workspace-invitations-postgres.ts"]));
-  console.log(await run(process.execPath, ["--import", "tsx", "scripts/test-workspace-member-management-postgres.ts"]));
-  if (process.argv.includes("--http-e2e")) console.log(await run(process.execPath, ["--import", "tsx", "scripts/check-s22-authenticated-local.ts"], 600000));
+  if (process.argv.includes("--ordinary-access-only")) {
+    env.NODE_ENV = "development";
+    env.NETLIFY = "false";
+    console.log(await run(process.execPath, ["--import", "tsx", "scripts/test-s22-ordinary-access-postgres.ts"]));
+  } else {
+    console.log(await run(process.execPath, ["--import", "tsx", "scripts/test-workspace-membership-postgres.ts"]));
+    console.log(await run(process.execPath, ["--import", "tsx", "scripts/test-workspace-invitations-postgres.ts"]));
+    console.log(await run(process.execPath, ["--import", "tsx", "scripts/test-workspace-member-management-postgres.ts"]));
+    console.log(await run(process.execPath, ["--import", "tsx", "scripts/test-s22-dossier-authority-postgres.ts"]));
+    if (process.argv.includes("--http-e2e")) console.log(await run(process.execPath, ["--import", "tsx", "scripts/check-s22-authenticated-local.ts"], 600000));
+  }
 } catch (error) {
   console.error(
     String(error.message).replaceAll(password, "[redacted]").slice(0, 3500),

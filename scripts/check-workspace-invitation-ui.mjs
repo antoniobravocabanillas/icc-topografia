@@ -30,9 +30,9 @@ const server = createServer(async (req, res) => {
     let body=''; for await (const chunk of req) body += chunk;
     const data=JSON.parse(body); commands.push(data);
     if (failNext) { failNext=false; res.statusCode=503; return res.end(JSON.stringify({error:'Connexion interrompue — réessayez.'})); }
-    if (data.action==='create') invitations=[{id:'invitation-one',email:data.email,role:data.role,status:'PENDING',expiresAt:'2099-01-01T00:00:00Z'}];
+    if (data.action==='create') invitations=[{id:'invitation-one',email:data.email,role:data.role,status:'PENDING',resendCount:0,expiresAt:'2099-01-01T00:00:00Z'}];
     if (data.action==='cancel') invitations[0].status='CANCELLED';
-    return res.end(JSON.stringify(data.action==='cancel'||data.action==='accept'?{workspaceId:'synthetic'}:{id:'invitation-one',token:'x'.repeat(43)}));
+    return res.end(JSON.stringify(data.action==='cancel'||data.action==='accept'?{workspaceId:'synthetic'}:{id:'invitation-one',token:(data.action==='rotate'?'y':'x').repeat(43),delivery:data.action==='rotate'?'accepted':'disabled'}));
   }
   if (req.url==='/app.js'||req.url==='/app.css') { res.setHeader('Content-Type', req.url.endsWith('.js')?'text/javascript':'text/css'); return res.end(await readFile(path.join(out,req.url.slice(1)))); }
   if (req.url==='/font.woff2') { res.setHeader('Content-Type','font/woff2'); return res.end(await readFile('public/fonts/satoshi/satoshi-regular.woff2')); }
@@ -59,9 +59,13 @@ try {
  await page.getByLabel('Enlace privado').waitFor();
  assert.equal(commands[0].operationKey,commands[1].operationKey,'retry preserves idempotency key');
  assert.equal(await page.getByLabel('Enlace privado').inputValue(),`${base}/invitacion-workspace#${'x'.repeat(43)}`);
+ await page.getByText('El envío de correo está desactivado.',{exact:false}).waitFor();
  await page.getByRole('button',{name:'Renovar enlace'}).click();
  assert.equal(commands.length,2,'confirmation does not mutate');
  await page.getByRole('button',{name:'Confirmar',exact:true}).click();
+ await page.getByText('El proveedor aceptó el correo de invitación.',{exact:false}).waitFor();
+ assert.equal(commands.at(-1).expectedResendCount,0);
+ assert.equal(await page.getByLabel('Enlace privado').inputValue(),`${base}/invitacion-workspace#${'y'.repeat(43)}`);
  await page.getByRole('button',{name:'Cancelar',exact:true}).click();
  await page.getByRole('button',{name:'Confirmar',exact:true}).click();
  await page.getByText('Cancelada',{exact:true}).waitFor();

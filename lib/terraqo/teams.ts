@@ -1,3 +1,4 @@
+import { ordinaryWorkspaceFor, ordinaryWorkspaceMemberRoles } from "@/lib/terraqo/workspace-roles";
 import type { Prisma } from "@prisma/client";
 import type { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -34,9 +35,7 @@ const teamInclude = {
 export async function getTeamWorkspaces(userId: string) {
   return prisma.terraqoWorkspace.findMany({
     where: {
-      active: true,
-      deletedAt: null,
-      members: { some: { userId, active: true } },
+      ...ordinaryWorkspaceFor(userId),
       AND: [
         { modules: { some: { code: "COLLABORATION_TEAMS", active: true } } },
         { modules: { some: { code: "PROFESSIONAL_MESSAGING", active: true } } }
@@ -64,6 +63,7 @@ export async function getTeamHub(userId: string) {
       where: {
         workspaceId: { in: workspaceIds },
         active: true,
+        role: { in: ordinaryWorkspaceMemberRoles },
         userId: { not: userId },
         user: { terraqoProfessionalProfile: { isNot: null } }
       },
@@ -108,8 +108,7 @@ export async function getTeamForUser(userId: string, teamId: string) {
       id: teamId,
       status: "ACTIVE",
       workspace: {
-        active: true,
-        deletedAt: null,
+        ...ordinaryWorkspaceFor(userId),
         modules: { some: { code: "COLLABORATION_TEAMS", active: true } }
       },
       members: { some: { userId, status: { in: ["INVITED", "ACTIVE"] } } }
@@ -128,9 +127,7 @@ export async function createTeam(input: { userId: string; payload: z.infer<typeo
     prisma.terraqoWorkspace.findFirst({
       where: {
         id: input.payload.workspaceId,
-        active: true,
-        deletedAt: null,
-        members: { some: { userId: input.userId, active: true } },
+        ...ordinaryWorkspaceFor(input.userId),
         AND: [
           { modules: { some: { code: "COLLABORATION_TEAMS", active: true } } },
           { modules: { some: { code: "PROFESSIONAL_MESSAGING", active: true } } }
@@ -143,6 +140,7 @@ export async function createTeam(input: { userId: string; payload: z.infer<typeo
         workspaceId: input.payload.workspaceId,
         userId: { in: memberUserIds },
         active: true,
+        role: { in: ordinaryWorkspaceMemberRoles },
         user: { terraqoProfessionalProfile: { isNot: null } }
       },
       select: { userId: true }
@@ -199,7 +197,7 @@ export async function respondToTeamInvitation(input: { userId: string; payload: 
       status: "INVITED",
       team: {
         status: "ACTIVE",
-        workspace: { active: true, deletedAt: null, modules: { some: { code: "COLLABORATION_TEAMS", active: true } } }
+        workspace: { ...ordinaryWorkspaceFor(input.userId), modules: { some: { code: "COLLABORATION_TEAMS", active: true } } }
       }
     },
     select: { id: true, team: { select: { conversationId: true } } }

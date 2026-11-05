@@ -6,7 +6,7 @@ import styles from "./workspace-members.module.css";
 import { WorkspaceMemberRow } from "./workspace-member-row";
 
 export type WorkspaceMemberView = { id: string; name: string | null; email: string | null; role: string; active: boolean; updatedAt?: string; allowedRoles?: string[]; isSelf?: boolean };
-export type WorkspaceInvitationView = { id: string; email: string; role: string; status: string; expiresAt: string };
+export type WorkspaceInvitationView = { id: string; email: string; role: string; status: string; expiresAt: string; resendCount: number };
 const roles: Record<string, string> = { OWNER: "Propietario", ADMIN: "Administrador", MANAGER: "Gestor", VIEWER: "Lector", MEMBER: "Miembro", PROFESSIONAL: "Profesional", CLIENT: "Cliente" };
 
 export function WorkspaceMembers({ workspaceId, name, members: initialMembers, invitations: initialInvitations }: { workspaceId: string; name: string; members: WorkspaceMemberView[]; invitations: WorkspaceInvitationView[] }) {
@@ -23,7 +23,7 @@ export function WorkspaceMembers({ workspaceId, name, members: initialMembers, i
   const [link, setLink] = useState("");
   const [confirmation, setConfirmation] = useState<{ id: string; action: "cancel" | "rotate" } | null>(null);
 
-  async function mutate(action: "create" | "cancel" | "rotate", invitationId?: string) {
+  async function mutate(action: "create" | "cancel" | "rotate", invite?: WorkspaceInvitationView) {
     if (lock.current) return;
     lock.current = true;
     setBusy(true); setError(""); setMessage(""); setLink("");
@@ -31,11 +31,19 @@ export function WorkspaceMembers({ workspaceId, name, members: initialMembers, i
       // Keep the operation key after transport failure: retry must not create twice.
       const signature = JSON.stringify([workspaceId, email.trim().toLowerCase(), role]);
       if (!operation.current || operation.current.signature !== signature) operation.current = { signature, key: crypto.randomUUID() };
-      const response = await fetch("/api/terraqo/workspace-invitations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(action === "create" ? { action, workspaceId, email, role, operationKey: operation.current.key } : { action, workspaceId, invitationId }) });
+      const payload = action === "create"
+        ? { action, workspaceId, email, role, operationKey: operation.current.key }
+        : { action, workspaceId, invitationId: invite?.id, expectedResendCount: action === "rotate" ? invite?.resendCount : undefined };
+      const response = await fetch("/api/terraqo/workspace-invitations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "No se pudo guardar. Vuelve a intentarlo.");
       if (result.token) setLink(`${window.location.origin}/invitacion-workspace#${result.token}`);
-      setMessage(action === "cancel" ? "Invitación cancelada. El enlace ya no permite ingresar." : result.replayed ? "La invitación ya se creó. Renueva su enlace si no llegaste a copiarlo." : "Enlace preparado. Compártelo con la persona invitada; no se ha enviado un correo.");
+      if (action === "cancel") setMessage("Invitación cancelada. El enlace ya no permite ingresar.");
+      else if (result.replayed) setMessage("La invitación ya se creó. No se volvió a enviar el correo. Renueva el enlace si necesitas compartirlo.");
+      else if (result.delivery === "accepted") setMessage("El proveedor aceptó el correo de invitación. También puedes copiar el enlace.");
+      else if (result.delivery === "disabled") setMessage("El envío de correo está desactivado. Copia el enlace y compártelo con la persona invitada.");
+      else if (result.delivery === "unavailable") setMessage("El envío de correo no está disponible. Copia el enlace y compártelo con la persona invitada.");
+      else setMessage("La invitación está guardada. No pudimos confirmar el envío del correo. Puedes compartir el enlace.");
       setConfirmation(null);
       if (action === "create") { operation.current = null; setEmail(""); }
       const refresh = await fetch(`/api/terraqo/workspace-invitations?workspaceId=${encodeURIComponent(workspaceId)}`, { cache: "no-store" });
@@ -58,12 +66,12 @@ export function WorkspaceMembers({ workspaceId, name, members: initialMembers, i
             const state = invite.status === "ACCEPTED" ? "Aceptada" : invite.status === "CANCELLED" ? "Cancelada" : pending ? "Pendiente" : "Vencida";
             return <div key={invite.id}><div className={styles.row}><div className={styles.person}><strong>{invite.email}</strong><div className={styles.meta}><span>{roles[invite.role] || invite.role}</span><span className={`${styles.badge} ${pending ? styles.pending : ""}`}>{state}</span></div></div>
               {pending && <div className={styles.actions}><button disabled={busy} onClick={() => setConfirmation({ id: invite.id, action: "rotate" })}>Renovar enlace</button><button disabled={busy} onClick={() => setConfirmation({ id: invite.id, action: "cancel" })}>Cancelar</button></div>}
-            </div>{confirmation?.id === invite.id && <div className={styles.confirm}><p>{confirmation.action === "cancel" ? "¿Cancelar esta invitación? La persona ya no podrá aceptar el enlace." : "El enlace anterior dejará de funcionar. El nuevo conserva la fecha de vencimiento."}</p><div className={styles.actions}><button disabled={busy} onClick={() => void mutate(confirmation.action, invite.id)}>Confirmar</button><button disabled={busy} onClick={() => setConfirmation(null)}>Volver</button></div></div>}</div>;
+            </div>{confirmation?.id === invite.id && <div className={styles.confirm}><p>{confirmation.action === "cancel" ? "¿Cancelar esta invitación? La persona ya no podrá aceptar el enlace." : "El enlace anterior dejará de funcionar. El nuevo conserva el vencimiento y se enviará al correo de la invitación si el envío está disponible."}</p><div className={styles.actions}><button disabled={busy} onClick={() => void mutate(confirmation.action, invite)}>Confirmar</button><button disabled={busy} onClick={() => setConfirmation(null)}>Volver</button></div></div>}</div>;
           })}
           {!invitations.some(invite => matches(invite.email)) && <p className={styles.empty}>No hay invitaciones para mostrar.</p>}
         </section>
       </div>
-      <aside className={styles.panel} aria-labelledby="invite-heading"><h2 id="invite-heading">Invitar miembro</h2><p>El enlace solo podrá aceptarse con el correo verificado de la persona invitada.</p>
+      <aside className={styles.panel} aria-labelledby="invite-heading"><h2 id="invite-heading">Invitar miembro</h2><p>Al crear el enlace intentaremos enviarlo a este correo. Solo la persona invitada podrá aceptarlo con su cuenta verificada.</p>
         <form onSubmit={event => { event.preventDefault(); void mutate("create"); }}><label>Correo electrónico<input type="email" required maxLength={254} autoComplete="email" value={email} disabled={busy} onChange={event => setEmail(event.target.value)} placeholder="nombre@empresa.com" /></label>
           <label>Rol<select value={role} disabled={busy} onChange={event => setRole(event.target.value)}>{["VIEWER", "MEMBER", "PROFESSIONAL", "CLIENT"].map(value => <option key={value} value={value}>{roles[value]}</option>)}</select></label>
           <p>La invitación no concede administración ni modifica un rol que la persona ya tenga.</p>

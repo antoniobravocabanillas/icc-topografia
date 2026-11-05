@@ -1,3 +1,4 @@
+import { ordinaryWorkspaceFor } from "@/lib/terraqo/workspace-roles";
 import { listProfessionalDocuments } from "./portal-professional-documents";
 import {listPortalQuotes,savePortalQuote} from "./portal-quotes";
 import {listPortalOpportunities, savePortalOpportunity} from "./portal-opportunities";
@@ -28,6 +29,12 @@ const modules = { opportunities: "CRM", companies: "CRM", contacts: "CRM", conta
   worklogs: "PROFESSIONAL_NETWORK", quotes: "CRM", orders: "TECHNICAL_STORE", notifications: null, profile: "PROFESSIONAL_NETWORK",
   experiences: "PROFESSIONAL_NETWORK", education: "PROFESSIONAL_NETWORK", professionalDocuments: "PROFESSIONAL_NETWORK" } as const;
 export async function authorizeResource(token: WorkspacePortalToken, resource: ResourceCode) {
+  if (resource === "files" || resource === "notes") {
+    const workspace = await prisma.terraqoWorkspace.findFirst({
+      where: { id: token.workspaceId, ...ordinaryWorkspaceFor(token.sub) }, select: { id: true },
+    });
+    if (!workspace) throw new PortalResourceError("Sin acceso a este recurso del workspace.", 403);
+  }
   if (["profile", "experiences", "education", "professionalDocuments"].includes(resource) && token.role !== "PROFESSIONAL")
     throw new PortalResourceError("Esta sección requiere tu cuenta profesional.", 403);
   if (["opportunities", "companies", "contacts", "contactCompanies", "quoteClients", "clients", "leads", "projectMembers", "milestones", "projectProgress", "operationalProjects", "projects", "projectClients", "tasks", "taskProjects", "taskAssignees", "taskMilestones"].includes(resource) && token.role !== "ADMIN")

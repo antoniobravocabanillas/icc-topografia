@@ -1,3 +1,4 @@
+import { ordinaryWorkspaceMembership, ordinaryWorkspaceMemberRoles } from "@/lib/terraqo/workspace-roles";
 import { createHash, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -107,6 +108,34 @@ export function conversationWorkspaceScope(
   };
 }
 
+// A prior participant row survives membership changes. Recheck the conversation's
+// own tenant before returning messages, media, or notifications.
+export function accessibleConversation(
+  userId: string, module: "PROFESSIONAL_MESSAGING" | "TERRAQO_MEET" = "PROFESSIONAL_MESSAGING",
+): Prisma.TerraqoConversationWhereInput {
+  return {
+    OR: [
+      { workspaceId: null },
+      {
+        workspace: { active: true, deletedAt: null, modules: { some: { code: module, active: true } } },
+        OR: [
+          { workspace: { members: { some: ordinaryWorkspaceMembership(userId) } } },
+          { participants: { some: { userId, leftAt: null, user: { role: "SUPER_ADMIN" } } } },
+        ],
+      },
+    ],
+  };
+}
+
+export async function requireMessagingParticipant(db: Prisma.TransactionClient, userId: string, conversationId: string) {
+  const participant = await db.terraqoConversationParticipant.findFirst({
+    where: { userId, conversationId, leftAt: null, conversation: accessibleConversation(userId) },
+    select: { id: true },
+  });
+  if (!participant) throw new TerraqoMessagingError("No tienes acceso a esta conversación.", 403);
+  return participant;
+}
+
 export async function getMessagingWorkspaces(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -115,10 +144,11 @@ export async function getMessagingWorkspaces(userId: string) {
   return prisma.terraqoWorkspace.findMany({
     where: {
       active: true,
+      deletedAt: null,
       modules: { some: { code: "PROFESSIONAL_MESSAGING", active: true } },
       ...(user?.role === "SUPER_ADMIN"
         ? {}
-        : { members: { some: { userId, active: true } } }),
+        : { members: { some: ordinaryWorkspaceMembership(userId) } }),
     },
     select: { id: true, name: true, slug: true },
     orderBy: { name: "asc" },
@@ -156,6 +186,7 @@ export async function getConversationHub(
       prisma.terraqoWorkspaceMember.findMany({
         where: {
           active: true,
+          role: { in: ordinaryWorkspaceMemberRoles },
           workspaceId: workspaceId || { in: [...allowedWorkspaceIds] },
           userId: { not: userId },
         },
@@ -302,8 +333,7 @@ export async function startConversation(input: {
   if (!workspaceId) {
     const shared = await prisma.terraqoWorkspaceMember.findFirst({
       where: {
-        userId: input.recipientUserId,
-        active: true,
+        ...ordinaryWorkspaceMembership(input.recipientUserId),
         workspaceId: { in: [...allowedIds] },
       },
       select: { workspaceId: true },
@@ -332,7 +362,7 @@ export async function startConversation(input: {
 
   const recipientMembership = workspaceId
     ? await prisma.terraqoWorkspaceMember.findFirst({
-        where: { workspaceId, userId: input.recipientUserId, active: true },
+        where: { workspaceId, ...ordinaryWorkspaceMembership(input.recipientUserId) },
         select: { id: true },
       })
     : null;
@@ -405,44 +435,8 @@ export async function sendMessage(input: {
     body,
   );
 
-  const participant = await prisma.terraqoConversationParticipant.findFirst({
-    where: {
-      conversationId: input.conversationId,
-      userId: input.userId,
-      leftAt: null,
-    },
-    select: {
-      id: true,
-      conversation: {
-        select: {
-          workspace: {
-            select: {
-              modules: {
-                where: { code: "PROFESSIONAL_MESSAGING", active: true },
-                select: { id: true },
-              },
-            },
-          },
-        },
-      },
-    },
-  });
-  if (!participant) {
-    throw new TerraqoMessagingError(
-      "No tienes acceso a esta conversacion o el modulo no esta activo.",
-      403,
-    );
-  }
-  if (
-    participant.conversation.workspace &&
-    !participant.conversation.workspace.modules.length
-  )
-    throw new TerraqoMessagingError(
-      "El modulo de mensajeria no esta activo.",
-      403,
-    );
-
   const readReplay = async () => {
+    await requireMessagingParticipant(prisma, input.userId, input.conversationId);
     const replay = await prisma.terraqoMessageOperation.findUnique({
       where: { actorId_operationKey: { actorId: input.userId, operationKey } },
       include: { message: true },
@@ -461,6 +455,7 @@ export async function sendMessage(input: {
 
   try {
     return await prisma.$transaction(async (tx) => {
+      const participant = await requireMessagingParticipant(tx, input.userId, input.conversationId);
       const replay = await tx.terraqoMessageOperation.findUnique({
         where: { actorId_operationKey: { actorId: input.userId, operationKey } },
         include: { message: true },

@@ -100,6 +100,19 @@ export async function renderVerificationCodeEmail(input: { recipientName?: strin
   return { html: await render(element), text: await render(element, { plainText: true }) };
 }
 
+export async function renderWorkspaceInvitationEmail(invitationUrl: string, expiresAt: Date) {
+  const expiry = new Intl.DateTimeFormat("es-PE", { dateStyle: "long", timeStyle: "short", timeZone: "America/Lima" }).format(expiresAt);
+  const element = (
+    <EmailFrame preview="Tienes una invitación a un workspace de Terraqo." eyebrow="Acceso al workspace" title="Te invitaron al equipo" footerNote="Este enlace es personal. Si no reconoces la invitación, puedes ignorar este correo.">
+      <p style={paragraphStyle}>Un administrador te invitó a su workspace de Terraqo. Para aceptar, inicia sesión con la cuenta verificada asociada a este correo.</p>
+      <table role="presentation" cellPadding="0" cellSpacing="0" style={{ margin: "28px 0" }}><tbody><tr><td style={buttonCellStyle}><a href={invitationUrl} style={buttonLinkStyle}>Revisar invitación</a></td></tr></tbody></table>
+      <p style={helperStyle}>También puedes copiar el enlace en tu navegador. Vence el {expiry} (hora de Lima).</p>
+      <p style={urlBoxStyle}><a href={invitationUrl} style={urlLinkStyle}>{invitationUrl}</a></p>
+    </EmailFrame>
+  );
+  return { html: await render(element), text: await render(element, { plainText: true }) };
+}
+
 type ProfileCompletionEmailInput = { recipientName?: string | null; profileUrl: string; customMessage?: string | null; emailVerified: boolean; hasUsername: boolean; registrationSourceName?: string | null };
 
 export function ProfileCompletionTemplate({ recipientName, profileUrl, customMessage, emailVerified, hasUsername, registrationSourceName }: ProfileCompletionEmailInput) {

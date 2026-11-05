@@ -1,3 +1,4 @@
+import { ordinaryWorkspaceFor, ordinaryWorkspaceMembership, workspaceAdminMemberRoles } from "@/lib/terraqo/workspace-roles";
 import type { TerraqoFileCategory, TerraqoFileVisibility, TerraqoNoteKind } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { reserveStorage, releaseWorkspaceStorage } from "@/lib/terraqo/billing/storage-quota";
@@ -20,7 +21,7 @@ const allowedExtensions = new Set([
 
 async function hasMembership(userId: string, workspaceId: string) {
   return prisma.terraqoWorkspaceMember.findFirst({
-    where: { userId, workspaceId, active: true, workspace: { active: true, deletedAt: null } },
+    where: { ...ordinaryWorkspaceMembership(userId), workspaceId, workspace: { active: true, deletedAt: null } },
     select: { id: true, role: true }
   });
 }
@@ -51,8 +52,8 @@ export async function createPrivateNote(request: Request, userId: string, requir
 
     const note = await prisma.terraqoPrivateNote.create({
       data: {
-        userId,
-        workspaceId,
+        user: { connect: { id: userId } },
+        workspace: { connect: { id: workspaceId, ...ordinaryWorkspaceFor(userId) } },
         kind,
         title: kind === "SIMPLE" ? title : null,
         body: kind === "SIMPLE" ? body : null,
@@ -68,7 +69,7 @@ export async function createPrivateNote(request: Request, userId: string, requir
 
 export async function updatePrivateNote(request: Request, userId: string, id: string, requiredWorkspaceId?: string) {
   try {
-    const existing = await prisma.terraqoPrivateNote.findFirst({ where: { id, userId, ...(requiredWorkspaceId ? { workspaceId: requiredWorkspaceId } : {}) } });
+    const existing = await prisma.terraqoPrivateNote.findFirst({ where: { id, userId, workspace: ordinaryWorkspaceFor(userId), ...(requiredWorkspaceId ? { workspaceId: requiredWorkspaceId } : {}) } });
     if (!existing) return fail("Nota no encontrada.", 404);
     const payload = await request.json() as Record<string, unknown>;
     const title = String(payload.title || "").trim();
@@ -77,7 +78,7 @@ export async function updatePrivateNote(request: Request, userId: string, id: st
     if (existing.kind === "SIMPLE" && (!title || !body || title.length > 140 || body.length > 24000)) return fail("Completa la nota y respeta los limites de contenido.", 422);
     if (existing.kind === "SECURE" && (securePayload.length < 80 || securePayload.length > 60000)) return fail("El contenido cifrado no es valido.", 422);
     const note = await prisma.terraqoPrivateNote.update({
-      where: { id },
+      where: { id, userId, workspace: ordinaryWorkspaceFor(userId) },
       data: existing.kind === "SIMPLE" ? { title, body } : { securePayload },
       select: { id: true, kind: true, title: true, body: true, securePayload: true, createdAt: true, updatedAt: true }
     });
@@ -88,20 +89,32 @@ export async function updatePrivateNote(request: Request, userId: string, id: st
 }
 
 export async function deletePrivateNote(userId: string, id: string, requiredWorkspaceId?: string) {
-  const note = await prisma.terraqoPrivateNote.findFirst({ where: { id, userId, ...(requiredWorkspaceId ? { workspaceId: requiredWorkspaceId } : {}) }, select: { id: true } });
+  const note = await prisma.terraqoPrivateNote.findFirst({ where: { id, userId, workspace: ordinaryWorkspaceFor(userId), ...(requiredWorkspaceId ? { workspaceId: requiredWorkspaceId } : {}) }, select: { id: true } });
   if (!note) return fail("Nota no encontrada.", 404);
-  await prisma.terraqoPrivateNote.delete({ where: { id } });
+  await prisma.terraqoPrivateNote.delete({ where: { id, userId, workspace: ordinaryWorkspaceFor(userId) } });
   return ok({ deleted: true });
+}
+
+function readableWorkspaceFile(userId: string) {
+  return {
+    workspace: ordinaryWorkspaceFor(userId),
+    OR: [
+      { userId },
+      {
+        visibility: "WORKSPACE" as const,
+        workspace: { members: { some: { userId, active: true, role: { in: workspaceAdminMemberRoles } } } },
+      },
+    ],
+  };
 }
 
 export async function listWorkspaceFiles(userId: string, workspaceId: string) {
   const membership = await hasMembership(userId, workspaceId);
   if (!membership) return fail("No perteneces al workspace seleccionado.", 403);
-  const canReview = ["OWNER", "ADMIN", "MANAGER"].includes(membership.role);
   const files = await prisma.terraqoWorkspaceFile.findMany({
     where: {
       workspaceId,
-      OR: [{ userId }, ...(canReview ? [{ visibility: "WORKSPACE" as const }] : [])]
+      ...readableWorkspaceFile(userId)
     },
     select: {
       id: true, userId: true, category: true, visibility: true, title: true, description: true, projectName: true,
@@ -136,7 +149,12 @@ export async function uploadWorkspaceFile(request: Request, userId: string, requ
     try {
       await store.set(storageKey, await file.arrayBuffer(), { metadata: { workspaceId, userId, originalName: file.name, contentType: file.type, size: file.size } });
       const created = await prisma.terraqoWorkspaceFile.create({
-        data: { userId, workspaceId, category, visibility, title, description: description || null, projectName: projectName || null, storageKey, fileName: file.name, contentType: file.type || "application/octet-stream", size: file.size },
+        data: {
+          user: { connect: { id: userId } },
+          workspace: { connect: { id: workspaceId, ...ordinaryWorkspaceFor(userId) } },
+          category, visibility, title, description: description || null, projectName: projectName || null,
+          storageKey, fileName: file.name, contentType: file.type || "application/octet-stream", size: file.size,
+        },
         select: { id: true, category: true, visibility: true, title: true, description: true, projectName: true, fileName: true, contentType: true, size: true, createdAt: true }
       });
       return ok(created, { status: 201 });
@@ -151,12 +169,13 @@ export async function uploadWorkspaceFile(request: Request, userId: string, requ
 }
 
 async function authorizedFile(userId: string, id: string, requiredWorkspaceId?: string) {
-  const file = await prisma.terraqoWorkspaceFile.findFirst({ where: { id, ...(requiredWorkspaceId ? { workspaceId: requiredWorkspaceId } : {}) } });
-  if (!file) return null;
-  if (file.userId === userId) return file;
-  if (file.visibility !== "WORKSPACE") return null;
-  const membership = await hasMembership(userId, file.workspaceId);
-  return membership && ["OWNER", "ADMIN", "MANAGER"].includes(membership.role) ? file : null;
+  return prisma.terraqoWorkspaceFile.findFirst({
+    where: {
+      id,
+      ...(requiredWorkspaceId ? { workspaceId: requiredWorkspaceId } : {}),
+      ...readableWorkspaceFile(userId),
+    },
+  });
 }
 
 export async function serveWorkspaceFile(request: Request, userId: string, id: string, requiredWorkspaceId?: string) {
@@ -180,9 +199,9 @@ export async function serveWorkspaceFile(request: Request, userId: string, id: s
 }
 
 export async function deleteWorkspaceFile(userId: string, id: string, requiredWorkspaceId?: string) {
-  const file = await prisma.terraqoWorkspaceFile.findFirst({ where: { id, userId, ...(requiredWorkspaceId ? { workspaceId: requiredWorkspaceId } : {}) } });
+  const file = await prisma.terraqoWorkspaceFile.findFirst({ where: { id, userId, workspace: ordinaryWorkspaceFor(userId), ...(requiredWorkspaceId ? { workspaceId: requiredWorkspaceId } : {}) } });
   if (!file) return fail("Archivo no encontrado.", 404);
-  await prisma.terraqoWorkspaceFile.delete({ where: { id } });
+  await prisma.terraqoWorkspaceFile.delete({ where: { id, userId, workspace: ordinaryWorkspaceFor(userId) } });
   await getWorkspaceFileStore().delete(file.storageKey).catch(() => undefined);
   await releaseWorkspaceStorage(file.workspaceId,file.size);
   return ok({ deleted: true });

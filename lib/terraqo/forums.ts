@@ -1,3 +1,4 @@
+import { ordinaryWorkspaceMembership } from "@/lib/terraqo/workspace-roles";
 import type { Prisma, TerraqoVisibility } from "@prisma/client";
 import type { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -27,8 +28,7 @@ export async function getForumAccessContext(userId: string) {
     }),
     prisma.terraqoWorkspaceMember.findMany({
       where: {
-        userId,
-        active: true,
+        ...ordinaryWorkspaceMembership(userId),
         workspace: {
           active: true,
           deletedAt: null,

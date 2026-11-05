@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { Prisma, type TerraqoEvaluationSourceAccessKind } from "@prisma/client";
 import type { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { workspaceAdminMemberRoles } from "./workspace-roles";
 import { isWorkspaceReplay } from "@/lib/terraqo/idempotency-scope";
 import { constrainAllowedFields, type EvaluationSourceFieldPolicy } from "@/lib/terraqo/evaluation-source-policy";
 import type {
@@ -518,6 +519,20 @@ async function resolveSourceAccess(tx: Prisma.TransactionClient, actorId: string
   };
 }
 
+// The HTTP session selects the workspace. Recheck live authority inside the
+// transaction before returning private records, including idempotent replays.
+async function requireDossierAdministrator(tx: Prisma.TransactionClient, actor: { userId: string; workspaceId: string }) {
+  const user = await tx.user.findUnique({ where: { id: actor.userId }, select: { role: true } });
+  const workspace = user && await tx.terraqoWorkspace.findFirst({
+    where: {
+      id: actor.workspaceId, active: true, deletedAt: null,
+      ...(user.role === "SUPER_ADMIN" ? {} : { members: { some: { userId: actor.userId, active: true, role: { in: workspaceAdminMemberRoles } } } }),
+    },
+    select: { id: true },
+  });
+  if (!workspace) throw new DiscoveryNeedsError("No tienes acceso a las evaluaciones de este workspace.", 403);
+}
+
 export async function createEvaluationDossier(input: {
   userId: string;
   workspaceId: string;
@@ -529,6 +544,7 @@ export async function createEvaluationDossier(input: {
   const operationFingerprint = fingerprint(input.payload);
   return prisma.$transaction(async (tx) => {
     await tx.$queryRaw(Prisma.sql`SELECT id FROM icc."TerraqoWorkspace" WHERE id=${input.workspaceId} FOR UPDATE`);
+    await requireDossierAdministrator(tx, input);
     const existing = await tx.terraqoEvaluationDossier.findUnique({
       where: { createdById_operationKey: { createdById: input.userId, operationKey: input.operationKey } },
       include: { sources: true },
@@ -539,6 +555,9 @@ export async function createEvaluationDossier(input: {
         operationFingerprint,
       }))
         throw new DiscoveryNeedsError("La clave de reintento ya fue usada con otro expediente.", 409);
+      if (existing.lifecycle === "ARCHIVED") throw new DiscoveryNeedsError("Expediente no disponible.", 404);
+      const available = await Promise.all(existing.sources.map(source => evaluationSourceIsAccessible(tx, input.userId, source)));
+      if (available.some(access => !access)) throw new DiscoveryNeedsError("Alguna fuente perdió autorización.", 409);
       return existing;
     }
     const needRevision = await tx.terraqoWorkNeedRevision.findFirst({
@@ -621,6 +640,7 @@ async function evaluationSourceIsAccessible(
 
 export async function listEvaluationDossiers(input: { userId: string; workspaceId: string }) {
   return prisma.$transaction(async (tx) => {
+    await requireDossierAdministrator(tx, input);
     const dossiers = await tx.terraqoEvaluationDossier.findMany({
       where: { workspaceId: input.workspaceId, lifecycle: { not: "ARCHIVED" } },
       include: {
@@ -690,7 +710,7 @@ export async function listEvaluationDossiers(input: { userId: string; workspaceI
         revokedSourceCount: revokedCount,
       };
     }));
-  });
+  }, { isolationLevel: "RepeatableRead", maxWait: 20_000, timeout: 15_000 });
 }
 
 export async function saveEvaluationAssessment(input: {
@@ -703,6 +723,20 @@ export async function saveEvaluationAssessment(input: {
   const operationFingerprint = fingerprint(input.payload);
   const key = criterionKey(input.payload);
   return prisma.$transaction(async (tx) => {
+    await requireDossierAdministrator(tx, input);
+    const dossier = await tx.terraqoEvaluationDossier.findFirst({
+      where: { id: input.dossierId, workspaceId: input.workspaceId, lifecycle: { not: "ARCHIVED" } },
+      select: { id: true, needRevisionId: true },
+    });
+    if (!dossier) throw new DiscoveryNeedsError("Expediente no disponible.", 404);
+    const sourceIds = [...new Set(input.payload.sourceIds)];
+    const sources = sourceIds.length ? await tx.terraqoEvaluationSource.findMany({
+      where: { id: { in: sourceIds }, dossierId: dossier.id },
+      select: { id: true, accessKind: true, accessReferenceId: true, worklogRevisionId: true, accessSnapshot: true },
+    }) : [];
+    if (sources.length !== sourceIds.length) throw new DiscoveryNeedsError("Alguna fuente no pertenece al expediente.", 422);
+    const accessChecks = await Promise.all(sources.map((source) => evaluationSourceIsAccessible(tx, input.userId, source)));
+    if (accessChecks.some((accessible) => !accessible)) throw new DiscoveryNeedsError("Alguna fuente fue retirada o perdió autorización.", 409);
     const replay = await tx.terraqoEvaluationAssessment.findUnique({
       where: { createdById_operationKey: { createdById: input.userId, operationKey: input.operationKey } },
     });
@@ -711,11 +745,6 @@ export async function saveEvaluationAssessment(input: {
         throw new DiscoveryNeedsError("La clave de reintento ya fue usada con otra evaluación.", 409);
       return replay;
     }
-    const dossier = await tx.terraqoEvaluationDossier.findFirst({
-      where: { id: input.dossierId, workspaceId: input.workspaceId, lifecycle: { not: "ARCHIVED" } },
-      select: { id: true, needRevisionId: true },
-    });
-    if (!dossier) throw new DiscoveryNeedsError("Expediente no disponible.", 404);
     await tx.$queryRaw(Prisma.sql`SELECT id FROM icc."TerraqoEvaluationDossier" WHERE id=${dossier.id} FOR UPDATE`);
     if (input.payload.requirementId) {
       const requirement = await tx.terraqoNeedRequirement.findFirst({
@@ -731,14 +760,6 @@ export async function saveEvaluationAssessment(input: {
     const currentRevisionNo = current?.revisionNo ?? 0;
     if (currentRevisionNo !== input.payload.expectedRevisionNo)
       throw new DiscoveryNeedsError("El criterio cambió en otra sesión. Recarga antes de guardar.", 409);
-    const sourceIds = [...new Set(input.payload.sourceIds)];
-    const sources = sourceIds.length ? await tx.terraqoEvaluationSource.findMany({
-      where: { id: { in: sourceIds }, dossierId: dossier.id },
-      select: { id: true, accessKind: true, accessReferenceId: true, worklogRevisionId: true, accessSnapshot: true },
-    }) : [];
-    if (sources.length !== sourceIds.length) throw new DiscoveryNeedsError("Alguna fuente no pertenece al expediente.", 422);
-    const accessChecks = await Promise.all(sources.map((source) => evaluationSourceIsAccessible(tx, input.userId, source)));
-    if (accessChecks.some((accessible) => !accessible)) throw new DiscoveryNeedsError("Alguna fuente fue retirada o perdió autorización.", 409);
     if (current) await tx.terraqoEvaluationAssessment.update({ where: { id: current.id }, data: { current: false } });
     return tx.terraqoEvaluationAssessment.create({
       data: {
@@ -769,6 +790,12 @@ export async function addEvaluationNote(input: {
 }) {
   const operationFingerprint = fingerprint(input.payload);
   return prisma.$transaction(async (tx) => {
+    await requireDossierAdministrator(tx, input);
+    const dossier = await tx.terraqoEvaluationDossier.findFirst({
+      where: { id: input.dossierId, workspaceId: input.workspaceId, lifecycle: { not: "ARCHIVED" } },
+      select: { id: true },
+    });
+    if (!dossier) throw new DiscoveryNeedsError("Expediente no disponible.", 404);
     const replay = await tx.terraqoEvaluationNote.findUnique({
       where: { createdById_operationKey: { createdById: input.userId, operationKey: input.operationKey } },
     });
@@ -777,11 +804,6 @@ export async function addEvaluationNote(input: {
         throw new DiscoveryNeedsError("La clave de reintento ya fue usada con otra nota.", 409);
       return replay;
     }
-    const dossier = await tx.terraqoEvaluationDossier.findFirst({
-      where: { id: input.dossierId, workspaceId: input.workspaceId, lifecycle: { not: "ARCHIVED" } },
-      select: { id: true },
-    });
-    if (!dossier) throw new DiscoveryNeedsError("Expediente no disponible.", 404);
     return tx.terraqoEvaluationNote.create({
       data: {
         dossierId: dossier.id,
@@ -803,6 +825,12 @@ export async function saveEvaluationQuestion(input: {
 }) {
   const operationFingerprint = fingerprint(input.payload);
   return prisma.$transaction(async (tx) => {
+    await requireDossierAdministrator(tx, input);
+    const dossier = await tx.terraqoEvaluationDossier.findFirst({
+      where: { id: input.dossierId, workspaceId: input.workspaceId, lifecycle: { not: "ARCHIVED" } },
+      select: { id: true },
+    });
+    if (!dossier) throw new DiscoveryNeedsError("Expediente no disponible.", 404);
     const replay = await tx.terraqoEvaluationQuestion.findUnique({
       where: { createdById_operationKey: { createdById: input.userId, operationKey: input.operationKey } },
     });
@@ -811,11 +839,6 @@ export async function saveEvaluationQuestion(input: {
         throw new DiscoveryNeedsError("La clave de reintento ya fue usada con otra pregunta.", 409);
       return replay;
     }
-    const dossier = await tx.terraqoEvaluationDossier.findFirst({
-      where: { id: input.dossierId, workspaceId: input.workspaceId, lifecycle: { not: "ARCHIVED" } },
-      select: { id: true },
-    });
-    if (!dossier) throw new DiscoveryNeedsError("Expediente no disponible.", 404);
     const current = input.payload.questionId ? await tx.terraqoEvaluationQuestion.findFirst({
       where: { id: input.payload.questionId, dossierId: dossier.id, current: true, lifecycle: "DRAFT" },
     }) : null;

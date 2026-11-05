@@ -29,7 +29,7 @@ export default async function WorkspaceMembersPage() {
       timeout: 15_000,
     });
     const invitations = await listWorkspaceInvitations(prisma, session.user.id, workspace.id);
-    return <WorkspaceMembers workspaceId={workspace.id} name={workspace.name} members={data} invitations={invitations.map(invite => ({ id: invite.id, email: invite.email, role: invite.role, status: invite.status, expiresAt: invite.expiresAt.toISOString() }))} />;
+    return <WorkspaceMembers workspaceId={workspace.id} name={workspace.name} members={data} invitations={invitations.map(invite => ({ id: invite.id, email: invite.email, role: invite.role, status: invite.status, resendCount: invite.resendCount, expiresAt: invite.expiresAt.toISOString() }))} />;
   } catch (error) {
     if (error instanceof WorkspaceInvitationError) notFound();
     throw error;

@@ -73,7 +73,8 @@ export async function verifyWorkspaceAdministration(db: PrismaClient, base: stri
     const created = await createdResponse.json();
     const replay = await post(admin, create);
     assert.equal(replay.status(), 200);
-    assert.deepEqual(await replay.json(), { id: created.id, token: null, replayed: true });
+    assert.equal(created.delivery, "disabled", "Synthetic runs must never send an invitation");
+    assert.deepEqual(await replay.json(), { id: created.id, token: null, replayed: true, delivery: "skipped" });
     const recipientContext = await context(); await login(recipientContext, recipient.email!);
     assert.equal((await post(recipientContext, { action: "accept", token: created.token })).status(), 404);
     assert.equal((await post(admin, { action: "rotate", workspaceId, invitationId: created.id })).status(), 429);

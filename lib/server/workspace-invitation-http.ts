@@ -2,18 +2,29 @@ import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
 import { readBoundedJson, BoundedRequestBodyError } from "./bounded-request-body";
 import { isSameOriginMutation } from "./same-origin-mutation";
+import type { sendWorkspaceInvitationEmail } from "./workspace-invitation-email";
+import type { WorkspaceInvitationIssue } from "../terraqo/workspace-invitations";
 import { createWorkspaceInvitation, manageWorkspaceInvitation, acceptWorkspaceInvitation, listWorkspaceInvitations, WorkspaceInvitationError } from "../terraqo/workspace-invitations";
 
 const id = z.string().min(1).max(160);
 const mutation = z.discriminatedUnion("action", [
   z.object({ action: z.literal("create"), workspaceId: id, email: z.string().trim().email().max(254), role: z.enum(["VIEWER", "MEMBER", "PROFESSIONAL", "CLIENT"]).default("VIEWER"), operationKey: z.string().uuid() }).strict(),
-  z.object({ action: z.enum(["cancel", "rotate"]), workspaceId: id, invitationId: id }).strict(),
+  z.object({ action: z.literal("cancel"), workspaceId: id, invitationId: id }).strict(),
+  z.object({ action: z.literal("rotate"), workspaceId: id, invitationId: id, expectedResendCount: z.number().int().min(0).max(5).default(0) }).strict(),
   z.object({ action: z.literal("accept"), token: z.string().regex(/^[A-Za-z0-9_-]{43}$/) }).strict(),
 ]);
 
 /** Session identity is supplied by the server, never by a request payload. */
-export function workspaceInvitationHandlers(deps: { db: PrismaClient; actor: (request: Request) => Promise<string | null>; enabled: () => boolean }) {
+export function workspaceInvitationHandlers(deps: { db: PrismaClient; actor: (request: Request) => Promise<string | null>; enabled: () => boolean; deliver: typeof sendWorkspaceInvitationEmail }) {
   const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer" } });
+  async function deliver(issue: WorkspaceInvitationIssue) {
+    try {
+      return await deps.deliver(issue);
+    } catch {
+      // The mutation committed. A timeout can also mean the provider accepted the message.
+      return "unconfirmed";
+    }
+  }
   async function handle(request: Request, write: boolean) {
     if (!deps.enabled()) return json({ error: "No disponible." }, 404);
     const actorId = await deps.actor(request);
@@ -33,9 +44,12 @@ export function workspaceInvitationHandlers(deps: { db: PrismaClient; actor: (re
           workspaceId: data.workspaceId, email: data.email,
           role: data.role, operationKey: data.operationKey,
         });
-        return json(result, result.replayed ? 200 : 201);
+        if (result.token === null) return json({ id: result.id, token: null, replayed: true, delivery: "skipped" });
+        return json({ id: result.id, token: result.token, replayed: false, delivery: await deliver(result) }, 201);
       }
-      return json(await manageWorkspaceInvitation(deps.db, actorId, data.workspaceId, data.invitationId, data.action));
+      const result = await manageWorkspaceInvitation(deps.db, actorId, data.workspaceId, data.invitationId, data.action, data.action === "rotate" ? data.expectedResendCount : undefined);
+      if (result.token === null) return json({ token: null });
+      return json({ token: result.token, delivery: await deliver(result) });
     } catch (error) {
       if (error instanceof WorkspaceInvitationError) return json({ error: error.message }, error.status);
       if (error instanceof BoundedRequestBodyError) return json({ error: "Solicitud no válida o demasiado grande." }, error.status);

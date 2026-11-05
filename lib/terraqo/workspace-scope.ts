@@ -1,3 +1,4 @@
+import { ordinaryWorkspaceMembership } from "@/lib/terraqo/workspace-roles";
 import { cache } from "react";
 import type { Role, TerraqoModuleCode } from "@prisma/client";
 import { auth } from "@/auth";
@@ -53,8 +54,7 @@ export async function getSessionWorkspaceWithModule(code: TerraqoModuleCode) {
   // The previous admin-only lookup made the UI visible but rejected its API call.
   const membership = await prisma.terraqoWorkspaceMember.findFirst({
     where: {
-      userId: session.user.id,
-      active: true,
+      ...ordinaryWorkspaceMembership(session.user.id),
       workspace: {
         active: true,
         deletedAt: null,

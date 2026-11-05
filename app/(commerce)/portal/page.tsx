@@ -1,3 +1,5 @@
+import { accessibleConversation } from "@/lib/terraqo/messaging";
+import { ordinaryWorkspaceFor, ordinaryWorkspaceMembership } from "@/lib/terraqo/workspace-roles";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { ElementType } from "react";
@@ -190,8 +192,7 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
 
     const memberships = await prisma.terraqoWorkspaceMember.findMany({
       where: {
-        userId: professionalProfile.userId,
-        active: true,
+        ...ordinaryWorkspaceMembership(professionalProfile.userId),
         workspace: { active: true, deletedAt: null },
       },
       select: {
@@ -206,14 +207,14 @@ export default async function ClientPortalPage({ searchParams }: ClientPortalPag
 
     const [participants, pendingTeamInvitations, pendingExperienceValidations, weekWorklogs, weekValidatedWorklogs, weekTrustAggregate, newConnections, totalWorklogs, verifiedExperiences, validationBackings, forumPosts, networkWorklogs, jobPosts, networkValidations] = await Promise.all([
       prisma.terraqoConversationParticipant.findMany({
-        where: { userId: professionalProfile.userId, leftAt: null },
+        where: { userId: professionalProfile.userId, leftAt: null, conversation: accessibleConversation(professionalProfile.userId) },
         select: { conversationId: true, lastReadAt: true, joinedAt: true },
       }),
       prisma.terraqoTeamMember.count({
         where: {
           userId: professionalProfile.userId,
           status: "INVITED",
-          team: { status: "ACTIVE" },
+          team: { status: "ACTIVE", workspace: ordinaryWorkspaceFor(professionalProfile.userId) },
         },
       }),
       prisma.terraqoProfessionalExperience.count({

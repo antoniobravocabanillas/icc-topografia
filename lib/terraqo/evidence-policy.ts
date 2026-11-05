@@ -1,3 +1,4 @@
+import { ordinaryWorkspaceMembership } from "@/lib/terraqo/workspace-roles";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
@@ -117,8 +118,7 @@ export async function resolveEvidenceReadScope(input: {
 
   const memberships = await prisma.terraqoWorkspaceMember.findMany({
     where: {
-      userId: actorUserId,
-      active: true,
+      ...ordinaryWorkspaceMembership(actorUserId),
       workspace: { active: true, deletedAt: null },
     },
     select: { workspaceId: true },

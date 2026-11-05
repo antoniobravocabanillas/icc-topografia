@@ -1,3 +1,5 @@
+import { ordinaryWorkspaceMembership, workspaceAdminMemberRoles, workspaceBrandAuthority } from "@/lib/terraqo/workspace-roles";
+import { lockWorkspaceMemberships } from "@/lib/terraqo/workspace-membership-guard";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { Building2, ImagePlus, ShieldCheck } from "lucide-react";
@@ -28,52 +30,25 @@ export const metadata = createMetadata({
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const workspaceManagerRoles = new Set(["OWNER", "ADMIN", "MANAGER"]);
-const platformManagerRoles = new Set(["SUPER_ADMIN", "ADMIN", "COMMERCIAL_ADMIN"]);
-
 function textField(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? value.trim() : "";
-}
-
-function canManageWorkspace(input: { memberRole?: string | null; platformRole?: string | null; ownerUserId?: string | null; userId?: string | null }) {
-  return (
-    (input.memberRole ? workspaceManagerRoles.has(input.memberRole) : false) ||
-    (input.platformRole ? platformManagerRoles.has(input.platformRole) : false) ||
-    Boolean(input.ownerUserId && input.userId && input.ownerUserId === input.userId)
-  );
 }
 
 async function updateWorkspaceBrandAction(formData: FormData) {
   "use server";
 
   const session = await auth();
-  if (!session?.user?.id || !session.user.email) redirect("/cuenta");
+  if (!session?.user?.id) redirect("/cuenta");
 
   const workspaceId = await getDefaultTerraqoWorkspaceId();
-  const membership = await prisma.terraqoWorkspaceMember.findFirst({
-    where: {
-      workspaceId,
-      active: true,
-      user: { OR: [{ id: session.user.id }, { email: session.user.email }] }
-    },
-    select: {
-      role: true,
-      workspace: { select: { ownerUserId: true, logoUrl: true } }
-    }
-  });
-
-  if (!canManageWorkspace({
-    memberRole: membership?.role,
-    platformRole: session.user.role,
-    ownerUserId: membership?.workspace.ownerUserId,
-    userId: session.user.id
-  })) {
-    redirect("/portal/workspace?status=permission");
-  }
+  const authority = workspaceBrandAuthority(session.user.id, workspaceId);
+  const authorized = await prisma.terraqoWorkspace.findFirst({ where: authority, select: { id: true } });
+  if (!authorized) redirect("/portal/workspace?status=permission");
 
   const logoFile = formData.get("logoFile");
-  let logoUrl = textField(formData, "logoUrl") || membership?.workspace.logoUrl || null;
+  let logoUrl = textField(formData, "logoUrl") || undefined;
+  let uploadedLogoKey: string | undefined;
 
   if (logoFile instanceof File && logoFile.size > 0) {
     if (!ALLOWED_CLIENT_LOGO_TYPES.has(logoFile.type)) redirect("/portal/workspace?status=logo-type");
@@ -90,6 +65,7 @@ async function updateWorkspaceBrandAction(formData: FormData) {
         uploadedBy: session.user.id
       }
     });
+    uploadedLogoKey = key;
     logoUrl = absoluteUrl(`/api/media/${key}`);
   }
 
@@ -99,17 +75,25 @@ async function updateWorkspaceBrandAction(formData: FormData) {
   const industry = textField(formData, "industry");
   const description = textField(formData, "description");
 
-  await prisma.terraqoWorkspace.update({
-    where: { id: workspaceId },
-    data: {
-      brandName: brandName || null,
-      name: name || brandName || undefined,
-      domain: domain || null,
-      industry: industry || null,
-      description: description || null,
-      logoUrl
-    }
+  const updated = await prisma.$transaction(async (tx) => {
+    // Membership changes take this same tenant lock. Check authority again after the upload.
+    await lockWorkspaceMemberships(tx, workspaceId);
+    return tx.terraqoWorkspace.updateMany({
+      where: authority,
+      data: {
+        brandName: brandName || null,
+        name: name || brandName || undefined,
+        domain: domain || null,
+        industry: industry || null,
+        description: description || null,
+        logoUrl
+      },
+    });
   });
+  if (!updated.count) {
+    if (uploadedLogoKey) await getClientLogoStore().delete(uploadedLogoKey);
+    redirect("/portal/workspace?status=permission");
+  }
 
   revalidatePath("/portal");
   revalidatePath("/portal/workspace");
@@ -124,14 +108,14 @@ type WorkspacePageProps = {
 export default async function WorkspaceBrandPage({ searchParams }: WorkspacePageProps) {
   const params = await searchParams;
   const session = await auth();
-  if (!session?.user?.id || !session.user.email) redirect("/cuenta");
+  if (!session?.user?.id) redirect("/cuenta");
 
   const workspaceId = await getDefaultTerraqoWorkspaceId();
   const membership = await prisma.terraqoWorkspaceMember.findFirst({
     where: {
       workspaceId,
-      active: true,
-      user: { OR: [{ id: session.user.id }, { email: session.user.email }] }
+      ...ordinaryWorkspaceMembership(session.user.id),
+      workspace: { active: true, deletedAt: null }
     },
     select: {
       role: true,
@@ -143,8 +127,7 @@ export default async function WorkspaceBrandPage({ searchParams }: WorkspacePage
           domain: true,
           industry: true,
           description: true,
-          logoUrl: true,
-          ownerUserId: true
+          logoUrl: true
         }
       }
     }
@@ -153,12 +136,7 @@ export default async function WorkspaceBrandPage({ searchParams }: WorkspacePage
   if (!membership?.workspace) redirect("/portal");
 
   const workspace = membership.workspace;
-  const allowed = canManageWorkspace({
-    memberRole: membership.role,
-    platformRole: session.user.role,
-    ownerUserId: workspace.ownerUserId,
-    userId: session.user.id
-  });
+  const allowed = workspaceAdminMemberRoles.includes(membership.role);
 
   const statusMessage =
     params.status === "permission"

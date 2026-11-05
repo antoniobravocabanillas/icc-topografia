@@ -1,3 +1,4 @@
+import { ordinaryWorkspaceMembership } from "@/lib/terraqo/workspace-roles";
 import { Prisma } from "@prisma/client";
 import { createHash } from "node:crypto";
 import type { z } from "zod";
@@ -99,8 +100,7 @@ export async function getProfessionalNetworkContext(userId: string) {
     }),
     prisma.terraqoWorkspaceMember.findMany({
       where: {
-        userId,
-        active: true,
+        ...ordinaryWorkspaceMembership(userId),
         workspace: { active: true, deletedAt: null },
       },
       orderBy: { createdAt: "asc" },
@@ -181,7 +181,7 @@ export async function getVisibleWorklogs(userId: string, take = 30) {
 
 export async function canViewWorklog(userId: string, worklogId: string) {
   const memberships = await prisma.terraqoWorkspaceMember.findMany({
-    where: { userId, active: true },
+    where: { ...ordinaryWorkspaceMembership(userId), workspace: { active: true, deletedAt: null } },
     select: { workspaceId: true },
   });
   const workspaceIds = memberships.map((membership) => membership.workspaceId);
@@ -221,7 +221,7 @@ export async function createProfessionalWorklog(input: {
 
   if (workspaceId) {
     const membership = await prisma.terraqoWorkspaceMember.findFirst({
-      where: { workspaceId, userId: input.userId, active: true },
+      where: { workspaceId, ...ordinaryWorkspaceMembership(input.userId), workspace: { active: true, deletedAt: null } },
       select: { id: true },
     });
     if (!membership)

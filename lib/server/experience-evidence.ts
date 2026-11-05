@@ -1,3 +1,4 @@
+import { ordinaryWorkspaceMembership } from "@/lib/terraqo/workspace-roles";
 import { prisma } from "@/lib/prisma";
 import { fail, handleApiError } from "@/lib/server/api";
 import { ALLOWED_EXPERIENCE_EVIDENCE_TYPES, createExperienceEvidenceKey, getWorklogEvidenceStore, MAX_EXPERIENCE_EVIDENCE_SIZE } from "@/lib/server/media";
@@ -41,7 +42,15 @@ export async function getExperienceEvidenceFile(userId: string, evidenceId: stri
       include: { experience: { select: { professionalProfile: { select: { userId: true } }, validatorUserId: true, workspaceId: true } } }
     });
     if (!evidence) return fail("Evidencia no encontrada.", 404);
-    const authorized = evidence.experience.professionalProfile.userId === userId || evidence.experience.validatorUserId === userId || Boolean(evidence.experience.workspaceId && await prisma.terraqoWorkspaceMember.findFirst({ where: { userId, workspaceId: evidence.experience.workspaceId, active: true }, select: { id: true } }));
+    const { experience } = evidence;
+    const authorized = experience.professionalProfile.userId === userId || experience.validatorUserId === userId ||
+      (experience.workspaceId && await prisma.terraqoWorkspaceMember.findFirst({
+        where: {
+          ...ordinaryWorkspaceMembership(userId), workspaceId: experience.workspaceId,
+          workspace: { active: true, deletedAt: null },
+        },
+        select: { id: true },
+      }));
     if (!authorized) return fail("No tienes permiso para ver esta evidencia.", 403);
     const entry = await getWorklogEvidenceStore().getWithMetadata(evidence.storageKey, { type: "arrayBuffer" });
     if (!entry) return fail("La evidencia ya no está disponible.", 404);

@@ -1,3 +1,5 @@
+import { accessibleConversation } from "@/lib/terraqo/messaging";
+import { ordinaryWorkspaceFor } from "@/lib/terraqo/workspace-roles";
 import { prisma } from "@/lib/prisma";
 import { fail, handleApiError, ok } from "@/lib/server/api";
 import { requireUser } from "@/lib/server/authz";
@@ -13,7 +15,7 @@ export async function GET() {
 
   try {
     const participants = await prisma.terraqoConversationParticipant.findMany({
-      where: { userId, leftAt: null, mutedAt: null },
+      where: { userId, leftAt: null, mutedAt: null, conversation: accessibleConversation(userId) },
       select: { conversationId: true, lastReadAt: true, joinedAt: true },
     });
     const unreadWindows = participants.map((participant) => ({
@@ -26,9 +28,7 @@ export async function GET() {
         { userId },
         {
           userId: null,
-          terraqoWorkspace: {
-            members: { some: { userId, active: true } },
-          },
+          terraqoWorkspace: ordinaryWorkspaceFor(userId),
         },
       ],
     };

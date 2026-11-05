@@ -20,7 +20,7 @@ async function main() {
     const input = { workspaceId: ws.id, email: recipient.email!, operationKey: randomUUID() };
     let actorId: string | null = owner.id;
     let enabled = true;
-    const http = workspaceInvitationHandlers({ db, actor: async () => actorId, enabled: () => enabled });
+    const http = workspaceInvitationHandlers({ db, actor: async () => actorId, enabled: () => enabled, deliver: async () => "disabled" });
     const endpoint = "https://workspace.invalid/api/terraqo/workspace-invitations";
     const post = (body: unknown, origin = "https://workspace.invalid", contentType = "application/json") => http.POST(new Request(endpoint, { method: "POST", headers: { origin, "content-type": contentType }, body: JSON.stringify(body) }));
     const command = { action: "create", ...input, email: "http@invite.invalid", operationKey: randomUUID() };

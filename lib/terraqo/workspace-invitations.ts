@@ -22,6 +22,10 @@ async function authorize(tx: Prisma.TransactionClient, workspaceId: string, acto
 }
 const unavailable = () => new WorkspaceInvitationError("La invitación no está disponible para esta cuenta.", 404);
 
+// Return delivery details only for the exact issuance written by the authorized transaction.
+const issuanceFields = { id: true, email: true, resendCount: true, expiresAt: true } as const;
+export type WorkspaceInvitationIssue = { id: string; email: string; resendCount: number; expiresAt: Date; token: string };
+
 /** Explicit projection excludes token hashes, operation fingerprints and private identity records. */
 export async function listWorkspaceInvitations(db: PrismaClient, actorId: string, workspaceId: string) {
   return db.$transaction(async tx => {
@@ -52,12 +56,12 @@ export async function createWorkspaceInvitation(db: PrismaClient, actorId: strin
     const count = await tx.terraqoWorkspaceInvitation.count({ where: { workspaceId: data.workspaceId, createdAt: { gte: new Date(now.getTime() - 86400000) } } });
     if (count >= 50) throw new WorkspaceInvitationError("Se alcanzó el límite diario de invitaciones.", 429);
     const token = randomBytes(32).toString("base64url");
-    const invitation = await tx.terraqoWorkspaceInvitation.create({ data: { ...data, createdById: actorId, operationFingerprint: fingerprint, tokenHash: hash(token), expiresAt: new Date(now.getTime() + 7 * 86400000) } });
-    return { id: invitation.id, token, replayed: false };
+    const invitation = await tx.terraqoWorkspaceInvitation.create({ data: { ...data, createdById: actorId, operationFingerprint: fingerprint, tokenHash: hash(token), expiresAt: new Date(now.getTime() + 7 * 86400000) }, select: issuanceFields });
+    return { ...invitation, token, replayed: false };
   }, { isolationLevel: "ReadCommitted" });
 }
 
-export async function manageWorkspaceInvitation(db: PrismaClient, actorId: string, workspaceId: string, invitationId: string, action: "cancel" | "rotate") {
+export async function manageWorkspaceInvitation(db: PrismaClient, actorId: string, workspaceId: string, invitationId: string, action: "cancel" | "rotate", expectedResendCount?: number) {
   if (action !== "cancel" && action !== "rotate") throw unavailable();
   return db.$transaction(async tx => {
     await lockWorkspaceMemberships(tx, workspaceId);
@@ -70,13 +74,17 @@ export async function manageWorkspaceInvitation(db: PrismaClient, actorId: strin
       await tx.terraqoWorkspaceInvitation.update({ where: { id: invitationId }, data: { status: "CANCELLED", cancelledAt: new Date() } });
       return { token: null };
     }
+    // Check under the workspace lock, including retries that arrive after the cooldown.
+    if (expectedResendCount !== undefined && invitation.resendCount !== expectedResendCount) {
+      throw new WorkspaceInvitationError("El enlace ya se renovó. Actualiza la página para ver la invitación vigente.", 409);
+    }
     const now = new Date();
     if (invitation.expiresAt <= now || invitation.resendCount >= 5 || now.getTime() - invitation.lastIssuedAt.getTime() < 60000) {
       throw new WorkspaceInvitationError("No se puede renovar el enlace todavía o se agotó su vigencia o límite.", 429);
     }
     const token = randomBytes(32).toString("base64url");
-    await tx.terraqoWorkspaceInvitation.update({ where: { id: invitationId }, data: { tokenHash: hash(token), lastIssuedAt: now, resendCount: { increment: 1 } } });
-    return { token };
+    const rotated = await tx.terraqoWorkspaceInvitation.update({ where: { id: invitationId }, data: { tokenHash: hash(token), lastIssuedAt: now, resendCount: { increment: 1 } }, select: issuanceFields });
+    return { ...rotated, token };
   }, { isolationLevel: "ReadCommitted" });
 }
 

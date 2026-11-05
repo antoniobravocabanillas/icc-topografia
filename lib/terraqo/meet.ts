@@ -1,3 +1,4 @@
+import { accessibleConversation } from "@/lib/terraqo/messaging";
 import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 
@@ -51,7 +52,7 @@ export function getMeetProviderConfig() {
 
 export async function createOrGetMeeting(userId: string, conversationId: string) {
   const participant = await prisma.terraqoConversationParticipant.findFirst({
-    where: { conversationId, userId, leftAt: null },
+    where: { conversationId, userId, leftAt: null, conversation: accessibleConversation(userId, "TERRAQO_MEET") },
     select: {
       role: true,
       conversation: {
@@ -123,7 +124,7 @@ export async function getMeetingForUser(meetingId: string, userId: string) {
       meeting: {
         status: "LIVE",
         workspace: { modules: { some: { code: "TERRAQO_MEET", active: true } } },
-        conversation: { participants: { some: { userId, leftAt: null } } }
+        conversation: { ...accessibleConversation(userId, "TERRAQO_MEET"), participants: { some: { userId, leftAt: null } } }
       }
     },
     select: { meeting: { include: meetingInclude } }

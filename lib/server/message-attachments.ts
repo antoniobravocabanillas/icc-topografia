@@ -8,42 +8,7 @@ import {
   getMessageAttachmentStore,
   MAX_MESSAGE_ATTACHMENT_SIZE,
 } from "@/lib/server/media";
-import { TerraqoMessagingError } from "@/lib/terraqo/messaging";
-
-async function activeParticipant(userId: string, conversationId: string) {
-  const participant = await prisma.terraqoConversationParticipant.findFirst({
-    where: { userId, conversationId, leftAt: null },
-    select: {
-      id: true,
-      conversation: {
-        select: {
-          workspace: {
-            select: {
-              modules: {
-                where: { code: "PROFESSIONAL_MESSAGING", active: true },
-                select: { id: true },
-              },
-            },
-          },
-        },
-      },
-    },
-  });
-  if (!participant)
-    throw new TerraqoMessagingError(
-      "No tienes acceso a esta conversación.",
-      403,
-    );
-  if (
-    participant.conversation.workspace &&
-    !participant.conversation.workspace.modules.length
-  )
-    throw new TerraqoMessagingError(
-      "El módulo de mensajería no está activo.",
-      403,
-    );
-  return participant;
-}
+import { accessibleConversation, requireMessagingParticipant, TerraqoMessagingError } from "@/lib/terraqo/messaging";
 
 export async function uploadMessageAttachment(
   request: Request,
@@ -70,6 +35,7 @@ export async function uploadMessageAttachment(
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(operationKey))
     throw new TerraqoMessagingError("La solicitud no incluye una clave de reintento válida.", 400);
 
+  await requireMessagingParticipant(prisma, userId, conversationId);
   const bytes = await file.arrayBuffer();
   const fingerprint = createHash("sha256").update(JSON.stringify({
     conversationId,
@@ -90,7 +56,6 @@ export async function uploadMessageAttachment(
     return replay.message;
   }
 
-  const participant = await activeParticipant(userId, conversationId);
   const kind = contentType.startsWith("audio/")
     ? "AUDIO"
     : contentType.startsWith("image/")
@@ -112,6 +77,7 @@ export async function uploadMessageAttachment(
   });
 
     return await prisma.$transaction(async (tx) => {
+      const participant = await requireMessagingParticipant(tx, userId, conversationId);
       const message = await tx.terraqoDirectMessage.create({
         data: {
           conversationId,
@@ -147,6 +113,7 @@ export async function uploadMessageAttachment(
     await reservation.release();
     await store.delete(storageKey).catch(() => undefined);
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      await requireMessagingParticipant(prisma, userId, conversationId);
       const concurrent = await prisma.terraqoMessageOperation.findUnique({
         where: { actorId_operationKey: { actorId: userId, operationKey } },
         include: { message: { include: { attachmentItems: true } } },
@@ -166,7 +133,7 @@ export async function downloadMessageAttachment(
     where: {
       id: attachmentId,
       message: {
-        conversation: { participants: { some: { userId, leftAt: null } } },
+        conversation: { ...accessibleConversation(userId), participants: { some: { userId, leftAt: null } } },
       },
     },
   });
