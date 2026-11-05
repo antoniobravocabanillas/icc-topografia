@@ -26,8 +26,8 @@ function candidateSha(value) {
   check(typeof value === "string" && value.length === 40 && /^[0-9a-f]{40}$/.test(value), "Expected a full lowercase commit SHA");
   return value;
 }
-function assetList(runId) {
-  return s24BlobFixtures(runId).flat().map(({ key, bytes, sha256 }) => ({ key, size: bytes.length, sha256 }));
+function assetList(runId, mediaVersion) {
+  return s24BlobFixtures(runId, mediaVersion).flat().map(({ key, bytes, sha256 }) => ({ key, size: bytes.length, sha256 }));
 }
 function validateManifest(manifest) {
   check(manifest?.siteId === siteId && manifest.branch === branch && manifest.store === storeName &&
@@ -35,7 +35,7 @@ function validateManifest(manifest) {
   candidateSha(manifest.candidate);
   s24BlobRun(manifest.runId);
   s24BlobRun(manifest.ownerId);
-  check(JSON.stringify(manifest.assets) === JSON.stringify(assetList(manifest.runId)), "Manifest asset prefix or content mismatch");
+  check(JSON.stringify(manifest.assets) === JSON.stringify(assetList(manifest.runId, manifest.mediaVersion ?? 1)), "Manifest asset prefix or content mismatch");
   return manifest;
 }
 async function readManifest(dir) {
@@ -63,14 +63,14 @@ async function readAsset(store, manifest, asset) {
 }
 async function inspect(store, manifest) {
   const assets = [];
-  for (const asset of s24BlobFixtures(manifest.runId).flat())
+  for (const asset of s24BlobFixtures(manifest.runId, manifest.mediaVersion ?? 1).flat())
     assets.push({ key: asset.key, status: await readAsset(store, manifest, asset) });
   return assets;
 }
 async function cleanup(dir, store, manifest) {
   const cleaning = await saveManifest(dir, manifest, "cleaning");
   const failed = [];
-  for (const asset of s24BlobFixtures(cleaning.runId).flat()) {
+  for (const asset of s24BlobFixtures(cleaning.runId, cleaning.mediaVersion ?? 1).flat()) {
     try {
       const status = await readAsset(store, cleaning, asset);
       if (status === "absent") continue;
@@ -114,7 +114,7 @@ export async function blobOperation(command, { dir, store, candidate, expectedRu
     if (active) check((await inspect(store, active)).every(row => row.status === "absent"), "Previous run keys still present");
     const runId = randomUUID();
     const manifest = await saveManifest(dir, { siteId, branch, store: storeName, candidate: candidateSha(candidate),
-      runId, ownerId: randomUUID(), assets: assetList(runId) }, "preparing");
+      runId, ownerId: randomUUID(), mediaVersion: 2, assets: assetList(runId, 2) }, "preparing");
     try {
       for (const asset of s24BlobFixtures(runId).flat()) {
         const result = await store.set(asset.key, Uint8Array.from(asset.bytes).buffer,

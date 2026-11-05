@@ -65,8 +65,8 @@ try {
   for (const asset of assets) {
     const image = await sharp(asset.bytes).metadata();
     assert.equal(image.format, "webp");
-    assert.equal(image.width, 4);
-    assert.equal(image.height, 4);
+    assert.equal(image.width, asset.key.endsWith("-selected.webp") ? 960 : 4);
+    assert.equal(image.height, asset.key.endsWith("-selected.webp") ? 540 : 4);
     assert.deepEqual(Buffer.from(objects.get(asset.key).data), asset.bytes);
   }
   const original = await readFile(file, "utf8");

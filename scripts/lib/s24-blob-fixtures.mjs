@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 
 export function s24BlobRun(value) {
@@ -7,8 +8,9 @@ export function s24BlobRun(value) {
   return value;
 }
 
-// Frozen 4x4 WebPs. Both the operator and the hosted HTTP assertion decode the
-// same bytes regardless of operating system or image codec version.
+// Version 1 used four tiny WebPs. Version 2 uses illustrative survey plans for
+// selected media. The operator and hosted HTTP assertion always read the
+// same immutable bytes, including when cleaning an older manifest.
 const pairs = [
   ["UklGRjgAAABXRUJQVlA4ICwAAACQAQCdASoEAAQAAUAmJaACdLoAA5gA/vQYtzXxAyb/7B3/6Dv/0Hf6cAAAAA==",
    "UklGRi4AAABXRUJQVlA4ICIAAABwAQCdASoEAAQAAUAmJYwCdAFAAAD+9uX5GGjXqqnr79AA"],
@@ -16,10 +18,14 @@ const pairs = [
    "UklGRjYAAABXRUJQVlA4ICoAAACQAQCdASoEAAQAAUAmJaACdLoAA5gA/u1N3/z8z96P8D86fyR3nsvgAAA="],
 ];
 
-export function s24BlobFixtures(runId) {
+export function s24BlobFixtures(runId, mediaVersion = 2) {
+  if (![1, 2].includes(mediaVersion)) throw new Error("Unknown S24 media version");
   const prefix = `worklog-evidence/s24-test/${s24BlobRun(runId)}/`;
   return pairs.map((pair, record) => pair.map((base64, index) => {
-    const bytes = Buffer.from(base64, "base64");
+    const file = record === 0 ? "nivelacion.webp" : "replanteo.webp";
+    const bytes = mediaVersion === 2 && index === 0
+      ? readFileSync(new URL("../fixtures/public-archive/media/" + file, import.meta.url))
+      : Buffer.from(base64, "base64");
     const key = `${prefix}record-${record + 1}-${index === 0 ? "selected" : "excluded"}.webp`;
     return { key, bytes, sha256: createHash("sha256").update(bytes).digest("hex") };
   }));

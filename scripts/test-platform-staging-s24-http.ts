@@ -96,7 +96,7 @@ async function main() {
           passwordHash: await bcrypt.hash(password, 12),
           terraqoProfessionalProfile: {
             create: {
-              username: `s24-${index}-${suffix}`,
+              username: index === 0 ? `s24-archive-${blobRun}` : `s24-${index}-${suffix}`,
               headline: "Perfil sintetico de staging S24",
               visibility: "PRIVATE",
               liveCvEnabled: index === 0,
@@ -134,9 +134,6 @@ async function main() {
       select: { id: true },
     });
 
-    const selection = await createS24Selection(prisma, { runId: blobRun, ownerId: owner.id, workspaceId: workspaceA.id,
-      profileId: owner.terraqoProfessionalProfile.id, worklogIds });
-    const { collection } = selection;
     async function isolatedContext() {
       const context = await browser.newContext({ serviceWorkers: "block" });
       contexts.push(context);
@@ -154,7 +151,6 @@ async function main() {
       signIn(strangerContext, origin, emails[2]!, password),
     ]);
     const reviewsUrl = new URL('/api/v1/publication-reviews', origin).toString();
-    const publicationUrl = new URL(`/api/v1/share-collections/${collection.id}/projection`, origin).toString();
     const headers = { Origin: origin.origin };
     assert.equal((await anonymous.request.get(reviewsUrl)).status(), 401);
     const read: ReadAs = async (actor, path) => {
@@ -166,6 +162,13 @@ async function main() {
       }
       return new Response(new Uint8Array(await result.body()), { status: result.status(), headers: result.headers() });
     };
+    const { checkHostedPublicArchive } = await import("./lib/hosted-public-archive");
+    await checkHostedPublicArchive(prisma, anonymous, origin, blobRun, owner.id, owner.terraqoProfessionalProfile.id,
+      `s24-archive-${blobRun}`, worklogIds);
+    const selection = await createS24Selection(prisma, { runId: blobRun, ownerId: owner.id, workspaceId: workspaceA.id,
+      profileId: owner.terraqoProfessionalProfile.id, worklogIds });
+    const { collection } = selection;
+    const publicationUrl = new URL(`/api/v1/share-collections/${collection.id}/projection`, origin).href;
     const first = await ownerContext.request.post(reviewsUrl, { headers, data: { collectionId: collection.id, expectedVersion: 1 } });
     assert.equal(first.status(), 200);
     const [stale] = await jsonData<Array<{ id: string; scopeHash: string }>>(first);

@@ -33,6 +33,8 @@ export async function verifyHostedPublication(source: NodeJS.ProcessEnv) {
     assert.equal(receipt.databaseCleanup, "matched");
     assert.equal(receipt.blobCleanup, "external");
     assert.ok(stdout.includes("PASS S24 hosted WorkCase scope, navigation, withdrawal and exact group cleanup."));
+    assert.ok(stdout.includes("PASS hosted S10/S11 public archive:"));
+    console.log("PASS hosted S10/S11 date range, two-plan gallery and return at 1280/375/320.");
     console.log(JSON.stringify({ gate: "s24", receipt }));
     console.log("PASS hosted WorkCase navigation and withdrawal, S24 selected and withheld attachment bytes, and retained database baseline.");
   } catch (error) {
