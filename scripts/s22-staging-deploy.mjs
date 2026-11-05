@@ -1,0 +1,68 @@
+import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+import { pathToFileURL } from "node:url";
+import { execFileSync } from "node:child_process";
+import { mkdir, writeFile } from "node:fs/promises";
+
+const siteId = "6b8c43fb-6083-450a-9b85-46a820fb6358";
+const origin = "https://terraqo-platform-staging.netlify.app";
+const branch = "codex/s22-workspace-admin-20261104";
+async function main() {
+  const mode = process.argv[2];
+  assert.ok(["inspect", "configure", "trigger", "status"].includes(mode));
+  const require = createRequire(new URL("../node_modules/netlify-cli/package.json", import.meta.url));
+  const { getAPIToken } = await import(pathToFileURL(require.resolve("@netlify/dev-utils")).href);
+  const { NetlifyAPI } = await import(pathToFileURL(require.resolve("@netlify/api")).href);
+  const api = new NetlifyAPI(await getAPIToken());
+  const site = await api.getSite({ site_id: siteId });
+  assert.equal(site.id, siteId); assert.equal(site.name, "terraqo-platform-staging"); assert.equal(site.ssl_url, origin);
+  if (mode === "status") {
+    const deployId = process.argv[3]; assert.match(deployId || "", /^[a-f0-9]{24}$/);
+    const deploy = await api.getSiteDeploy({ site_id: siteId, deploy_id: deployId });
+    assert.equal(deploy.site_id, siteId);
+    console.log(JSON.stringify({ id: deploy.id, state: deploy.state, commit: deploy.commit_ref, branch: deploy.branch, buildId: deploy.build_id, published: deploy.published_at, error: deploy.error_message, summary: deploy.summary }, null, 2));
+    return;
+  }
+  const envArgs = { accountId: site.account_slug, siteId };
+  let entries = await api.getEnvVars(envArgs);
+  const values = () => Object.fromEntries(entries.map(e => [e.key, e.values?.find(v => v.context === "production")?.value ?? e.values?.find(v => v.context === "all")?.value]));
+  if (mode === "inspect") {
+    const env = values();
+    const keys = ["PLATFORM_STAGING_CLOUD_PHASE", "PLATFORM_STAGING_SUPABASE_PROJECT_REF", "PLATFORM_STAGING_DATABASE_ROLE", "PLATFORM_STAGING_ALLOW_REMOTE", "TERRAQO_WORKSPACE_INVITATIONS_V1", "TERRAQO_TRANSACTIONAL_EMAIL_ENABLED", "AUTH_URL", "NEXT_PUBLIC_SITE_URL"];
+    console.log(JSON.stringify({ siteId, branch: site.build_settings?.repo_branch, repo: site.build_settings?.repo_path, publishedDeploy: site.published_deploy?.id, settings: Object.fromEntries(keys.map(k => [k, env[k] ?? null])), credentialsPresent: Object.fromEntries(["DATABASE_URL", "B5_GATE_DATABASE_URL", "AUTH_SECRET"].map(k => [k, Boolean(env[k])])) }, null, 2));
+    return;
+  }
+  const candidate = process.argv[3]; assert.match(candidate || "", /^[a-f0-9]{40}$/);
+  assert.equal(execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8", windowsHide: true }).trim(), candidate);
+  assert.equal(execFileSync("git", ["branch", "--show-current"], { encoding: "utf8", windowsHide: true }).trim(), branch);
+  assert.equal(execFileSync("git", ["status", "--porcelain"], { encoding: "utf8", windowsHide: true }).trim(), "");
+  const expected = {
+    S22_STAGING_CANDIDATE_SHA: candidate,
+    PLATFORM_STAGING_CLOUD_PHASE: "workspace-administration",
+    TERRAQO_S22_STAGING_CONFIRM: "mghdpciewbsowjrjwmwk:s22-fixtures",
+    TERRAQO_WORKSPACE_INVITATIONS_V1: "true",
+    TERRAQO_TRANSACTIONAL_EMAIL_ENABLED: "false",
+  };
+  const { assertWorkspaceAdministrationTestTarget } = await import("./lib/workspace-administration-test-target.ts");
+  assert.equal(assertWorkspaceAdministrationTestTarget({ ...values(), ...expected, SITE_ID: siteId }, origin), "staging");
+  if (mode === "configure") {
+    await mkdir("output/s22", { recursive: true });
+    await writeFile("output/s22/netlify-before.json", JSON.stringify({ siteId, previousBranch: site.build_settings?.repo_branch, previousDeploy: site.published_deploy?.id, values: Object.fromEntries(Object.keys(expected).map(key => [key, values()[key] ?? null])) }, null, 2));
+    for (const [key, value] of Object.entries(expected)) {
+      if (entries.some(e => e.key === key)) await api.setEnvVarValue({ ...envArgs, key, body: { context: "production", value } });
+      else await api.createEnvVars({ ...envArgs, body: [{ key, scopes: ["builds", "functions", "post_processing", "runtime"], values: [{ context: "production", value }] }] });
+    }
+    await api.updateSite({ site_id: siteId, body: { build_settings: { repo_branch: branch } } });
+    entries = await api.getEnvVars(envArgs);
+  }
+  for (const [key, value] of Object.entries(expected)) assert.equal(values()[key], value, `Unexpected ${key}`);
+  assert.equal((await api.getSite({ site_id: siteId })).build_settings.repo_branch, branch);
+  if (mode === "trigger") {
+    const remote = execFileSync("git", ["ls-remote", "origin", `refs/heads/${branch}`], { encoding: "utf8", windowsHide: true }).trim().split(/\s+/)[0];
+    assert.equal(remote, candidate);
+    const build = await api.createSiteBuild({ site_id: siteId, body: { clear_cache: true } });
+    await writeFile("output/s22/netlify-build.json", JSON.stringify({ siteId, candidate, buildId: build.id, deployId: build.deploy_id }, null, 2));
+    console.log(JSON.stringify({ triggered: true, siteId, candidate, buildId: build.id, deployId: build.deploy_id }));
+  } else console.log(JSON.stringify({ configured: true, siteId, candidate, branch, productionTouched: false }));
+}
+main().catch(error => { console.error(JSON.stringify({ failed: true, type: error?.name, status: error?.status, code: typeof error?.code === "string" ? error.code : undefined })); process.exitCode = 1; });

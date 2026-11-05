@@ -20,7 +20,7 @@ function assertProductionEnvironment(environment) {
     throw new Error("Production build: authentication must use the trusted request host.");
   }
   for (const [key, value] of Object.entries(environment)) {
-    if (value && (key.startsWith("PLATFORM_STAGING_") || key.startsWith("B5_GATE_") || key.startsWith("TERRAQO_STAGING_") || key.startsWith("ATTENTION_STAGING_") || key.startsWith("TERRAQO_ATTENTION_STAGING_"))) {
+    if (value && (key.startsWith("PLATFORM_STAGING_") || key.startsWith("B5_GATE_") || key.startsWith("TERRAQO_STAGING_") || key.startsWith("ATTENTION_STAGING_") || key.startsWith("TERRAQO_ATTENTION_STAGING_") || key.startsWith("S22_STAGING_") || key.startsWith("TERRAQO_S22_STAGING_"))) {
       throw new Error("Production build: staging-only configuration is present.");
     }
   }

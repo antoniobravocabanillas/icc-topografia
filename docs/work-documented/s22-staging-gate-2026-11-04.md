@@ -1,5 +1,11 @@
 # S22 dedicated staging gate — 4 November 2026
 
+## Authorized remote schema application
+
+After explicit user authorization, refreshed hosted preflight confirmed the unchanged 46-entry ledger, absent invitation table, no unfinished migrations and zero users/workspaces/worklogs. Applied the previously restored/rehearsed artifact only to `mghdpciewbsowjrjwmwk` through the Supabase migration connector (`s22_workspace_invitations_guarded`). Independent post-read confirms 47 finished entries, zero unfinished, exact invitation source checksum `28d6588fe6dba24a47b7ac1592e96d84d1ba5e0db7775d70289d70d2199972cf`, empty invitation table, all runtime DML grants, no public schema exposure and `postgres` SET restored to false. Existing entity counts remain zero. Production untouched.
+
+Next: deploy the exact reviewed candidate to the isolated Netlify staging site and require its hosted prepare/verify gates. Historical “no remote writes” statements below refer to earlier phases.
+
 ## Implemented and validated locally
 
 - Dedicated Netlify phase `workspace-administration` routes prepare/verify to `scripts/run-workspace-administration-staging.ts`, preserving attention and general platform routing.
