@@ -43,8 +43,20 @@ async function main() {
     TERRAQO_WORKSPACE_INVITATIONS_V1: "true",
     TERRAQO_TRANSACTIONAL_EMAIL_ENABLED: "false",
   };
-  const { assertWorkspaceAdministrationTestTarget } = await import("./lib/workspace-administration-test-target.ts");
-  assert.equal(assertWorkspaceAdministrationTestTarget({ ...values(), ...expected, SITE_ID: siteId }, origin), "staging");
+  // Netlify deliberately masks secrets returned by its management API. This
+  // preflight authorizes only nonsecret configuration; the hosted prebuild
+  // gate validates the actual database URLs and role before any fixture write.
+  const env = values();
+  assert.equal(env.PLATFORM_STAGING_SUPABASE_PROJECT_REF, "mghdpciewbsowjrjwmwk");
+  assert.equal(env.PLATFORM_STAGING_DATABASE_ROLE, "terraqo_staging_runtime");
+  assert.equal(env.PLATFORM_STAGING_ALLOW_REMOTE, "true");
+  for (const key of ["AUTH_URL", "NEXT_PUBLIC_SITE_URL", "NEXT_PUBLIC_PORTAL_URL", "NEXT_PUBLIC_ADMIN_URL", "NEXT_PUBLIC_API_URL"]) assert.equal(env[key], origin);
+  for (const key of ["DATABASE_URL", "B5_GATE_DATABASE_URL", "AUTH_SECRET"]) {
+    const entry = entries.find(item => item.key === key);
+    assert.ok(env[key], `Missing ${key}`);
+    assert.ok(entry.scopes.includes("builds") && entry.scopes.includes("functions"), `Missing scopes for ${key}`);
+  }
+  assert.equal(site.build_settings?.repo_path, "antoniobravocabanillas/icc-topografia");
   if (mode === "configure") {
     await mkdir("output/s22", { recursive: true });
     await writeFile("output/s22/netlify-before.json", JSON.stringify({ siteId, previousBranch: site.build_settings?.repo_branch, previousDeploy: site.published_deploy?.id, values: Object.fromEntries(Object.keys(expected).map(key => [key, values()[key] ?? null])) }, null, 2));
