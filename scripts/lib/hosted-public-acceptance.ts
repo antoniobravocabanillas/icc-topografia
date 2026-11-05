@@ -25,7 +25,7 @@ export async function verifyHostedPublication(source: NodeJS.ProcessEnv) {
   environment.PLATFORM_STAGING_S24_BLOB_RUN = runId;
   try {
     const { stdout } = await run(process.execPath, ["--conditions=react-server", "--import", "tsx", resolve("scripts/test-platform-staging-s24-http.ts")], {
-      env: environment, timeout: 480_000, maxBuffer: 2 * 1024 * 1024, windowsHide: true,
+      env: environment, timeout: 720_000, maxBuffer: 2 * 1024 * 1024, windowsHide: true,
     });
     const receipt = JSON.parse(stdout.trim().split(/\r?\n/).at(-1)!);
     assert.equal(receipt.runId, runId);

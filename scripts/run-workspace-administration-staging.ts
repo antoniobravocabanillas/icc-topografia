@@ -59,6 +59,15 @@ async function main() {
         }
         step = "live-publication-probe";
         await confirmLiveTarget();
+        const recovery = process.env.S24_STAGING_RECOVER_INTERRUPTED;
+        if (recovery && recovery !== "off") {
+          assert.match(recovery, /^[a-f0-9-]{36}\/[a-f0-9]{12}$/);
+          const [priorRunId, suffix] = recovery.split("/");
+          assert.notEqual(priorRunId, process.env.PLATFORM_STAGING_S24_BLOB_RUN);
+          const { recoverInterruptedS24 } = await import("./lib/s24-cleanup");
+          await recoverInterruptedS24(db, priorRunId, suffix);
+          console.log("PASS interrupted S24 fixture recovery");
+        }
         await verifyHostedPublication(process.env);
         await confirmLiveTarget();
         console.log("PASS S24 diagnostic against served commit " + servedCommit);

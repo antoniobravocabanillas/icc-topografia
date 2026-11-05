@@ -60,7 +60,10 @@ async function main() {
     assert.ok(changed.split(/\r?\n/).every(file => /^(scripts\/|docs\/|plugins\/terraqo-staging-gate\/)/.test(file)));
     probeTarget = live.commit_ref + "/" + live.id;
   }
+  const recover = process.argv[4] ?? "off";
+  if (recover !== "off") { assert.ok(probe); assert.match(recover, /^[a-f0-9-]{36}\/[a-f0-9]{12}$/); }
   const expected = {
+    S24_STAGING_RECOVER_INTERRUPTED: recover,
     S24_STAGING_DIAGNOSTIC_TARGET: probeTarget,
     S22_STAGING_CANDIDATE_SHA: candidate,
     PLATFORM_STAGING_CLOUD_PHASE: "workspace-administration",
