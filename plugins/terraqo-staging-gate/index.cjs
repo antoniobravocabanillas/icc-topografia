@@ -14,7 +14,8 @@ function run(stage, { utils }) {
     return;
   }
   const attention = process.env.PLATFORM_STAGING_CLOUD_PHASE === "customer-attention";
-  const runner = attention ? "scripts/run-customer-attention-staging.ts" : "scripts/run-platform-staging-cloud.ts";
+  const s22 = process.env.PLATFORM_STAGING_CLOUD_PHASE === "workspace-administration";
+  const runner = s22 ? "scripts/run-workspace-administration-staging.ts" : attention ? "scripts/run-customer-attention-staging.ts" : "scripts/run-platform-staging-cloud.ts";
   const result = spawnSync(process.execPath, ["--import", "tsx", resolve(runner), stage], {
     cwd: process.cwd(), env: process.env, encoding: "utf8", timeout: 1_100_000, shell: false,
   });
@@ -26,7 +27,7 @@ function run(stage, { utils }) {
   for (const line of diagnostics.split(/\r?\n/)) {
     try {
       const entry = JSON.parse(line);
-      for (const key of ["attentionStep", "authenticatedAttentionFailedAt", "attentionCleanup", "errorType", "code"]) {
+      for (const key of ["s22Step", "attentionStep", "authenticatedAttentionFailedAt", "attentionCleanup", "errorType", "code"]) {
         if (typeof entry[key] === "string" && /^[A-Za-z0-9_-]{1,60}$/.test(entry[key])) attentionSteps.push(`${key}:${entry[key]}`);
       }
     } catch { /* Never emit raw error text, credentials or customer content. */ }

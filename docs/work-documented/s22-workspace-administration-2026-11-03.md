@@ -1,5 +1,9 @@
 # S22 — workspace authority safety
 
+## Latest checkpoint — dedicated staging gate and migration rehearsal
+
+Dedicated S22 hosted runner, destination guards, shared authenticated browser/cleanup contract and migration preparation are implemented. Target rejection tests, local S22/attention real-session flows, exact fixture cleanup, migration wrapper rollback/replay checks and full Next.js production build pass. Read-only staging audit confirms 46 matching migrations, no unfinished ledger and absent invitation table. See `s22-staging-gate-2026-11-04.md`. Next: fresh staging backup/restore and role/default-grant audit before migration; then hosted acceptance. Evaluator permissions and delivery remain open. No remote writes.
+
 ## Latest checkpoint — reconciled customer-attention release
 
 Integrated released attention commit `285b20a` into the isolated S22 candidate after saving implementation checkpoint `d8c8601`. Both atomic last-admin protection and released chat operations/navigation remain. S22 authenticated browser and attention authenticated browser/PostgreSQL suites pass when run sequentially; they share `.next` and must not run in parallel. Desktop/mobile captures inspected. See `s22-release-reconciliation-2026-11-04.md` for candidate scope, exact schema delta and hosted gate gaps. No remote environment changed. Next: dedicated hosted S22 verifier and staging flag/migration readiness; Evaluator permissions and email delivery remain open.

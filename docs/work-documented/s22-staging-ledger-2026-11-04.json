@@ -1,0 +1,196 @@
+{
+  "project": "mghdpciewbsowjrjwmwk",
+  "name": "Terraqo Platform Staging",
+  "readOnly": true,
+  "database": "postgres",
+  "migrationCount": 46,
+  "unfinished": 0,
+  "ledger": [
+    {
+      "migration_name": "20260808143000_profile_experience_education",
+      "checksum": "f555672f3f5f8462ac6acac45dbada04e1f8e2e39aa63c243691f19ddf8e6529"
+    },
+    {
+      "migration_name": "20260808202000_experience_public_details",
+      "checksum": "34e8af19dcf985db5c5c701d6106b8d85e333e4d4376ea28168c5279c3038aff"
+    },
+    {
+      "migration_name": "20260809093000_professional_social_links",
+      "checksum": "093466f9ef2dbfd93b757d2ba8936081a464a16831e2affe9622f816f99a5d7c"
+    },
+    {
+      "migration_name": "20260826150000_user_unique_identity",
+      "checksum": "fd3a942239adfcc4928f404e9e8d5253bb7a3e6d4187282da7d81a874a286d21"
+    },
+    {
+      "migration_name": "20260827023000_professional_affiliation_requests",
+      "checksum": "9c9ae662b1ca47d6798de454cedd23258cb5cbdc42eac43d87470bb9b6ed291b"
+    },
+    {
+      "migration_name": "20260827143000_link_experience_to_workspace",
+      "checksum": "dbd451abf234cd5b3e8ff0ade3d667b2c3a928cb918891fe45e672baffb869ad"
+    },
+    {
+      "migration_name": "20260827170000_professional_plan_tier",
+      "checksum": "5f19e7e9f6ec603ffdfc3a8d0812dc0509f5353cc5e72d540940b0cba81a9ef2"
+    },
+    {
+      "migration_name": "20260828173000_user_presence",
+      "checksum": "59e8440495632cdb2915f9758d562eecae3d24318e3b81e4d53a03a15d763b29"
+    },
+    {
+      "migration_name": "20260828195000_experience_evidence_files",
+      "checksum": "102320b3c4fbc6b014b73386464d1e550456e822912e18bb4e765423f2954b1c"
+    },
+    {
+      "migration_name": "20260829013000_ai_writing_assistant_module",
+      "checksum": "cbeced1f368c55725269dad229cb392b006d87dc5ab219923de8b8d6c1c36934"
+    },
+    {
+      "migration_name": "20260829180000_terraqo_builders",
+      "checksum": "4639b87c0e483a55f27f8e5743ea80de6c33f578427ea889244f3744ac37a63f"
+    },
+    {
+      "migration_name": "20260829180100_enable_terraqo_builders",
+      "checksum": "7f71efd7ea9a726052f0832eeadced511eaa5ee8b60bf7b07632b3b3d3b9d1b9"
+    },
+    {
+      "migration_name": "20260830110000_worklog_trust_layer",
+      "checksum": "322a49b6ec6a656441687049cfc08504b3c620675e15f1241a533fbd5861aefc"
+    },
+    {
+      "migration_name": "20260830113000_worklog_evidence_hash",
+      "checksum": "491cee8c96cf0ff06eb4dae4508d4fe59a10463b9b5c3fc45cc9e5d653b1614a"
+    },
+    {
+      "migration_name": "20260830160000_personal_professional_documents",
+      "checksum": "56d7a5f33f932fe3e1970d02c8d17445937bfb65be5f62be45e51b6ec3de845f"
+    },
+    {
+      "migration_name": "20260830173000_terraqo_friendships",
+      "checksum": "5110f32c09ff6907dd0152faf7cd1d85e907af9310cf2e0d49d609c5dea7f5b1"
+    },
+    {
+      "migration_name": "20260830213000_terraqo_message_attachments",
+      "checksum": "671b62351f979fa9008da55bfc8361a05fcc2c2b5d2f352078612c0db9607a4a"
+    },
+    {
+      "migration_name": "20260902120000_worklog_continuity",
+      "checksum": "04e108de5fb99a4c0add1689d49ebef50405a10ec694ca57fc650fbc8e161fe7"
+    },
+    {
+      "migration_name": "20260902183000_worklog_location",
+      "checksum": "c727044fdc836ed115553620a0041a03f2b4173ef3dbbe01687972d0a3ec2bf9"
+    },
+    {
+      "migration_name": "20260907190000_terraqo_billing",
+      "checksum": "38b13069dc80391820c85974940cd2f1e3fa25748e62a5fa9f1147344ed40aa8"
+    },
+    {
+      "migration_name": "20260909120000_terraqo_complaints",
+      "checksum": "a0163ca40039b45887e0aca27cc0aab66dfafbbcf4ffad349c7b362be496594c"
+    },
+    {
+      "migration_name": "20260927110000_terraqo_cv_import",
+      "checksum": "e5dcaea466618db280202616b4ba8b407f6caea3e8841eee556cb34c8df1a314"
+    },
+    {
+      "migration_name": "20260928123000_cv_import_background_jobs",
+      "checksum": "9daf43a722cee6586cfa3ccefb553d0dba6abc09b578ae0c805ceb3f6476c34a"
+    },
+    {
+      "migration_name": "20260929014500_jornada_compensation_core",
+      "checksum": "abda8e96dd0bc6d909ae12be3e229d7a937efe19b24b2cc15be147109252c1f0"
+    },
+    {
+      "migration_name": "20260929031500_attendance_period_closure",
+      "checksum": "8d6274b00794bb05602e29c8b41574e81c191b841507d4cc0ac46851477d4dd0"
+    },
+    {
+      "migration_name": "20260930120000_personal_field_attendance",
+      "checksum": "ce7b09243b5f4b87bb7dbb101031532af3123f1f432fa7141e14ccc83c3b3432"
+    },
+    {
+      "migration_name": "20260930153000_attendance_location_tracking",
+      "checksum": "bafa43ba09dc9d212d7159ccda81e79c01315fb9f729fd39faa7783ffe37f582"
+    },
+    {
+      "migration_name": "20261001093000_attendance_policy_engine",
+      "checksum": "80ac1bf7471f043a09ff30e4d0a8bae2d4d0edc49b17a9062bf948b405264c30"
+    },
+    {
+      "migration_name": "20261007114000_cv_publication_operations",
+      "checksum": "aebf3c101fe70e15a59e8da8e046c34460db61350996b1ddb80823b08334b94a"
+    },
+    {
+      "migration_name": "20261007195600_education_evidence_prerequisites",
+      "checksum": "32f3390c670bddffc0f7a00f6f5a82175af8f73ae64bf10be4ff8c366861c6d7"
+    },
+    {
+      "migration_name": "20261008015500_education_evidence_withdrawal",
+      "checksum": "f1cb6984b9d2aecee5057df77a981dab9ffc50d36849ce64474f5298fa279300"
+    },
+    {
+      "migration_name": "20261008051000_native_worklog_operations",
+      "checksum": "793ef74992f0d91e311cd692402884dc6db13777427c57298ed1829e9961d9c9"
+    },
+    {
+      "migration_name": "20261008161000_native_worklog_decision",
+      "checksum": "48443fa878589145aa5f19bb5ac680acebbee12a3cd9248179b65fd4bb708686"
+    },
+    {
+      "migration_name": "20261008162500_native_worklog_content_key",
+      "checksum": "53a30a11ef03631c9827ed303f409dae5ee51e8331fe6f9a822f68dd239adbb4"
+    },
+    {
+      "migration_name": "20261008232500_native_worklog_authority_snapshot",
+      "checksum": "56390cab35263715b382b1e7f5c180abba043dfe4c0f371711ab167d05a33ace"
+    },
+    {
+      "migration_name": "20261009035000_native_worklog_first_decision",
+      "checksum": "734d3af1c5e165cdb0f573375e273b730e09523e0a2ac116f60644ad0e236a0c"
+    },
+    {
+      "migration_name": "20261016113000_worklog_archive_cursor_index",
+      "checksum": "1c087e22e5971d76df58674a550c51d03f5cd94f304285945fd2edcb45c79327"
+    },
+    {
+      "migration_name": "20261016143000_worklog_full_text_search",
+      "checksum": "0225064b5112e0b91debf1cd833a0f8f990faa6567f081f5981deb6b2132df2e"
+    },
+    {
+      "migration_name": "20261016183000_worklog_revisions_work_cases",
+      "checksum": "eb7bdb7ae7709a202052e978c2abcd1f41ab676e32ff156fb592b29de8b4d208"
+    },
+    {
+      "migration_name": "20261017120000_scoped_sharing_endorsements",
+      "checksum": "10acb5ad3e553e59da248fd734abb1cbf610e3ec48736b61c80ef9f25a37e1a3"
+    },
+    {
+      "migration_name": "20261017230000_discovery_needs",
+      "checksum": "8a61cad9b6e16abf34903f760fd0ffdde5992fc753dd165d21f4bd2720e89444"
+    },
+    {
+      "migration_name": "20261018153000_evidence_analysis_jobs",
+      "checksum": "fd68f7e35136fa569c434c773a574dc146ecc8ca2172d40ee503d999599d06fe"
+    },
+    {
+      "migration_name": "20261020143000_share_item_media_snapshot",
+      "checksum": "5942c4826669b236fc4e09e1e5fdf97f123e38724c5d12b08fecdb5ab25418fd"
+    },
+    {
+      "migration_name": "20261101000100_enterprise_publication_review",
+      "checksum": "1cbf0517579579375084bf54c3eb79c448b3f64d4c1687e52d5805b1698d5c46"
+    },
+    {
+      "migration_name": "20261102000100_selection_access_requests",
+      "checksum": "78be174a7b140054e3c4b5813e67d07e5880a4c322292b298337a9ff0e534e69"
+    },
+    {
+      "migration_name": "20261104000200_customer_attention_followup",
+      "checksum": "a7f498f903d18ce459c2f12e32cb4dde3a36006e6a92480831f9b787ba8cde57"
+    }
+  ],
+  "invitationTable": null,
+  "publicSchemaAccess": false
+}
