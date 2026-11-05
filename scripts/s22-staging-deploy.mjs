@@ -59,12 +59,12 @@ async function main() {
   assert.equal(site.build_settings?.repo_path, "antoniobravocabanillas/icc-topografia");
   if (mode === "configure") {
     await mkdir("output/s22", { recursive: true });
-    await writeFile("output/s22/netlify-before.json", JSON.stringify({ siteId, previousBranch: site.build_settings?.repo_branch, previousDeploy: site.published_deploy?.id, values: Object.fromEntries(Object.keys(expected).map(key => [key, values()[key] ?? null])) }, null, 2));
+    await writeFile("output/s22/netlify-before.json", JSON.stringify({ siteId, previousBranch: site.build_settings?.repo_branch, previousDeploy: site.published_deploy?.id, values: Object.fromEntries(Object.keys(expected).map(key => [key, values()[key] ?? null])) }, null, 2), { flag: "wx" }).catch(error => { if (error.code !== "EEXIST") throw error; });
     for (const [key, value] of Object.entries(expected)) {
       if (entries.some(e => e.key === key)) await api.setEnvVarValue({ ...envArgs, key, body: { context: "production", value } });
       else await api.createEnvVars({ ...envArgs, body: [{ key, scopes: ["builds", "functions", "post_processing", "runtime"], values: [{ context: "production", value }] }] });
     }
-    await api.updateSite({ site_id: siteId, body: { build_settings: { repo_branch: branch } } });
+    await api.updateSite({ site_id: siteId, body: { repo: { repo_branch: branch } } });
     entries = await api.getEnvVars(envArgs);
   }
   for (const [key, value] of Object.entries(expected)) assert.equal(values()[key], value, `Unexpected ${key}`);
