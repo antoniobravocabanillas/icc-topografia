@@ -64,7 +64,8 @@ async function main() {
       if (entries.some(e => e.key === key)) await api.setEnvVarValue({ ...envArgs, key, body: { context: "production", value } });
       else await api.createEnvVars({ ...envArgs, body: [{ key, scopes: ["builds", "functions", "post_processing", "runtime"], values: [{ context: "production", value }] }] });
     }
-    await api.updateSite({ site_id: siteId, body: { repo: { repo_branch: branch } } });
+    const repo = Object.fromEntries(["provider", "repo_path", "repo_url", "installation_id"].map(key => [key, site.build_settings[key]]));
+    await api.updateSite({ site_id: siteId, body: { repo: { ...repo, repo_branch: branch } } });
     entries = await api.getEnvVars(envArgs);
   }
   for (const [key, value] of Object.entries(expected)) assert.equal(values()[key], value, `Unexpected ${key}`);
