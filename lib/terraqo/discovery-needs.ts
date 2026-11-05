@@ -449,13 +449,13 @@ export async function discoverEvidenceForNeed(workspaceId: string, needId: strin
   }).slice(0, 80);
 }
 
-async function resolveSourceAccess(tx: Prisma.TransactionClient, actorId: string, revisionId: string) {
-  const revision = await tx.terraqoWorklogRevision.findUnique({
-    where: { id: revisionId },
+async function resolveDossierSources(tx: Prisma.TransactionClient, actorId: string, revisionIds: string[], profileId: string) {
+  const rows = await tx.terraqoWorklogRevision.findMany({
+    where: { id: { in: revisionIds } },
     select: {
       id: true,
       contentHash: true,
-      worklog: { select: { id: true, visibility: true, deletedAt: true, lifecycle: true, currentRevisionId: true, professionalProfile: { select: { liveCvEnabled: true } } } },
+      worklog: { select: { id: true, professionalProfileId: true, visibility: true, deletedAt: true, lifecycle: true, currentRevisionId: true, professionalProfile: { select: { liveCvEnabled: true } } } },
       shareItems: {
         where: { collection: { lifecycle: { not: "ARCHIVED" } } },
         select: {
@@ -464,7 +464,7 @@ async function resolveSourceAccess(tx: Prisma.TransactionClient, actorId: string
             select: {
               publicProjection: { select: { id: true, revokedAt: true } },
               grants: {
-                where: { subjectUserId: actorId, lifecycle: "ACTIVE", expiresAt: { gt: new Date() }, scopes: { has: "VIEW_COLLECTION" } },
+                where: { subjectUserId: actorId, lifecycle: "ACTIVE", revokedAt: null, expiresAt: { gt: new Date() }, scopes: { has: "VIEW_COLLECTION" } },
                 select: { id: true, expiresAt: true },
                 take: 1,
               },
@@ -474,49 +474,63 @@ async function resolveSourceAccess(tx: Prisma.TransactionClient, actorId: string
       },
     },
   });
-  if (!revision || revision.worklog.deletedAt || revision.worklog.lifecycle !== "PUBLISHED" || revision.worklog.currentRevisionId !== revision.id)
-    throw new DiscoveryNeedsError("La evidencia seleccionada ya no está vigente.", 409);
-  let accessKind: TerraqoEvaluationSourceAccessKind | null = null;
-  let accessReferenceId: string | null = null;
-  let allowedFields: EvaluationSourceFieldPolicy = null;
-  const privateItem = revision.shareItems.find((item) => item.collection.grants.length > 0);
-  const publicItem = revision.shareItems.find((item) => item.collection.publicProjection && !item.collection.publicProjection.revokedAt);
-  if (revision.worklog.visibility === "PUBLIC" && revision.worklog.professionalProfile.liveCvEnabled) {
-    accessKind = "PUBLIC_CV";
-    accessReferenceId = revision.worklog.id;
-  } else if (privateItem?.collection.grants[0]) {
-    // A direct grant remains valid even when the professional withdraws their
-    // public CV. Never let an ineligible public path mask the actor's private
-    // authorization.
-    accessKind = "PRIVATE_GRANT";
-    accessReferenceId = privateItem.collection.grants[0].id;
-    allowedFields = privateItem.allowedFields;
-  } else if (publicItem?.collection.publicProjection && revision.worklog.professionalProfile.liveCvEnabled) {
-    accessKind = "PUBLIC_SELECTION";
-    accessReferenceId = publicItem.collection.publicProjection.id;
-    if (publicationReviewEnabled()) {
-      const pinned = await readPublicationSource(tx, accessReferenceId, revision.id);
-      if (!pinned) throw new DiscoveryNeedsError("No existe autorización vigente para esta evidencia.", 403);
-      allowedFields = Object.keys(pinned.fields);
-    } else {
-      const legacy = await tx.terraqoPublicProjection.findFirst({ where: { id: accessReferenceId, ...publicSelectionPolicyWhere() }, select: { id: true } });
-      if (!legacy) throw new DiscoveryNeedsError("No existe autorización vigente para esta evidencia.", 403);
-      allowedFields = publicItem.allowedFields;
+  const byId = new Map(rows.map(row => [row.id, row]));
+  const projectionIds = [...new Set(rows.flatMap(row => {
+    if (row.worklog.visibility === "PUBLIC" || row.shareItems.some(item => item.collection.grants.length)) return [];
+    return row.shareItems.flatMap(item => item.collection.publicProjection && !item.collection.publicProjection.revokedAt
+      ? [item.collection.publicProjection.id] : []);
+  }))];
+  const enforceReview = publicationReviewEnabled();
+  const snapshots = enforceReview ? await loadPublicationProjections(tx, projectionIds) : undefined;
+  const legacyIds = new Set(!enforceReview && projectionIds.length ? (await tx.terraqoPublicProjection.findMany({
+    where: { id: { in: projectionIds }, ...publicSelectionPolicyWhere() }, select: { id: true },
+  })).map(projection => projection.id) : []);
+  return revisionIds.map(revisionId => {
+    const revision = byId.get(revisionId);
+    if (!revision || revision.worklog.deletedAt || revision.worklog.lifecycle !== "PUBLISHED" || revision.worklog.currentRevisionId !== revision.id)
+      throw new DiscoveryNeedsError("La evidencia seleccionada ya no está vigente.", 409);
+    let accessKind: TerraqoEvaluationSourceAccessKind | null = null;
+    let accessReferenceId: string | null = null;
+    let allowedFields: EvaluationSourceFieldPolicy = null;
+    const privateItem = revision.shareItems.find((item) => item.collection.grants.length > 0);
+    const publicItem = revision.shareItems.find((item) => item.collection.publicProjection && !item.collection.publicProjection.revokedAt);
+    if (revision.worklog.visibility === "PUBLIC" && revision.worklog.professionalProfile.liveCvEnabled) {
+      accessKind = "PUBLIC_CV";
+      accessReferenceId = revision.worklog.id;
+    } else if (privateItem?.collection.grants[0]) {
+      // A direct grant remains valid even when the professional withdraws their
+      // public CV. Never let an ineligible public path mask the actor's private
+      // authorization.
+      accessKind = "PRIVATE_GRANT";
+      accessReferenceId = privateItem.collection.grants[0].id;
+      allowedFields = privateItem.allowedFields;
+    } else if (publicItem?.collection.publicProjection && revision.worklog.professionalProfile.liveCvEnabled) {
+      accessKind = "PUBLIC_SELECTION";
+      accessReferenceId = publicItem.collection.publicProjection.id;
+      if (enforceReview) {
+        const pinned = snapshots?.get(accessReferenceId)?.items.find(item => item.revisionId === revision.id);
+        if (!pinned) throw new DiscoveryNeedsError("No existe autorización vigente para esta evidencia.", 403);
+        allowedFields = Object.keys(pinned.fields);
+      } else {
+        if (!legacyIds.has(accessReferenceId)) throw new DiscoveryNeedsError("No existe autorización vigente para esta evidencia.", 403);
+        allowedFields = publicItem.allowedFields;
+      }
     }
-  }
-  if (!accessKind || !accessReferenceId) throw new DiscoveryNeedsError("No existe autorización vigente para esta evidencia.", 403);
-  return {
-    worklogRevisionId: revision.id,
-    accessKind,
-    accessReferenceId,
-    accessSnapshot: {
-      checkedAt: new Date().toISOString(),
-      revisionHash: revision.contentHash,
+    if (!accessKind || !accessReferenceId) throw new DiscoveryNeedsError("No existe autorización vigente para esta evidencia.", 403);
+    if (revision.worklog.professionalProfileId !== profileId) throw new DiscoveryNeedsError("Todas las evidencias deben pertenecer al profesional evaluado.", 422);
+    return {
+      worklogRevisionId: revision.id,
       accessKind,
       accessReferenceId,
-      allowedFields,
-    },
-  };
+      accessSnapshot: {
+        checkedAt: new Date().toISOString(),
+        revisionHash: revision.contentHash,
+        accessKind,
+        accessReferenceId,
+        allowedFields,
+      },
+    };
+  });
 }
 
 // The HTTP session selects the workspace. Recheck live authority inside the
@@ -567,11 +581,7 @@ export async function createEvaluationDossier(input: {
     if (!needRevision) throw new DiscoveryNeedsError("La versión de la necesidad no está disponible.", 404);
     const profile = await tx.terraqoProfessionalProfile.findUnique({ where: { id: input.payload.professionalProfileId }, select: { id: true } });
     if (!profile) throw new DiscoveryNeedsError("El perfil profesional no está disponible.", 404);
-    const sources = await Promise.all(input.payload.worklogRevisionIds.map((revisionId) => resolveSourceAccess(tx, input.userId, revisionId)));
-    const mismatched = await tx.terraqoWorklogRevision.count({
-      where: { id: { in: sources.map((source) => source.worklogRevisionId) }, worklog: { professionalProfileId: { not: profile.id } } },
-    });
-    if (mismatched) throw new DiscoveryNeedsError("Todas las evidencias deben pertenecer al profesional evaluado.", 422);
+    const sources = await resolveDossierSources(tx, input.userId, input.payload.worklogRevisionIds, profile.id);
     return tx.terraqoEvaluationDossier.create({
       data: {
         workspaceId: input.workspaceId,
@@ -581,19 +591,11 @@ export async function createEvaluationDossier(input: {
         createdById: input.userId,
         operationKey: input.operationKey,
         operationFingerprint,
-        sources: {
-          create: sources.map((source) => ({
-            accessKind: source.accessKind,
-            accessReferenceId: source.accessReferenceId,
-            accessSnapshot: source.accessSnapshot,
-            worklogRevision: { connect: { id: source.worklogRevisionId } },
-            addedBy: { connect: { id: input.userId } },
-          })),
-        },
+        sources: { createMany: { data: sources.map(source => ({ ...source, addedById: input.userId })) } },
       },
       include: { sources: true },
     });
-  }, { isolationLevel: "Serializable" });
+  }, { isolationLevel: "Serializable", maxWait: 10_000, timeout: 20_000 });
 }
 
 export async function evaluationSourceIsAccessible(
