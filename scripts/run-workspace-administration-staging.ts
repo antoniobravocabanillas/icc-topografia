@@ -17,7 +17,9 @@ async function main() {
   assert.equal(process.env.BRANCH, "codex/s22-workspace-admin-20261104");
   assert.equal(process.env.PLATFORM_STAGING_CLOUD_PHASE, "workspace-administration");
   for (const file of [".env", ".env.local", ".env.production", ".env.production.local"]) assert.ok(!existsSync(file));
+  step = "target";
   assert.equal(assertWorkspaceAdministrationTestTarget(process.env, origin), "staging");
+  step = "candidate";
   const commit = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8", windowsHide: true }).trim();
   assert.equal(process.env.COMMIT_REF, commit);
   assert.equal(process.env.S22_STAGING_CANDIDATE_SHA, commit);
@@ -61,6 +63,7 @@ async function main() {
 }
 main().catch(error => {
   // Assertions may contain tokens/URLs. Log only structural diagnostics.
-  console.error(JSON.stringify({ s22Step: step, s22Failed: true, code: typeof error?.code === "string" && /^[A-Z0-9_]{1,32}$/.test(error.code) ? error.code : "GATE_REJECTED" }));
+  const location = typeof error?.stack === "string" ? error.stack.match(/(?:workspace-administration-test-target|run-workspace-administration-staging)\.ts:\d+:\d+/)?.[0] : undefined;
+  console.error(JSON.stringify({ s22Step: step, s22Failed: true, location, code: typeof error?.code === "string" && /^[A-Z0-9_]{1,32}$/.test(error.code) ? error.code : "GATE_REJECTED" }));
   process.exitCode = 1;
 });

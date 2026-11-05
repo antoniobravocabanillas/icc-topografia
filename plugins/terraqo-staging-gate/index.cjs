@@ -32,7 +32,7 @@ function run(stage, { utils }) {
       }
     } catch { /* Never emit raw error text, credentials or customer content. */ }
   }
-  const locations = [...new Set(diagnostics.match(/(?:test-platform-staging-[a-z0-9-]+|run-platform-staging-cloud|platform-staging-cloud)\.ts:\d+:\d+/g) || [])].slice(0, 6);
+  const locations = [...new Set(diagnostics.match(/(?:test-platform-staging-[a-z0-9-]+|run-platform-staging-cloud|platform-staging-cloud|workspace-administration-test-target|run-workspace-administration-staging)\.ts:\d+:\d+/g) || [])].slice(0, 6);
   const codes = [...new Set(diagnostics.match(/\b(?:ERR_ASSERTION|TimeoutError|P\d{4}|SOURCE_REVOKED|PROVIDER_UNAVAILABLE)\b/g) || [])].slice(0, 6);
   if (result.status !== 0) {
     const fail = stage === "verify" ? utils.build.failPlugin : utils.build.failBuild;
