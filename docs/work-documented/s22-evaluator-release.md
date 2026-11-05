@@ -1,5 +1,15 @@
 # S22 · Acceso de evaluadores
 
+## Resultado en staging
+
+El 4 de noviembre de 2026 a las 23:23, hora de Lima, Netlify publicó el candidato `58196fd0c03dcd58f38bb1e3c2ac2e0dc15a7fd8` en Terraqo Platform Staging. El despliegue es `6aec040f55e368e91f60e443`. La migración autorizada `20261104000300_workspace_evaluators` dejó 48 entradas completas y cero pendientes. El checksum aplicado coincide con el del ensayo. El rol de ejecución tiene los permisos previstos y el esquema privado conserva sus restricciones.
+
+Chromium comprobó aceptación, lectura del expediente asignado, exclusión del segundo expediente, revocación con sesión existente y rechazo de una actualización obsoleta. También pasaron las comprobaciones de aislamiento entre empresas, origen de la solicitud y acceso anónimo. El verificador alojado terminó en 3 minutos y 28 segundos.
+
+La lectura independiente posterior confirmó el commit servido y la limpieza de las pruebas. Quedaron únicamente el workspace de correo, su emisor, su membresía y la invitación de Lector. La comparación de la fila confirmó que los valores históricos se conservaron y que el permiso de evaluación está desactivado para esa invitación. Hay cero evaluadores, asignaciones, expedientes y eventos de auditoría de las pruebas.
+
+La evidencia siguiente documenta la preparación previa al despliegue.
+
 La administración de invitaciones y el refuerzo de permisos están publicados en Terraqo Platform Staging en el commit `5017b71c6dd25148d1695701ea5523563e18fbd0`, despliegue `6aebfe2940b1caebbba87acb`. Pasaron el control previo, la compilación, el recorrido autenticado y la limpieza. El historial sigue en 47 migraciones aplicadas.
 
 Una invitación autorizada de Lector se emitió desde staging. Se envió la plantilla de la aplicación a través del conector Resend, que informó entrega al servidor de destino. El emisor sintético tiene su contraseña deshabilitada. La invitación vence el 11 de noviembre a las 22:51, hora de Lima. El sitio conserva el envío transaccional desactivado y requiere credenciales y remitente para probar el despacho automático hacia un buzón. Los reintentos, errores de proveedor y aceptación del proveedor se probaron con transporte simulado. El envío se intenta después del commit y no hay cola persistente.
@@ -20,4 +30,4 @@ El proyecto objetivo es exclusivamente `mghdpciewbsowjrjwmwk`, con 47 entradas v
 
 Se restauró la copia `s24-backup-1793851559216/icc.dump`, SHA-256 `237ca86d30ccce6a4dfbef2314707045f387e4f9d36baa8d2aad36ca260fde98`. La copia proviene de PostgreSQL 17 y se restauró en PostgreSQL 18 local. En la restauración, el artefacto avanzó el historial de 47 a 48 en una transacción, comprobó las invitaciones existentes, verificó los privilegios, preservó los recuentos y rechazó la repetición. El checksum de la migración y el historial se vuelven a comprobar al aplicar.
 
-Para reproducir el artefacto local se usa `node --import tsx scripts/prepare-s22-staging-migration.ts docs/work-documented/s22-evaluator-staging-ledger-2026-11-04.json --evaluators`. Produce `output/s22/evaluator-migration.sql`. El siguiente paso externo requiere aprobar esta nueva migración en staging y desplegar la rama del Evaluador con su indicador habilitado. Tras la aplicación debe verificarse el historial de 48 entradas, la conservación de la invitación de prueba, el recorrido alojado y la eliminación de sus usuarios sintéticos.
+Para reproducir el artefacto local se usa `node --import tsx scripts/prepare-s22-staging-migration.ts docs/work-documented/s22-evaluator-staging-ledger-2026-11-04.json --evaluators`. Produce `output/s22/evaluator-migration.sql` a partir del inventario histórico de 47 entradas. La instalación en staging ya se completó.
