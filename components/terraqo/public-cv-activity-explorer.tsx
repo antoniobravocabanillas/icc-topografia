@@ -199,6 +199,13 @@ function formatDay(value: string) {
   }).toUpperCase();
 }
 
+function archiveDateLabel(value: string) {
+  const instant = value + "T12:00:00-05:00";
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(instant))
+    ? formatDate(instant, { day: "numeric", month: "short", year: "numeric" })
+    : value;
+}
+
 function formatLongDate(value: string) {
   return formatDate(value, { day: "2-digit", month: "long", year: "numeric" });
 }
@@ -267,6 +274,11 @@ export function PublicCvActivityExplorer({
   const [calendarBusy, setCalendarBusy] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [rangeStart, setRangeStart] = useState<string | null>(null);
+  const activityQuery = publicArchiveApiQuery({ ...draft, from: "", to: "" });
+  activityQuery.set("month", month);
+  activityQuery.delete("period");
+  const activitySearch = activityQuery.toString();
   const generation = useRef(0);
   const pending = useRef(false);
   const pages = useRef(1);
@@ -286,6 +298,7 @@ export function PublicCvActivityExplorer({
       const next = readPublicArchiveFilters(window.location.search);
       setFilters(next);
       setDraft(next);
+      setRangeStart(null);
       if (!initialRecordId) {
         let restoreEntry: string | null = null;
         try {
@@ -409,13 +422,8 @@ export function PublicCvActivityExplorer({
     setCalendarBusy(true);
     setCalendarError(null);
     setDays({});
-    const params = publicArchiveApiQuery(draft);
-    params.set("month", month);
-    params.delete("from");
-    params.delete("to");
-    params.delete("period");
     void fetch(
-      `/api/v1/profiles/${encodeURIComponent(profileId)}/evidence/activity?${params}`,
+      `/api/v1/profiles/${encodeURIComponent(profileId)}/evidence/activity?${activitySearch}`,
       { signal: controller.signal, cache: "no-store" },
     )
       .then(async (response) => {
@@ -440,7 +448,7 @@ export function PublicCvActivityExplorer({
         if (!controller.signal.aborted) setCalendarBusy(false);
       });
     return () => controller.abort();
-  }, [calendarOpen, month, draft, profileId, detailId]);
+  }, [calendarOpen, activitySearch, profileId, detailId]);
 
   function apply(next: PublicArchiveFilters) {
     const href = publicArchivePath(username, next);
@@ -467,6 +475,7 @@ export function PublicCvActivityExplorer({
     } catch {}
     setFilters(next);
     setDraft(next);
+    setRangeStart(null);
   }
   function remember(id: string) {
     try {
@@ -559,8 +568,12 @@ export function PublicCvActivityExplorer({
         projects.find((project) => project.id === value)?.title ||
         "Proyecto seleccionado"
       );
-    if (key === "from") return `Desde ${value}`;
-    if (key === "to") return `Hasta ${value}`;
+    if (key === "from") {
+      const from = archiveDateLabel(value);
+      if (!filters.to) return `Desde ${from}`;
+      return filters.to === value ? from : `${from} – ${archiveDateLabel(filters.to)}`;
+    }
+    if (key === "to") return `Hasta ${archiveDateLabel(value)}`;
     return value;
   }
   const today = new Intl.DateTimeFormat("sv-SE", {
@@ -590,7 +603,7 @@ export function PublicCvActivityExplorer({
             Evidencias
           </Link>
         </nav>
-        <Link
+        {detailId && <Link
           onClick={() => {
             if (detailId) {
               try {
@@ -602,12 +615,12 @@ export function PublicCvActivityExplorer({
               } catch {}
             }
           }}
-          href={detailId ? archiveHref : `/cv/${encodeURIComponent(username)}`}
+          href={archiveHref}
           className={button}
         >
           <ArrowLeft size={18} />
-          {detailId ? "Volver a las bitácoras" : "Volver al CV"}
-        </Link>
+          Volver a las bitácoras
+        </Link>}
         {detailId ? (
           <div className="mt-6">
             {selected ? (
@@ -683,7 +696,7 @@ export function PublicCvActivityExplorer({
                   <button
                     type="button"
                     aria-pressed={!calendarOpen}
-                    onClick={() => setCalendarOpen(false)}
+                    onClick={() => { setRangeStart(null); setCalendarOpen(false); }}
                     className={`${button} border-0 ${!calendarOpen ? "bg-[#2563eb]" : ""}`}
                   >
                     <List size={18} />
@@ -783,9 +796,10 @@ export function PublicCvActivityExplorer({
                       className={`${control} mt-2`}
                       type="date"
                       value={draft.from}
-                      onChange={(e) =>
-                        setDraft({ ...draft, from: e.target.value })
-                      }
+                      onChange={(e) => {
+                        setRangeStart(null);
+                        setDraft({ ...draft, from: e.target.value });
+                      }}
                     />
                   </label>
                   <label className="text-sm">
@@ -795,9 +809,10 @@ export function PublicCvActivityExplorer({
                       type="date"
                       min={draft.from || undefined}
                       value={draft.to}
-                      onChange={(e) =>
-                        setDraft({ ...draft, to: e.target.value })
-                      }
+                      onChange={(e) => {
+                        setRangeStart(null);
+                        setDraft({ ...draft, to: e.target.value });
+                      }}
                     />
                   </label>
                 </div>
@@ -813,8 +828,7 @@ export function PublicCvActivityExplorer({
                     />
                   </label>
                   <p className="my-3 text-sm text-[#afbdcd]">
-                    Cada punto indica trabajo público registrado. Selecciona un
-                    día o escribe un rango.
+                    Los puntos indican registros públicos. Elige un día o marca los dos extremos del periodo.
                   </p>
                   {calendarError ? (
                     <p role="alert" className="text-sm text-[#e9bd63]">
@@ -853,9 +867,11 @@ export function PublicCvActivityExplorer({
                           aria-label={`${date}${date === today ? ", hoy" : ""}: ${days[date] || 0} registros públicos`}
                           aria-pressed={chosen}
                           className={`flex min-h-11 flex-col items-center justify-center rounded-lg border text-sm ${chosen ? "border-[#8ecfff] bg-[#255a97]" : date === today ? "border-[#8ecfff]" : "border-transparent hover:bg-[#243d56]"}`}
-                          onClick={() =>
-                            apply({ ...draft, from: date, to: date })
-                          }
+                          onClick={() => {
+                            const first = rangeStart || date;
+                            setDraft({ ...draft, from: first < date ? first : date, to: first < date ? date : first });
+                            setRangeStart(rangeStart ? null : date);
+                          }}
                         >
                           {i + 1}
                           <span
@@ -868,13 +884,13 @@ export function PublicCvActivityExplorer({
                   </div>
                 </div>
                 <div
-                  className={`${filtersOpen ? "flex" : "hidden"} mt-4 flex-wrap gap-3`}
+                  className="mt-4 flex flex-wrap gap-3"
                 >
                   <button
                     type="submit"
                     className={`${button} flex-1 bg-[#255a97]`}
                   >
-                    Aplicar filtros
+                    {filtersOpen ? "Aplicar filtros" : "Aplicar fechas"}
                   </button>
                   <button
                     type="button"
@@ -889,13 +905,13 @@ export function PublicCvActivityExplorer({
             <div className="my-4 flex flex-wrap items-center gap-2 text-sm text-[#afbdcd]">
               <span>Más recientes primero · Hora de Perú</span>
               {archiveFilterKeys
-                .filter((key) => filters[key])
+                .filter((key) => filters[key] && !(key === "to" && filters.from))
                 .map((key) => (
                   <button
                     className={button}
                     key={key}
-                    onClick={() => apply({ ...filters, [key]: "" })}
-                    aria-label={`Quitar filtro: ${filterLabel(key)}`}
+                    onClick={() => apply(key === "from" || key === "to" ? { ...filters, from: "", to: "" } : { ...filters, [key]: "" })}
+                    aria-label={`${key === "from" || key === "to" ? "Quitar periodo" : "Quitar filtro"}: ${filterLabel(key)}`}
                   >
                     {filterLabel(key)} <span aria-hidden="true">×</span>
                   </button>
@@ -910,7 +926,7 @@ export function PublicCvActivityExplorer({
               ) : null}
             </div>
             <div className="mb-2 hidden items-center justify-between rounded-lg border border-[#294057] bg-[#0b1b2b] px-6 py-3 text-sm text-[#b8c9da] sm:flex">
-              <span>Evidencia · más recientes primero</span>
+              <span>Evidencia</span>
               <span>Acciones</span>
             </div>
             <div aria-busy={loading} className="space-y-3">

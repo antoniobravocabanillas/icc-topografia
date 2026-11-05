@@ -19,7 +19,7 @@ const item = (i) => ({
   validations: [],
 });
 try {
-  for (const width of [1280, 375]) {
+  for (const width of [1280, 375, 320]) {
     const page = await browser.newPage({ viewport: { width, height: 850 } });
     const requests = [];
     await page.route("**/fixture-*.svg", route => route.fulfill({contentType:"image/svg+xml",body:'<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450"><rect width="800" height="450" fill="#17354a"/><text x="60" y="230" fill="white" font-size="32">Imagen de prueba</text></svg>'}));
@@ -69,6 +69,21 @@ try {
     await expect(
       page.getByText("21 bitácoras en este resultado"),
     ).toBeVisible();
+    await page.getByRole("button", { name: "Calendario", exact: true }).click();
+    await page.getByLabel("Actividad del mes", { exact: true }).fill("2026-10");
+    const end = page.getByRole("button", { name: "2026-10-28: 2 registros públicos", exact: true });
+    await expect(end).toBeVisible();
+    const beforeDates = page.url();
+    const requestCount = requests.length;
+    await end.click();
+    await page.getByRole("button", { name: "2026-10-26: 0 registros públicos", exact: true }).click();
+    assert.equal(page.url(), beforeDates, "Draft dates must not change the URL");
+    assert.equal(requests.length, requestCount, "Draft dates must not reload activity or results");
+    await page.getByRole("button", { name: "Aplicar fechas", exact: true }).click();
+    await expect(page).toHaveURL(/from=2026-10-26.*to=2026-10-28/);
+    await page.getByRole("button", { name: /^Quitar periodo:/ }).click();
+    await expect(page).toHaveURL(beforeDates);
+    await page.getByRole("button", { name: "Lista", exact: true }).click();
     await page.getByRole("button", { name: "Cargar más bitácoras" }).click();
     await expect(
       page.getByRole("heading", {
