@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdtemp, writeFile, readFile, open, unlink } from "node:fs/promises";
+import { mkdtemp, writeFile, readFile, open, unlink, mkdir } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import net from "node:net";
 import os from "node:os";
@@ -28,6 +28,9 @@ const env = {
   PGPASSWORD: password,
   PGOPTIONS: "-c search_path=icc",
   TERRAQO_WORKSPACE_PUBLICATION_V1: "true",
+  TERRAQO_SCOPED_SHARING_V1: "true",
+  S24_BLOB_DIRECTORY: path.join(directory, "s24-blobs"),
+  NODE_ENV: "test",
   TERRAQO_LOCAL_S24_TEST: "synthetic-only",
 };
 async function run(file, args) {
@@ -100,6 +103,8 @@ try {
     "--output",
     baseSql,
   ]);
+  const afterS24 = path.join(directory, "after-s24.prisma");
+  await writeFile(afterS24, await run("git", ["show", "ce911d5a5a28baccbbee4aea45092aef5c17e9e4:prisma/schema.prisma"]));
   await run(process.execPath, [
     cli,
     "migrate",
@@ -107,7 +112,7 @@ try {
     "--from-schema-datamodel",
     baseline,
     "--to-schema-datamodel",
-    "prisma/schema.prisma",
+    afterS24,
     "--script",
     "--output",
     migration,
@@ -116,6 +121,7 @@ try {
   const normalize = text => text.replaceAll('"icc".', '').replaceAll('\r\n', '\n').trim();
   assert.equal(normalize(await readFile(artifact, "utf8")), normalize(await readFile(migration, "utf8")), "Migration artifact must match datamodel diff");
   const psqlArgs = [
+    "-X",
     "-h",
     "127.0.0.1",
     "-p",
@@ -144,6 +150,18 @@ try {
     "-f",
     artifact,
   ]);
+  for (const migrationName of [
+    "20261102000100_selection_access_requests", "20261104000100_workspace_invitations",
+    "20261104000200_customer_attention_followup", "20261104000300_workspace_evaluators",
+  ]) {
+    await run(path.join(bin, "psql.exe"), [...psqlArgs, "-f", path.join(root, "prisma/migrations", migrationName, "migration.sql")]);
+  }
+  await mkdir(env.S24_BLOB_DIRECTORY);
+  await mkdir("output", { recursive: true });
+  const expanded = JSON.parse((await run(process.execPath, ["--import", "tsx", "scripts/test-s24-acceptance-postgres.ts"])).trim());
+  assert.equal(expanded.localOnly, true);
+  assert.equal(expanded.cleanup, "matched");
+  console.log(JSON.stringify(expanded));
   console.log(
     await run(process.execPath, [
       "--import",
@@ -162,6 +180,7 @@ try {
         productionWrites: false,
         stagingWrites: false,
         concurrency: true,
+        expandedS24: expanded,
         sourceBaseline: "c623ec8e70d27c04babc3cb0ac6c594b00bc4cfc",
       },
       null,

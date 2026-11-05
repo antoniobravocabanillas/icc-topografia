@@ -1,3 +1,5 @@
+import { PublicWorkCaseView } from "@/components/terraqo/public-cv-work-cases";
+import { publicWorkCase } from "@/lib/terraqo/public-work-case";
 import { notFound } from "next/navigation";
 import { PublicCVSectionPage } from "@/components/terraqo/public-cv";
 import {
@@ -12,6 +14,7 @@ import {
 } from "@/lib/terraqo/evidence-policy";
 
 type PublicEvidencePermalinkProps = {
+  searchParams: Promise<{ trabajo?: string | string[]; revision?: string | string[] }>;
   params: Promise<{ username: string; recordId: string }>;
 };
 
@@ -44,8 +47,12 @@ async function loadPublicEvidence(username: string, recordId: string) {
   };
 }
 
-export async function generateMetadata({ params }: PublicEvidencePermalinkProps) {
+export async function generateMetadata({ params, searchParams }: PublicEvidencePermalinkProps) {
   const { username, recordId } = await params;
+  const context = await searchParams;
+  // A scoped link must never generate metadata from the unrestricted record.
+  if (context.trabajo !== undefined || context.revision !== undefined)
+    return { title: "Bitácora compartida", robots: { index: false } };
   const result = await loadPublicEvidence(username, recordId);
   if (!result) {
     return createMetadata({
@@ -63,9 +70,17 @@ export async function generateMetadata({ params }: PublicEvidencePermalinkProps)
 }
 
 export default async function PublicEvidencePermalink({
-  params,
+  params, searchParams,
 }: PublicEvidencePermalinkProps) {
   const { username, recordId } = await params;
+  const { trabajo, revision } = await searchParams;
+  if (trabajo !== undefined || revision !== undefined) {
+    if (typeof trabajo !== "string" || !trabajo || typeof revision !== "string" || !revision) notFound();
+    const work = await publicWorkCase(username, trabajo);
+    const item = work?.items.find(row => row.worklogId === recordId && row.revisionId === revision);
+    if (!work || !item) notFound();
+    return <PublicWorkCaseView username={username} work={work} selected={item} />;
+  }
   const result = await loadPublicEvidence(username, recordId);
   if (!result) notFound();
 

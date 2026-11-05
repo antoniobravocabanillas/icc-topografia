@@ -5,10 +5,13 @@ import {
   publicationSnapshotHash,
   publicationSnapshotSchema,
   type PublicationSource,
+  type WorkCaseTarget,
+  workCaseScopeSchema,
 } from "./publication-review-policy";
 import {
   publicationReviewEnabled,
   publicationSourceSelect,
+  requireCaseScope,
   PublicationReviewError,
 } from "./publication-review";
 
@@ -16,6 +19,7 @@ export const PUBLICATION_PROJECTION_POLICY = "public-selection-v2";
 const snapshotSchema = z
   .object({
     policy: z.literal(PUBLICATION_PROJECTION_POLICY),
+    workCaseScope: workCaseScopeSchema.optional(),
     collectionId: z.string(),
     collectionVersion: z.number().int().positive(),
     title: z.string(),
@@ -73,6 +77,7 @@ export async function preparePublicationProjection(
   tx: Prisma.TransactionClient,
   collectionId: string,
   expectedVersion: number,
+  workCase?: WorkCaseTarget,
 ) {
   if (!publicationReviewEnabled())
     throw new PublicationReviewError("Recurso no disponible.", 404);
@@ -85,6 +90,9 @@ export async function preparePublicationProjection(
       "La selección cambió. Recarga antes de publicar.",
       409,
     );
+  const caseScope = workCase
+    ? await requireCaseScope(tx, collection, workCase)
+    : undefined;
   const workspaceIds = [
     ...new Set(
       collection.items.flatMap((item) =>
@@ -114,7 +122,11 @@ export async function preparePublicationProjection(
   const items = personalItems(collection);
   const approvals: PublicationProjectionSnapshot["approvals"] = [];
   for (const workspaceId of workspaceIds) {
-    const current = buildPublicationSnapshot(collection, workspaceId);
+    const current = buildPublicationSnapshot(
+      collection,
+      workspaceId,
+      caseScope,
+    );
     const review = reviews.find((review) => review.workspaceId === workspaceId);
     if (
       !review ||
@@ -138,6 +150,7 @@ export async function preparePublicationProjection(
     policy: PUBLICATION_PROJECTION_POLICY,
     collectionId,
     collectionVersion: expectedVersion,
+    ...(caseScope ? { workCaseScope: caseScope } : {}),
     title: collection.title,
     description: collection.description,
     items,
@@ -249,6 +262,7 @@ export async function loadPublicationProjections(
           ),
         );
         return (
+          reviewed.data.workCaseScope === snapshot.workCaseScope &&
           reviewed.data.title === snapshot.title &&
           reviewed.data.description === snapshot.description &&
           JSON.stringify(workspaceItems) === JSON.stringify(reviewed.data.items)

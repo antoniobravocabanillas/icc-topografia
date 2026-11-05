@@ -8,6 +8,12 @@ import {
   publicationSnapshotSchema,
 } from "./publication-review-policy";
 
+import type {
+  WorkCaseTarget,
+  PublicationSource,
+} from "./publication-review-policy";
+import { caseDisclosure, workCaseScope } from "./work-case-publication";
+
 export class PublicationReviewError extends Error {
   constructor(
     message: string,
@@ -92,7 +98,31 @@ async function administrator(
     );
 }
 
+export async function requireCaseScope(
+  tx: Prisma.TransactionClient,
+  source: PublicationSource,
+  target?: WorkCaseTarget,
+) {
+  let disclosure;
+  try {
+    disclosure = caseDisclosure(source);
+  } catch {
+    throw new PublicationReviewError(
+      "El contenido seleccionado ya no está disponible.",
+      409,
+    );
+  }
+  const scope = await workCaseScope(tx, disclosure, target);
+  if (!scope)
+    throw new PublicationReviewError(
+      "La agrupación o su versión ya no está disponible.",
+      409,
+    );
+  return scope;
+}
+
 export async function requestPublicationReviews(input: {
+  workCase?: WorkCaseTarget;
   userId: string;
   collectionId: string;
   expectedVersion: number;
@@ -127,6 +157,9 @@ export async function requestPublicationReviews(input: {
           "Esta selección no contiene material empresarial.",
           422,
         );
+      const caseScope = input.workCase
+        ? await requireCaseScope(tx, collection, input.workCase)
+        : undefined;
       const reviews = [];
       for (const workspaceId of workspaceIds) {
         const workspace = await tx.terraqoWorkspace.findFirst({
@@ -138,7 +171,11 @@ export async function requestPublicationReviews(input: {
             "La empresa ya no está disponible para revisar material.",
             409,
           );
-        const snapshot = buildPublicationSnapshot(collection, workspaceId);
+        const snapshot = buildPublicationSnapshot(
+          collection,
+          workspaceId,
+          caseScope,
+        );
         const scopeHash = publicationSnapshotHash(snapshot);
         const existing = await tx.terraqoPublicationReview.findUnique({
           where: {
@@ -262,9 +299,13 @@ export async function getPublicationReviewMedia(input: {
         },
       ],
     },
-    select: { snapshot: true, scopeHash: true, workspaceId: true },
+    select: { snapshot: true, scopeHash: true, workspaceId: true, decision: true,
+      collectionVersion: true, collection: { select: { version: true } } },
   });
-  if (!review) throw new PublicationReviewError("Recurso no disponible.", 404);
+  // An obsolete pending request can never be approved. Its preview must not
+  // become a second byte-access path after a newer authorization is withdrawn.
+  if (!review || (review.decision === "PENDING" && review.collectionVersion !== review.collection.version))
+    throw new PublicationReviewError("Recurso no disponible.", 404);
   const snapshot = publicationSnapshotSchema.parse(review.snapshot);
   if (publicationSnapshotHash(snapshot) !== review.scopeHash)
     throw new PublicationReviewError("El alcance no está disponible.", 409);
@@ -332,10 +373,14 @@ export async function decidePublicationReview(input: {
         );
       }
       const collection = await collectionForReview(tx, review.collectionId);
+      const reviewed = publicationSnapshotSchema.parse(review.snapshot);
+      const caseScope = reviewed.workCaseScope
+        ? await requireCaseScope(tx, collection)
+        : undefined;
       if (
         collection.version !== review.collectionVersion ||
         publicationSnapshotHash(
-          buildPublicationSnapshot(collection, review.workspaceId),
+          buildPublicationSnapshot(collection, review.workspaceId, caseScope),
         ) !== review.scopeHash
       )
         throw new PublicationReviewError(

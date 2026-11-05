@@ -6,6 +6,7 @@ import { PrismaClient } from "@prisma/client";
 import { assertWorkspaceAdministrationTestTarget } from "./lib/workspace-administration-test-target";
 import { migrationSourceChecksums } from "./lib/migration-source-checksums";
 import { verifyWorkspaceAdministration } from "./test-workspace-administration-authenticated";
+import { verifyHostedPublication } from "./lib/hosted-public-acceptance";
 
 const origin = "https://terraqo-platform-staging.netlify.app";
 let step = "environment";
@@ -57,6 +58,11 @@ async function main() {
     await assertServed();
     step = "authenticated-browser";
     await verifyWorkspaceAdministration(db, origin);
+    if (process.env.PLATFORM_STAGING_S24_CONFIRM) {
+      step = "public-acceptance";
+      await assertServed();
+      await verifyHostedPublication(process.env);
+    }
     step = "final-candidate";
     await assertServed();
     console.log(`PASS S22 staging: commit=${commit}; deploy=${marker.deployId}; exact fixtures removed.`);

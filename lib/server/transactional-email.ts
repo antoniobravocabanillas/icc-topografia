@@ -25,8 +25,21 @@ export function transactionalEmailEnabled() {
   return process.env.TERRAQO_TRANSACTIONAL_EMAIL_ENABLED?.trim().toLowerCase() !== "false";
 }
 
+export function canSendTransactionalEmail(input: Pick<TransactionalEmailInput, "to" | "tags">) {
+  // Exercise the deployed invitation transport against Resend's simulator
+  // while all real-recipient transactional sends remain disabled in staging.
+  const origin = "https://terraqo-platform-staging.netlify.app";
+  const project = process.env.PLATFORM_STAGING_SUPABASE_PROJECT_REF;
+  if (!project && process.env.AUTH_URL !== origin && process.env.NEXT_PUBLIC_PORTAL_URL !== origin && !process.env.TERRAQO_STAGING_INVITATION_PROBE) return transactionalEmailEnabled();
+  return !transactionalEmailEnabled() && process.env.TERRAQO_STAGING_INVITATION_PROBE === "true" &&
+    project === "mghdpciewbsowjrjwmwk" &&
+    process.env.AUTH_URL === origin && process.env.NEXT_PUBLIC_PORTAL_URL === origin &&
+    /^delivered\+s22-[a-f0-9]{24}@resend\.dev$/.test(input.to) &&
+    input.tags?.some(t => t.name === "category" && t.value === "workspace_invitation") === true;
+}
+
 export async function sendTransactionalEmail(input: TransactionalEmailInput) {
-  if (!transactionalEmailEnabled()) {
+  if (!canSendTransactionalEmail(input)) {
     return { delivered: false as const, reason: "disabled" as const };
   }
   const apiKey = process.env.RESEND_API_KEY;

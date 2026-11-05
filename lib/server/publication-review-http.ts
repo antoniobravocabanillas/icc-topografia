@@ -6,7 +6,10 @@ import {
   readBoundedJson,
 } from "./bounded-request-body";
 import { publicRequestOrigin } from "./request-origin";
-import { publicationDecisionSchema } from "@/lib/terraqo/publication-review-policy";
+import {
+  publicationDecisionSchema,
+  workCaseTargetSchema,
+} from "@/lib/terraqo/publication-review-policy";
 import { PublicationReviewError } from "@/lib/terraqo/publication-review";
 import type * as Service from "@/lib/terraqo/publication-review";
 
@@ -16,7 +19,11 @@ const id = z
   .max(80)
   .regex(/^[a-zA-Z0-9_-]+$/);
 const requestSchema = z
-  .object({ collectionId: id, expectedVersion: z.number().int().positive() })
+  .object({
+    collectionId: id,
+    expectedVersion: z.number().int().positive(),
+    workCase: workCaseTargetSchema.optional(),
+  })
   .strict();
 const decisionSchema = z
   .object({ reviewId: id, payload: publicationDecisionSchema })

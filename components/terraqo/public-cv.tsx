@@ -42,7 +42,10 @@ import {
   parseWorklogArchiveFilters,
 } from "@/lib/terraqo/worklog-archive-contract";
 
+import type { PublicWorkCaseCard } from "@/lib/terraqo/public-work-case";
+
 type PublicCVPageProps = {
+  cases?: PublicWorkCaseCard[];
   profile: PublicCvProfile;
 };
 
@@ -251,7 +254,7 @@ function profileCapabilities(profile: PublicCvProfile, limit = 6) {
   return Array.from(new Set(values)).slice(0, limit);
 }
 
-export function PublicCVPage({ profile }: PublicCVPageProps) {
+export function PublicCVPage({ profile, cases = [] }: PublicCVPageProps) {
   const name = profile.user.name || profile.username || "Profesional Terraqo";
   const username = profile.username || "perfil";
   const isPublicCv = profile.liveCvEnabled && profile.liveCvVisibility === "PUBLIC";
@@ -269,7 +272,7 @@ export function PublicCVPage({ profile }: PublicCVPageProps) {
         <section className="mx-auto w-[min(100%-32px,1440px)] py-8 text-white sm:w-[min(100%-80px,1440px)] sm:py-10">
           <ProfileHero profile={profile} name={name} username={username} specialties={specialties} isPublicCv={isPublicCv} />
           <div className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,2.2fr)_minmax(280px,1fr)]">
-            <LiveCvPulse profile={profile} username={username} />
+            <LiveCvPulse cases={cases} profile={profile} username={username} />
             <aside className="rounded-xl border border-[#294259] bg-[#0a1927] p-6 lg:mt-16">
               <h2 className="text-xl font-semibold text-white">Antes de colaborar</h2>
               <p className="mt-2 text-[13px] text-slate-400">Perfil actualizado el {formatDate(profile.updatedAt)}</p>
@@ -927,8 +930,8 @@ function FeaturedProjects({ projects, profile, username }: { projects: ProjectSn
   return <ProjectsSection projects={projects} profile={profile} username={username} />;
 }
 
-function LiveCvPulse({ profile, username }: { profile: PublicCvProfile; username: string }) {
-  return <PublicCvWorkShowcase username={username} records={profile.worklogs.slice(0, 2).map(worklog => ({
+function LiveCvPulse({ profile, username, cases }: { cases: PublicWorkCaseCard[]; profile: PublicCvProfile; username: string }) {
+  return <PublicCvWorkShowcase cases={cases} username={username} records={profile.worklogs.slice(0, 2).map(worklog => ({
     id: worklog.id,
     title: normalizeSpanishCopy(worklog.title) || worklog.title,
     summary: worklog.summary,

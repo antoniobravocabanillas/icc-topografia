@@ -12,9 +12,8 @@ export async function GET(request: Request, { params }: Context) {
   const { response, session } = await requireUser();
   if (response) return response;
   const { id, mediaId } = await params;
-  const now = new Date();
   const download = new URL(request.url).searchParams.get("download") === "1";
-  const media = await prisma.terraqoWorklogMedia.findFirst({
+  const permittedMedia = () => prisma.terraqoWorklogMedia.findFirst({
     where: {
       id: mediaId,
       contentType: "image/webp",
@@ -32,7 +31,7 @@ export async function GET(request: Request, { params }: Context) {
                     some: {
                       lifecycle: "ACTIVE",
                       revokedAt: null,
-                      expiresAt: { gt: now },
+                      expiresAt: { gt: new Date() },
                       scopes: { has: download ? "DOWNLOAD_MEDIA" : "VIEW_COLLECTION" },
                       OR: [
                         { subjectUserId: session.user.id },
@@ -49,9 +48,14 @@ export async function GET(request: Request, { params }: Context) {
     },
     select: { storageKey: true, fileName: true, contentType: true },
   });
+  const media = await permittedMedia();
   if (!media) return new Response("Evidencia no encontrada.", { status: 404 });
   const entry = await getWorklogEvidenceStore().getWithMetadata(media.storageKey, { type: "arrayBuffer" });
   if (!entry) return new Response("La evidencia ya no está disponible.", { status: 404 });
+  // The grant or item can be withdrawn while storage I/O is pending.
+  // Bind the loaded bytes to the still-authorized object on the second read.
+  if ((await permittedMedia())?.storageKey !== media.storageKey)
+    return new Response("Evidencia no encontrada.", { status: 404 });
   return new Response(entry.data, {
     headers: {
       "Content-Type": media.contentType,

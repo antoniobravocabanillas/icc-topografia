@@ -66,6 +66,20 @@ export async function verifyWorkspaceAdministration(db: PrismaClient, base: stri
     const admin = await context(); await login(admin, owner.email!);
     const endpoint = "/api/terraqo/workspace-invitations";
     const post = (ctx: BrowserContext, data: unknown) => ctx.request.post(endpoint, { headers: { Origin: base }, data });
+    if (env.TERRAQO_STAGING_INVITATION_PROBE === "true") {
+      assert.equal(base, "https://terraqo-platform-staging.netlify.app");
+      assert.match(env.DEPLOY_ID || "", /^[a-f0-9]{24}$/);
+      const probe = { action: "create", workspaceId, email: `delivered+s22-${env.DEPLOY_ID}@resend.dev`, role: "VIEWER", operationKey: randomUUID() };
+      const issued = await post(admin, probe);
+      assert.equal(issued.status(), 201);
+      const result = await issued.json();
+      assert.equal(result.delivery, "accepted", "Staging invitation must reach the provider simulator");
+      const repeated = await post(admin, probe);
+      assert.equal(repeated.status(), 200);
+      assert.deepEqual(await repeated.json(), { id: result.id, token: null, replayed: true, delivery: "skipped" });
+      assert.equal((await post(admin, { action: "cancel", workspaceId, invitationId: result.id })).status(), 200);
+      console.log("PASS automatic staging invitation: provider accepted, replay skipped, test link cancelled.");
+    }
     assert.equal((await admin.request.get(`${endpoint}?workspaceId=${otherWorkspaceId}`)).status(), 403);
     assert.equal((await post(admin, { action: "create", workspaceId: otherWorkspaceId, email: recipient.email, operationKey: randomUUID() })).status(), 403);
     const create = { action: "create", workspaceId, email: staff.email, role: "VIEWER", operationKey: randomUUID() };

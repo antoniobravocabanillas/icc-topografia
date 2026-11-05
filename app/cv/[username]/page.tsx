@@ -4,6 +4,7 @@ import { PublicCVPage } from "@/components/terraqo/public-cv";
 import { publicCvProfileInclude, publishedCvProfileWhere } from "@/lib/terraqo/public-cv";
 import { getPublicCvSeoProfile, publicCvJsonLd, publicCvSeoFacts } from "@/lib/terraqo/public-cv-seo";
 import { prisma } from "@/lib/prisma";
+import { publicWorkCaseCards } from "@/lib/terraqo/public-work-case";
 import { absoluteUrl } from "@/lib/utils";
 
 type PublicCvPageProps = {
@@ -82,12 +83,13 @@ export async function generateMetadata({ params }: PublicCvPageProps): Promise<M
 
 export default async function PublicCvRoute({ params }: PublicCvPageProps) {
   const { username } = await params;
-  const [profile, seoProfile] = await Promise.all([
+  const [profile, seoProfile, cases] = await Promise.all([
     prisma.terraqoProfessionalProfile.findUnique({
       where: publishedCvProfileWhere(username),
       include: publicCvProfileInclude
     }),
-    getPublicCvSeoProfile(username)
+    getPublicCvSeoProfile(username),
+    publicWorkCaseCards(username, 2)
   ]);
 
   if (!profile) notFound();
@@ -103,7 +105,7 @@ export default async function PublicCvRoute({ params }: PublicCvPageProps) {
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
         />
       ) : null}
-      <PublicCVPage profile={profile} />
+      <PublicCVPage profile={profile} cases={cases.cards} />
     </>
   );
 }

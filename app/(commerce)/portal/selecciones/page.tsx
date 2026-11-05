@@ -34,6 +34,21 @@ export default async function SelectionsPage() {
     listShareCollections(session.user.id),
   ]);
 
+  const selectedIds = [...new Set(collections.flatMap(collection => collection.items.map(item => item.revision.worklog.id)))];
+  const links = publicationReviewEnabled() && process.env.TERRAQO_WORK_CASES_V1 === "true" && selectedIds.length
+    ? await prisma.terraqoWorkCaseRecord.findMany({
+      where: { worklogId: { in: selectedIds }, relationshipStatus: "CONFIRMED",
+        worklog: { deletedAt: null, lifecycle: "PUBLISHED", professionalProfileId: profile.id },
+        workCase: { professionalProfileId: profile.id, lifecycle: "ACTIVE", archivedAt: null } },
+      select: { worklogId: true, workCase: { select: { id: true, version: true, title: true } } },
+    }) : [];
+  const groupByRecord = new Map(links.map(link => [link.worklogId, link.workCase]));
+  function caseOffer(recordIds: string[]) {
+    const group = groupByRecord.get(recordIds[0]);
+    return group && new Set(recordIds).size >= 2 && recordIds.every(id => groupByRecord.get(id)?.id === group.id)
+      ? group : undefined;
+  }
+
   const accessRequests = selectionAccessRequestsEnabled() ? await listSelectionAccessRequests(session.user.id) : [];
   const reviews = publicationReviewEnabled() ? (await listPublicationReviews(session.user.id)).filter(review => review.requestedByMe) : [];
   return (
@@ -46,6 +61,7 @@ export default async function SelectionsPage() {
         collections={collections.map((collection) => ({
           id: collection.id,
           title: collection.title,
+          caseOffer: caseOffer(collection.items.map(item => item.revision.worklog.id)),
           description: collection.description,
           version: collection.version,
           items: collection.items.map((item) => ({ id: item.id, allowedFields: item.allowedFields, includeMedia: item.includeMedia, revision: { title: item.revision.title, worklog: { workspaceId: item.revision.worklog.workspaceId, media: item.revision.worklog.media } } })),

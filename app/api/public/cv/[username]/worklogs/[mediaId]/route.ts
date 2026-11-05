@@ -10,15 +10,16 @@ export const revalidate = 0;
 
 export async function GET(request: Request, { params }: RouteContext) {
   const { username, mediaId } = await params;
+  const where = {
+    id: mediaId,
+    worklog: {
+      visibility: "PUBLIC" as const,
+      deletedAt: null,
+      professionalProfile: { username, liveCvEnabled: true }
+    }
+  };
   const media = await prisma.terraqoWorklogMedia.findFirst({
-    where: {
-      id: mediaId,
-      worklog: {
-        visibility: "PUBLIC",
-        deletedAt: null,
-        professionalProfile: { username }
-      }
-    },
+    where,
     select: {
       storageKey: true,
       fileName: true,
@@ -31,6 +32,11 @@ export async function GET(request: Request, { params }: RouteContext) {
   const entry = await getWorklogEvidenceStore().getWithMetadata(media.storageKey, { type: "arrayBuffer" });
   if (!entry) return new Response("La evidencia ya no está disponible.", { status: 404 });
 
+  const stillPublic = await prisma.terraqoWorklogMedia.findFirst({
+    where: { ...where, storageKey: media.storageKey }, select: { id: true },
+  });
+  if (!stillPublic) return new Response("Evidencia no encontrada.", { status: 404 });
+
   const safeName = media.fileName.replace(/[\r\n"]/g, "-");
   const download = new URL(request.url).searchParams.get("download") === "1";
 
@@ -38,7 +44,7 @@ export async function GET(request: Request, { params }: RouteContext) {
     headers: {
       "Content-Type": media.contentType,
       "Content-Disposition": `${download ? "attachment" : "inline"}; filename="${safeName}"`,
-      "Cache-Control": "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400",
+      "Cache-Control": "private, no-store, no-transform",
       "X-Content-Type-Options": "nosniff",
       ETag: entry.etag || ""
     }

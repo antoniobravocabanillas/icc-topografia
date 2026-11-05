@@ -1,5 +1,15 @@
 # Remaining platform execution — 3 November 2026
 
+## 5 November — Candidato de casos públicos y permisos de evidencia
+
+S05/S09 ahora requiere que el titular elija publicar una selección como caso. Una agrupación privada por sí sola conserva su privacidad. En los casos de empresa, la autorización abarca el destino de publicación, la versión y los campos seleccionados. El CV, el índice, el detalle y las imágenes vuelven a comprobar el permiso al navegar. Las pruebas locales de PostgreSQL y Chromium cubren selección ordinaria, caso explícito, revocación y navegación en escritorio y móvil.
+
+S24 cubre dos registros con dos adjuntos cada uno. La revisión obsoleta y la concesión que vence durante una lectura de almacenamiento pierden acceso a los bytes. Los ensayos locales verifican también versiones obsoletas, lectores secundarios, limpieza tras fallo y conservación de las filas iniciales. El operador de staging prepara y recoge cuatro WebP sintéticos con un manifiesto de propiedad y sin entregar una credencial de operador al build. La prueba de aceptación de Netlify/Chromium queda preparada para ejecutar estas comprobaciones sobre el próximo candidato.
+
+S22 conserva el envío general desactivado en staging. El modo de prueba acepta únicamente el simulador de Resend, con etiqueta de invitación y destino sintético. Las pruebas locales cubren denegación de correo real y repetición sin duplicados. Netlify devolvió HTTP 403 al crear la credencial protegida exclusiva para Functions. La credencial temporal de Resend fue revocada. Falta validar el despacho automático alojado; la invitación de prueba del 4 de noviembre permanece bajo su autorización original.
+
+La compilación local generó 102 páginas. Pasaron los recorridos de atención autenticada, contacto, asignación, replay y aislamiento de empresa. El primer ensayo de atención terminó sin diagnóstico del subproceso; el segundo completó la batería y la compilación. La validación alojada del nuevo candidato y la revisión visual de las demás pantallas siguen pendientes. Este bloque no requiere migración.
+
 4 November, 23:23 Lima. Evaluator migration 48 and candidate `58196fd` are verified on Terraqo Platform Staging, deploy `6aec040f55e368e91f60e443`. The hosted authenticated browser gate and independent database cleanup checks passed. The authorized mail-test invitation was preserved. See `s22-evaluator-release.md`. Remaining release work includes automatic invitation delivery configuration, public WorkCase navigation and the outstanding visual and S24 acceptance gates.
 
 S22 follow-up, 4 November (Lima). The ordinary-workspace access policy now explicitly lists the existing roles. Private evidence, storage, collaboration and brand mutations check tenant authority, and administrative evaluation reads and replays check the live actor and dossier. Disposable PostgreSQL tests cover cross-workspace replay, archive, demotion and loss of access during upload. The authenticated browser flow passed with disabled mail. Evaluator issuance and the grant tying a reviewer to a specific dossier remain open.

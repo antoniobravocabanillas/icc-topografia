@@ -1,3 +1,4 @@
+import type { WorkCaseTarget } from "./publication-review-policy";
 import { publicationReviewEnabled, PublicationReviewError } from "./publication-review";
 import { preparePublicationProjection, loadPublicationProjections, publicSelectionPolicyWhere, PUBLICATION_PROJECTION_POLICY } from "./publication-projection";
 import { createHash, randomBytes } from "node:crypto";
@@ -300,6 +301,7 @@ export async function revokeCollectionGrant(input: {
 }
 
 export async function publishCollectionProjection(input: {
+  workCase?: WorkCaseTarget;
   userId: string;
   collectionId: string;
   expectedVersion: number;
@@ -328,9 +330,11 @@ export async function publishCollectionProjection(input: {
         422,
       );
 
+    if (input.workCase && (!publicationReviewEnabled() || process.env.TERRAQO_WORK_CASES_V1 !== "true"))
+      throw new ScopedSharingError("La publicación de trabajos agrupados no está disponible.", 409);
     let snapshot;
     if (publicationReviewEnabled()) {
-      try { snapshot = await preparePublicationProjection(tx, collection.id, input.expectedVersion); }
+      try { snapshot = await preparePublicationProjection(tx, collection.id, input.expectedVersion, input.workCase); }
       catch (error) { if (error instanceof PublicationReviewError) throw new ScopedSharingError(error.message, error.status); throw error; }
     }
     const policyVersion = snapshot ? PUBLICATION_PROJECTION_POLICY : "public-selection-v1";

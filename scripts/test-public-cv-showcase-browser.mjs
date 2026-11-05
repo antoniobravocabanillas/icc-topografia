@@ -25,7 +25,7 @@ try {
     await page.getByRole("navigation", { name: "Explorar el CV" }).getByRole("link", { name: "Respaldo" }).click();
     await expect(page).toHaveURL(/#respaldo$/);
     await expect(page.getByRole("heading", { name: "Trayectoria y respaldo" })).toBeInViewport();
-    await page.getByRole("link", { name: "Ver trabajo", exact: true }).first().click();
+    await page.getByRole("link", { name: "Ver bitácora", exact: true }).first().click();
     await expect(page).toHaveURL(/\/evidencias\/work-1$/);
     await expect(page.getByRole("heading", { name: "Levantamiento de campo — prueba" })).toBeVisible();
     await page.goBack();

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { execFileSync } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 
 const siteId = "6b8c43fb-6083-450a-9b85-46a820fb6358";
 const origin = "https://terraqo-platform-staging.netlify.app";
@@ -36,6 +36,15 @@ async function main() {
   assert.equal(execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8", windowsHide: true }).trim(), candidate);
   assert.equal(execFileSync("git", ["branch", "--show-current"], { encoding: "utf8", windowsHide: true }).trim(), branch);
   assert.equal(execFileSync("git", ["status", "--porcelain"], { encoding: "utf8", windowsHide: true }).trim(), "");
+  const assets = JSON.parse(await readFile("output/s24-staging-blobs/active.json", "utf8"));
+  assert.equal(assets.state, "prepared");
+  assert.equal(assets.siteId, siteId);
+  assert.equal(assets.candidate, candidate);
+  assert.match(assets.runId, /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/);
+  const mailKey = entries.find(entry => entry.key === "RESEND_API_KEY");
+  const probeReady = mailKey?.is_secret === true && mailKey.scopes?.length === 1 &&
+    mailKey.scopes[0] === "functions" && Boolean(values().RESEND_API_KEY) &&
+    values().TERRAQO_EMAIL_FROM === "Terraqo <noreply@terraqoglobal.com>";
   const expected = {
     S22_STAGING_CANDIDATE_SHA: candidate,
     PLATFORM_STAGING_CLOUD_PHASE: "workspace-administration",
@@ -43,6 +52,10 @@ async function main() {
     TERRAQO_WORKSPACE_INVITATIONS_V1: "true",
     TERRAQO_WORKSPACE_EVALUATORS_V1: "true",
     TERRAQO_TRANSACTIONAL_EMAIL_ENABLED: "false",
+    TERRAQO_STAGING_INVITATION_PROBE: probeReady ? "true" : "false",
+    PLATFORM_STAGING_S24_CONFIRM: "mghdpciewbsowjrjwmwk:s24-http-fixtures",
+    PLATFORM_STAGING_S24_BLOB_RUN: assets.runId,
+    TERRAQO_WORKSPACE_PUBLICATION_V1: "true",
   };
   // Netlify deliberately masks secrets returned by its management API. This
   // preflight authorizes only nonsecret configuration; the hosted prebuild

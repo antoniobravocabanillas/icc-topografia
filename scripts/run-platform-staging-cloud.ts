@@ -1,3 +1,4 @@
+import { s24BlobRun } from "./lib/s24-blob-fixtures.mjs";
 import assert from "node:assert/strict";
 import { execFile, execFileSync, spawnSync } from "node:child_process";
 import { existsSync, writeFileSync } from "node:fs";
@@ -48,9 +49,12 @@ async function main() {
     const started = Date.now();
     // Keep the event loop alive while browsers run; a synchronous child blocks
     // socket close/timer events and can leave stale HTTP connections behind.
+    const gateEnvironment: NodeJS.ProcessEnv = stagingCloudGateEnvironment(target.environment, gate);
+    if (gate === "s24")
+      gateEnvironment.PLATFORM_STAGING_S24_BLOB_RUN = s24BlobRun(process.env.PLATFORM_STAGING_S24_BLOB_RUN);
     const result = await new Promise<{ status: number; signal: string | null; stdout: string; stderr: string }>((resolveResult) => {
       execFile(process.execPath, ["--conditions=react-server", "--import", "tsx", resolve(root, "scripts", stagingGateScript(gate))], {
-        cwd: root, env: stagingCloudGateEnvironment(target.environment, gate), encoding: "utf8", timeout: 480_000,
+        cwd: root, env: gateEnvironment, encoding: "utf8", timeout: 480_000,
         maxBuffer: 2 * 1024 * 1024, windowsHide: true, shell: false,
       }, (error, stdout, stderr) => resolveResult({ status: typeof error?.code === "number" ? error.code : error ? 1 : 0, signal: error?.signal ?? null, stdout, stderr }));
     });
@@ -59,6 +63,14 @@ async function main() {
     // No retry: if interrupted, an independent readback must check fixture cleanup.
     assert.equal(result.status, 0, "Gate remoto fallido. Revisa el readback antes de reintentar.");
     await verifyCandidate();
+    if (gate === "s24") {
+      const receipt = JSON.parse(result.stdout.trim().split(/\r?\n/).at(-1)!);
+      assert.equal(receipt.passed, true);
+      assert.equal(receipt.databaseCleanup, "matched");
+      assert.equal(receipt.runId, gateEnvironment.PLATFORM_STAGING_S24_BLOB_RUN);
+      assert.equal(receipt.blobCleanup, "external");
+      console.log(JSON.stringify({ gate, commit: head, deployId: target.deployId, receipt }));
+    }
   }
   console.log(`Staging cloud verified PASS: phase=${target.phase}; commit=${head}; deploy=${target.deployId}`);
 }

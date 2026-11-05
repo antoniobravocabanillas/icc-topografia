@@ -52,6 +52,7 @@ type Grant = {
   revokedAt: string | null;
 };
 type Collection = {
+  caseOffer?: { id: string; version: number; title: string };
   id: string;
   title: string;
   description: string | null;
@@ -96,6 +97,7 @@ export function ScopedSharingConsole({
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [recipientByCollection, setRecipientByCollection] = useState<Record<string, string>>({});
   const [expiryByCollection, setExpiryByCollection] = useState<Record<string, string>>({});
+  const [caseConsent, setCaseConsent] = useState<Record<string, string>>({});
   const [downloadByCollection, setDownloadByCollection] = useState<Record<string, boolean>>({});
 
   const selectedCandidates = useMemo(
@@ -275,6 +277,11 @@ export function ScopedSharingConsole({
         <div className="mt-5 grid gap-5 xl:grid-cols-2">
           {collections.map((collection) => {
             const activeProjection = collection.publicProjection && !collection.publicProjection.revokedAt ? collection.publicProjection : null;
+            const offer = collection.caseOffer;
+            const consentVersion = offer ? `${collection.version}/${offer.id}/${offer.version}` : "";
+            const asWork = !!offer && caseConsent[collection.id] === consentVersion;
+            const publication = { expectedVersion: collection.version,
+              ...(asWork && offer ? { workCase: { id: offer.id, version: offer.version } } : {}) };
             return (
               <article key={collection.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-technical sm:p-6">
                 <div className="flex items-start justify-between gap-4">
@@ -303,8 +310,18 @@ export function ScopedSharingConsole({
                 </div>
                 {collection.grants.length ? <div className="mt-4 space-y-2">{collection.grants.map((grant) => <div key={grant.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2 text-xs"><span><strong>{grant.inviteEmail || "Usuario Terraqo"}</strong><br /><span className="text-slate-500">{grant.lifecycle} · vence {new Intl.DateTimeFormat("es-PE", { dateStyle: "medium" }).format(new Date(grant.expiresAt))}</span></span>{grant.lifecycle === "ACTIVE" ? <span className="flex flex-wrap items-center gap-2"><button aria-label="Copiar enlace privado" onClick={async () => { await navigator.clipboard.writeText(`${window.location.origin}/portal/selecciones/${collection.id}`); setMessage({ tone: "ok", text: "Enlace privado copiado. Solo funcionará para la identidad autorizada y dentro de la vigencia." }); }} className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-primary hover:bg-primary/5"><Copy className="h-4 w-4" /></button><RevokeAccessControl key={`${grant.id}:${collection.version}`} label="Revocar acceso" subject={grant.inviteEmail || "Usuario Terraqo"} pending={pending} onConfirm={() => run(async () => { await requestJson(`/api/v1/share-collections/${collection.id}/grants`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ grantId: grant.id, expectedVersion: collection.version, reason: "Revocado por el titular" }) }); setMessage({ tone: "ok", text: "Acceso revocado de inmediato." }); })} /></span> : null}</div>)}</div> : null}
                 <div className="mt-5 flex flex-wrap gap-2 border-t pt-5">
-                  {publicationReviewEnabled && collection.items.some(item => item.revision.worklog.workspaceId) ? <button disabled={pending} onClick={() => run(async () => { await requestJson("/api/v1/publication-reviews", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ collectionId: collection.id, expectedVersion: collection.version }) }); setMessage({ tone: "ok", text: "Solicitud enviada. Consulta el estado en Autorizaciones de publicación; el material sigue sin publicarse." }); })} className="inline-flex min-h-11 items-center gap-2 rounded-lg border px-4 text-sm font-bold hover:bg-slate-50"><ShieldCheck className="h-4 w-4" />Solicitar autorización empresarial</button> : null}
-                  {activeProjection ? <><Link href={`/selecciones/${activeProjection.slug}`} target="_blank" className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-bold text-white"><Eye className="h-4 w-4" /> Ver página pública</Link><RevokeAccessControl key={`${collection.id}:${collection.version}`} label="Revocar publicación" subject="enlace público de esta selección" pending={pending} onConfirm={() => run(async () => { await requestJson(`/api/v1/share-collections/${collection.id}/projection`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedVersion: collection.version }) }); setMessage({ tone: "ok", text: "La página pública dejó de admitir nuevas lecturas." }); })} /></> : <button disabled={pending} onClick={() => run(async () => { await requestJson(`/api/v1/share-collections/${collection.id}/projection`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedVersion: collection.version }) }); setMessage({ tone: "ok", text: "Selección publicada con un enlace opaco y revocable." }); })} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-white hover:bg-primary/90"><Globe2 className="h-4 w-4" /> Publicar selección</button>}
+                  {offer && !activeProjection && <label className="flex min-h-11 w-full items-center gap-3 text-sm font-medium">
+                    <input type="checkbox" checked={asWork} disabled={pending} className="h-4 w-4 accent-primary"
+                      onChange={event => {
+                        const choice = event.currentTarget.checked ? consentVersion : "";
+                        setCaseConsent(current => ({ ...current, [collection.id]: choice }));
+                      }} />
+                    <span>Mostrar esta selección como trabajo agrupado en mi CV público ({offer.title})
+                      <span className="mt-1 block font-normal text-slate-600">Se mostrará con el título «{collection.title}» y solo con los campos y archivos seleccionados.</span>
+                    </span>
+                  </label>}
+                  {publicationReviewEnabled && collection.items.some(item => item.revision.worklog.workspaceId) ? <button disabled={pending} onClick={() => run(async () => { await requestJson("/api/v1/publication-reviews", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ collectionId: collection.id, ...publication }) }); setMessage({ tone: "ok", text: "Solicitud enviada. Consulta el estado en Autorizaciones de publicación; el material sigue sin publicarse." }); })} className="inline-flex min-h-11 items-center gap-2 rounded-lg border px-4 text-sm font-bold hover:bg-slate-50"><ShieldCheck className="h-4 w-4" />Solicitar autorización empresarial</button> : null}
+                  {activeProjection ? <><Link href={`/selecciones/${activeProjection.slug}`} target="_blank" className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-bold text-white"><Eye className="h-4 w-4" /> Ver página pública</Link><RevokeAccessControl key={`${collection.id}:${collection.version}`} label="Revocar publicación" subject="enlace público de esta selección" pending={pending} onConfirm={() => run(async () => { await requestJson(`/api/v1/share-collections/${collection.id}/projection`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedVersion: collection.version }) }); setMessage({ tone: "ok", text: "La página pública dejó de admitir nuevas lecturas." }); })} /></> : <button disabled={pending} onClick={() => run(async () => { await requestJson(`/api/v1/share-collections/${collection.id}/projection`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(publication) }); setMessage({ tone: "ok", text: "Selección publicada con un enlace opaco y revocable." }); })} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-white hover:bg-primary/90"><Globe2 className="h-4 w-4" /> {asWork ? "Publicar selección y mostrar trabajo en mi CV" : "Publicar selección"}</button>}
                 </div>
               </article>
             );

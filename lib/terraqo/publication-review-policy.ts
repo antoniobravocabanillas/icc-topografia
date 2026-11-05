@@ -27,10 +27,20 @@ const fieldsSchema = z
     locationLabel: z.string().nullable().optional(),
   })
   .strict();
+export const workCaseTargetSchema = z
+  .object({
+    id: z.string().min(1).max(160),
+    version: z.number().int().positive(),
+  })
+  .strict();
+export type WorkCaseTarget = z.infer<typeof workCaseTargetSchema>;
+export const workCaseScopeSchema = z.string().regex(/^[a-f0-9]{64}$/);
+
 export const publicationSnapshotSchema = z
   .object({
     policy: z.literal(PUBLICATION_POLICY),
     destination: z.literal("PUBLIC_SELECTION"),
+    workCaseScope: workCaseScopeSchema.optional(),
     collectionId: z.string(),
     collectionVersion: z.number().int().positive(),
     workspaceId: z.string(),
@@ -92,10 +102,12 @@ export type PublicationSource = {
 export function buildPublicationSnapshot(
   collection: PublicationSource,
   workspaceId: string,
+  workCaseScope?: string,
 ): PublicationSnapshot {
   return publicationSnapshotSchema.parse({
     policy: PUBLICATION_POLICY,
     destination: "PUBLIC_SELECTION",
+    ...(workCaseScope ? { workCaseScope } : {}),
     collectionId: collection.id,
     collectionVersion: collection.version,
     workspaceId,

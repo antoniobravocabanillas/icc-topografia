@@ -125,6 +125,9 @@ function ReviewDetail({
         <h3 className="mt-2 break-words font-display text-2xl font-bold text-slate-950">
           {review.snapshot.title}
         </h3>
+        {review.snapshot.workCaseScope && <p className="mt-3 font-semibold text-slate-800">
+          También se solicita presentar estas bitácoras como trabajo agrupado en el CV público del profesional.
+        </p>}
         {review.snapshot.description ? (
           <p className="mt-3 max-w-prose text-sm leading-6 text-slate-600">
             {review.snapshot.description}

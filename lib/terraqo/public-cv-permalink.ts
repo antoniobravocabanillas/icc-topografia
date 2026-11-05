@@ -45,3 +45,16 @@ export function publicCvEvidenceHref(username: string, recordId: string) {
   }
   return `${profilePath}/${encodeURIComponent(recordId)}`;
 }
+
+export function publicWorkCaseListHref(username: string) {
+  return `/cv/${encodeURIComponent(username)}/trabajos`;
+}
+
+export function publicWorkCaseHref(username: string, slug: string) {
+  return `${publicWorkCaseListHref(username)}/${encodeURIComponent(slug)}`;
+}
+
+export function publicCaseRecordHref(username: string, slug: string, recordId: string, revisionId: string) {
+  const context = new URLSearchParams({ trabajo: slug, revision: revisionId });
+  return `/cv/${encodeURIComponent(username)}/evidencias/${encodeURIComponent(recordId)}?${context}`;
+}
