@@ -85,7 +85,9 @@ async function main() {
     await assertServed();
     step = "authenticated-browser";
     await verifyWorkspaceAdministration(db, origin);
-    if (process.env.PLATFORM_STAGING_S24_CONFIRM) {
+    if (process.env.S24_STAGING_VERIFICATION === "independent") {
+      console.log("S24 requires a separate diagnostic receipt for this served commit.");
+    } else if (process.env.PLATFORM_STAGING_S24_CONFIRM) {
       step = "public-acceptance";
       await assertServed();
       await verifyHostedPublication(process.env);

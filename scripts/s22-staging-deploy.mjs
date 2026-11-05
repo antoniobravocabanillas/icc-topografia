@@ -65,6 +65,7 @@ async function main() {
   const expected = {
     S24_STAGING_RECOVER_INTERRUPTED: recover,
     S24_STAGING_DIAGNOSTIC_TARGET: probeTarget,
+    S24_STAGING_VERIFICATION: "independent",
     S22_STAGING_CANDIDATE_SHA: candidate,
     PLATFORM_STAGING_CLOUD_PHASE: "workspace-administration",
     TERRAQO_S22_STAGING_CONFIRM: "mghdpciewbsowjrjwmwk:s22-fixtures",
