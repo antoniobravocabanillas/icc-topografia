@@ -37,7 +37,9 @@ export async function verifyHostedPublication(source: NodeJS.ProcessEnv) {
     console.log("PASS hosted WorkCase navigation and withdrawal, S24 selected and withheld attachment bytes, and retained database baseline.");
   } catch (error) {
     const failure = error as { stdout?: string; stderr?: string };
-    console.error(JSON.stringify(cloudFailureDiagnostic(`${failure.stdout ?? ""}\n${failure.stderr ?? ""}`)));
+    const diagnostic = cloudFailureDiagnostic(`${failure.stdout ?? ""}\n${failure.stderr ?? ""}`);
+    const stage = /Hosted WorkCase check failed during ([a-z ,/-]{1,80})\./.exec(failure.stderr ?? "")?.[1];
+    console.error(JSON.stringify({ ...diagnostic, workCaseStage: stage }));
     throw new Error("Hosted publication acceptance failed");
   }
 

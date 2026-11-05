@@ -215,7 +215,10 @@ export async function checkHostedPublicWorkCase({
         if (record.fields.locationLabel) await page.getByText(record.fields.locationLabel, { exact: true }).waitFor();
         assert.deepEqual(await page.locator("article dl dt").allTextContents(),
           record.fields.locationLabel ? ["Ubicación", "Contribución"] : ["Contribución"]);
-        await page.locator(`img[src="${imagePath(record.selected.id)}"]`).first().waitFor();
+        await page.waitForFunction(({ origin, path }) => Array.from(document.images).some(img => {
+          const src = new URL(img.currentSrc || img.src, location.href);
+          return src.origin === origin && src.pathname === path && img.complete && img.naturalWidth > 0;
+        }), { origin: origin.origin, path: imagePath(record.selected.id) });
         checkPublicBody(await page.locator("body").innerText());
         await page.goBack();
         await page.waitForURL(absolute(casePath));

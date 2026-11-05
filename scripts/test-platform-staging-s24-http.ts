@@ -202,7 +202,11 @@ async function main() {
     for (const [index, record] of selection.records.entries()) {
       const img = images.nth(index);
       await img.scrollIntoViewIfNeeded(); // The second image may be lazy-loaded.
-      assert.equal(await img.getAttribute("src"), `/api/v1/publication-reviews/${review.id}/media/${record.selected.id}`);
+      const src = await img.getAttribute("src");
+      assert.ok(src);
+      const mediaUrl = new URL(src, origin);
+      assert.equal(mediaUrl.origin, origin.origin);
+      assert.equal(mediaUrl.pathname, `/api/v1/publication-reviews/${review.id}/media/${record.selected.id}`);
       await img.evaluate(node => (node as HTMLImageElement).decode());
     }
     assert.equal(await page.getByRole("checkbox").isChecked(), false);
