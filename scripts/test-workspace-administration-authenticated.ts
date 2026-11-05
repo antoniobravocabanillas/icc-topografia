@@ -20,6 +20,7 @@ export async function verifyWorkspaceAdministration(db: PrismaClient, base: stri
   // Persist exact ownership before any write; no credentials enter this manifest.
   await writeFile(path.join(out, "fixtures.json"), JSON.stringify({ workspaceIds, userIds }));
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
+  let phase = "fixtures";
   try {
   const password = randomBytes(24).toString("base64url");
   const passwordHash = await bcrypt.hash(password, 10);
@@ -29,6 +30,7 @@ export async function verifyWorkspaceAdministration(db: PrismaClient, base: stri
   const recipient = await db.user.create({ data: { id: userIds[1], email: `recipient-${suffix}@s22.invalid`, name: "Profesional de prueba", passwordHash, emailVerified: new Date() } });
   const staff = await db.user.create({ data: { id: userIds[2], email: `staff-${suffix}@s22.invalid`, name: "Miembro de prueba", passwordHash, emailVerified: new Date() } });
   await db.terraqoWorkspaceMember.createMany({ data: [{ workspaceId: workspace.id, userId: owner.id, role: "OWNER" }, { workspaceId: workspace.id, userId: staff.id, role: "MEMBER" }] });
+    phase = "browser-launch";
     browser = await chromium.launch({ headless: true });
     const browserErrors: string[] = [];
     async function context() {
@@ -41,6 +43,7 @@ export async function verifyWorkspaceAdministration(db: PrismaClient, base: stri
       return ctx;
     }
     async function login(ctx: BrowserContext, email: string) {
+      phase = "credential-session";
       const csrf = await (await ctx.request.get("/api/auth/csrf")).json();
       await ctx.request.post("/api/auth/callback/credentials", { headers: { "X-Auth-Return-Redirect": "1", Origin: base }, form: { csrfToken: csrf.csrfToken, email, password, callbackUrl: `${base}/admin/workspace/miembros` } });
       const session = await (await ctx.request.get("/api/auth/session")).json();
@@ -54,6 +57,7 @@ export async function verifyWorkspaceAdministration(db: PrismaClient, base: stri
     assert.equal((await admin.request.get(`${endpoint}?workspaceId=${otherWorkspaceId}`)).status(), 403);
     assert.equal((await post(admin, { action: "create", workspaceId: otherWorkspaceId, email: recipient.email, operationKey: randomUUID() })).status(), 403);
     const create = { action: "create", workspaceId, email: staff.email, role: "VIEWER", operationKey: randomUUID() };
+    phase = "invitation-api";
     const createdResponse = await post(admin, create);
     assert.equal(createdResponse.status(), 201);
     assert.match(createdResponse.headers()["cache-control"], /no-store/);
@@ -76,6 +80,7 @@ export async function verifyWorkspaceAdministration(db: PrismaClient, base: stri
     assert.equal((await post(admin, { action: "cancel", workspaceId, invitationId: created.id })).status(), 200);
     assert.equal((await post(staffContext, { action: "accept", token: rotated.token })).status(), 404);
     const page = await admin.newPage(); page.setDefaultTimeout(60000);
+    phase = "member-page";
     await page.goto(`${base}/admin/workspace/miembros`, { timeout: 120000 });
     await page.getByRole("heading", { name: "Equipo del workspace" }).waitFor();
     await page.getByRole("button", { name: "Gestionar acceso", exact: true }).click();
@@ -87,6 +92,7 @@ export async function verifyWorkspaceAdministration(db: PrismaClient, base: stri
     await page.getByText("Acceso actualizado.", { exact: true }).waitFor();
     assert.equal((await db.terraqoWorkspaceMember.findUniqueOrThrow({ where: { workspaceId_userId: { workspaceId: workspace.id, userId: staff.id } } })).role, "VIEWER");
     await page.getByLabel("Correo electrónico", { exact: true }).fill(recipient.email!);
+    phase = "invitation-link";
     await page.getByRole("button", { name: "Crear enlace de invitación" }).click();
     const link = page.getByLabel("Enlace privado"); await link.waitFor();
     const privateLink = await link.inputValue();
@@ -95,6 +101,7 @@ export async function verifyWorkspaceAdministration(db: PrismaClient, base: stri
     await page.reload(); await page.getByRole("heading", { name: "Equipo del workspace" }).waitFor();
     await page.screenshot({ path: path.join(out, "members-desktop.png"), fullPage: true, caret: "initial" });
     const acceptPage = await recipientContext.newPage(); acceptPage.setDefaultTimeout(60000);
+    phase = "recipient-acceptance";
     await acceptPage.goto(privateLink, { timeout: 120000 });
     await acceptPage.getByRole("button", { name: "Aceptar invitación", exact: true }).click();
     await acceptPage.getByRole("heading", { name: "Invitación aceptada" }).waitFor();
@@ -108,6 +115,7 @@ export async function verifyWorkspaceAdministration(db: PrismaClient, base: stri
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "Mobile must not overflow");
     // A valid session cookie must not preserve revoked workspace authority.
     let pulseRequests = 0;
+    phase = "revoked-authority";
     page.on("request", request => { if (new URL(request.url()).pathname === "/api/admin/notifications/pulse") pulseRequests++; });
     const lostAccessPulse = page.waitForResponse(response => new URL(response.url()).pathname === "/api/admin/notifications/pulse" && response.status() === 403);
     await db.terraqoWorkspaceMember.update({ where: { workspaceId_userId: { workspaceId: workspace.id, userId: owner.id } }, data: { active: false } });
@@ -123,6 +131,10 @@ export async function verifyWorkspaceAdministration(db: PrismaClient, base: stri
     assert.equal((await admin.request.patch("/api/terraqo/workspace-members", { headers: { Origin: base }, data: { workspaceId: workspace.id, memberId: accepted.id, role: "MEMBER", active: true, expectedUpdatedAt: accepted.updatedAt.toISOString() } })).status(), 403);
     assert.deepEqual(browserErrors.filter(message => !message.includes("status of 403 (Forbidden)")), [], "No hydration/runtime/server errors; only expected access-revocation 403 is allowed");
     console.log("PASS authenticated local Next.js + PostgreSQL + Chromium: real Auth.js credential sessions, anonymous 401, member-role UI persisted, invitation UI and verified recipient acceptance, viewer forbidden, revoked authority rejected with existing cookie, desktop/mobile. Synthetic data only; no external requests allowed in browser.");
+  } catch (error) {
+    const location = error instanceof Error ? error.stack?.match(/test-workspace-administration-authenticated\.ts:\d+:\d+/)?.[0] : undefined;
+    console.error(JSON.stringify({ s22Step: phase, errorType: error instanceof Error && /^[A-Za-z]+$/.test(error.name) ? error.name : "UnknownError", location }));
+    throw error;
   } finally {
     try { await browser?.close(); } finally {
       // Exact random IDs only; never delete by a prefix or an existing customer workspace.
