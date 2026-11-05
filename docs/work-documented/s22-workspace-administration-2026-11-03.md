@@ -1,5 +1,9 @@
 # S22 — workspace authority safety
 
+## Latest checkpoint — authorized migration and hosted core gate PASS
+
+Applied the rehearsed invitation migration only to staging after explicit authorization: 47 finished migrations, private schema and runtime grants verified. Final candidate `c717bd5e76d7791529525c29a91887a5879c025b`, deploy `6aebe18dd27a103cc121c1e3`, passed hosted prepare/build and authenticated Chromium acceptance. Fixed bounded serverless transaction acquisition (P2028) on the members page and made the verifier's expected revoked-polling 403 check specific to its endpoint and compatible with HTTP/2. Independent readback verifies the served candidate and zero synthetic users/workspaces/invitations/memberships/audit events. Production untouched. See `s22-staging-gate-2026-11-04.md` for evidence and historical failures. Next: Evaluator/granular permissions and real invitation delivery; full S22 and the platform release remain open. Earlier pending migration/hosted statements below are historical.
+
 ## Latest checkpoint — actual staging backup restored
 
 Fresh read-only staging backup (SHA256 `5301e98cb65b2a84fbe061ae7efda4e3a07e7adebfa6c16f993d7496e660aa7e`) restored locally; S22 artifact applied on the restored schema, ledger 46→47, existing entity counts preserved, duplicate rejected and migrator SET disabled again. Actual hosted role/default-grant audit matches the expected private schema boundary. See backup/restore section in `s22-staging-gate-2026-11-04.md`. Next: controlled staging migration and hosted acceptance; remote database still unchanged. Evaluator permissions/email and remaining platform reference gates remain open.

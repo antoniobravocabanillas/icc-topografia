@@ -1,5 +1,15 @@
 # S22 dedicated staging gate — 4 November 2026
 
+## Final result: hosted core acceptance PASS
+
+Candidate `c717bd5e76d7791529525c29a91887a5879c025b`, Netlify deploy `6aebe18dd27a103cc121c1e3` (build `6aebe18dd27a103cc121c1e1`), published to **Terraqo Platform Staging** on 4 November 2026 at 20:56:51 America/Lima. Hosted prepare, Next.js build, authenticated Chromium contract, exact-fixture cleanup and final served-candidate check all PASS. Postdeploy verification completed in 2m 9.8s. Production remains unchanged.
+
+Independent post-run HTTP readback matched the exact candidate and deploy IDs; anonymous invitations returned 401. Independent Supabase readback: 47 finished migrations, zero unfinished; zero users, workspaces, invitations, memberships and audit events; runtime invitation CRUD true; public schema exposure false; postgres migrator SET false. These are actual hosted results, not an inference from Netlify's `ready` status.
+
+Closed core gate: real credential sessions; anonymous and cross-workspace exclusion; invitation creation/replay/rotation throttle/cancel/wrong-recipient rejection; member-role UI persistence; verified-recipient acceptance; minimum viewer authority; desktop/mobile browser flow; rejection of revoked authority with an existing session and stopped notification polling. No unexpected hydration/runtime/server console errors. The local mobile screenshot was also inspected; hosted screenshots were generated inside the build but were not independently downloaded for a new visual-fidelity review.
+
+Next: S22 Evaluator/granular permissions and real invitation delivery, then remaining S23/S24/public UX/release gates. This is **not full S22 completion or production release approval**. The investigation below is historical; its pending statements are superseded by this final result. Do not repeat the migration or backup unnecessarily.
+
 ## Hosted deployment and acceptance investigation
 
 Authorized staging configuration now selects `codex/s22-workspace-admin-20261104`, phase `workspace-administration`, the exact candidate SHA, explicit S22 fixture consent and invitations enabled; transactional email remains disabled. Production was not modified. Management API secrets are masked: configuration validates nonsecret destination metadata and secret presence/scopes, while the hosted prebuild validates actual URLs, database authority and migration checksums before fixtures. The Netlify repository update requires the writable `repo` payload with its existing provider/path/URL/installation identity.
@@ -11,6 +21,8 @@ Candidate `d55e8106c119254172bf058f3737d06072c7c124`, deploy `6aebdb49de107fb695
 Rollback metadata is retained in ignored `output/s22/netlify-before.json`: prior staging branch `codex/customer-attention-release-20261104`, deploy `6aeb9b79ca0426eb80b3521b`, phase `customer-attention`, invitations previously unset, email disabled. Do not reverse the additive invitation migration or replay it. Hosted browser acceptance remains required before any release decision.
 
 Diagnostic candidate `3182fef51ac12be8e146ac8738e343e69c099459`, deploy `6aebdd26c3520cf08526d453`, localized the failure to waiting for the members heading. The server function log independently identified Prisma P2028: unable to acquire a transaction in time. Authentication and invitation API lifecycle had already passed. The members page now uses bounded `maxWait: 20000` and `timeout: 15000` for its existing RepeatableRead transaction, matching the constrained serverless pool rather than changing authorization or consistency. Hosted verification of this correction is pending.
+
+Candidate `903e81e0d738ddf46ccd1702c5d6d7423377fe23`, deploy `6aebdf63db244c16d063e6f9`, passed every browser interaction and authorization assertion, including revoked-session rejection and stopped polling. Its last console assertion still failed because the test accepted only HTTP/1-style `403 (Forbidden)`; Netlify uses an empty HTTP/2 reason phrase. A separate anonymous Chromium probe confirmed `401 ()` on the same polling endpoint, and the corrected candidate's function logs had no P2028 entries. The verifier now accepts only the exact polling URL's 403 resource diagnostic during intentional owner revocation, allowing either reason phrase, and rejects all other console errors. No broad 403 suppression remains. TypeScript and targeted lint pass. Final hosted run remains required; earlier partial runs are not PASS.
 
 ## Authorized remote schema application
 
