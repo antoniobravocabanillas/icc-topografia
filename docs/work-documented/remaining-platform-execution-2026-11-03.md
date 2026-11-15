@@ -1,5 +1,11 @@
 # Remaining platform execution — 3 November 2026
 
+## 14 de noviembre — S10/S11 y S24 validados en staging
+
+El diagnóstico del calendario confirmó un registro el 28 de octubre y otro el 29 en America/Lima. Antes de la corrección, Netlify Durable y Edge reutilizaban el conteo global de dos registros al pedir el rango 27–28. El listado y el calendario ahora usan respuestas privadas sin almacenamiento compartido. La misma consulta contra el candidato corregido devolvió un registro y el diagnóstico independiente confirmó que la interfaz actualizó el conteo.
+
+El candidato servido `1146af90bcff42ccfe957be813553fa3eecbed67` pasó S22 en el despliegue `6af92db51f750eb42d0c29b2`. El diagnóstico `6af92f9d496b04f2b2c86cba` pasó S10/S11 en Chromium a 1280, 375 y 320 px: selección inversa de fechas, aplicación explícita, dos planos en la galería, regreso con filtros y limpieza del periodo. También pasó S24: alcance y revocación de evidencias y casos, con la base de datos conservada. Se retiraron y verificaron ausentes los cuatro objetos sintéticos. Producción queda pendiente de la revisión visual restante y los controles de lanzamiento.
+
 ## 14 de noviembre — Calendario y galería pública en staging
 
 Netlify sirve el commit `7ffa85a3fefe1e4d2ead956f7cea49207360798d` en el despliegue `6aed0e62e406fbe3eec5b74c`. El registro confirma PASS S22 con retirada de sus fixtures. Las pruebas locales del contrato del archivo, los parámetros de navegación y los cuatro objetos sintéticos pasaron.
