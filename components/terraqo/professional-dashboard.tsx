@@ -1,3 +1,4 @@
+import { TrajectoryActions } from "./trajectory-actions";
 import Image from "next/image";
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
@@ -287,6 +288,7 @@ export function ProfessionalDashboard({ profile, workspaceId, dashboard }: { pro
 
   return (
     <div className="min-w-0 space-y-5 py-5 lg:py-7">
+      <TrajectoryActions profileId={profile.id} workCases={process.env.TERRAQO_WORK_CASES_V1 === "true"} endorsements={process.env.TERRAQO_SCOPED_ENDORSEMENTS_V1 === "true"} />
       <section className="relative overflow-hidden rounded-2xl border border-[#163b54] bg-[radial-gradient(circle_at_82%_10%,rgba(37,192,213,0.16),transparent_30%),linear-gradient(125deg,#081b2b_0%,#0c3143_62%,#103b45_100%)] px-5 py-6 text-white shadow-[0_20px_48px_rgba(8,27,43,0.16)] sm:px-7 lg:px-8">
         <div className="absolute inset-y-0 right-0 hidden w-[44%] opacity-35 lg:block [background-image:repeating-radial-gradient(ellipse_at_100%_50%,transparent_0,transparent_18px,rgba(102,220,224,0.18)_19px,transparent_20px)]" />
         <div className="relative flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">

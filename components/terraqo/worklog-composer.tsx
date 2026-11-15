@@ -507,6 +507,7 @@ export function WorklogComposer({
 
   return (
     <form
+      id="registrar-trabajo"
       ref={formRef}
       onSubmit={submit}
       onChangeCapture={scheduleDraft}

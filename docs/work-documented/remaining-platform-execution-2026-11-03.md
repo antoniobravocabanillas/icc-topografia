@@ -1,5 +1,11 @@
 # Remaining platform execution — 3 November 2026
 
+## S01/S02 — Retorno a la invitación y borrador prioritario, validación local
+
+Referencia contrastada: páginas 2 y 3 de 02-ui-ux-pantallas.pdf. En S01 la invitación permanece en la pestaña original mientras se inicia sesión o se crea una cuenta en otra. Al volver se consulta la sesión y la aceptación sigue siendo explícita. El secreto del fragmento se mantiene en memoria. En S02 el inicio profesional cuenta con acceso prioritario al borrador local consentido del perfil y destinos a captura, organización, respaldo y documentos según los módulos disponibles.
+
+TypeScript y el recorrido de invitaciones existente pasaron. Chromium local comprobó a 1280, 375 y 320 px los dos estados del acceso al borrador, aislamiento entre perfiles y retorno a la invitación con sesión simulada y una sola aceptación. Las capturas locales corresponden a los componentes, no a un recorrido autenticado alojado. Pendiente: probar con dos pestañas y autenticación real en staging, validar los destinos integrados del panel y contrastar actividad y pendientes con la composición completa de S02.
+
 ## 14 de noviembre — S10/S11 y S24 validados en staging
 
 El diagnóstico del calendario confirmó un registro el 28 de octubre y otro el 29 en America/Lima. Antes de la corrección, Netlify Durable y Edge reutilizaban el conteo global de dos registros al pedir el rango 27–28. El listado y el calendario ahora usan respuestas privadas sin almacenamiento compartido. La misma consulta contra el candidato corregido devolvió un registro y el diagnóstico independiente confirmó que la interfaz actualizó el conteo.

@@ -100,6 +100,11 @@ export async function saveWorklogLocalDraft(input: {
   return record.updatedAt;
 }
 
+// The dashboard only needs presence; avoid loading offline photo blobs until editing.
+export async function hasWorklogLocalDraft(key: string) {
+  return (await runStoreRequest("readonly", store => store.getKey(key))) !== undefined;
+}
+
 export async function loadWorklogLocalDraft(key: string): Promise<WorklogLocalDraft | null> {
   const record = await runStoreRequest<StoredWorklogDraft | undefined>("readonly", (store) => store.get(key));
   if (!record || record.schemaVersion !== 1) return null;
