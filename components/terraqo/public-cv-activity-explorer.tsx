@@ -611,7 +611,7 @@ export function PublicCvActivityExplorer({
       style={{ colorScheme: "dark" }}
       className="min-h-screen bg-[#07111e] text-[#f4f7fb]"
     >
-      <div className="mx-auto max-w-[1440px] px-4 py-7 sm:px-8 sm:py-10">
+      <div className="mx-auto max-w-[1440px] px-4 pt-7 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:px-8 sm:py-10">
         <nav
           aria-label="Navegación del perfil público"
           className="mb-6 flex gap-6 border-b border-[#294057] text-sm"

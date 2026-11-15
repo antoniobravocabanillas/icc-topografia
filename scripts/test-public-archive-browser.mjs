@@ -106,7 +106,15 @@ try {
     await page.getByRole("button", { name: /^Quitar periodo:/ }).click();
     await expect(page).toHaveURL(beforeDates);
     await page.getByRole("button", { name: "Lista", exact: true }).click();
-    await page.getByRole("button", { name: "Cargar más bitácoras" }).click();
+    const loadMore = page.getByRole("button", { name: "Cargar más bitácoras" });
+    if (width < 640) {
+      const clearance = await loadMore.evaluate(node => {
+        node.scrollIntoView({ block: "center", behavior: "instant" });
+        return innerHeight - node.getBoundingClientRect().bottom;
+      });
+      assert.ok(clearance >= 60, "Pagination overlaps the mobile hosting badge or safe area");
+    }
+    await loadMore.click();
     await expect(
       page.getByRole("heading", {
         name: "Trabajo documentado 21",
