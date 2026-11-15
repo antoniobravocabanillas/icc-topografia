@@ -30,9 +30,12 @@ async function exerciseArchive(origin: string, role: string, phase: (name: strin
         phase("public-archive-reads");
         await archiveReads(visitor, fixture);
         for (const width of archiveWidths) {
-          const page = await visitor.newPage();
-          try { await archiveJourney(page, origin, fixture, width, phase); }
-          finally { await page.close(); }
+          const device = await sharingSession(browser, origin);
+          try {
+            const page = await device.newPage();
+            await archiveJourney(page, origin, fixture, width, phase);
+            await anonymousSession(device);
+          } finally { await device.close(); }
         }
         phase("anonymous-session");
         await anonymousSession(visitor);

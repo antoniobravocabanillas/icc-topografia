@@ -83,7 +83,26 @@ export async function archiveJourney(page: Page, origin: string, f: ArchiveFixtu
   assert.equal((await page.goto(archive))?.status(), 200);
   await rows(page, first, f.visible.length);
   await fitsViewport(page);
-  await button(page, "Cargar más bitácoras").click();
+  step("load-more-visible");
+  const more = button(page, "Cargar más bitácoras");
+  await check(more).toBeVisible();
+  await check(more).toBeEnabled();
+  // Model the visitor reaching the end of the list before tapping the control.
+  await more.evaluate(node => node.scrollIntoView({ block: "center", behavior: "instant" }));
+  step("load-more-hit-target");
+  const hitTarget = () => more.evaluate(node => {
+    const box = node.getBoundingClientRect();
+    const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    return hit && (hit === node || node.contains(hit)) ? "button" : hit?.tagName.toLowerCase() || "outside";
+  });
+  try { await check.poll(hitTarget).toBe("button"); }
+  catch (error) {
+    const tag = await hitTarget();
+    step("load-more-covered-" + (/^[a-z-]{1,20}$/.test(tag) ? tag : "other"));
+    throw error;
+  }
+  step("load-more-click");
+  await more.click();
   const target = page.locator("#record-" + f.start.id);
   await check(target).toBeVisible();
   await rows(page, f.visible);
