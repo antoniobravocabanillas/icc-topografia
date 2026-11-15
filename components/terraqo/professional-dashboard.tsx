@@ -3,7 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import type { ElementType } from "react";
-import { ArrowRight, BadgeCheck, BriefcaseBusiness, Building2, CheckCircle2, ChevronRight, CircleUserRound, FileCheck2, FileText, FolderKanban, MapPin, MessageSquareText, NotebookPen, ShieldCheck, Sparkles, UserRoundPlus } from "lucide-react";
+import { ArrowRight, BadgeCheck, BriefcaseBusiness, Building2, CheckCircle2, ChevronRight, CircleUserRound, FileCheck2, FileText, FolderKanban, MessageSquareText, NotebookPen, ShieldCheck, Sparkles, UserRoundPlus } from "lucide-react";
 
 import { FieldVerificationPanel } from "@/components/terraqo/field-verification-panel";
 import { Button } from "@/components/ui/button";
@@ -157,22 +157,13 @@ function IdentityAvatar({ src, label, size = "md" }: { src?: string | null; labe
 }
 
 function AttentionCard({ icon: Icon, value, label, href, tone }: { icon: ElementType; value: number; label: string; href: string; tone: "red" | "blue" | "teal" | "amber" }) {
-  const tones = {
-    red: "border-[#f6d4d2] bg-[#fff7f6] text-[#b42318]",
-    blue: "border-[#dbe9fb] bg-[#f5f9ff] text-[#1768b0]",
-    teal: "border-[#d6eee9] bg-[#f2fbf8] text-[#087b70]",
-    amber: "border-[#f3e5bd] bg-[#fffbef] text-[#9a6700]",
-  };
+  const tones = { red: "text-rose-300", blue: "text-sky-300", teal: "text-teal-300", amber: "text-amber-300" };
   return (
-    <Link href={href} className={`group flex min-h-[92px] items-center gap-3 rounded-xl border p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(14,26,38,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1768b0] focus-visible:ring-offset-2 ${tones[tone]}`}>
-      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white/85 shadow-sm">
-        <Icon className="h-5 w-5" aria-hidden="true" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <strong className="block font-display text-2xl leading-none text-[#0e1a26]">{value}</strong>
-        <span className="mt-1 block text-xs font-semibold leading-4 text-[#52677a]">{label}</span>
-      </span>
-      <ChevronRight className="h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5" />
+    <Link href={href} className="group flex min-h-14 items-center gap-3 rounded-lg border border-[#30465c] bg-[#102030] px-3 py-2 text-white hover:border-[#6692b8] focus-visible:outline-sky-300">
+      <Icon className={`h-5 w-5 shrink-0 ${tones[tone]}`} aria-hidden="true" />
+      <span className="min-w-0 flex-1 text-sm font-semibold">{label}</span>
+      <span className="text-sm tabular-nums text-slate-300">{value}</span>
+      <ChevronRight className="h-4 w-4 shrink-0 text-sky-300" aria-hidden="true" />
     </Link>
   );
 }
@@ -317,7 +308,7 @@ export function ProfessionalDashboard({ profile, workspaceId, dashboard }: { pro
       </section>
       <section className="relative overflow-hidden rounded-2xl border border-[#163b54] bg-[radial-gradient(circle_at_82%_10%,rgba(37,192,213,0.16),transparent_30%),linear-gradient(125deg,#081b2b_0%,#0c3143_62%,#103b45_100%)] px-5 py-6 text-white shadow-[0_20px_48px_rgba(8,27,43,0.16)] sm:px-7 lg:px-8">
         <div className="absolute inset-y-0 right-0 hidden w-[44%] opacity-35 lg:block [background-image:repeating-radial-gradient(ellipse_at_100%_50%,transparent_0,transparent_18px,rgba(102,220,224,0.18)_19px,transparent_20px)]" />
-        <div className="relative flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+        <div className="relative flex flex-col gap-6 2xl:flex-row 2xl:items-center 2xl:justify-between">
           <div>
             <p className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-[#67dce1]">Tu Terraqo</p>
             <h1 className="mt-2 font-display text-[clamp(1.7rem,4vw,2.35rem)] font-bold tracking-[-0.035em]">
@@ -326,7 +317,7 @@ export function ProfessionalDashboard({ profile, workspaceId, dashboard }: { pro
             <p className="mt-1 text-sm font-medium text-white/68">Workspace personal · {planCopy[profile.planTier] || profile.planTier}</p>
           </div>
 
-          <div className="grid flex-1 grid-cols-2 gap-3 xl:max-w-[760px] xl:grid-cols-4">
+          <div className="grid min-w-0 flex-1 grid-cols-2 gap-3 md:grid-cols-4">
             <div className="flex items-center gap-3 border-white/12 xl:border-l xl:pl-5">
               <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full border border-[#55d6df]/45 bg-[#55d6df]/10 font-display text-sm font-bold text-[#7de7e7]">{percent}%</span>
               <span className="text-xs leading-4 text-white/72">

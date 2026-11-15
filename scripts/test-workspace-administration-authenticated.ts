@@ -41,7 +41,10 @@ export async function verifyWorkspaceAdministration(db: PrismaClient, base: stri
       const ctx = await browser!.newContext({ baseURL: base, viewport: { width: 1440, height: 1100 } });
       await ctx.route("**/*", route => new URL(route.request().url()).origin === base ? route.continue() : route.abort());
       ctx.on("page", page => {
-        page.on("pageerror", error => browserErrors.push(error.message.split("\n")[0].slice(0, 180)));
+        page.on("pageerror", error => {
+          console.log("S22 browser exception", error.name.replace(/[^A-Za-z]/g, "").slice(0, 24));
+          browserErrors.push(error.message.split("\n")[0].slice(0, 180));
+        });
         page.on("console", message => {
           if (message.type() !== "error") return;
           // HTTP/2 has no reason phrase: Netlify emits "403 ()". Match only
@@ -49,6 +52,13 @@ export async function verifyWorkspaceAdministration(db: PrismaClient, base: stri
           const resource = message.location().url;
           const expectedRevocation = revokingOwner && resource === `${base}/api/admin/notifications/pulse` &&
             /^Failed to load resource: the server responded with a status of 403 \((?:Forbidden)?\)$/.test(message.text());
+          if (!expectedRevocation) {
+            // Resource path and HTTP status suffice; never print query strings or session contents.
+            const url = URL.canParse(resource) ? new URL(resource) : null;
+            const safePath = url?.pathname.replace(/[^a-z0-9/._-]/gi, "_").slice(0, 160);
+            const status = /status of (\d{3})/.exec(message.text())?.[1] || "unknown";
+            console.log("S22 browser diagnostic", safePath ?? "inline", status, message.text().includes("hydrated") ? "hydration" : "console");
+          }
           if (!expectedRevocation) browserErrors.push(message.text().includes("hydrated") ? message.text() : message.text().split("\n")[0].slice(0, 180));
         });
       });
