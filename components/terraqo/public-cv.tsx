@@ -27,6 +27,7 @@ import {
   type LucideIcon
 } from "lucide-react";
 import type { PublicCvProfile } from "@/lib/terraqo/public-cv";
+import { PUBLIC_WORKLOG_MEDIA_TYPES, publicWorklogFileName } from "@/lib/terraqo/public-worklog-media";
 import { formatExperienceDuration, monthsBetween, normalizeSpanishCopy } from "@/lib/terraqo/profile-summary";
 import { TerraqoLogo } from "@/components/terraqo/terraqo-logo";
 import { TerraqoAvatar } from "@/components/terraqo/terraqo-avatar";
@@ -310,33 +311,34 @@ export function PublicCVSectionPage({
       evidenceStatus: worklog.evidenceStatus,
       occurredAt: worklog.occurredAt.toISOString(),
       createdAt: worklog.createdAt.toISOString(),
-      locationLabel: worklog.locationLabel
-        ? normalizeSpanishCopy(worklog.locationLabel) || worklog.locationLabel
-        : null,
+      // Free-form locations may contain exact coordinates or internal site names.
+      locationLabel: null,
       skills: worklog.skills.map((skill) => normalizeSpanishCopy(skill) || skill),
-      evidenceUrls: worklog.evidenceUrls,
+      evidenceUrls: [],
       project: worklog.project ? {
         title: normalizeSpanishCopy(worklog.project.title) || worklog.project.title,
         clientName: null,
-        location: worklog.project.location ? normalizeSpanishCopy(worklog.project.location) || worklog.project.location : null,
+        location: null,
         category: worklog.project.category ? normalizeSpanishCopy(worklog.project.category) || worklog.project.category : null,
         image: worklog.project.images[0]?.url || null
       } : null,
       workspace: worklog.workspace ? normalizeSpanishCopy(worklog.workspace.brandName || worklog.workspace.name) || worklog.workspace.brandName || worklog.workspace.name : null,
-      media: worklog.media.map((media) => ({
+      // Only previewable media served by the public authorization endpoint.
+      // Internal documents and original filenames never enter the client DTO.
+      media: worklog.media.filter((media) => PUBLIC_WORKLOG_MEDIA_TYPES.includes(media.contentType)).map((media) => ({
         id: media.id,
-        fileName: media.fileName,
+        fileName: publicWorklogFileName(media.contentType),
         contentType: media.contentType,
         href: `/api/public/cv/${encodeURIComponent(username)}/worklogs/${encodeURIComponent(media.id)}`,
         downloadHref: `/api/public/cv/${encodeURIComponent(username)}/worklogs/${encodeURIComponent(media.id)}?download=1`
       })),
       validations: worklog.validations.map((validation) => ({
         id: validation.id,
-        responseNote: validation.responseNote ? normalizeSpanishCopy(validation.responseNote) : null,
+        responseNote: null,
         resolvedAt: validation.resolvedAt?.toISOString() || null,
         createdAt: validation.createdAt.toISOString(),
         validatorName: validation.validator.name ? normalizeSpanishCopy(validation.validator.name) || validation.validator.name : null,
-        validatorImage: validation.validator.image
+        validatorImage: null
       }))
     }));
 
@@ -502,7 +504,7 @@ export function PublicCVSectionPage({
         <PublicCvActivityExplorer
           username={username}
           profileName={profile.user.name || username}
-          records={activityRecords}
+          records={initialRecordId ? worklogRecords.filter((record) => record.id === initialRecordId) : activityRecords}
           initialRecordId={initialRecordId}
           profileId={profile.id}
           initialNextCursor={initialNextCursor}

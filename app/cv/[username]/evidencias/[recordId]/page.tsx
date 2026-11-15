@@ -1,5 +1,6 @@
 import { PublicWorkCaseView } from "@/components/terraqo/public-cv-work-cases";
 import { publicWorkCase } from "@/lib/terraqo/public-work-case";
+import { cache } from "react";
 import { notFound } from "next/navigation";
 import { PublicCVSectionPage } from "@/components/terraqo/public-cv";
 import {
@@ -8,11 +9,6 @@ import {
 } from "@/lib/terraqo/public-cv";
 import { prisma } from "@/lib/prisma";
 import { createMetadata } from "@/lib/seo";
-import {
-  resolveEvidenceReadScope,
-  scopeEvidenceWhere,
-} from "@/lib/terraqo/evidence-policy";
-
 type PublicEvidencePermalinkProps = {
   searchParams: Promise<{ trabajo?: string | string[]; revision?: string | string[] }>;
   params: Promise<{ username: string; recordId: string }>;
@@ -21,31 +17,22 @@ type PublicEvidencePermalinkProps = {
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-async function loadPublicEvidence(username: string, recordId: string) {
+// Metadata and HTML share the same authorized read for this request.
+const loadPublicEvidence = cache(async (username: string, recordId: string) => {
   const profile = await prisma.terraqoProfessionalProfile.findUnique({
     where: publishedCvProfileWhere(username),
-    select: publicCvProfileSelect,
+    select: {
+      ...publicCvProfileSelect,
+      worklogs: {
+        ...publicCvProfileSelect.worklogs,
+        where: { ...publicCvProfileSelect.worklogs.where, id: recordId },
+        take: 1,
+      },
+    },
   });
-  if (!profile) return null;
-
-  const included = profile.worklogs.find((worklog) => worklog.id === recordId);
-  if (included) return { profile, record: included };
-
-  const scope = await resolveEvidenceReadScope({
-    professionalProfileId: profile.id,
-  });
-  if (!scope) return null;
-  const record = await prisma.terraqoWorklogEntry.findFirst({
-    where: scopeEvidenceWhere(scope, { id: recordId }),
-    include: publicCvProfileSelect.worklogs.include,
-  });
-  if (!record) return null;
-
-  return {
-    profile: { ...profile, worklogs: [record, ...profile.worklogs] },
-    record,
-  };
-}
+  const record = profile?.worklogs[0];
+  return profile && record ? { profile, record } : null;
+});
 
 export async function generateMetadata({ params, searchParams }: PublicEvidencePermalinkProps) {
   const { username, recordId } = await params;

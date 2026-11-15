@@ -1,3 +1,4 @@
+import { PUBLIC_WORKLOG_MEDIA_TYPES } from "./public-worklog-media";
 import type { Prisma } from "@prisma/client";
 
 // A public entry inside a CV never overrides withdrawal of its parent profile.
@@ -98,15 +99,15 @@ export const publicCvProfileSelect = {
         where: { status: "APPROVED" },
         select: {
           id: true,
-          responseNote: true,
           createdAt: true,
           resolvedAt: true,
-          validator: { select: { name: true, image: true } }
+          validator: { select: { name: true } }
         },
         take: 2
       },
       media: {
-        select: { id: true, fileName: true, contentType: true, sortOrder: true },
+        where: { contentType: { in: PUBLIC_WORKLOG_MEDIA_TYPES } },
+        select: { id: true, contentType: true, sortOrder: true },
         orderBy: { sortOrder: "asc" },
         take: 12
       }

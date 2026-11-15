@@ -1,3 +1,4 @@
+import { PUBLIC_WORKLOG_MEDIA_TYPES, publicWorklogFileName } from "./public-worklog-media";
 import type { WorklogWithContext } from "@/lib/terraqo/worklog";
 import type { EvidenceReadScope } from "@/lib/terraqo/evidence-policy";
 
@@ -20,11 +21,11 @@ export function projectEvidenceValidations(
       .filter((validation) => validation.status === "APPROVED")
       .map((validation) => ({
         id: validation.id,
-        responseNote: validation.responseNote,
+        responseNote: null,
         resolvedAt: validation.resolvedAt?.toISOString() || null,
         createdAt: validation.requestedAt.toISOString(),
         validatorName: validation.validator?.name || null,
-        validatorImage: validation.validator?.image || null,
+        validatorImage: null,
       }));
   }
 
@@ -43,6 +44,9 @@ export function evidenceListDto(
   worklog: WorklogWithContext,
   scope: EvidenceReadScope,
 ) {
+  const isPublic = scope.audience === "PUBLIC";
+  const mediaRows = isPublic ? worklog.media.filter(media => PUBLIC_WORKLOG_MEDIA_TYPES.includes(media.contentType)) : worklog.media;
+  const evidenceUrls = isPublic ? [] : worklog.evidenceUrls;
   return {
     id: worklog.id,
     title: worklog.title,
@@ -53,26 +57,26 @@ export function evidenceListDto(
     visibility: worklog.visibility,
     occurredAt: worklog.occurredAt.toISOString(),
     createdAt: worklog.createdAt.toISOString(),
-    locationLabel: worklog.locationLabel,
+    locationLabel: isPublic ? null : worklog.locationLabel,
     skills: worklog.skills,
     project: worklog.project,
     workspace: worklog.workspace,
-    evidenceCount: worklog.media.length + worklog.evidenceUrls.length,
-    evidenceUrls: worklog.evidenceUrls,
-    media: worklog.media.map((media) => ({
+    evidenceCount: mediaRows.length + evidenceUrls.length,
+    evidenceUrls,
+    media: mediaRows.map((media) => ({
       id: media.id,
-      fileName: media.fileName,
+      fileName: isPublic ? publicWorklogFileName(media.contentType) : media.fileName,
       contentType: media.contentType,
     })),
     validations: worklog.validations
-      .filter((validation) => validation.status === "APPROVED")
-      .map((validation) => ({
+      .filter(validation => validation.status === "APPROVED")
+      .map(validation => ({
         id: validation.id,
-        responseNote: validation.responseNote,
+        responseNote: isPublic ? null : validation.responseNote,
         resolvedAt: validation.resolvedAt?.toISOString() || null,
         createdAt: validation.requestedAt.toISOString(),
         validatorName: validation.validator?.name || null,
-        validatorImage: validation.validator?.image || null,
+        validatorImage: isPublic ? null : validation.validator?.image || null,
       })),
     engagement: {
       comments: worklog._count.comments,
@@ -90,11 +94,11 @@ export function evidenceDetailDto(
   worklog: WorklogWithContext,
   scope: EvidenceReadScope,
 ) {
+  const list = evidenceListDto(worklog, scope);
   return {
-    ...evidenceListDto(worklog, scope),
-    evidenceUrls: worklog.evidenceUrls,
+    ...list,
     location: {
-      label: worklog.locationLabel,
+      label: list.locationLabel,
       ...(scope.capabilities.viewPreciseLocation
         ? {
             latitude: worklog.latitude,
@@ -104,7 +108,7 @@ export function evidenceDetailDto(
           }
         : {}),
     },
-    media: worklog.media.map((media) => ({
+    media: scope.audience === "PUBLIC" ? list.media : worklog.media.map((media) => ({
       id: media.id,
       fileName: media.fileName,
       contentType: media.contentType,

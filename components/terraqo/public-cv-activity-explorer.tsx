@@ -642,7 +642,7 @@ export function PublicCvActivityExplorer({
         {detailId ? (
           <div className="mt-6">
             {selected ? (
-              <ActivityDetail record={selected} copied={copied} onCopy={copy} />
+              <ActivityDetail key={selected.id} record={selected} profileName={profileName} username={username} copied={copied} onCopy={copy} />
             ) : (
               <p role="status">El registro no está disponible.</p>
             )}
@@ -1088,10 +1088,14 @@ export function PublicCvActivityExplorer({
 
 function ActivityDetail({
   record,
+  profileName,
+  username,
   copied,
   onCopy,
 }: {
   record: PublicCvActivityRecord;
+  profileName: string;
+  username: string;
   copied: boolean;
   onCopy: () => void;
 }) {
@@ -1113,17 +1117,20 @@ function ActivityDetail({
           : "Declarado";
   const panel = "rounded-xl border border-[#294057] bg-[#0b1b2b]";
   return (
-    <article>
+    <article className="min-w-0 [overflow-wrap:anywhere]">
       <header className="mb-6">
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div className="max-w-4xl">
             <h1 className="text-2xl font-semibold leading-tight sm:text-4xl">
               {record.title}
             </h1>
+            <p className="mt-3 text-sm text-[#b8c9da]">
+              Por <Link className="font-semibold text-[#8ecfff] underline-offset-4 hover:underline" href={`/cv/${encodeURIComponent(username)}`}>{profileName}</Link>
+            </p>
             <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-[#b8c9da]">
               <span className="inline-flex items-center gap-2">
                 <CalendarDays size={17} />
-                {formatDay(record.occurredAt)}
+                Trabajo: {formatDay(record.occurredAt)}
                 {worklogToday(new Date(record.occurredAt)) === worklogToday(new Date(record.createdAt)) && ` · ${formatTime(record.occurredAt)}`}
               </span>
               {record.locationLabel && (
@@ -1136,10 +1143,13 @@ function ActivityDetail({
                 {status}
               </span>
             </div>
+            <p className="mt-3 text-sm text-[#b8c9da]">
+              Registrado el <time dateTime={record.createdAt}>{formatLongDate(record.createdAt)} · {formatTime(record.createdAt)}</time>
+            </p>
           </div>
           <button
             onClick={onCopy}
-            className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[#35506e] px-5 text-sm font-semibold"
+            className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[#35506e] px-5 text-sm font-semibold hover:bg-[#1b3149] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#7fa8ff]"
           >
             <Copy size={17} />
             {copied ? "Enlace copiado" : "Compartir registro"}
@@ -1148,7 +1158,7 @@ function ActivityDetail({
       </header>
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
         <section
-          className={`${panel} overflow-hidden p-2`}
+          className={`${panel} min-w-0 overflow-hidden p-2`}
           aria-label="Galería de evidencias"
         >
           {current ? (
@@ -1170,7 +1180,7 @@ function ActivityDetail({
           ) : (
             <div className="flex aspect-[16/9] flex-col items-center justify-center gap-3 text-[#b8c9da]">
               <FileText size={36} />
-              <p>Este registro no incluye archivos multimedia públicos.</p>
+              <p className="px-4 text-center">Este registro no incluye archivos multimedia públicos.</p>
             </div>
           )}
           {playable.length > 1 && (
@@ -1209,10 +1219,14 @@ function ActivityDetail({
           <h2 className="text-xl font-semibold">Resumen del registro</h2>
           <dl className="mt-5 divide-y divide-[#294057] border-t border-[#294057]">
             <div className="py-5">
-              <dt className="text-sm text-[#b8c9da]">Tipo de trabajo</dt>
+              <dt className="text-sm text-[#b8c9da]">Contribución</dt>
               <dd className="mt-2 font-medium">
-                {typeMeta(record.type).label}
+                {record.summary || "No indicada"}
               </dd>
+            </div>
+            <div className="py-5">
+              <dt className="text-sm text-[#b8c9da]">Contexto</dt>
+              <dd className="mt-2 leading-7">{[record.project?.category, record.workspace].filter(Boolean).join(" · ") || "No indicado"}</dd>
             </div>
             <div className="py-5">
               <dt className="text-sm text-[#b8c9da]">Resultado declarado</dt>
@@ -1271,7 +1285,7 @@ function ActivityDetail({
             aria-selected={tab === id}
             aria-controls={`panel-${id}`}
             onClick={() => setTab(id)}
-            className={`min-h-12 border-b-2 px-4 text-sm font-semibold ${tab === id ? "border-[#539bff] text-white" : "border-transparent text-[#b8c9da]"}`}
+            className={`min-h-12 border-b-2 px-3 text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#7fa8ff] sm:px-4 ${tab === id ? "border-[#539bff] text-white" : "border-transparent text-[#b8c9da]"}`}
           >
             {label}
           </button>
@@ -1281,23 +1295,24 @@ function ActivityDetail({
         role="tabpanel"
         id={`panel-${tab}`}
         aria-labelledby={`tab-${tab}`}
+        tabIndex={0}
         className={`${panel} mt-4 p-5 sm:p-6`}
       >
         {tab === "evidence" && (
           <>
             <h2 className="text-lg font-semibold">Evidencias del registro</h2>
             <p className="mt-3 max-w-3xl leading-7 text-[#c6d3e1]">
-              {record.summary}
+              Archivos y referencias públicos disponibles para este registro. El relato del autor se presenta por separado en el resumen.
             </p>
             <div className="mt-5 flex flex-wrap gap-3">
-              {record.media.map((media) => (
+              {record.media.map((media, index) => (
                 <a
                   key={media.id}
                   href={media.downloadHref}
-                  className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[#35506e] px-4 text-sm"
+                  className="inline-flex min-h-11 max-w-full items-center gap-2 rounded-lg border border-[#35506e] px-4 py-2 text-sm hover:bg-[#1b3149]"
                 >
                   <FileText size={16} />
-                  {media.fileName}
+                  <span className="min-w-0">Descargar evidencia {index + 1}</span>
                 </a>
               ))}
             </div>
@@ -1331,14 +1346,12 @@ function ActivityDetail({
                   <p className="font-medium">
                     {validation.validatorName || "Responsable autorizado"}
                   </p>
-                  <p className="mt-1 text-sm text-[#b8c9da]">
-                    {formatLongDate(
-                      validation.resolvedAt || validation.createdAt,
-                    )}
-                  </p>
-                  {validation.responseNote && (
-                    <p className="mt-3 leading-7">{validation.responseNote}</p>
-                  )}
+                  {validation.resolvedAt && <p className="mt-1 text-sm text-[#b8c9da]">{formatLongDate(validation.resolvedAt)}</p>}
+                  <dl className="mt-3 grid gap-2 text-sm text-[#b8c9da]">
+                    <div><dt className="inline">Relación: </dt><dd className="inline">No indicada públicamente</dd></div>
+                    <div><dt className="inline">Aspecto: </dt><dd className="inline">No disponible para este respaldo heredado</dd></div>
+                    <div><dt className="inline">Versión: </dt><dd className="inline">No disponible para este respaldo heredado</dd></div>
+                  </dl>
                 </div>
               ))
             ) : (

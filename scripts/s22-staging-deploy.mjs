@@ -15,7 +15,8 @@ async function main() {
   const s08 = ["s08-configure", "s08-trigger"].includes(requested);
   const s09 = ["s09-configure", "s09-trigger"].includes(requested);
   const s10 = ["s10-configure", "s10-trigger"].includes(requested);
-  const mode = probe ? requested.slice(6) : (s06 || s07 || s08 || s09 || s10) ? requested.slice(4) : requested;
+  const s11 = ["s11-configure", "s11-trigger"].includes(requested);
+  const mode = probe ? requested.slice(6) : (s06 || s07 || s08 || s09 || s10 || s11) ? requested.slice(4) : requested;
   assert.ok(["inspect", "configure", "trigger", "status"].includes(mode));
   const require = createRequire(new URL("../node_modules/netlify-cli/package.json", import.meta.url));
   const { getAPIToken } = await import(pathToFileURL(require.resolve("@netlify/dev-utils")).href);
@@ -73,7 +74,8 @@ async function main() {
   const recover = process.argv[4] ?? "off";
   if (recover !== "off") { assert.ok(probe); assert.match(recover, /^[a-f0-9-]{36}\/[a-f0-9]{12}$/); }
   const expected = {
-    ...(s09 ? { TERRAQO_WORK_CASES_V1: "true" } : {}),
+    ...((s09 || s11) ? { TERRAQO_WORK_CASES_V1: "true" } : {}),
+    S11_STAGING_RECORD_GATE: s11 ? "record" : "off",
     S10_STAGING_ARCHIVE_GATE: s10 ? "archive" : "off",
     S09_STAGING_VISITOR_GATE: s09 ? "visitor" : "off",
     S08_STAGING_REVIEW_GATE: s08 ? "review" : "off",

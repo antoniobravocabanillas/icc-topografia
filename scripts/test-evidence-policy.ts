@@ -81,6 +81,7 @@ const publicValidations = projectEvidenceValidations(validations, "PUBLIC");
 assert.deepEqual(publicValidations.map((validation) => validation.id), ["approved"]);
 assert.equal("requestNote" in publicValidations[0]!, false, "La nota interna no debe salir en público.");
 assert.equal("status" in publicValidations[0]!, false, "El flujo interno no debe salir en público.");
+assert.equal(publicValidations[0]?.responseNote, null, "El comentario del revisor no se publica.");
 const ownerValidations = projectEvidenceValidations(validations, "OWNER");
 assert.equal(ownerValidations.length, 2, "El propietario conserva el flujo completo.");
 assert.equal("requestNote" in ownerValidations[0]!, true);
