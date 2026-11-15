@@ -36,12 +36,7 @@ export async function GET(
       mes: url.searchParams.get("month") || undefined,
       tz: url.searchParams.get("timezone") || undefined,
     });
-    const counts = await getWorklogArchiveCalendar({
-      professionalProfileId: profileId,
-      filters,
-      scopeWhere: scope.where,
-      scope,
-    });
+    const counts = await getWorklogArchiveCalendar({ professionalProfileId: profileId, filters, scope });
     return ok(
       {
         version: 1,

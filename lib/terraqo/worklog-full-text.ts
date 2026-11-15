@@ -48,6 +48,12 @@ function visibilityCondition(scope?: EvidenceReadScope) {
   return Prisma.sql`(${Prisma.join(alternatives, " OR ")})`;
 }
 
+// Prisma DateTime columns are UTC timestamps without time zone. Bind that same
+// type so PostgreSQL does not shift date bounds or cursors to its session zone.
+function utcTimestamp(instant: Date) {
+  return Prisma.sql`${instant.toISOString().slice(0, -1)}::timestamp`;
+}
+
 function archiveConditions(input: {
   professionalProfileId: string;
   filters: WorklogArchiveFilters;
@@ -58,11 +64,16 @@ function archiveConditions(input: {
   const conditions: Prisma.Sql[] = [
     Prisma.sql`w."professionalProfileId" = ${input.professionalProfileId}`,
     Prisma.sql`w."deletedAt" IS NULL`,
-    Prisma.sql`w."searchVector" @@ websearch_to_tsquery('spanish'::regconfig, ${filters.query || ""})`,
   ];
+  if (filters.query) {
+    const pattern = "%" + filters.query + "%";
+    conditions.push(isWorklogFullTextEnabled()
+      ? Prisma.sql`w."searchVector" @@ websearch_to_tsquery('spanish'::regconfig, ${filters.query})`
+      : Prisma.sql`(w."title" ILIKE ${pattern} OR w."summary" ILIKE ${pattern} OR w."outcome" ILIKE ${pattern})`);
+  }
   const period = worklogArchivePeriod(filters);
-  if (period?.gte) conditions.push(Prisma.sql`w."occurredAt" >= ${period.gte}`);
-  if (period?.lt) conditions.push(Prisma.sql`w."occurredAt" < ${period.lt}`);
+  if (period?.gte) conditions.push(Prisma.sql`w."occurredAt" >= ${utcTimestamp(period.gte)}`);
+  if (period?.lt) conditions.push(Prisma.sql`w."occurredAt" < ${utcTimestamp(period.lt)}`);
   if (filters.type) conditions.push(Prisma.sql`w."type"::text = ${filters.type}`);
   if (filters.projectId) conditions.push(Prisma.sql`w."projectId" = ${filters.projectId}`);
   if (filters.evidenceStatus) {
@@ -75,8 +86,8 @@ function archiveConditions(input: {
   if (input.cursor) {
     conditions.push(
       Prisma.sql`(
-        w."occurredAt" < ${input.cursor.occurredAt}
-        OR (w."occurredAt" = ${input.cursor.occurredAt} AND w."id" < ${input.cursor.id})
+        w."occurredAt" < ${utcTimestamp(input.cursor.occurredAt)}
+        OR (w."occurredAt" = ${utcTimestamp(input.cursor.occurredAt)} AND w."id" < ${input.cursor.id})
       )`,
     );
   }
@@ -113,16 +124,23 @@ export async function countWorklogFullText(input: {
   return Number(rows[0]?.count || 0n);
 }
 
-export async function findWorklogFullTextCalendar(input: {
+// Prisma stores occurredAt as a UTC timestamp without time zone. Convert before
+// grouping so a record after midnight UTC still belongs to the local workday.
+export async function countArchiveDays(input: {
   professionalProfileId: string;
   filters: WorklogArchiveFilters;
   scope?: EvidenceReadScope;
+  recordId?: string;
 }) {
+  const { filters, recordId } = input;
   const conditions = archiveConditions(input);
-  return prisma.$queryRaw<Array<{ occurredAt: Date }>>(Prisma.sql`
-    SELECT w."occurredAt"
+  if (recordId) conditions.push(Prisma.sql`w.id = ${recordId}`);
+  const rows = await prisma.$queryRaw<Array<{ day: string; count: bigint }>>(Prisma.sql`
+    SELECT to_char((w."occurredAt" AT TIME ZONE 'UTC') AT TIME ZONE ${filters.timeZone}, 'YYYY-MM-DD') AS day,
+           count(*) AS count
     FROM icc."TerraqoWorklogEntry" w
     WHERE ${Prisma.join(conditions, " AND ")}
-    ORDER BY w."occurredAt" ASC, w."id" ASC
+    GROUP BY 1 ORDER BY 1
   `);
+  return new Map(rows.map(row => [row.day, Number(row.count)]));
 }

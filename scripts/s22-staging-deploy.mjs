@@ -14,7 +14,8 @@ async function main() {
   const s07 = ["s07-configure", "s07-trigger"].includes(requested);
   const s08 = ["s08-configure", "s08-trigger"].includes(requested);
   const s09 = ["s09-configure", "s09-trigger"].includes(requested);
-  const mode = probe ? requested.slice(6) : (s06 || s07 || s08 || s09) ? requested.slice(4) : requested;
+  const s10 = ["s10-configure", "s10-trigger"].includes(requested);
+  const mode = probe ? requested.slice(6) : (s06 || s07 || s08 || s09 || s10) ? requested.slice(4) : requested;
   assert.ok(["inspect", "configure", "trigger", "status"].includes(mode));
   const require = createRequire(new URL("../node_modules/netlify-cli/package.json", import.meta.url));
   const { getAPIToken } = await import(pathToFileURL(require.resolve("@netlify/dev-utils")).href);
@@ -42,11 +43,16 @@ async function main() {
   assert.equal(execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8", windowsHide: true }).trim(), candidate);
   assert.equal(execFileSync("git", ["branch", "--show-current"], { encoding: "utf8", windowsHide: true }).trim(), branch);
   assert.equal(execFileSync("git", ["status", "--porcelain"], { encoding: "utf8", windowsHide: true }).trim(), "");
-  const assets = JSON.parse(await readFile("output/s24-staging-blobs/active.json", "utf8"));
-  assert.equal(assets.state, "prepared");
-  assert.equal(assets.siteId, siteId);
-  assert.equal(assets.candidate, candidate);
-  assert.match(assets.runId, /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/);
+  // S10 exercises the archive and calendar using database rows only.
+  let blobRun;
+  if (!s10) {
+    const assets = JSON.parse(await readFile("output/s24-staging-blobs/active.json", "utf8"));
+    assert.equal(assets.state, "prepared");
+    assert.equal(assets.siteId, siteId);
+    assert.equal(assets.candidate, candidate);
+    assert.match(assets.runId, /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/);
+    blobRun = assets.runId;
+  }
   const mailKey = entries.find(entry => entry.key === "RESEND_API_KEY");
   const probeReady = mailKey?.is_secret === true && mailKey.scopes?.length === 1 &&
     mailKey.scopes[0] === "functions" && Boolean(values().RESEND_API_KEY) &&
@@ -68,6 +74,7 @@ async function main() {
   if (recover !== "off") { assert.ok(probe); assert.match(recover, /^[a-f0-9-]{36}\/[a-f0-9]{12}$/); }
   const expected = {
     ...(s09 ? { TERRAQO_WORK_CASES_V1: "true" } : {}),
+    S10_STAGING_ARCHIVE_GATE: s10 ? "archive" : "off",
     S09_STAGING_VISITOR_GATE: s09 ? "visitor" : "off",
     S08_STAGING_REVIEW_GATE: s08 ? "review" : "off",
     S07_STAGING_ENDORSEMENT_GATE: s07 ? "request" : "off",
@@ -85,7 +92,7 @@ async function main() {
     TERRAQO_TRANSACTIONAL_EMAIL_ENABLED: "false",
     TERRAQO_STAGING_INVITATION_PROBE: probeReady ? "true" : "false",
     PLATFORM_STAGING_S24_CONFIRM: "mghdpciewbsowjrjwmwk:s24-http-fixtures",
-    PLATFORM_STAGING_S24_BLOB_RUN: assets.runId,
+    ...(blobRun ? { PLATFORM_STAGING_S24_BLOB_RUN: blobRun } : {}),
     TERRAQO_WORKSPACE_PUBLICATION_V1: "true",
   };
   // Netlify deliberately masks secrets returned by its management API. This

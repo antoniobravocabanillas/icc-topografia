@@ -85,6 +85,14 @@ async function main() {
     };
     step = "served-candidate";
     await assertServed();
+    if (process.env.S10_STAGING_ARCHIVE_GATE === "archive") {
+      step = "s10-archive";
+      const { verifyS10Archive } = await import("./verify-s10-archive");
+      await verifyS10Archive(origin);
+      await assertServed();
+      console.log(`PASS S10 staging: commit=${commit}; deploy=${marker.deployId}; archive journey verified.`);
+      return;
+    }
     if (process.env.S09_STAGING_VISITOR_GATE === "visitor") {
       step = "s09-visitor";
       const { verifyS09Visitor } = await import("./verify-s09-visitor");
@@ -137,7 +145,7 @@ async function main() {
 }
 main().catch(error => {
   // Assertions may contain tokens/URLs. Log only structural diagnostics.
-  const location = typeof error?.stack === "string" ? error.stack.match(/(?:workspace-administration-test-target|run-workspace-administration-staging|verify-worklog-draft-conflict|verify-s22-evaluator-browser|verify-hosted-worklog-clips|verify-s09-visitor|s09-[a-z-]+|verify-s08-review|s08-[a-z-]+|verify-s07-endorsement|s07-[a-z-]+|verify-s06-sharing|s06-[a-z-]+)\.ts:\d+:\d+/)?.[0] : undefined;
+  const location = typeof error?.stack === "string" ? error.stack.match(/(?:workspace-administration-test-target|run-workspace-administration-staging|verify-worklog-draft-conflict|verify-s22-evaluator-browser|verify-hosted-worklog-clips|verify-s10-archive|s10-[a-z-]+|verify-s09-visitor|s09-[a-z-]+|verify-s08-review|s08-[a-z-]+|verify-s07-endorsement|s07-[a-z-]+|verify-s06-sharing|s06-[a-z-]+)\.ts:\d+:\d+/)?.[0] : undefined;
   console.error(JSON.stringify({ s22Step: step, s22Failed: true, location, code: typeof error?.code === "string" && /^[A-Z0-9_]{1,32}$/.test(error.code) ? error.code : "GATE_REJECTED" }));
   process.exitCode = 1;
 });

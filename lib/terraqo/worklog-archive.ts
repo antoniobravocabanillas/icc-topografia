@@ -4,7 +4,7 @@ import { worklogInclude } from "@/lib/terraqo/worklog";
 import type { EvidenceReadScope } from "@/lib/terraqo/evidence-policy";
 import {
   countWorklogFullText,
-  findWorklogFullTextCalendar,
+  countArchiveDays,
   findWorklogFullTextPage,
   isWorklogFullTextEnabled,
 } from "@/lib/terraqo/worklog-full-text";
@@ -12,7 +12,6 @@ import {
   buildWorklogArchiveWhere,
   decodeWorklogArchiveCursor,
   encodeWorklogArchiveCursor,
-  formatWorklogDay,
   type WorklogArchiveFilters,
 } from "@/lib/terraqo/worklog-archive-contract";
 
@@ -104,42 +103,15 @@ export async function getWorklogArchivePage(input: {
   };
 }
 
-export async function getWorklogArchiveCalendar(input: {
+export function getWorklogArchiveCalendar(input: {
   professionalProfileId: string;
   filters: WorklogArchiveFilters;
-  scopeWhere?: Prisma.TerraqoWorklogEntryWhereInput;
   scope?: EvidenceReadScope;
+  recordId?: string;
 }) {
-  const monthFilters = {
-    ...input.filters,
-    date: undefined,
-    from: undefined,
-    to: undefined,
-  };
-  const archiveWhere = buildWorklogArchiveWhere(
-      input.professionalProfileId,
-      monthFilters,
-    );
-  const records =
-    monthFilters.query && isWorklogFullTextEnabled()
-      ? await findWorklogFullTextCalendar({
-          professionalProfileId: input.professionalProfileId,
-          filters: monthFilters,
-          scope: input.scope,
-        })
-      : await prisma.terraqoWorklogEntry.findMany({
-    where: input.scopeWhere
-      ? { AND: [input.scopeWhere, archiveWhere] }
-      : archiveWhere,
-    select: { occurredAt: true },
-    orderBy: [{ occurredAt: "asc" }, { id: "asc" }],
-        });
-  const counts = new Map<string, number>();
-  for (const record of records) {
-    const day = formatWorklogDay(record.occurredAt, input.filters.timeZone);
-    counts.set(day, (counts.get(day) || 0) + 1);
-  }
-  return counts;
+  return countArchiveDays({ ...input, filters: {
+    ...input.filters, date: undefined, from: undefined, to: undefined, allTime: false,
+  } });
 }
 
 export async function countWorklogArchive(input: {
@@ -168,11 +140,8 @@ export async function countWorklogArchive(input: {
 
 // Facets use the same authorized record scope; no private project inventory is exposed.
 export async function getWorklogArchiveProjects(scope: EvidenceReadScope) {
-  const groups = await prisma.terraqoWorklogEntry.groupBy({
-    by: ["projectId"], where: { AND: [scope.where, { projectId: { not: null } }] },
-  });
   return prisma.project.findMany({
-    where: { id: { in: groups.flatMap(group => group.projectId ? [group.projectId] : []) } },
+    where: { terraqoWorklogs: { some: scope.where } },
     select: { id: true, title: true }, orderBy: [{ title: "asc" }, { id: "asc" }],
   });
 }

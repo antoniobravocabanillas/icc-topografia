@@ -109,6 +109,15 @@ type EvidencePageResponse = {
   error?: { message?: string };
 };
 
+type ArchivePosition = {
+  pages?: number;
+  scroll?: number;
+  id?: string;
+  calendarOpen?: boolean;
+  filtersOpen?: boolean;
+  month?: string;
+};
+
 const TYPE_COPY: Record<
   string,
   { label: string; description: string; icon: LucideIcon; tone: string }
@@ -278,6 +287,7 @@ export function PublicCvActivityExplorer({
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [rangeStart, setRangeStart] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const activityQuery = publicArchiveApiQuery({ ...draft, from: "", to: "" });
   activityQuery.set("month", month);
   activityQuery.delete("period");
@@ -305,8 +315,9 @@ export function PublicCvActivityExplorer({
       if (!initialRecordId) {
         let restoreEntry: string | null = null;
         try {
-          restoreEntry = sessionStorage.getItem(`archive-return:${profileId}`);
-          sessionStorage.removeItem(`archive-return:${profileId}`);
+          const returnKey = `archive-return:${profileId}:${publicArchiveQuery(next)}`;
+          restoreEntry = sessionStorage.getItem(returnKey);
+          sessionStorage.removeItem(returnKey);
         } catch {}
         const id =
           restoreEntry ||
@@ -345,7 +356,7 @@ export function PublicCvActivityExplorer({
   }, [username, profileId, initialRecordId]);
 
   useEffect(() => {
-    if (!ready || detailId) return;
+    if (!ready || !entry || detailId) return;
     const controller = new AbortController();
     const current = ++generation.current;
     setLoading(true);
@@ -356,12 +367,19 @@ export function PublicCvActivityExplorer({
     pending.current = true;
     async function load() {
       try {
-        let restore: { pages?: number; scroll?: number; id?: string } = {};
+        let restore: ArchivePosition = {};
         try {
           restore = JSON.parse(sessionStorage.getItem(restorationKey) || "{}");
         } catch {}
         // Restore only pages previously visited; never fetch the entire archive to filter it.
-        const count = Math.max(1, Math.min(10, Number(restore.pages) || 1));
+        const savedPages = restore.pages;
+        const count = typeof savedPages === "number" && Number.isSafeInteger(savedPages) && savedPages > 0
+          ? savedPages : 1;
+        setSelectedId(restore.id || null);
+        if (restore.calendarOpen !== undefined) setCalendarOpen(restore.calendarOpen);
+        if (restore.filtersOpen !== undefined) setFiltersOpen(restore.filtersOpen);
+        if (restore.month && /^\d{4}-(0[1-9]|1[0-2])$/.test(restore.month))
+          setMonth(restore.month);
         let next: string | null = null;
         let collected: EvidencePageItem[] = [];
         for (let index = 0; index < count; index++) {
@@ -389,6 +407,7 @@ export function PublicCvActivityExplorer({
         if (restore.scroll !== undefined)
           requestAnimationFrame(() =>
             requestAnimationFrame(() => {
+              if (controller.signal.aborted || current !== generation.current) return;
               window.scrollTo({
                 top: restore.scroll || 0,
                 behavior: "instant",
@@ -417,7 +436,7 @@ export function PublicCvActivityExplorer({
       generation.current = current + 1;
     };
     // Filters are represented by the canonical query, preventing fetches on unrelated UI state.
-  }, [ready, query, filters, profileId, detailId, retry, restorationKey]);
+  }, [ready, entry, query, filters, profileId, detailId, retry, restorationKey]);
 
   useEffect(() => {
     if (!calendarOpen || detailId) return;
@@ -454,6 +473,7 @@ export function PublicCvActivityExplorer({
   }, [calendarOpen, activitySearch, profileId, detailId]);
 
   function apply(next: PublicArchiveFilters) {
+    remember();
     const href = publicArchivePath(username, next);
     window.history.replaceState(
       { ...window.history.state, terraqoScrollY: window.scrollY },
@@ -471,22 +491,26 @@ export function PublicCvActivityExplorer({
       href,
     );
     setEntry(nextEntry);
-    try {
-      sessionStorage.removeItem(
-        `terraqo-public-archive:${profileId}:${publicArchiveQuery(next)}`,
-      );
-    } catch {}
     setFilters(next);
     setDraft(next);
     setRangeStart(null);
   }
-  function remember(id: string) {
+  function remember(id = selectedId || undefined) {
     try {
       sessionStorage.setItem(
         restorationKey,
-        JSON.stringify({ pages: pages.current, scroll: window.scrollY, id }),
+        JSON.stringify({ pages: pages.current, scroll: window.scrollY, id,
+          calendarOpen, filtersOpen, month } satisfies ArchivePosition),
       );
       sessionStorage.setItem(`archive-last:${profileId}:${query}`, entry);
+    } catch {}
+  }
+  function returnToArchive() {
+    if (!detailId) return;
+    try {
+      const saved = sessionStorage.getItem(`archive-last:${profileId}:${query}`);
+      if (saved)
+        sessionStorage.setItem(`archive-return:${profileId}:${query}`, saved);
     } catch {}
   }
   async function more() {
@@ -600,6 +624,7 @@ export function PublicCvActivityExplorer({
           </Link>
           <Link
             href={archiveHref}
+            onClick={returnToArchive}
             aria-current={!detailId ? "page" : undefined}
             className="flex min-h-12 items-center border-b-2 border-[#539bff] font-semibold"
           >
@@ -607,17 +632,7 @@ export function PublicCvActivityExplorer({
           </Link>
         </nav>
         {detailId && <Link
-          onClick={() => {
-            if (detailId) {
-              try {
-                const saved = sessionStorage.getItem(
-                  `archive-last:${profileId}:${query}`,
-                );
-                if (saved)
-                  sessionStorage.setItem(`archive-return:${profileId}`, saved);
-              } catch {}
-            }
-          }}
+          onClick={returnToArchive}
           href={archiveHref}
           className={button}
         >
@@ -726,7 +741,7 @@ export function PublicCvActivityExplorer({
                 }}
               >
                 <div
-                  className={`${filtersOpen ? "grid" : "hidden"} grid-cols-2 gap-4 lg:grid-cols-5`}
+                  className={`${filtersOpen ? "grid" : "hidden"} grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5`}
                 >
                   <label className="text-sm">
                     Tipo
@@ -769,7 +784,7 @@ export function PublicCvActivityExplorer({
                       <option value="VERIFIED">Validado</option>
                     </select>
                   </label>
-                  <label className="col-span-2 text-sm lg:col-span-1">
+                  <label className="text-sm sm:col-span-2 lg:col-span-1">
                     Proyecto
                     <select
                       aria-label="Proyecto"
@@ -819,7 +834,7 @@ export function PublicCvActivityExplorer({
                     />
                   </label>
                 </div>
-                <div hidden={!calendarOpen} className="max-w-xl">
+                <div hidden={!calendarOpen} className={`${filtersOpen ? "mt-4" : ""} max-w-xl`}>
                   <label className="text-sm">
                     Actividad del mes
                     <input
@@ -941,6 +956,7 @@ export function PublicCvActivityExplorer({
                 return (
                   <Link
                     id={`record-${item.id}`}
+                    aria-current={selectedId === item.id ? "true" : undefined}
                     key={item.id}
                     href={href}
                     prefetch={false}

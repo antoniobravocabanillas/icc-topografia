@@ -128,7 +128,7 @@ export default async function WorklogPage({ searchParams }: WorklogPageProps) {
     await Promise.all([
       getProfessionalProjects(profile.id, workspaceIds),
       archivePagePromise,
-      getWorklogArchiveCalendar(archiveRequest),
+      getWorklogArchiveCalendar({ professionalProfileId: profile.id, filters, recordId: archiveRequest.scopeWhere?.id }),
       countWorklogArchive(archiveRequest),
       prisma.terraqoWorklogEntry.findMany({
         where: { professionalProfileId: profile.id, deletedAt: null },

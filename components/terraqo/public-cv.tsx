@@ -287,11 +287,9 @@ export function PublicCVSectionPage({
   const username = profile.username || "perfil";
   const copy = PUBLIC_CV_SECTIONS[section];
   const projects = uniqueProjects(profile, null);
-  const orderedWorklogs = [...profile.worklogs].sort(
-    (left, right) =>
-      right.occurredAt.getTime() - left.occurredAt.getTime() ||
-      right.id.localeCompare(left.id),
-  );
+  // Preserve the database order, including its ID tie-breaker for equal dates.
+  // A locale-dependent browser sort would move the first page cursor.
+  const orderedWorklogs = profile.worklogs;
   const initialArchiveWorklogs = orderedWorklogs.slice(0, 20);
   const requestedWorklog = initialRecordId
     ? orderedWorklogs.find((worklog) => worklog.id === initialRecordId)

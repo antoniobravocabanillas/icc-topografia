@@ -44,6 +44,10 @@ async function main() {
       professionalProfileId: "profile",
       deletedAt: null,
       visibility: "PUBLIC",
+      lifecycle: "PUBLISHED",
+      workspaceId: null,
+      professionalProfile: { liveCvEnabled: true },
+      OR: [{ projectId: null }, { project: { isPublic: true, deletedAt: null } }],
     });
     assert.equal(
       (
