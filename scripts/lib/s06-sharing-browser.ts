@@ -64,8 +64,9 @@ export async function compose(page: Page, origin: string, fixture: SharingFixtur
     if (destination === "public") assert.equal(body.listOnCv, true);
   }
   const link = page.getByLabel("Enlace para compartir", { exact: true });
-  const next = needsReview ? (destination === "invited" ? "Confirmar acceso autorizado" : "Confirmar publicación autorizada") : "Crear otra selección";
-  await page.getByRole("region", { name: "Publicar y compartir selección" }).getByRole("button", { name: next, exact: true }).waitFor();
+  const composer = page.getByRole("region", { name: "Publicar y compartir selección" });
+  if (needsReview) await composer.getByRole("link", { name: "Revisar autorizaciones guardadas" }).waitFor();
+  else await composer.getByRole("button", { name: "Crear otra selección", exact: true }).waitFor();
   if (destination === "private" || needsReview) assert.equal(await link.count(), 0);
   else {
     const expectedPath = destination === "invited" ? "/portal/selecciones/" + collection.id : "/selecciones/" + (await permission!.json()).data.slug;
