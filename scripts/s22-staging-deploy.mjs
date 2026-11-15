@@ -71,6 +71,7 @@ async function main() {
     TERRAQO_S22_STAGING_CONFIRM: "mghdpciewbsowjrjwmwk:s22-fixtures",
     TERRAQO_WORKSPACE_INVITATIONS_V1: "true",
     TERRAQO_WORKSPACE_EVALUATORS_V1: "true",
+    TERRAQO_SCOPED_SHARING_V1: "true",
     TERRAQO_TRANSACTIONAL_EMAIL_ENABLED: "false",
     TERRAQO_STAGING_INVITATION_PROBE: probeReady ? "true" : "false",
     PLATFORM_STAGING_S24_CONFIRM: "mghdpciewbsowjrjwmwk:s24-http-fixtures",

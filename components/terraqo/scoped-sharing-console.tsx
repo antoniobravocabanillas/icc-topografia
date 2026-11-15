@@ -41,7 +41,25 @@ type Candidate = {
   occurredAt: string;
   locationLabel: string | null;
   mediaCount: number;
+  previewMediaIds: string[];
+  belongsToCompany: boolean;
 };
+function SelectionPhotoPreview({ ids }: { ids: string[] }) {
+  const [index, setIndex] = useState(0);
+  const current = Math.min(index, ids.length - 1);
+  if (current < 0) return null;
+  return <figure className="mt-3 overflow-hidden rounded-xl border bg-white">
+    {/* eslint-disable-next-line @next/next/no-img-element */}
+    <img alt={`Archivo seleccionado ${current + 1} de ${ids.length}`}
+      src={`/api/terraqo/worklog/evidence/${encodeURIComponent(ids[current])}`}
+      className="aspect-video w-full bg-slate-100 object-contain" />
+    {ids.length > 1 && <figcaption className="flex items-center justify-between gap-1 px-2 text-sm">
+      <button type="button" aria-label="Archivo anterior" disabled={current === 0} onClick={() => setIndex(current - 1)} className="min-h-11 px-2 text-primary disabled:opacity-40">Anterior</button>
+      <span aria-live="polite">{current + 1} de {ids.length}</span>
+      <button type="button" aria-label="Archivo siguiente" disabled={current === ids.length - 1} onClick={() => setIndex(current + 1)} className="min-h-11 px-2 text-primary disabled:opacity-40">Siguiente</button>
+    </figcaption>}
+  </figure>;
+}
 type Grant = {
   id: string;
   inviteEmail: string | null;
@@ -182,15 +200,15 @@ export function ScopedSharingConsole({
         <div className="grid gap-5 border-b border-slate-200 bg-gradient-to-r from-[#071c2d] via-[#09324a] to-[#0c5360] p-5 text-white lg:grid-cols-[1fr_auto] lg:items-end sm:p-7">
           <div>
             <p className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-cyan-300">Nueva selección privada</p>
-            <h2 className="mt-2 font-display text-2xl font-bold">Elige exactamente qué puede ver otra persona</h2>
+            <h2 className="mt-2 font-display text-2xl font-bold">Tú decides qué compartir</h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">Nada está preseleccionado. Crear la selección no la publica ni envía invitaciones.</p>
           </div>
           <div className="rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-sm backdrop-blur">
-            <strong className="text-xl">{selectedCandidates.length}</strong> registros elegidos
+            <strong className="text-xl">{selectedCandidates.length}</strong> {selectedCandidates.length === 1 ? "registro elegido" : "registros elegidos"}
           </div>
         </div>
 
-        <div className="grid gap-6 p-5 lg:grid-cols-[minmax(0,1fr)_22rem] sm:p-7">
+        <div className="grid gap-6 p-5 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] sm:p-7">
           <div className="space-y-3">
             {candidates.map((candidate) => {
               const selected = selection[candidate.revisionId];
@@ -219,7 +237,8 @@ export function ScopedSharingConsole({
                           </label>
                         ))}
                       </div>
-                      {candidate.mediaCount ? (
+                      {candidate.mediaCount > 0 && !candidate.previewMediaIds.length ? <p className="mt-3 text-sm text-slate-600">Puedes compartir los campos de este registro. Sus adjuntos incluyen formatos que esta selección no admite.</p> : null}
+                      {candidate.previewMediaIds.length ? (
                         <label className="mt-4 flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold">
                           <input type="checkbox" checked={selected.includeMedia} onChange={() => setSelection((current) => ({ ...current, [candidate.revisionId]: { ...selected, includeMedia: !selected.includeMedia } }))} className="h-4 w-4 accent-primary" />
                           <ImageIcon className="h-4 w-4 text-primary" /> Incluir archivos normalizados
@@ -236,16 +255,11 @@ export function ScopedSharingConsole({
           <aside className="h-fit rounded-xl border border-slate-200 bg-slate-50 p-5 lg:sticky lg:top-24">
             <FileLock2 className="h-6 w-6 text-primary" />
             <h3 className="mt-3 font-display text-lg font-bold">Vista previa del alcance</h3>
-            <label className="mt-5 block text-sm font-semibold">Nombre de la selección
-              <input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={180} className="mt-2 min-h-11 w-full rounded-lg border bg-white px-3 outline-none focus:border-primary focus:ring-2 focus:ring-primary/15" />
-            </label>
-            <label className="mt-4 block text-sm font-semibold">Contexto opcional
-              <textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={1200} rows={3} className="mt-2 w-full resize-y rounded-lg border bg-white px-3 py-2 outline-none focus:border-primary focus:ring-2 focus:ring-primary/15" />
-            </label>
             <div className="mt-5 space-y-3">
               {selectedCandidates.map((candidate) => (
                 <article aria-label="Contenido que se compartirá" key={candidate.revisionId} className="min-w-0 rounded-lg border bg-white p-4 text-sm">
                   <p className="text-xs font-semibold text-primary">Vista previa · Aún no compartido</p>
+                  {selection[candidate.revisionId].includeMedia && <SelectionPhotoPreview ids={candidate.previewMediaIds} />}
                   <dl className="mt-3 space-y-3 break-words">
                     {fieldOptions.filter(([field]) => selection[candidate.revisionId].fields.includes(field)).map(([field, label]) => {
                       const value = candidate[field];
@@ -257,8 +271,15 @@ export function ScopedSharingConsole({
                   <p className="mt-4 border-t pt-3 text-xs text-slate-600">{selection[candidate.revisionId].includeMedia ? `${candidate.mediaCount} archivos incluidos; su publicación depende de la autorización correspondiente.` : "Archivos excluidos de esta selección."}</p>
                 </article>
               ))}
+              {selectedCandidates.some(item => item.belongsToCompany && selection[item.revisionId].includeMedia) && <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950"><strong>Archivos de empresa.</strong> {" "}{publicationReviewEnabled ? "Para publicarlos, guarda primero la selección privada y solicita autorización a la empresa." : "Su publicación requiere autorización de la empresa."}</p>}
               {!selectedCandidates.length ? <p className="text-sm leading-6 text-slate-500">Selecciona registros y define sus campos. Terraqo no asumirá permisos por ti.</p> : null}
             </div>
+            <label className="mt-5 block text-sm font-semibold">Nombre de la selección
+              <input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={180} className="mt-2 min-h-11 w-full rounded-lg border bg-white px-3 outline-none focus:border-primary focus:ring-2 focus:ring-primary/15" />
+            </label>
+            <label className="mt-4 block text-sm font-semibold">Contexto opcional
+              <textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={1200} rows={3} className="mt-2 w-full resize-y rounded-lg border bg-white px-3 py-2 outline-none focus:border-primary focus:ring-2 focus:ring-primary/15" />
+            </label>
             <button disabled={!canCreate || pending} onClick={createCollection} className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-45">
               {pending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />} Crear selección privada
             </button>

@@ -1,3 +1,5 @@
+import { s24BlobFixtures } from "./lib/s24-blob-fixtures.mjs";
+import { workspaceAdministrationStagingOrigin } from "./lib/workspace-administration-test-target";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
@@ -68,6 +70,35 @@ export async function verifyEvaluatorBrowser(input: {
     assert.equal(await composer.locator("[name=outcome]").inputValue(), "Las cotas coinciden con el plano.");
     assert.equal(await db.terraqoWorklogEntry.count({ where: { professionalProfileId: targetProfile.id } }), 1);
     console.log("PASS S03/S04 authenticated capture, gallery, private visibility and return without publication.");
+    if (origin === workspaceAdministrationStagingOrigin) {
+      const photos = s24BlobFixtures(process.env.PLATFORM_STAGING_S24_BLOB_RUN!).map(pair => pair[0]);
+      await db.terraqoWorklogRevision.create({ data: { worklogId: entryId, createdById: reviewerId,
+        revisionNo: 1, title: "Nivelación de control", summary: "Resumen visible de prueba", contentHash: photos[0].sha256 } });
+      await db.terraqoWorklogMedia.createMany({ data: photos.map((photo, sortOrder) => ({
+        worklogId: entryId, sortOrder, size: photo.bytes.length, sha256: photo.sha256,
+        storageKey: photo.key, contentType: "image/webp", fileName: `plano-${sortOrder}.webp`,
+      })) });
+      const selectionPage = await reviewer.newPage();
+      try {
+        await selectionPage.goto(origin + "/portal/selecciones");
+        await selectionPage.getByRole("checkbox", { name: /Nivelación de control/ }).check();
+        await selectionPage.getByRole("checkbox", { name: "Descripción", exact: true }).check();
+        const preview = selectionPage.getByRole("article", { name: "Contenido que se compartirá" });
+        await preview.getByText("Resumen visible de prueba").waitFor();
+        assert.equal(await preview.getByText("Nivelación de control").count(), 0);
+        assert.equal(await preview.getByRole("img").count(), 0);
+        const include = selectionPage.getByRole("checkbox", { name: "Incluir archivos normalizados" });
+        await include.check();
+        for (const index of [0, 1]) {
+          if (index) await preview.getByRole("button", { name: "Archivo siguiente" }).click();
+          await preview.getByRole("img", { name: `Archivo seleccionado ${index + 1} de 2` })
+            .evaluate(el => (el as HTMLImageElement).decode());
+        }
+        await include.uncheck();
+        await preview.getByRole("img").waitFor({ state: "detached" });
+        console.log("PASS S06 authenticated private preview, selected fields, two decoded photos and exclusion.");
+      } finally { await selectionPage.close(); }
+    }
     console.log("S01/S02: trajectory inspected");
     await page.bringToFront();
     await page.getByText(email, { exact: true }).waitFor({ timeout: 60000 });

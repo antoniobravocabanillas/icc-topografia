@@ -11,7 +11,13 @@ try {
       writes.push(route.request().postDataJSON());
       return route.fulfill({ status: 200, json: { data: {} } });
     });
-    await page.goto("http://localhost:3190/compartir");
+    const mediaReads = [];
+    await page.route("**/api/terraqo/worklog/evidence/*", route => {
+      const id = route.request().url().split("/").pop();
+      mediaReads.push(id);
+      return route.fulfill({ contentType: "image/webp", path: "scripts/fixtures/public-archive/media/" + (id === "fixture-one" ? "nivelacion.webp" : "replanteo.webp") });
+    });
+    await page.goto(`${process.env.S06_FIXTURE_ORIGIN || "http://localhost:3190"}/compartir`);
     await page.getByRole("checkbox").first().check();
     const preview = page.getByRole("article", { name: "Contenido que se compartirá" });
     await expect(preview).not.toContainText("Título reservado");
@@ -24,6 +30,15 @@ try {
     await page.getByRole("checkbox", { name: "Fecha", exact: true }).check();
     await expect(preview).toContainText(/1 nov\.? 2026/);
     await expect(preview).toContainText("Archivos excluidos");
+    await page.getByRole("checkbox", { name: "Incluir archivos normalizados" }).check();
+    await preview.getByRole("img").evaluate(el => el.decode());
+    await preview.getByRole("button", { name: "Archivo siguiente" }).click();
+    await expect(preview.getByRole("img")).toHaveAttribute("alt", "Archivo seleccionado 2 de 2");
+    await preview.getByRole("img").evaluate(el => el.decode());
+    assert.deepEqual(mediaReads, ["fixture-one", "fixture-two"]);
+    await expect(page.getByText("Archivos de empresa.", { exact: true })).toBeVisible();
+    await page.getByRole("checkbox", { name: "Incluir archivos normalizados" }).uncheck();
+    await expect(preview.getByRole("img")).toHaveCount(0);
     await page.getByRole("checkbox", { name: "Incluir archivos normalizados" }).check();
     await expect(preview).toContainText("2 archivos incluidos");
     await page.getByLabel("Nombre de la selección").fill("Selección de prueba");

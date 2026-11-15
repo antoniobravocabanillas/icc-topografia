@@ -28,7 +28,7 @@ export default async function SelectionsPage() {
         responsibilities: true,
         methods: true,
         tools: true,
-        worklog: { select: { occurredAt: true, locationLabel: true, media: { select: { id: true } } } },
+        worklog: { select: { occurredAt: true, locationLabel: true, workspaceId: true, media: { select: { id: true, contentType: true }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] } } },
       },
     }),
     listShareCollections(session.user.id),
@@ -57,7 +57,7 @@ export default async function SelectionsPage() {
       {selectionAccessRequestsEnabled() ? <SelectionAccessInbox requests={accessRequests} /> : null}
       <ScopedSharingConsole
         publicationReviewEnabled={publicationReviewEnabled()}
-        candidates={revisions.map((revision) => ({ revisionId: revision.id, title: revision.title, summary: revision.summary, outcome: revision.outcome, contributionRole: revision.contributionRole, responsibilities: revision.responsibilities, methods: revision.methods, tools: revision.tools, occurredAt: revision.worklog.occurredAt.toISOString(), locationLabel: revision.worklog.locationLabel, mediaCount: revision.worklog.media.length }))}
+        candidates={revisions.map((revision) => ({ revisionId: revision.id, title: revision.title, summary: revision.summary, outcome: revision.outcome, contributionRole: revision.contributionRole, responsibilities: revision.responsibilities, methods: revision.methods, tools: revision.tools, occurredAt: revision.worklog.occurredAt.toISOString(), locationLabel: revision.worklog.locationLabel, mediaCount: revision.worklog.media.length, belongsToCompany: Boolean(revision.worklog.workspaceId), previewMediaIds: revision.worklog.media.every(file => file.contentType === "image/webp") ? revision.worklog.media.map(file => file.id) : [] }))}
         collections={collections.map((collection) => ({
           id: collection.id,
           title: collection.title,
