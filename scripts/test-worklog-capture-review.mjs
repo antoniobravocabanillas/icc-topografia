@@ -16,7 +16,7 @@ try {
     await page.route("**/test-record/evidence", async (route) => {
       uploads++;
       await route.fulfill(
-        uploads === 1
+        uploads === (width === 375 ? 1 : 2)
           ? { status: 503, json: {} }
           : { json: { data: { media: [{ id: "ok" }] } } },
       );
@@ -70,6 +70,13 @@ try {
     );
     await form.getByRole("button", { name: "Revisar visibilidad" }).click();
     await form.getByRole("button", { name: "Guardar en mi bitácora" }).click();
+    await expect(
+      form.getByRole("button", { name: "Reintentar fotos pendientes" }),
+    ).toBeEnabled();
+    await page.reload();
+    await expect(form.locator("[name=outcome]")).toHaveValue(
+      "La cota coincide con el plano de control.",
+    );
     await form
       .getByRole("button", { name: "Reintentar fotos pendientes" })
       .click();

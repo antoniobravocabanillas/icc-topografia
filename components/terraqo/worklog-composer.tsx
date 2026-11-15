@@ -175,7 +175,12 @@ export function WorklogComposer({
         const updatedAt = await saveWorklogLocalDraft({
           key: draftStorageKey,
           fields,
-          photos: options?.photos || photoFilesRef.current,
+          // Once the record exists, background saves must retain only unconfirmed attachments.
+          photos:
+            options?.photos ??
+            (savedWorklogId.current
+              ? [...pendingPhotos.current]
+              : photoFilesRef.current),
           serverWorklogId:
             options?.serverWorklogId === undefined
               ? savedWorklogId.current
@@ -233,7 +238,7 @@ export function WorklogComposer({
         setIncludeAutomaticLocation(draft.fields.includeAutomaticLocation);
         setPhotoFiles(draft.photos);
         photoFilesRef.current = draft.photos;
-        pendingPhotos.current = draft.photos;
+        pendingPhotos.current = [...draft.photos];
         if (draft.serverWorklogId) {
           submissionFields.current = draft.fields;
           savedWorklogId.current = draft.serverWorklogId;
@@ -470,6 +475,7 @@ export function WorklogComposer({
       }
     }
     if (!savedWorklogId.current) submissionFields.current = fieldsFromForm();
+    if (draftTimer.current) clearTimeout(draftTimer.current);
     busy.current = true;
     setSubmitting(true);
     try {
