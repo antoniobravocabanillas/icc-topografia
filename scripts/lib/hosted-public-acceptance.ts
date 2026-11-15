@@ -43,7 +43,7 @@ export async function verifyHostedPublication(source: NodeJS.ProcessEnv) {
     const stage = /Hosted WorkCase check failed during ([a-z ,/-]{1,80})\./.exec(failure.stderr ?? "")?.[1];
     const reads = failure.stdout?.match(/^S24_READ (owner|reviewer|stranger|anonymous) (download|media|selection) [1-5]\d\d$/gm) ?? [];
     const archiveList = failure.stdout?.match(/^S10_LIST [1-5]\d\d -?\d{1,5}$/m)?.[0];
-    console.log(JSON.stringify({ ...diagnostic, archiveList, workCaseStage: stage, recentGrantReads: reads.slice(-5) }));
+    console.log(JSON.stringify({ ...diagnostic, archiveList, archiveMonths: failure.stdout?.match(/^S10_MONTH (?:api|browser) \d{1,4} [1-5]\d\d -?\d{1,5} -?\d{1,5}$/gm)?.slice(-4), workCaseStage: stage, recentGrantReads: reads.slice(-5) }));
     throw new Error("Hosted publication acceptance failed");
   }
 

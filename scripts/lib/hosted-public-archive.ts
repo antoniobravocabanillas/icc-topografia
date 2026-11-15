@@ -37,12 +37,33 @@ export async function checkHostedPublicArchive(db: PrismaClient, anonymous: Brow
     console.log(`S10_LIST ${response.status()} ${Number(payload?.data?.scopeCounts?.records ?? -1)}`);
     assert.equal(response.status(), 200);
     assert.equal(payload.data.scopeCounts.records, 2);
+    const monthUrl = new URL(listUrl);
+    monthUrl.pathname += "/activity";
+    monthUrl.searchParams.delete("period");
+    monthUrl.searchParams.set("month", "2026-10");
+    async function checkMonth(response: { status(): number; json(): Promise<{ data?: { days?: { date: string; count: number }[]; month?: string; timeZone?: string } } | null> }, source: "api" | "browser", width: number) {
+      const data = (await response.json().catch(() => null))?.data;
+      const counts = ["2026-10-28", "2026-10-29"].map(day =>
+        Array.isArray(data?.days) ? Number(data.days.find((row) => row.date === day)?.count ?? 0) : -1);
+      console.log(`S10_MONTH ${source} ${width} ${response.status()} ${counts.join(" ")}`);
+      assert.equal(response.status(), 200);
+      assert.equal(data?.month, "2026-10");
+      assert.equal(data?.timeZone, "America/Lima");
+      assert.deepEqual(counts, [1, 1]);
+    }
+    await checkMonth(await anonymous.request.get(monthUrl.href), "api", 0);
     for (const width of [1280, 375, 320]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(archive.href);
       await verify(page.getByText("2 bitácoras en este resultado", { exact: true })).toBeVisible();
-      await page.getByRole("button", { name: "Calendario", exact: true }).click();
-      await page.getByLabel("Actividad del mes").fill("2026-10");
+      const activity = page.waitForResponse(response => {
+        const url = new URL(response.url());
+        return url.pathname === monthUrl.pathname && url.searchParams.get("month") === "2026-10";
+      });
+      await Promise.all([activity.then(response => checkMonth(response, "browser", width)), (async () => {
+        await page.getByRole("button", { name: "Calendario", exact: true }).click();
+        await page.getByLabel("Actividad del mes").fill("2026-10");
+      })()]);
       await page.getByRole("button", { name: "2026-10-28: 1 registros públicos", exact: true }).click();
       await page.getByRole("button", { name: "2026-10-27: 0 registros públicos", exact: true }).click();
       assert.equal(page.url(), archive.href);
