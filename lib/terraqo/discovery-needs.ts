@@ -51,6 +51,7 @@ export function explainDiscoveryMatch(input: {
   need: {
     title: string;
     problem: string;
+    context?: string | null;
     activities: string[];
     requiredTools: string[];
     locationLabel?: string | null;
@@ -86,7 +87,7 @@ export function explainDiscoveryMatch(input: {
     .filter((requirement) => requirement.priority === "DESIRED")
     .map((requirement) => ({ label: requirement.label, terms: matches([requirement.label]) }))
     .filter((requirement) => requirement.terms.length > 0);
-  const activityTerms = matches([input.need.title, input.need.problem, ...input.need.activities]);
+  const activityTerms = matches([input.need.title, input.need.problem, input.need.context ?? "", ...input.need.activities]);
   const toolTerms = matches(input.need.requiredTools);
   const locationTerms = matches([input.need.locationLabel ?? ""]);
 
@@ -261,6 +262,9 @@ export async function reviseWorkspaceNeed(input: {
   const { expectedVersion, ...content } = input.payload;
   const operationFingerprint = fingerprint(content);
   return prisma.$transaction(async (tx) => {
+    const [locked] = await tx.$queryRaw<Array<{ id: string; version: number }>>(Prisma.sql`SELECT id, version FROM icc."TerraqoWorkNeed"
+      WHERE id=${input.needId} AND "workspaceId"=${input.workspaceId} AND lifecycle <> 'ARCHIVED' FOR UPDATE`);
+    if (!locked) throw new DiscoveryNeedsError("Necesidad no disponible.", 404);
     const replay = await tx.terraqoWorkNeedRevision.findUnique({
       where: { createdById_operationKey: { createdById: input.userId, operationKey: input.operationKey } },
       select: { needId: true, operationFingerprint: true },
@@ -275,25 +279,18 @@ export async function reviseWorkspaceNeed(input: {
       if (!replayedNeed) throw new DiscoveryNeedsError("Necesidad no disponible.", 404);
       return replayedNeed;
     }
-    const need = await tx.terraqoWorkNeed.findFirst({
-      where: { id: input.needId, workspaceId: input.workspaceId, lifecycle: { not: "ARCHIVED" } },
-      select: { id: true },
-    });
-    if (!need) throw new DiscoveryNeedsError("Necesidad no disponible.", 404);
-    await tx.$queryRaw(Prisma.sql`SELECT id FROM icc."TerraqoWorkNeed" WHERE id=${need.id} FOR UPDATE`);
-    const locked = await tx.terraqoWorkNeed.findUnique({ where: { id: need.id }, select: { version: true } });
-    if (!locked || locked.version !== expectedVersion)
+    if (locked.version !== expectedVersion)
       throw new DiscoveryNeedsError("La necesidad cambió en otra sesión. Recarga antes de editar.", 409);
     const revision = await tx.terraqoWorkNeedRevision.create({
-      data: { needId: need.id, ...revisionData(content, input.userId, locked.version + 1, input.operationKey) },
+      data: { needId: locked.id, ...revisionData(content, input.userId, locked.version + 1, input.operationKey) },
       select: { id: true },
     });
     return tx.terraqoWorkNeed.update({
-      where: { id: need.id },
+      where: { id: locked.id },
       data: { currentRevisionId: revision.id, version: { increment: 1 } },
       include: needInclude,
     });
-  }, { isolationLevel: "Serializable" });
+  }, { isolationLevel: "ReadCommitted" });
 }
 
 const candidateSelect = {
@@ -347,6 +344,7 @@ export async function discoverEvidenceForNeed(workspaceId: string, needId: strin
     revision.title,
     revision.problem,
     ...revision.activities,
+    revision.context,
     ...revision.requiredTools,
     ...revision.requirements.map((requirement) => requirement.label),
   ]).slice(0, 24);

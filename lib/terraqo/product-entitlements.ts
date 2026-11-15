@@ -76,6 +76,16 @@ export async function getWorkspaceProductEntitlements(userId: string, workspaceI
   };
 }
 
+// The monthly counter measures new needs. Reading or revising an existing
+// draft does not consume a slot; creation checks the limit under the workspace lock.
+export async function requireWorkspaceNeedsAccess(userId: string, workspaceId: string) {
+  const { features } = await getWorkspaceProductEntitlements(userId, workspaceId);
+  const entitlement = features.find(item => item.feature === "employer_needs")!;
+  if (!entitlement.active && entitlement.status !== "LIMIT_REACHED")
+    throw new TerraqoEntitlementError("FEATURE_NOT_ENTITLED", "Esta función no está habilitada para el workspace.", 403);
+  return entitlement;
+}
+
 export async function requireWorkspacePilotFeature(userId: string, workspaceId: string, feature: TerraqoPilotFeature) {
   const entitlement = (await getWorkspaceProductEntitlements(userId, workspaceId)).features.find((item) => item.feature === feature)!;
   if (entitlement.status === "LIMIT_REACHED") throw new TerraqoEntitlementError("FEATURE_LIMIT_REACHED", "Alcanzaste el límite operativo del piloto. El historial permanece disponible.", 429, secondsUntilNextMonth());

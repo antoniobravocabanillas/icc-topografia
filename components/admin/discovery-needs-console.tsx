@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { DiscoveryNeedEditor, type EditableNeed } from "@/components/admin/discovery-need-editor";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Ban, BookOpenCheck, Bot, BriefcaseBusiness, Check, ChevronRight, CircleAlert, FileSearch, LoaderCircle, MapPin, MessageSquareText, Plus, RotateCcw, ShieldCheck, Sparkles, UserRoundSearch } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,20 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
 type Requirement = { id?: string; label: string; priority: "REQUIRED" | "DESIRED" };
-type Need = {
-  id: string;
-  lifecycle: "DRAFT" | "ACTIVE" | "ARCHIVED";
-  version: number;
-  currentRevision: null | {
-    id: string;
-    title: string;
-    problem: string;
-    activities: string[];
-    locationLabel: string | null;
-    requiredTools: string[];
-    requirements: Requirement[];
-  };
-};
+type Need = EditableNeed;
 type MatchReason = {
   required: Array<{ label: string; terms: string[] }>;
   desirable: Array<{ label: string; terms: string[] }>;
@@ -87,10 +75,6 @@ type AnalysisJob = {
   usage: { inputTokens: number | null; outputTokens: number | null; estimatedCostMicros: string | null; latencyMs: number | null };
 };
 
-function lines(value: string) {
-  return value.split(/[\n,]/).map((item) => item.trim()).filter(Boolean);
-}
-
 async function api<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
   const response = await fetch(input, { ...init, headers: { "content-type": "application/json", ...init?.headers } });
   const body = await response.json() as { data?: T; error?: { message?: string } };
@@ -114,6 +98,11 @@ export function DiscoveryNeedsConsole({ contextualMessagingEnabled = false, evid
   const [searching, setSearching] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [editingNeed, setEditingNeed] = useState<Need | null>(null);
+  const [editorEpoch, setEditorEpoch] = useState(0);
+  const [editorDirty, setEditorDirty] = useState(false);
+  const [editorBusy, setEditorBusy] = useState(false);
+  const employerNeedsExistingWritable = ["ACTIVE", "LIMIT_REACHED"].includes(employerNeedsEntitlement.status);
   const employerNeedsWritable = employerNeedsEntitlement.status === "ACTIVE";
 
   const loadNeeds = useCallback(async () => {
@@ -122,6 +111,7 @@ export function DiscoveryNeedsConsole({ contextualMessagingEnabled = false, evid
       const data = await api<Need[]>("/api/v1/work-needs", { cache: "no-store" });
       setNeeds(data);
       setSelectedNeedId((current) => current && data.some((need) => need.id === current) ? current : data[0]?.id ?? null);
+      return data;
     } catch (error) {
       setMessage({ type: "error", text: error instanceof Error ? error.message : "No se pudieron cargar las necesidades." });
     } finally {
@@ -168,46 +158,25 @@ export function DiscoveryNeedsConsole({ contextualMessagingEnabled = false, evid
     await Promise.all([loadNeeds(), loadDossiers()]);
   }
 
-  async function createNeed(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    setSubmitting(true);
-    setMessage(null);
-    try {
-      await api<Need>("/api/v1/work-needs", {
-        method: "POST",
-        headers: { "Idempotency-Key": crypto.randomUUID() },
-        body: JSON.stringify({
-          title: data.get("title"),
-          problem: data.get("problem"),
-          activities: lines(String(data.get("activities") || "")),
-          context: String(data.get("context") || "") || undefined,
-          locationLabel: String(data.get("locationLabel") || "") || undefined,
-          requiredTools: lines(String(data.get("requiredTools") || "")),
-          endorsementNeeded: data.get("endorsementNeeded") === "on",
-          requirements: [
-            ...lines(String(data.get("requiredRequirements") || "")).map((label) => ({ label, priority: "REQUIRED" })),
-            ...lines(String(data.get("desiredRequirements") || "")).map((label) => ({ label, priority: "DESIRED" })),
-          ],
-        }),
-      });
-      form.reset();
-      setMessage({ type: "success", text: "Necesidad privada creada con su primera versión inmutable." });
-      await loadNeeds();
-    } catch (error) {
-      setMessage({ type: "error", text: error instanceof Error ? error.message : "No se pudo crear la necesidad." });
-    } finally {
-      setSubmitting(false);
+  async function discardEditorChanges() {
+    if (editorBusy || searching) return;
+    if (editingNeed) {
+      setEditorBusy(true);
+      const data = await loadNeeds();
+      setEditorBusy(false);
+      if (!data) return;
+      setEditingNeed(data.find((item) => item.id === editingNeed.id) ?? null);
     }
+    setEditorDirty(false);
+    setEditorEpoch((current) => current + 1);
   }
 
-  async function discover() {
-    if (!selectedNeedId) return;
+  async function discover(needId = selectedNeedId) {
+    if (!needId || !employerNeedsExistingWritable) return;
     setSearching(true);
     setMessage(null);
     try {
-      setMatches(await api<EvidenceMatch[]>(`/api/v1/work-needs/${selectedNeedId}/discover`, { cache: "no-store" }));
+      setMatches(await api<EvidenceMatch[]>(`/api/v1/work-needs/${needId}/discover`, { cache: "no-store" }));
     } catch (error) {
       setMessage({ type: "error", text: error instanceof Error ? error.message : "No se pudo explorar la evidencia." });
     } finally {
@@ -428,62 +397,46 @@ export function DiscoveryNeedsConsole({ contextualMessagingEnabled = false, evid
 
   return (
     <section className="space-y-6" aria-busy={loading || searching || submitting}>
-      <header className="rounded-2xl border border-slate-200 bg-[linear-gradient(120deg,#071d2a_0%,#0b3442_58%,#0f766e_135%)] px-5 py-6 text-white shadow-[0_24px_70px_-45px_rgba(7,29,42,0.9)] sm:px-7">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-3xl">
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-200">Descubrimiento profesional privado</p>
-            <h1 className="mt-2 text-balance font-display text-3xl font-bold sm:text-4xl">De una necesidad real a evidencia explicable</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-200 sm:text-base">Define el trabajo que debe resolverse, encuentra trayectoria documentada y crea expedientes internos sin puntuar personas ni ampliar permisos.</p>
-          </div>
-          <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
-            <div className="rounded-xl border border-white/15 bg-white/10 p-3 backdrop-blur"><strong className="block text-2xl">{needs.length}</strong><span className="text-slate-200">necesidades</span></div>
-            <div className="rounded-xl border border-white/15 bg-white/10 p-3 backdrop-blur"><strong className="block text-2xl">{groupedMatches.length}</strong><span className="text-slate-200">perfiles hallados</span></div>
-            <div className="col-span-2 rounded-xl border border-white/15 bg-white/10 p-3 backdrop-blur sm:col-span-1"><strong className="block text-sm">Plan {employerNeedsEntitlement.tier}</strong><span className="text-slate-200">{employerNeedsEntitlement.remaining === null ? "Piloto controlado" : `${employerNeedsEntitlement.remaining} de ${employerNeedsEntitlement.limit} usos`}</span></div>
-          </div>
-        </div>
+      <header className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-5">
+        <div><h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Definir necesidad</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Describe el trabajo y revisa los criterios para encontrar evidencia relacionada.</p></div>
+        <p className="text-sm text-muted-foreground">Plan {employerNeedsEntitlement.tier} · {employerNeedsEntitlement.remaining === null ? "Piloto controlado" : `${employerNeedsEntitlement.remaining} nuevas necesidades disponibles`}</p>
       </header>
 
       {message ? <div role={message.type === "error" ? "alert" : "status"} aria-live={message.type === "error" ? "assertive" : "polite"} aria-atomic="true" className={`flex flex-col gap-3 rounded-xl border px-4 py-3 text-sm font-semibold sm:flex-row sm:items-center sm:justify-between ${message.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-red-200 bg-red-50 text-red-900"}`}><span>{message.text}</span>{message.type === "error" ? <Button type="button" variant="outline" size="sm" className="min-h-11 shrink-0 border-red-300 bg-white text-red-900 hover:bg-red-100" onClick={() => void retryInitialLoad()} disabled={loading}>Reintentar carga</Button> : null}</div> : null}
-      {!employerNeedsWritable ? <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"><strong>Consulta conservada.</strong> Puedes revisar necesidades y expedientes existentes, pero el piloto no admite nuevas búsquedas o expedientes en este workspace.</div> : null}
+      {!employerNeedsWritable ? <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">{employerNeedsEntitlement.status === "LIMIT_REACHED" ? <><strong>Límite de nuevas necesidades alcanzado.</strong> Puedes editar y buscar con tus necesidades existentes.</> : <><strong>Consulta conservada.</strong> Puedes revisar las necesidades y evaluaciones existentes. La edición y búsqueda no están habilitadas.</>}</div> : null}
       {evidenceAnalysisUnavailableReason ? <div role="status" className="flex gap-2 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950"><Bot className="mt-0.5 h-4 w-4 shrink-0" aria-hidden /><span><strong>Evaluación manual activa.</strong> {evidenceAnalysisUnavailableReason}</span></div> : null}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(320px,0.82fr)_minmax(0,1.6fr)]">
+      <div className="space-y-6">
         <div className="space-y-5">
-          <Card className="overflow-hidden">
-            <CardHeader className="border-b bg-slate-50/70">
-              <div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-cyan-50 text-cyan-800"><Plus className="h-5 w-5" aria-hidden /></span><div><CardTitle>Nueva necesidad</CardTitle><CardDescription>Versión privada para tu workspace.</CardDescription></div></div>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <form onSubmit={createNeed} className="space-y-4">
-                <fieldset disabled={!employerNeedsWritable} className="space-y-4 disabled:opacity-70">
-                <Field label="Título"><Input name="title" required minLength={4} placeholder="Ej. Control topográfico de obra" /></Field>
-                <Field label="Problema a resolver"><Textarea name="problem" required minLength={20} placeholder="Describe el resultado esperado y por qué es necesario." /></Field>
-                <Field label="Actividades"><Textarea name="activities" className="min-h-24" placeholder="Una por línea: replanteo, nivelación, informe final" /></Field>
-                <Field label="Requisitos indispensables"><Textarea name="requiredRequirements" required className="min-h-24" placeholder="Uno por línea" /></Field>
-                <Field label="Requisitos deseables"><Textarea name="desiredRequirements" className="min-h-20" placeholder="Uno por línea" /></Field>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Lugar"><Input name="locationLabel" placeholder="Lurín, Lima" /></Field>
-                  <Field label="Herramientas"><Input name="requiredTools" placeholder="GNSS, estación total" /></Field>
-                </div>
-                <Field label="Contexto interno"><Textarea name="context" className="min-h-20" placeholder="Restricciones, entorno o información operativa privada." /></Field>
-                <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border bg-slate-50 px-3 text-sm font-medium"><input name="endorsementNeeded" type="checkbox" className="h-4 w-4 accent-teal-700" /> Requiere respaldo verificable</label>
-                <Button type="submit" className="w-full" disabled={submitting}>{submitting ? <LoaderCircle className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden /> : <BriefcaseBusiness className="h-4 w-4" aria-hidden />}Crear necesidad privada</Button>
-                </fieldset>
-              </form>
-            </CardContent>
-          </Card>
+          <div className="flex flex-wrap gap-2">
+            {editingNeed ? <Button type="button" variant="outline" disabled={editorDirty || editorBusy} onClick={() => { setEditingNeed(null); setEditorEpoch((current) => current + 1); }}>Nueva necesidad</Button> : null}
+            {editorDirty ? <Button type="button" variant="outline" disabled={editorBusy} onClick={() => void discardEditorChanges()}>Descartar cambios sin guardar</Button> : null}
+          </div>
+          <DiscoveryNeedEditor key={`${editingNeed?.id ?? "new"}-${editorEpoch}`} need={editingNeed} writable={!loading && !searching && (editingNeed ? employerNeedsExistingWritable && editingNeed.lifecycle !== "ARCHIVED" : employerNeedsWritable)} onDirtyChange={setEditorDirty} onBusyChange={setEditorBusy} onSaved={async (saved, search) => {
+            setNeeds((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
+            setSelectedNeedId(saved.id);
+            setEditingNeed(saved);
+            setEditorDirty(false);
+            if (!search) setEditorEpoch((current) => current + 1);
+            setMatches([]);
+            setSelectedRevisions({});
+            setMessage({ type: "success", text: `Borrador guardado · versión ${saved.version}. Las evaluaciones anteriores conservan su versión.` });
+            if (search) { await discover(saved.id); setEditorEpoch((current) => current + 1); }
+          }} />
         </div>
 
         <div className="space-y-5">
           <Card>
             <CardHeader className="gap-4 border-b sm:flex-row sm:items-center sm:justify-between">
-              <div><CardTitle>Necesidades vigentes</CardTitle><CardDescription>Selecciona una versión para explorar evidencia pública o autorizada.</CardDescription></div>
-              <Button onClick={() => void discover()} disabled={!employerNeedsWritable || !selectedNeedId || searching} className="shrink-0">{searching ? <LoaderCircle className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden /> : <UserRoundSearch className="h-4 w-4" aria-hidden />}Explorar evidencia</Button>
+              <div><CardTitle>Borradores y necesidades</CardTitle><CardDescription>Selecciona una versión para explorar evidencia pública o autorizada.</CardDescription></div>
+              <Button onClick={() => void discover()} disabled={!employerNeedsExistingWritable || !selectedNeedId || selectedNeed?.lifecycle === "ARCHIVED" || searching || editorDirty || editorBusy} className="shrink-0">{searching ? <LoaderCircle className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden /> : <UserRoundSearch className="h-4 w-4" aria-hidden />}Explorar evidencia</Button>
             </CardHeader>
             <CardContent className="pt-5">
-              {loading ? <div role="status" aria-label="Cargando necesidades" className="h-24 animate-pulse rounded-xl bg-slate-100 motion-reduce:animate-none" /> : needs.length ? <div className="grid gap-3 md:grid-cols-2">{needs.map((need) => <button key={need.id} type="button" aria-pressed={need.id === selectedNeedId} onClick={() => { setSelectedNeedId(need.id); setMatches([]); }} className={`min-h-24 rounded-xl border p-4 text-left transition motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${need.id === selectedNeedId ? "border-teal-600 bg-teal-50 shadow-sm" : "bg-white hover:border-slate-300 hover:bg-slate-50"}`}><span className="flex items-center justify-between gap-2"><strong className="line-clamp-2">{need.currentRevision?.title ?? "Sin versión"}</strong><span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-bold">v{need.version}</span></span><span className="mt-2 line-clamp-2 text-sm text-muted-foreground">{need.currentRevision?.problem}</span></button>)}</div> : <Empty icon={<BriefcaseBusiness className="h-6 w-6" />} title="Aún no hay necesidades" body="Crea la primera con el formulario. No será publicada ni convertida en una vacante automáticamente." />}
+              {loading ? <div role="status" aria-label="Cargando necesidades" className="h-24 animate-pulse rounded-xl bg-slate-100 motion-reduce:animate-none" /> : needs.length ? <div className="grid gap-3 md:grid-cols-2">{needs.map((need) => <button key={need.id} type="button" aria-pressed={need.id === selectedNeedId} disabled={editorDirty || editorBusy || searching} onClick={() => { setSelectedNeedId(need.id); setMatches([]); setSelectedRevisions({}); }} className={`min-h-24 rounded-xl border p-4 text-left transition motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${need.id === selectedNeedId ? "border-teal-600 bg-teal-50 shadow-sm" : "bg-white hover:border-slate-300 hover:bg-slate-50"}`}><span className="flex items-center justify-between gap-2"><strong className="line-clamp-2">{need.currentRevision?.title ?? "Sin versión"}</strong><span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-bold">{need.lifecycle === "DRAFT" ? "Borrador" : need.lifecycle === "ARCHIVED" ? "Archivada" : "Activa"} · v{need.version}</span></span><span className="mt-2 line-clamp-2 text-sm text-muted-foreground">{need.currentRevision?.problem}</span></button>)}</div> : <Empty icon={<BriefcaseBusiness className="h-6 w-6" />} title="Aún no hay necesidades" body="Crea la primera con el formulario. No será publicada ni convertida en una vacante automáticamente." />}
             </CardContent>
           </Card>
+
+          {selectedNeed?.currentRevision ? <section className="rounded-xl border bg-white p-5" aria-label="Versión seleccionada de la necesidad"><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><h3 className="break-words font-bold">{selectedNeed.currentRevision.title}</h3><p className="mt-1 text-xs font-semibold text-slate-500">Versión {selectedNeed.version} · {selectedNeed.lifecycle === "DRAFT" ? "Borrador privado" : selectedNeed.lifecycle === "ARCHIVED" ? "Archivada" : "Activa"}</p></div><Button type="button" variant="outline" disabled={!employerNeedsExistingWritable || editorDirty || editorBusy || searching || selectedNeed.lifecycle === "ARCHIVED"} onClick={() => { setEditingNeed(selectedNeed); setEditorEpoch((current) => current + 1); setEditorDirty(false); }}>Editar borrador</Button></div><p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-slate-600">{selectedNeed.currentRevision.problem}</p><p className="mt-3 text-xs leading-5 text-slate-500">{selectedNeed.currentRevision.requirements.length} requisitos definidos. Las evaluaciones conservan la versión con la que se crearon.</p>{editorDirty ? <p role="status" className="mt-3 text-sm font-semibold text-amber-800">Guarda o descarta los cambios y revisa las sugerencias pendientes antes de buscar.</p> : null}</section> : null}
 
           {selectedNeed && matches.length === 0 && !searching ? <Card><CardContent className="pt-6"><Empty icon={<FileSearch className="h-6 w-6" />} title="Exploración bajo control" body="La búsqueda muestra razones concretas y señales faltantes. Nunca genera una calificación única de la persona." /></CardContent></Card> : null}
 
@@ -617,10 +570,6 @@ function AnalysisBadge({ status }: { status: EvaluationDossier["effectiveAnalysi
   const labels: Record<EvaluationDossier["effectiveAnalysisStatus"], string> = { NOT_REQUESTED: "Manual", PROCESSING: "Procesando", READY: "Analizado", FAILED: "Falló", INSUFFICIENT: "Fuentes insuficientes", SOURCE_REVOKED: "Fuente retirada" };
   const warning = status === "FAILED" || status === "INSUFFICIENT" || status === "SOURCE_REVOKED";
   return <span className={`inline-flex min-h-7 items-center rounded-full border px-2.5 text-[11px] font-bold ${warning ? "border-amber-200 bg-amber-50 text-amber-800" : "border-teal-200 bg-teal-50 text-teal-800"}`}>{labels[status]}</span>;
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label className="grid gap-2 text-sm font-semibold"><span>{label}</span>{children}</label>;
 }
 
 function Empty({ icon, title, body }: { icon: React.ReactNode; title: string; body: string }) {

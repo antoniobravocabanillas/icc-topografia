@@ -33,8 +33,9 @@ async function main() {
   assert.match(service, /mode:"live"|effectivePlan/, "La proyección debe partir del plan efectivo servidor.");
   assert.match(service, /readPreserved: true/);
   assert.match(service, /TERRAQO_B5_PILOT_WORKSPACE_IDS/);
-  assert.match(needsRoute, /requireWorkspacePilotFeature\(session\.user\.id, workspace\.id, "employer_needs"\)/);
-  assert.match(discoveryRoute, /requireWorkspacePilotFeature/);
+  for (const route of [needsRoute, discoveryRoute, await source("app/api/v1/work-needs/[id]/revisions/route.ts"), await source("app/api/v1/work-needs/suggestions/route.ts")])
+    assert.match(route, /requireWorkspaceNeedsAccess\(session\.user\.id, workspace\.id\)/);
+  assert.match(needsRoute, /monthlyLimit: entitlement.limit/);
   assert.match(dossierRoute, /requireWorkspacePilotFeature/);
   assert.match(analysisRoute, /requireWorkspacePilotFeature\(session\.user\.id, workspace\.id, "evidence_analysis"\)/);
   assert.match(analysisRetryRoute, /requireWorkspacePilotFeature\(session\.user\.id, workspace\.id, "evidence_analysis"\)/, "Los reintentos también consumen capacidad del piloto vigente.");
@@ -46,7 +47,6 @@ async function main() {
   assert.match(needsPage, /evidenceAnalysis\.active && evidenceAnalysisConfigured/, "El entitlement y la disponibilidad técnica deben comprobarse por separado.");
 
   const employerMutationRoutes = [
-    "app/api/v1/work-needs/[id]/revisions/route.ts",
     "app/api/v1/evaluation-dossiers/[id]/assessments/route.ts",
     "app/api/v1/evaluation-dossiers/[id]/notes/route.ts",
     "app/api/v1/evaluation-dossiers/[id]/questions/route.ts",

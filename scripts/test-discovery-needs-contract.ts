@@ -27,6 +27,11 @@ const baseNeed = {
   ],
 };
 
+const minimal = terraqoWorkNeedCreateSchema.parse({ title: "Replanteo", problem: "En obra" });
+assert.deepEqual(minimal.requirements, []);
+assert.deepEqual(minimal.requiredTools, []);
+assert.equal(minimal.endorsementNeeded, false);
+assert.equal(terraqoWorkNeedRevisionSchema.safeParse({ ...minimal, expectedVersion: 1 }).success, true);
 assert.equal(terraqoWorkNeedCreateSchema.safeParse(baseNeed).success, true);
 assert.equal(terraqoWorkNeedCreateSchema.safeParse({
   ...baseNeed,

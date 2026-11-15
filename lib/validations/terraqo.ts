@@ -241,8 +241,8 @@ const terraqoNeedRequirementSchema = z.object({
 });
 
 const terraqoWorkNeedContentSchema = z.object({
-  title: z.string().trim().min(4).max(180),
-  problem: z.string().trim().min(20).max(2400),
+  title: z.string().trim().min(2).max(180),
+  problem: z.string().trim().min(2).max(2400),
   activities: z.array(z.string().trim().min(2).max(180)).max(30).default([]),
   context: z.string().trim().max(1600).optional(),
   locationLabel: z.string().trim().max(180).optional(),
@@ -250,7 +250,7 @@ const terraqoWorkNeedContentSchema = z.object({
   availableUntil: z.string().datetime({ offset: true }).optional(),
   requiredTools: z.array(z.string().trim().min(1).max(120)).max(30).default([]),
   endorsementNeeded: z.boolean().default(false),
-  requirements: z.array(terraqoNeedRequirementSchema).min(1).max(40),
+  requirements: z.array(terraqoNeedRequirementSchema).max(40).default([]),
 }).superRefine((value, context) => {
   if (value.availableFrom && value.availableUntil && new Date(value.availableUntil) <= new Date(value.availableFrom)) {
     context.addIssue({
