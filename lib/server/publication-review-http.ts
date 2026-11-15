@@ -8,7 +8,7 @@ import {
 import { publicRequestOrigin } from "./request-origin";
 import {
   publicationDecisionSchema,
-  workCaseTargetSchema,
+  workCaseTargetSchema, inviteTargetSchema,
 } from "@/lib/terraqo/publication-review-policy";
 import { PublicationReviewError } from "@/lib/terraqo/publication-review";
 import type * as Service from "@/lib/terraqo/publication-review";
@@ -23,6 +23,8 @@ const requestSchema = z
     collectionId: id,
     expectedVersion: z.number().int().positive(),
     workCase: workCaseTargetSchema.optional(),
+    listOnCv: z.literal(true).optional(),
+    inviteTarget: inviteTargetSchema.optional(),
   })
   .strict();
 const decisionSchema = z

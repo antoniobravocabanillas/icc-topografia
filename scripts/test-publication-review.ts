@@ -47,6 +47,14 @@ const source: PublicationSource = {
   ],
 };
 const snapshot = buildPublicationSnapshot(source, "company");
+const invite = { email: "reader@example.invalid", expiresAt: "2026-12-01T00:00:00.000Z", download: false };
+const scopeFor = (audience: Parameters<typeof buildPublicationSnapshot>[3]) =>
+  publicationSnapshotHash(buildPublicationSnapshot(source, "company", undefined, audience));
+const scopes = [scopeFor({}), scopeFor({ listOnCv: true }), scopeFor({ inviteTarget: invite }),
+  scopeFor({ inviteTarget: { ...invite, email: "other@example.invalid" } }),
+  scopeFor({ inviteTarget: { ...invite, download: true } }),
+  scopeFor({ inviteTarget: { ...invite, expiresAt: "2026-12-02T00:00:00.000Z" } })];
+assert.equal(new Set(scopes).size, scopes.length, "Una autorización es específica al destino, destinatario, plazo y descarga.");
 assert.deepEqual(snapshot.items[0].fields, { summary: "Texto seleccionado" });
 assert.equal(JSON.stringify(snapshot).includes("Lugar privado"), false);
 assert.equal(JSON.stringify(snapshot).includes("No autorizado"), false);

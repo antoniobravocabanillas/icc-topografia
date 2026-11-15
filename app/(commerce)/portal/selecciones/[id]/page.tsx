@@ -17,7 +17,7 @@ export default async function GrantedSelectionPage({ params, searchParams }: { p
   const requested = typeof query.registro === "string" ? `${basePath}?registro=${encodeURIComponent(query.registro)}` : basePath;
   const session = await auth();
   if (!session?.user?.id || !session.user.email) redirect(`/cuenta?callbackUrl=${encodeURIComponent(requested)}`);
-  const selection = await getGrantedCollection({ userId: session.user.id, userEmail: session.user.email, collectionId: id }).catch((error) => {
+  const selection = await getGrantedCollection({ userId: session.user.id, collectionId: id }).catch((error) => {
     if (error instanceof ScopedSharingError && error.status === 404) {
       if (selectionAccessRequestsEnabled()) return null;
       notFound();

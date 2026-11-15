@@ -2,14 +2,14 @@ import { Prisma } from "@prisma/client";
 import type { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import {
-  buildPublicationSnapshot,
+  buildPublicationSnapshot, companyGrantId,
   publicationDecisionSchema,
   publicationSnapshotHash,
   publicationSnapshotSchema,
 } from "./publication-review-policy";
 
 import type {
-  WorkCaseTarget,
+  WorkCaseTarget, SelectionAudience,
   PublicationSource,
 } from "./publication-review-policy";
 import { caseDisclosure, workCaseScope } from "./work-case-publication";
@@ -121,7 +121,7 @@ export async function requireCaseScope(
   return scope;
 }
 
-export async function requestPublicationReviews(input: {
+export async function requestPublicationReviews(input: SelectionAudience & {
   workCase?: WorkCaseTarget;
   userId: string;
   collectionId: string;
@@ -130,6 +130,7 @@ export async function requestPublicationReviews(input: {
   requireEnabled();
   return prisma.$transaction(
     async (tx) => {
+      if (input.inviteTarget && (input.listOnCv || input.workCase)) throw new PublicationReviewError("Elige un solo destino para esta autorización.", 422);
       const owned = await tx.terraqoShareCollection.findFirst({
         where: { id: input.collectionId, createdById: input.userId },
         select: { id: true },
@@ -174,7 +175,7 @@ export async function requestPublicationReviews(input: {
         const snapshot = buildPublicationSnapshot(
           collection,
           workspaceId,
-          caseScope,
+          caseScope, input,
         );
         const scopeHash = publicationSnapshotHash(snapshot);
         const existing = await tx.terraqoPublicationReview.findUnique({
@@ -380,7 +381,7 @@ export async function decidePublicationReview(input: {
       if (
         collection.version !== review.collectionVersion ||
         publicationSnapshotHash(
-          buildPublicationSnapshot(collection, review.workspaceId, caseScope),
+          buildPublicationSnapshot(collection, review.workspaceId, caseScope, reviewed),
         ) !== review.scopeHash
       )
         throw new PublicationReviewError(
@@ -445,7 +446,11 @@ export async function revokePublicationReview(input: {
         },
       });
       // Revoke the actual access root in the same transaction; no cached grant can reopen it.
-      await tx.terraqoPublicProjection.updateMany({
+      const scope = publicationSnapshotSchema.parse(review.snapshot);
+      if (scope.destination === "INVITED_SELECTION") {
+        await tx.terraqoAccessGrant.updateMany({ where: { id: companyGrantId(review.collectionId, review.collectionVersion), collectionId: review.collectionId, revokedAt: null },
+          data: { lifecycle: "REVOKED", revokedAt: now } });
+      } else await tx.terraqoPublicProjection.updateMany({
         where: { collectionId: review.collectionId, revokedAt: null },
         data: { revokedAt: now },
       });

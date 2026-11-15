@@ -85,6 +85,14 @@ async function main() {
     };
     step = "served-candidate";
     await assertServed();
+    if (process.env.S06_STAGING_VISIBILITY_GATE === "visibility") {
+      step = "s06-visibility";
+      const { verifyS06Sharing } = await import("./verify-s06-sharing");
+      await verifyS06Sharing(origin);
+      await assertServed();
+      console.log(`PASS S06 staging: commit=${commit}; deploy=${marker.deployId}; visibility and company approvals verified.`);
+      return;
+    }
     step = "authenticated-browser";
     await verifyWorkspaceAdministration(db, origin);
     step = "worklog-draft-devices";
@@ -105,7 +113,7 @@ async function main() {
 }
 main().catch(error => {
   // Assertions may contain tokens/URLs. Log only structural diagnostics.
-  const location = typeof error?.stack === "string" ? error.stack.match(/(?:workspace-administration-test-target|run-workspace-administration-staging|verify-worklog-draft-conflict|verify-s22-evaluator-browser|verify-hosted-worklog-clips)\.ts:\d+:\d+/)?.[0] : undefined;
+  const location = typeof error?.stack === "string" ? error.stack.match(/(?:workspace-administration-test-target|run-workspace-administration-staging|verify-worklog-draft-conflict|verify-s22-evaluator-browser|verify-hosted-worklog-clips|verify-s06-sharing|s06-[a-z-]+)\.ts:\d+:\d+/)?.[0] : undefined;
   console.error(JSON.stringify({ s22Step: step, s22Failed: true, location, code: typeof error?.code === "string" && /^[A-Z0-9_]{1,32}$/.test(error.code) ? error.code : "GATE_REJECTED" }));
   process.exitCode = 1;
 });

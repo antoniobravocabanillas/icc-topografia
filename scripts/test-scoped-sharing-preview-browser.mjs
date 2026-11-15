@@ -9,7 +9,7 @@ try {
     const writes = [];
     await page.route("**/api/v1/share-collections", route => {
       writes.push(route.request().postDataJSON());
-      return route.fulfill({ status: 200, json: { data: {} } });
+      return route.fulfill({ status: 200, json: { data: { id: "fixture-collection", version: 1 } } });
     });
     const mediaReads = [];
     await page.route("**/api/terraqo/worklog/evidence/*", route => {
@@ -45,7 +45,7 @@ try {
     assert.equal(writes.length, 0);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await page.screenshot({ path: `output/sharing-preview-${width}.png`, fullPage: true });
-    await page.getByRole("button", { name: "Crear selección privada" }).click();
+    await page.getByRole("button", { name: "Guardar selección y permisos" }).click();
     await expect(page.getByRole("status")).toContainText("Aún no se compartió con nadie");
     assert.deepEqual(writes[0].items, [{ revisionId: "synthetic-revision", allowedFields: ["summary", "occurredAt"], includeMedia: true }]);
     await page.close();

@@ -27,12 +27,16 @@ function run(stage, { utils }) {
   for (const line of diagnostics.split(/\r?\n/)) {
     try {
       const entry = JSON.parse(line);
+      if (entry.gate === "s06" && /^[a-z0-9-]{1,60}$/.test(entry.phase || "")) {
+        attentionSteps.push("s06:" + entry.phase);
+        for (const key of ["actual", "expected"]) if (Number.isSafeInteger(entry[key])) attentionSteps.push(key + ":" + entry[key]);
+      }
       for (const key of ["s22Step", "attentionStep", "authenticatedAttentionFailedAt", "attentionCleanup", "errorType", "code"]) {
         if (typeof entry[key] === "string" && /^[A-Za-z0-9_-]{1,60}$/.test(entry[key])) attentionSteps.push(`${key}:${entry[key]}`);
       }
     } catch { /* Never emit raw error text, credentials or customer content. */ }
   }
-  const locations = [...new Set(diagnostics.match(/(?:s24-acceptance|s24-readers|s24-cleanup|hosted-public-work-case|test-platform-staging-[a-z0-9-]+|run-platform-staging-cloud|platform-staging-cloud|workspace-administration-test-target|run-workspace-administration-staging|test-workspace-administration-authenticated)\.ts:\d+:\d+/g) || [])].slice(0, 6);
+  const locations = [...new Set(diagnostics.match(/(?:s24-acceptance|s24-readers|s24-cleanup|hosted-public-work-case|test-platform-staging-[a-z0-9-]+|run-platform-staging-cloud|platform-staging-cloud|workspace-administration-test-target|run-workspace-administration-staging|test-workspace-administration-authenticated|verify-s06-sharing|s06-[a-z-]+)\.ts:\d+:\d+/g) || [])].slice(0, 6);
   const codes = [...new Set(diagnostics.match(/\b(?:ERR_ASSERTION|TimeoutError|P\d{4}|SOURCE_REVOKED|PROVIDER_UNAVAILABLE)\b/g) || [])].slice(0, 6);
   if (result.status !== 0) {
     const fail = stage === "verify" ? utils.build.failPlugin : utils.build.failBuild;
@@ -40,7 +44,7 @@ function run(stage, { utils }) {
   } else if (s22 && stage === "prepare" && process.env.S24_STAGING_DIAGNOSTIC_TARGET && process.env.S24_STAGING_DIAGNOSTIC_TARGET !== "off") {
     utils.build.cancelBuild("S24 staging diagnostic completed; the existing deploy remains active.");
   } else if (stage === "verify" && utils.status?.show) {
-    utils.status.show({ title: "Staging gate verified", summary: `PASS ${process.env.PLATFORM_STAGING_CLOUD_PHASE}; commit=${process.env.COMMIT_REF}; deploy=${process.env.DEPLOY_ID}` });
+    utils.status.show({ title: "Staging gate verified", summary: `PASS ${process.env.S06_STAGING_VISIBILITY_GATE === "visibility" ? "S06 visibility" : process.env.PLATFORM_STAGING_CLOUD_PHASE}; commit=${process.env.COMMIT_REF}; deploy=${process.env.DEPLOY_ID}` });
   }
 }
 

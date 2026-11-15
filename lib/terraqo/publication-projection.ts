@@ -19,6 +19,7 @@ export const PUBLICATION_PROJECTION_POLICY = "public-selection-v2";
 const snapshotSchema = z
   .object({
     policy: z.literal(PUBLICATION_PROJECTION_POLICY),
+    listOnCv: z.literal(true).optional(),
     workCaseScope: workCaseScopeSchema.optional(),
     collectionId: z.string(),
     collectionVersion: z.number().int().positive(),
@@ -78,6 +79,7 @@ export async function preparePublicationProjection(
   collectionId: string,
   expectedVersion: number,
   workCase?: WorkCaseTarget,
+  listOnCv = false,
 ) {
   if (!publicationReviewEnabled())
     throw new PublicationReviewError("Recurso no disponible.", 404);
@@ -125,7 +127,7 @@ export async function preparePublicationProjection(
     const current = buildPublicationSnapshot(
       collection,
       workspaceId,
-      caseScope,
+      caseScope, { listOnCv },
     );
     const review = reviews.find((review) => review.workspaceId === workspaceId);
     if (
@@ -151,6 +153,7 @@ export async function preparePublicationProjection(
     collectionId,
     collectionVersion: expectedVersion,
     ...(caseScope ? { workCaseScope: caseScope } : {}),
+    ...(listOnCv ? { listOnCv: true } : {}),
     title: collection.title,
     description: collection.description,
     items,
@@ -250,7 +253,8 @@ export async function loadPublicationProjections(
           return false;
         const reviewed = publicationSnapshotSchema.safeParse(review.snapshot);
         if (
-          !reviewed.success ||
+          !reviewed.success || reviewed.data.destination !== "PUBLIC_SELECTION" ||
+          Boolean(reviewed.data.listOnCv) !== Boolean(snapshot.listOnCv) ||
           publicationSnapshotHash(reviewed.data) !== review.scopeHash
         )
           return false;
@@ -320,4 +324,19 @@ export async function readPublicationSource(
   return (
     projection?.items.find((item) => item.revisionId === revisionId) ?? null
   );
+}
+
+// Only selections whose owner explicitly chose the public CV are indexed here.
+export async function listedCvSelections(client: Prisma.TransactionClient, profileId: string) {
+  if (!publicationReviewEnabled() || process.env.TERRAQO_SCOPED_SHARING_V1 !== "true") return [];
+  const roots = await client.terraqoPublicProjection.findMany({
+    where: { ...publicSelectionPolicyWhere(), collection: { professionalProfileId: profileId, lifecycle: { not: "ARCHIVED" } },
+      snapshot: { path: ["listOnCv"], equals: true } },
+    select: { id: true, slug: true }, orderBy: [{ publishedAt: "desc" }, { id: "asc" }],
+  });
+  const visible = await loadPublicationProjections(client, roots.map(root => root.id));
+  return roots.flatMap(root => {
+    const snapshot = visible.get(root.id);
+    return snapshot?.listOnCv ? [{ slug: root.slug, title: snapshot.title, count: snapshot.items.length }] : [];
+  });
 }

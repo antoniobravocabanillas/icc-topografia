@@ -1,5 +1,5 @@
-import type { WorkCaseTarget } from "./publication-review-policy";
-import { publicationReviewEnabled, PublicationReviewError } from "./publication-review";
+import { buildPublicationSnapshot, companyGrantId, publicationSnapshotHash, publicationSnapshotSchema, type InviteTarget, type WorkCaseTarget } from "./publication-review-policy";
+import { publicationReviewEnabled, PublicationReviewError, publicationSourceSelect } from "./publication-review";
 import { preparePublicationProjection, loadPublicationProjections, publicSelectionPolicyWhere, PUBLICATION_PROJECTION_POLICY } from "./publication-projection";
 import { createHash, randomBytes } from "node:crypto";
 import { Prisma } from "@prisma/client";
@@ -157,6 +157,36 @@ export async function createShareCollection(input: {
   }, { isolationLevel: "Serializable" });
 }
 
+// A company approval is tied to this recipient, expiry, version, fields and media.
+async function approvedCompanyGrants(tx: Prisma.TransactionClient, collectionId: string, requested?: { version: number; target: InviteTarget }) {
+  const hasCompany = await tx.terraqoShareCollectionItem.findFirst({
+    where: { collectionId, revision: { worklog: { workspaceId: { not: null } } } }, select: { id: true },
+  });
+  if (!hasCompany) return null;
+  if (!publicationReviewEnabled()) return [];
+  const collection = await tx.terraqoShareCollection.findUnique({ where: { id: collectionId }, select: publicationSourceSelect });
+  if (!collection) return [];
+  const companies = new Set(collection.items.flatMap(i => i.revision.worklog.workspaceId ? [i.revision.worklog.workspaceId] : []));
+  const reviews = await tx.terraqoPublicationReview.findMany({ where: {
+    collectionId, collectionVersion: requested?.version, decision: "APPROVED", revokedAt: null,
+    workspace: { active: true, deletedAt: null }, snapshot: { path: ["destination"], equals: "INVITED_SELECTION" },
+  }, select: { workspaceId: true, collectionVersion: true, snapshot: true, scopeHash: true } });
+  const approved = new Map<number, Set<string>>();
+  for (const review of reviews) {
+    const parsed = publicationSnapshotSchema.safeParse(review.snapshot);
+    if (!parsed.success || !parsed.data.inviteTarget || !companies.has(review.workspaceId)) continue;
+    const target = requested?.target ?? parsed.data.inviteTarget;
+    try {
+      const current = buildPublicationSnapshot({ ...collection, version: review.collectionVersion }, review.workspaceId, undefined, { inviteTarget: target });
+      if (publicationSnapshotHash(current) !== review.scopeHash || publicationSnapshotHash(parsed.data) !== review.scopeHash) continue;
+    } catch { continue; } // A removed source no longer authorizes disclosure.
+    const group = approved.get(review.collectionVersion) ?? new Set<string>();
+    group.add(review.workspaceId);
+    approved.set(review.collectionVersion, group);
+  }
+  return [...approved].filter(([, group]) => group.size === companies.size).map(([version]) => companyGrantId(collectionId, version));
+}
+
 export async function createCollectionGrant(input: {
   userId: string;
   collectionId: string;
@@ -226,11 +256,20 @@ export async function createCollectionGrant(input: {
         throw new ScopedSharingError("No necesitas concederte acceso a tu propia selección.", 422);
     }
 
+    let reviewGrantId: string | undefined;
+    const companyReview = await approvedCompanyGrants(tx, collection.id, {
+      version: locked.version, target: { email: input.payload.inviteEmail ?? "", expiresAt: expiresAt.toISOString(), download: input.payload.scopes.includes("DOWNLOAD_MEDIA") },
+    });
+    if (companyReview !== null) {
+      if (!companyReview.length || !input.payload.inviteEmail) throw new ScopedSharingError("La empresa debe autorizar el destinatario, los campos y la vigencia antes de conceder acceso.", 409);
+      reviewGrantId = companyReview[0];
+    }
     const created = await tx.terraqoAccessGrant.create({
       data: {
         collectionId: collection.id,
         subjectUserId: input.payload.subjectUserId,
         inviteEmail: input.payload.inviteEmail,
+        id: reviewGrantId,
         tokenHash,
         scopes: input.payload.scopes,
         expiresAt,
@@ -301,6 +340,7 @@ export async function revokeCollectionGrant(input: {
 }
 
 export async function publishCollectionProjection(input: {
+  listOnCv?: boolean;
   workCase?: WorkCaseTarget;
   userId: string;
   collectionId: string;
@@ -330,11 +370,12 @@ export async function publishCollectionProjection(input: {
         422,
       );
 
+    if (input.listOnCv && !publicationReviewEnabled()) throw new ScopedSharingError("La publicación en el CV no está disponible.", 409);
     if (input.workCase && (!publicationReviewEnabled() || process.env.TERRAQO_WORK_CASES_V1 !== "true"))
       throw new ScopedSharingError("La publicación de trabajos agrupados no está disponible.", 409);
     let snapshot;
     if (publicationReviewEnabled()) {
-      try { snapshot = await preparePublicationProjection(tx, collection.id, input.expectedVersion, input.workCase); }
+      try { snapshot = await preparePublicationProjection(tx, collection.id, input.expectedVersion, input.workCase, input.listOnCv); }
       catch (error) { if (error instanceof PublicationReviewError) throw new ScopedSharingError(error.message, error.status); throw error; }
     }
     const policyVersion = snapshot ? PUBLICATION_PROJECTION_POLICY : "public-selection-v1";
@@ -466,45 +507,42 @@ export async function getPublicCollectionProjection(slug: string) {
   };
 }
 
+// Invitations follow the verified mailbox currently attached to the authenticated account.
+export async function selectionGrantForUser(userId: string, collectionId: string, download = false): Promise<Prisma.TerraqoAccessGrantWhereInput> {
+  const account = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, emailVerified: true } });
+  const companyGrantIds = await approvedCompanyGrants(prisma, collectionId);
+  return {
+    ...(companyGrantIds === null ? {} : { id: { in: companyGrantIds } }),
+    lifecycle: "ACTIVE", revokedAt: null, expiresAt: { gt: new Date() },
+    scopes: { has: download ? "DOWNLOAD_MEDIA" : "VIEW_COLLECTION" },
+    OR: [
+      { subjectUserId: userId },
+      ...(account?.emailVerified ? [{ subjectUserId: null, inviteEmail: account.email.toLowerCase() }] : []),
+    ],
+  };
+}
+
 export async function getGrantedCollection(input: {
   userId: string;
-  userEmail: string;
   collectionId: string;
 }) {
-  const now = new Date();
+  const activeGrant = await selectionGrantForUser(input.userId, input.collectionId);
   const collection = await prisma.terraqoShareCollection.findFirst({
     where: {
       id: input.collectionId,
       lifecycle: { not: "ARCHIVED" },
-      grants: {
-        some: {
-          lifecycle: "ACTIVE",
-          revokedAt: null,
-          expiresAt: { gt: now },
-          OR: [
-            { subjectUserId: input.userId },
-            { subjectUserId: null, inviteEmail: input.userEmail.toLowerCase() },
-          ],
-        },
-      },
+      grants: { some: activeGrant },
     },
     select: {
       title: true,
       description: true,
       grants: {
-        where: {
-          lifecycle: "ACTIVE",
-          revokedAt: null,
-          expiresAt: { gt: now },
-          OR: [
-            { subjectUserId: input.userId },
-            { subjectUserId: null, inviteEmail: input.userEmail.toLowerCase() },
-          ],
-        },
+        where: activeGrant,
         select: { scopes: true, expiresAt: true },
-        take: 1,
+        orderBy: { expiresAt: "asc" },
       },
       items: {
+        where: { revision: { worklog: { deletedAt: null } } },
         orderBy: { sortOrder: "asc" },
         select: {
           allowedFields: true,
@@ -536,7 +574,7 @@ export async function getGrantedCollection(input: {
   if (!collection || !collection.grants[0])
     throw new ScopedSharingError("Selección no disponible.", 404);
   const grant = collection.grants[0];
-  const canDownload = grant.scopes.includes("DOWNLOAD_MEDIA");
+  const canDownload = collection.grants.some(active => active.scopes.includes("DOWNLOAD_MEDIA"));
   return {
     title: collection.title,
     description: collection.description,

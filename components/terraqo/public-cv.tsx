@@ -46,6 +46,7 @@ import type { PublicWorkCaseCard } from "@/lib/terraqo/public-work-case";
 
 type PublicCVPageProps = {
   cases?: PublicWorkCaseCard[];
+  selections?: Array<{ slug: string; title: string; count: number }>;
   profile: PublicCvProfile;
 };
 
@@ -254,7 +255,7 @@ function profileCapabilities(profile: PublicCvProfile, limit = 6) {
   return Array.from(new Set(values)).slice(0, limit);
 }
 
-export function PublicCVPage({ profile, cases = [] }: PublicCVPageProps) {
+export function PublicCVPage({ profile, cases = [], selections = [] }: PublicCVPageProps) {
   const name = profile.user.name || profile.username || "Profesional Terraqo";
   const username = profile.username || "perfil";
   const isPublicCv = profile.liveCvEnabled && profile.liveCvVisibility === "PUBLIC";
@@ -295,6 +296,14 @@ export function PublicCVPage({ profile, cases = [] }: PublicCVPageProps) {
           <EducationTimeline profile={profile} username={username} />
           <FeaturedProjects projects={projects} profile={profile} username={username} />
           <PublicEvidence worklogs={evidence} username={username} />
+          {selections.length > 0 && <section aria-label="Selecciones públicas" className="rounded-xl border border-[#294259] bg-[#0a1927] p-6">
+            <h2 className="text-xl font-semibold text-white">Selecciones públicas</h2>
+            <ul className="mt-3 divide-y divide-white/10">{selections.map(item => <li key={item.slug}>
+              <Link href={`/selecciones/${item.slug}`} className="flex min-h-12 items-center justify-between gap-4 py-2 text-sky-200 hover:underline">
+                <strong>{item.title}</strong><span className="text-sm text-slate-300">{item.count} {item.count === 1 ? "registro" : "registros"}</span>
+              </Link>
+            </li>)}</ul>
+          </section>}
           <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
             <SkillsAndTools profile={profile} username={username} />
             <DocumentsPanel profile={profile} username={username} />

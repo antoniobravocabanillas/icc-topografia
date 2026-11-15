@@ -4,6 +4,7 @@ import { PublicCVPage } from "@/components/terraqo/public-cv";
 import { publicCvProfileInclude, publishedCvProfileWhere } from "@/lib/terraqo/public-cv";
 import { getPublicCvSeoProfile, publicCvJsonLd, publicCvSeoFacts } from "@/lib/terraqo/public-cv-seo";
 import { prisma } from "@/lib/prisma";
+import { listedCvSelections } from "@/lib/terraqo/publication-projection";
 import { publicWorkCaseCards } from "@/lib/terraqo/public-work-case";
 import { absoluteUrl } from "@/lib/utils";
 
@@ -93,6 +94,7 @@ export default async function PublicCvRoute({ params }: PublicCvPageProps) {
   ]);
 
   if (!profile) notFound();
+  const selections = await listedCvSelections(prisma, profile.id);
 
   const canonical = absoluteUrl(`/cv/${username}`);
   const jsonLd = seoProfile ? publicCvJsonLd(seoProfile, username, canonical) : null;
@@ -105,7 +107,7 @@ export default async function PublicCvRoute({ params }: PublicCvPageProps) {
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
         />
       ) : null}
-      <PublicCVPage profile={profile} cases={cases.cards} />
+      <PublicCVPage profile={profile} cases={cases.cards} selections={selections} />
     </>
   );
 }

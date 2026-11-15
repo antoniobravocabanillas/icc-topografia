@@ -1,3 +1,5 @@
+import { publicationSnapshotHash } from "@/lib/terraqo/publication-review-policy";
+import { workCaseScope } from "@/lib/terraqo/work-case-publication";
 import { SelectionAccessInbox } from "@/components/terraqo/selection-access-inbox";
 import { listSelectionAccessRequests, selectionAccessRequestsEnabled } from "@/lib/terraqo/selection-access-request";
 import { PublicationReviewConsole } from "@/components/terraqo/publication-review-console";
@@ -51,12 +53,35 @@ export default async function SelectionsPage() {
 
   const accessRequests = selectionAccessRequestsEnabled() ? await listSelectionAccessRequests(session.user.id) : [];
   const reviews = publicationReviewEnabled() ? (await listPublicationReviews(session.user.id)).filter(review => review.requestedByMe) : [];
+  const ownerReviews = await Promise.all(reviews.map(async review => {
+    // Derive recovery data exclusively from the authenticated owner's persisted reviews.
+    // Grouped-work publication also needs the current membership/version to match the approved hash.
+    let workCaseTarget: { id: string; version: number } | undefined;
+    const collection = collections.find(row => row.id === review.collectionId && row.version === review.collectionVersion);
+    if (collection && review.snapshot.workCaseScope) {
+      const offer = caseOffer(collection.items.map(item => item.revision.worklog.id));
+      const related = reviews.filter(row => row.collectionId === collection.id && row.collectionVersion === collection.version && row.snapshot.workCaseScope === review.snapshot.workCaseScope);
+      const pinned = collection.items.map(item => related.flatMap(row => row.snapshot.items).find(row => row.revisionId === item.revision.id));
+      if (offer && pinned.every((item): item is NonNullable<typeof item> => Boolean(item))) {
+        const scope = await workCaseScope(prisma, { collectionId: collection.id, collectionVersion: collection.version,
+          title: collection.title, description: collection.description, items: pinned }, offer);
+        if (scope === review.snapshot.workCaseScope) workCaseTarget = { id: offer.id, version: offer.version };
+      }
+    }
+    return { id: review.id, collectionId: review.collectionId, collectionVersion: review.collectionVersion,
+      workspaceId: review.workspaceId, workspace: review.workspace, requestedByMe: review.requestedByMe,
+      decision: review.decision, revokedAt: review.revokedAt?.toISOString() || null,
+      scopeHash: review.scopeHash, snapshot: review.snapshot,
+      snapshotVerified: publicationSnapshotHash(review.snapshot) === review.scopeHash,
+      ...(workCaseTarget ? { workCaseTarget } : {}) };
+  }));
   return (
     <div className="space-y-8">
       <PortalPageHeading eyebrow="Privacidad y alcance" title="Selecciones compartidas" description="Construye una vista precisa de tu trayectoria, decide campo por campo y revoca el acceso cuando quieras. Una selección nace privada." />
       {selectionAccessRequestsEnabled() ? <SelectionAccessInbox requests={accessRequests} /> : null}
       <ScopedSharingConsole
         publicationReviewEnabled={publicationReviewEnabled()}
+        ownerReviews={ownerReviews}
         candidates={revisions.map((revision) => ({ revisionId: revision.id, title: revision.title, summary: revision.summary, outcome: revision.outcome, contributionRole: revision.contributionRole, responsibilities: revision.responsibilities, methods: revision.methods, tools: revision.tools, occurredAt: revision.worklog.occurredAt.toISOString(), locationLabel: revision.worklog.locationLabel, mediaCount: revision.worklog.media.length, belongsToCompany: Boolean(revision.worklog.workspaceId), previewMediaIds: revision.worklog.media.every(file => file.contentType === "image/webp") ? revision.worklog.media.map(file => file.id) : [] }))}
         collections={collections.map((collection) => ({
           id: collection.id,
@@ -64,7 +89,7 @@ export default async function SelectionsPage() {
           caseOffer: caseOffer(collection.items.map(item => item.revision.worklog.id)),
           description: collection.description,
           version: collection.version,
-          items: collection.items.map((item) => ({ id: item.id, allowedFields: item.allowedFields, includeMedia: item.includeMedia, revision: { title: item.revision.title, worklog: { workspaceId: item.revision.worklog.workspaceId, media: item.revision.worklog.media } } })),
+          items: collection.items.map((item) => ({ id: item.id, revisionId: item.revision.id, mediaIds: item.mediaIds, allowedFields: item.allowedFields, includeMedia: item.includeMedia, revision: { title: item.revision.title, worklog: { workspaceId: item.revision.worklog.workspaceId, media: item.revision.worklog.media } } })),
           grants: collection.grants.map((grant) => ({ ...grant, expiresAt: grant.expiresAt.toISOString(), createdAt: grant.createdAt.toISOString(), revokedAt: grant.revokedAt?.toISOString() || null })),
           publicProjection: collection.publicProjection ? { ...collection.publicProjection, publishedAt: collection.publicProjection.publishedAt.toISOString(), revokedAt: collection.publicProjection.revokedAt?.toISOString() || null } : null,
         }))}

@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { fail, handleApiError, ok, parseJson } from "@/lib/server/api";
 import { requireUser } from "@/lib/server/authz";
 import {
@@ -17,10 +18,10 @@ export async function POST(request: Request, { params }: Context) {
   const { response, session } = await requireUser();
   if (response) return response;
   try {
-    const [{ id }, payload] = await Promise.all([params, parseJson(request, terraqoPublicProjectionSchema.extend({ workCase: workCaseTargetSchema.optional() }).strict())]);
-    if (payload.workCase && (request.headers.get("origin") !== publicRequestOrigin(request) ||
+    const [{ id }, payload] = await Promise.all([params, parseJson(request, terraqoPublicProjectionSchema.extend({ workCase: workCaseTargetSchema.optional(), listOnCv: z.literal(true).optional() }).strict())]);
+    if ((payload.workCase || payload.listOnCv) && (request.headers.get("origin") !== publicRequestOrigin(request) ||
         request.headers.get("sec-fetch-site") === "cross-site")) return fail("Origen de solicitud no permitido.", 403);
-    return ok(await publishCollectionProjection({ userId: session.user.id, collectionId: id, expectedVersion: payload.expectedVersion, workCase: payload.workCase }));
+    return ok(await publishCollectionProjection({ userId: session.user.id, collectionId: id, expectedVersion: payload.expectedVersion, workCase: payload.workCase, listOnCv: payload.listOnCv }));
   } catch (error) {
     if (error instanceof ScopedSharingError) return fail(error.message, error.status);
     return handleApiError(error);

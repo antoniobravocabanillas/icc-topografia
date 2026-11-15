@@ -36,10 +36,23 @@ export const workCaseTargetSchema = z
 export type WorkCaseTarget = z.infer<typeof workCaseTargetSchema>;
 export const workCaseScopeSchema = z.string().regex(/^[a-f0-9]{64}$/);
 
+export const inviteTargetSchema = z.object({
+  email: z.string().trim().email().transform(email => email.toLowerCase()),
+  expiresAt: z.string().datetime(), download: z.boolean(),
+}).strict();
+export type InviteTarget = z.infer<typeof inviteTargetSchema>;
+export type SelectionAudience = { listOnCv?: boolean; inviteTarget?: InviteTarget };
+
+export function companyGrantId(collectionId: string, version: number) {
+  return "c" + createHash("sha256").update(`s06-grant:${collectionId}:${version}`).digest("hex").slice(0, 30);
+}
+
 export const publicationSnapshotSchema = z
   .object({
     policy: z.literal(PUBLICATION_POLICY),
-    destination: z.literal("PUBLIC_SELECTION"),
+    destination: z.enum(["PUBLIC_SELECTION", "INVITED_SELECTION"]),
+    listOnCv: z.literal(true).optional(),
+    inviteTarget: inviteTargetSchema.optional(),
     workCaseScope: workCaseScopeSchema.optional(),
     collectionId: z.string(),
     collectionVersion: z.number().int().positive(),
@@ -103,10 +116,13 @@ export function buildPublicationSnapshot(
   collection: PublicationSource,
   workspaceId: string,
   workCaseScope?: string,
+  audience: SelectionAudience = {},
 ): PublicationSnapshot {
   return publicationSnapshotSchema.parse({
     policy: PUBLICATION_POLICY,
-    destination: "PUBLIC_SELECTION",
+    destination: audience.inviteTarget ? "INVITED_SELECTION" : "PUBLIC_SELECTION",
+    ...(audience.listOnCv ? { listOnCv: true } : {}),
+    ...(audience.inviteTarget ? { inviteTarget: audience.inviteTarget } : {}),
     ...(workCaseScope ? { workCaseScope } : {}),
     collectionId: collection.id,
     collectionVersion: collection.version,

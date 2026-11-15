@@ -94,7 +94,7 @@ function ReviewDetail({
       setNotice({
         error: false,
         text: revoke
-          ? "Autorización retirada. El material deja de admitir nuevas consultas públicas."
+          ? "Autorización retirada. El acceso concedido para este destino deja de estar disponible."
           : decision === "APPROVED"
             ? "Autorización guardada. El profesional debe publicar la selección por separado."
             : "Decisión guardada. El profesional podrá consultar el motivo.",
@@ -125,6 +125,8 @@ function ReviewDetail({
         <h3 className="mt-2 break-words font-display text-2xl font-bold text-slate-950">
           {review.snapshot.title}
         </h3>
+        {review.snapshot.listOnCv && <p>Destino: selección visible en el CV público del profesional.</p>}
+        {review.snapshot.inviteTarget && <p>Acceso de {review.snapshot.inviteTarget.email} hasta {new Date(review.snapshot.inviteTarget.expiresAt).toLocaleString("es-PE", {timeZone: "America/Lima"})} (hora de Perú). {review.snapshot.inviteTarget.download ? "Incluye descarga." : "Solo lectura."}</p>}
         {review.snapshot.workCaseScope && <p className="mt-3 font-semibold text-slate-800">
           También se solicita presentar estas bitácoras como trabajo agrupado en el CV público del profesional.
         </p>}
@@ -144,7 +146,7 @@ function ReviewDetail({
       >
         <div>
           <h4 className="font-semibold text-slate-950">
-            Contenido solicitado para la página pública
+            {review.snapshot.inviteTarget ? "Contenido solicitado para la persona invitada" : "Contenido solicitado para la página pública"}
           </h4>
           <p className="mt-1 text-sm leading-6 text-slate-600">
             Solo se incluyen los campos y adjuntos que aparecen aquí. Esta
@@ -256,7 +258,7 @@ function ReviewDetail({
                   className="mt-1 h-5 w-5 shrink-0 accent-primary"
                 />
                 He revisado esta versión y autorizo los campos y adjuntos
-                mostrados para la página pública.
+                mostrados para el destino solicitado.
               </label>
               <p className="text-sm leading-6 text-slate-600">
                 Autorizar no publica el material. Si necesita cambios, solicita
@@ -324,8 +326,7 @@ export function PublicationReviewConsole({
         Autorizaciones de publicación
       </h2>
       <p className="mt-2 max-w-prose text-sm leading-6 text-slate-600">
-        Revisa el alcance del material empresarial antes de compartirlo
-        públicamente.
+        Revisa quién podrá acceder al material empresarial y qué campos y archivos verá.
       </p>
       {!reviews.length ? (
         <p className="mt-8 border-t pt-6 text-sm text-slate-600">

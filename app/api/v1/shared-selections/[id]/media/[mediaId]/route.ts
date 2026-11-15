@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/server/authz";
+import { auth } from "@/auth";
+import { selectionGrantForUser } from "@/lib/terraqo/scoped-sharing";
 import { getWorklogEvidenceStore } from "@/lib/server/media";
 
 type Context = { params: Promise<{ id: string; mediaId: string }> };
@@ -9,11 +10,11 @@ export const revalidate = 0;
 export async function GET(request: Request, { params }: Context) {
   if (process.env.TERRAQO_SCOPED_SHARING_V1 !== "true")
     return new Response("Recurso no disponible.", { status: 404 });
-  const { response, session } = await requireUser();
-  if (response) return response;
+  const session = await auth();
+  if (!session?.user?.id) return new Response("Inicia sesión.", { status: 401 });
   const { id, mediaId } = await params;
   const download = new URL(request.url).searchParams.get("download") === "1";
-  const permittedMedia = () => prisma.terraqoWorklogMedia.findFirst({
+  const permittedMedia = async () => prisma.terraqoWorklogMedia.findFirst({
     where: {
       id: mediaId,
       contentType: "image/webp",
@@ -27,18 +28,8 @@ export async function GET(request: Request, { params }: Context) {
                 mediaIds: { has: mediaId },
                 collectionId: id,
                 collection: {
-                  grants: {
-                    some: {
-                      lifecycle: "ACTIVE",
-                      revokedAt: null,
-                      expiresAt: { gt: new Date() },
-                      scopes: { has: download ? "DOWNLOAD_MEDIA" : "VIEW_COLLECTION" },
-                      OR: [
-                        { subjectUserId: session.user.id },
-                        { subjectUserId: null, inviteEmail: session.user.email.toLowerCase() },
-                      ],
-                    },
-                  },
+                  lifecycle: { not: "ARCHIVED" },
+                  grants: { some: await selectionGrantForUser(session.user.id, id, download) },
                 },
               },
             },
