@@ -1,5 +1,16 @@
 # Remaining platform execution — 3 November 2026
 
+## 15 de noviembre — S03/S04, cierre web de fecha, multimedia y borradores
+
+Staging sirvió el commit `2d060e5e3138af96f08dccacb6f84677abd672c9` en el despliegue `6af9bc3a0ecdd05f329c429f`. La suite autenticada terminó con PASS para ese despliegue.
+
+- Se creó una bitácora privada con fecha de trabajo del 14 de octubre. PostgreSQL conservó ese día en Lima y registró la hora efectiva de publicación por separado. La fecha sobrevivió a la edición en otro dispositivo y, en la prueba local, a un reintento de publicación tras recargar.
+- Se adjuntaron y reprodujeron audio y vídeo WebM por HTTP, se reintentó la carga y se comprobó el acceso antes, durante y después de publicar la evidencia sintética. La prueba local cubrió también MP4 y la grabación con dispositivos simulados. Límite por clip: 3 MiB.
+- Dos sesiones Auth.js del mismo profesional editaron un borrador con fechas diferentes. Una escritura simultánea recibió 200 y la otra 409. La resolución conservó ambas versiones y se comprobó que otro perfil no podía leerlas. La sincronización de cuenta incluye campos y enlaces. Los archivos pendientes permanecen en el dispositivo de captura.
+- La suite retiró las filas sintéticas. El operador verificó por lectura la ausencia de los dos clips del recorrido y de los cuatro objetos auxiliares S24. El descarte del borrador conserva únicamente su revisión para rechazar escrituras atrasadas.
+
+Alcance de este cierre: plataforma web de staging. La captura nativa Flutter y las pruebas físicas de cámara y micrófono no forman parte de esta ejecución.
+
 ## 15 de noviembre — S03/S04, captura y revisión web en staging
 
 El candidato 583f84cc0100dc6e7895dfb3e098341ef7e06dc3, despliegue 6af9b5e10d4a902bb123b293, pasó la suite S22 y el nuevo recorrido autenticado S03/S04. Se seleccionaron dos imágenes, se abrió la segunda en la galería, se revisó el resultado y se volvió desde la visibilidad privada. El conteo en PostgreSQL acreditó que avanzar y volver no creó una publicación. El primer candidato había fallado antes de llegar al recorrido en la API de miembros (500); no se reprodujo en la ejecución final. La limpieza confirmó cero fixtures S22 y cuatro objetos externos ausentes.
