@@ -1,5 +1,15 @@
 # Remaining platform execution — 3 November 2026
 
+## 15 de noviembre — S07, solicitud de respaldo validada en staging
+
+Netlify confirmó `PASS S07 endorsement` para el despliegue `6af9fc02f1f2bf1e444f1ca4`. El marcador del sitio sirvió el commit `96c14fbabf50a33930c33d021ccc5b055039f981`.
+
+El recorrido comenzó en una bitácora y comprobó la revisión preseleccionada, el borrador privado, la confirmación del destinatario, el envío directo y el envío desde un borrador. Al perder la respuesta de red, el reintento recuperó la misma solicitud. Con tres cuentas sintéticas y una sesión anónima se verificaron la identidad por correo verificado, la proyección de campos y el aviso interno. El recordatorio conserva la fecha de envío inicial y solo se permite una vez cada 24 horas.
+
+Se verificó la caducidad y la revocación posterior a una decisión. El autor conserva el comentario y su trazabilidad, y el destinatario pierde acceso al contenido. El verificador comprobó la limpieza de sus filas y la lectura posterior confirmó la ausencia de los cuatro archivos de prueba del lote `b125380b-6721-4df5-b98f-5d13190ecf40`.
+
+La revisión visual se realizó en Chromium a 1440, 375 y 320 px. El primer candidato tenía una cadena en codificación incorrecta en el aviso interno. Se corrigió antes del despliegue validado. La siguiente fase es S08.
+
 ## 15 de noviembre — S06, destinos y autorización empresarial validados en staging
 
 Netlify registró `PASS S06 visibility` para el commit `93e0aa96ef010513376796396125963315591eb6` y el despliegue `6af9cc4b8986b4ac75c44464`. El marcador del sitio confirmó ambos identificadores. El recorrido usó tres sesiones autenticadas de prueba y una anónima.
