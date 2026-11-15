@@ -1,5 +1,15 @@
 # Remaining platform execution — 3 November 2026
 
+## 15 de noviembre — S11, detalle público y trazabilidad en staging
+
+Netlify confirmó `PASS S11 record` en el candidato `f66348ebabfa4a390115ffacca50e67c292dac57`, despliegue `6afa3ca9cc5af6b7ac10190a`. Se comprobó el marcador servido. Chromium anónimo recorrió archivo, detalle, galería, descarga, respaldo, historial y retorno al archivo con foco y filtro conservados a 1440, 375 y 320 px. El enlace histórico con fragmento abrió la ficha y la acción de compartir copió el enlace canónico.
+
+La ficha distingue autor, fecha del trabajo y fecha de registro en Lima. Se comprobaron los bytes de dos imágenes y la exclusión de archivos internos, coordenadas, nombres originales y comentarios del revisor en HTML y API. Tras retirar la bitácora, la ficha y los archivos devolvieron 404 y los metadatos coincidieron con un registro inexistente.
+
+El respaldo heredado acredita el nombre del validador y la fecha de resolución. El esquema actual carece de autorización de publicación para la relación, el aspecto y la versión de un respaldo por invitación. Esos tres datos siguen privados. Para mostrarlos en el futuro se requiere una autorización de publicación explícita que pueda retirarse.
+
+TypeScript, ESLint y los ensayos locales pasaron. Una consulta independiente posterior encontró cero perfiles S11 de prueba y el almacenamiento confirmó la eliminación de los cuatro objetos de ensayo. S12 es la siguiente pantalla del plan.
+
 ## 15 de noviembre — S10, archivo y calendario validados en staging
 
 Netlify confirmó `PASS S10 archive` para el commit `9bee2e469be9d2d6b0bee6f272ea192e515665c1`, despliegue `6afa382872b2aa61dc8cd628`. El marcador del sitio coincidió. Chromium anónimo recorrió el archivo a 1440, 375 y 320 px. El primer lote trajo 20 de 28 bitácoras y el segundo las ocho restantes. Tras abrir una bitácora de la segunda página y volver, se conservaron los registros cargados, el foco, la selección y el desplazamiento (tolerancia de 4 px).
