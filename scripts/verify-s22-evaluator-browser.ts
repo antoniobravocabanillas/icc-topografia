@@ -50,6 +50,22 @@ export async function verifyEvaluatorBrowser(input: {
       assert.ok(c.y > b.y);
       assert.ok(await loginPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     }
+    await loginPage.getByRole("link", { name: "Registrar trabajo", exact: true }).click();
+    const composer = loginPage.locator("#registrar-trabajo");
+    await composer.locator("input[type=file][multiple]").setInputFiles("scripts/fixtures/public-archive/media/nivelacion.webp");
+    await composer.locator("input[capture]").setInputFiles("scripts/fixtures/public-archive/media/replanteo.webp");
+    await composer.locator("[name=title]").fill("Control de cotas de prueba");
+    await composer.locator("[name=summary]").fill("Se contrastaron las cotas de los dos planos de prueba.");
+    await composer.getByRole("button", { name: "Continuar", exact: true }).click();
+    await composer.getByRole("button", { name: "Ver foto 2" }).click();
+    await composer.getByRole("img", { name: "Evidencia seleccionada" }).evaluate(async el => (el as HTMLImageElement).decode());
+    await composer.locator("[name=outcome]").fill("Las cotas coinciden con el plano.");
+    await composer.getByRole("button", { name: "Revisar visibilidad" }).click();
+    assert.equal(await composer.locator("[name=visibility]").inputValue(), "PRIVATE");
+    await composer.getByRole("button", { name: "Volver", exact: true }).click();
+    assert.equal(await composer.locator("[name=outcome]").inputValue(), "Las cotas coinciden con el plano.");
+    assert.equal(await db.terraqoWorklogEntry.count({ where: { professionalProfileId: targetProfile.id } }), 1);
+    console.log("PASS S03/S04 authenticated capture, gallery, private visibility and return without publication.");
     console.log("S01/S02: trajectory inspected");
     await page.bringToFront();
     await page.getByText(email, { exact: true }).waitFor({ timeout: 60000 });

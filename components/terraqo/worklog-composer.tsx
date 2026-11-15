@@ -12,12 +12,11 @@ import {
 import { useRouter } from "next/navigation";
 import {
   CalendarClock,
-  CheckCircle2,
+  Camera,
   ImagePlus,
   Link2,
   LocateFixed,
   MapPin,
-  NotebookPen,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -76,11 +75,22 @@ export function WorklogComposer({
   const [draftRenderKey, setDraftRenderKey] = useState(0);
   const [draftEnabled, setDraftEnabled] = useState(false);
   const [draftStatus, setDraftStatus] = useState("Borrador local desactivado.");
-  const [restoredFields, setRestoredFields] = useState<WorklogDraftFields | null>(null);
+  const [restoredFields, setRestoredFields] =
+    useState<WorklogDraftFields | null>(null);
   const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id || "");
   const [projectId, setProjectId] = useState("");
   const [previousWorklogId, setPreviousWorklogId] = useState("");
   const [continuityQuery, setContinuityQuery] = useState("");
+  const [step, setStep] = useState(1);
+  const [reviewTitle, setReviewTitle] = useState("");
+  const [reviewSummary, setReviewSummary] = useState("");
+  const [selectedPhoto, setSelectedPhoto] = useState(0);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  function changeStep(next: number) {
+    setMessage("");
+    setStep(next);
+    requestAnimationFrame(() => headingRef.current?.focus());
+  }
   const [submitting, setSubmitting] = useState(false);
   const busy = useRef(false);
   const savedWorklogId = useRef<string | null>(null);
@@ -93,13 +103,15 @@ export function WorklogComposer({
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
   const [locating, setLocating] = useState(false);
   const [location, setLocation] = useState<CapturedLocation | null>(null);
-  const [includeAutomaticLocation, setIncludeAutomaticLocation] = useState(true);
+  const [includeAutomaticLocation, setIncludeAutomaticLocation] =
+    useState(true);
   const [locationLabel, setLocationLabel] = useState("");
   const locationLabelRef = useRef("");
   const [locationStatus, setLocationStatus] = useState(
     "La ubicación se capturará automáticamente al publicar.",
   );
 
+  const submissionFields = useRef<WorklogDraftFields | null>(null);
   const fieldsFromForm = useCallback((): WorklogDraftFields | null => {
     const form = formRef.current;
     if (!form) return null;
@@ -124,34 +136,66 @@ export function WorklogComposer({
     };
   }, [includeAutomaticLocation]);
 
-  const persistDraft = useCallback(async (options?: {
-    photos?: File[];
-    serverWorklogId?: string | null;
-  }) => {
-    const fields = fieldsFromForm();
-    if (!draftEnabled || !fields) return;
-    setDraftStatus("Guardando en este dispositivo…");
-    try {
-      const updatedAt = await saveWorklogLocalDraft({
-        key: draftStorageKey,
-        fields,
-        photos: options?.photos || photoFilesRef.current,
-        serverWorklogId:
-          options?.serverWorklogId === undefined
-            ? savedWorklogId.current
-            : options.serverWorklogId,
-        operationKey: operationKey.current,
-      });
-      setDraftStatus(
-        `Guardado en este dispositivo · ${new Intl.DateTimeFormat("es-PE", {
-          hour: "2-digit",
-          minute: "2-digit",
-        }).format(new Date(updatedAt))}`,
-      );
-    } catch {
-      setDraftStatus("No se pudo guardar localmente. Mantén esta página abierta o vuelve a intentarlo.");
-    }
-  }, [draftEnabled, draftStorageKey, fieldsFromForm]);
+  const persistDraft = useCallback(
+    async (options?: { photos?: File[]; serverWorklogId?: string | null }) => {
+      const fields =
+        savedWorklogId.current && submissionFields.current
+          ? submissionFields.current
+          : fieldsFromForm();
+      if (
+        !draftEnabled ||
+        !fields ||
+        window.localStorage.getItem(draftConsentKey) !== "1"
+      )
+        return;
+      // Resetting a published form must not recreate an empty draft.
+      if (
+        !savedWorklogId.current &&
+        !photoFilesRef.current.length &&
+        ![
+          fields.title,
+          fields.summary,
+          fields.outcome,
+          fields.evidenceUrls,
+          fields.contributionRole,
+          fields.responsibilities,
+          fields.methods,
+          fields.tools,
+          fields.skills,
+          fields.locationLabel,
+          fields.projectId,
+          fields.previousWorklogId,
+        ].some(Boolean)
+      ) {
+        await deleteWorklogLocalDraft(draftStorageKey).catch(() => undefined);
+        return;
+      }
+      setDraftStatus("Guardando en este dispositivo…");
+      try {
+        const updatedAt = await saveWorklogLocalDraft({
+          key: draftStorageKey,
+          fields,
+          photos: options?.photos || photoFilesRef.current,
+          serverWorklogId:
+            options?.serverWorklogId === undefined
+              ? savedWorklogId.current
+              : options.serverWorklogId,
+          operationKey: operationKey.current,
+        });
+        setDraftStatus(
+          `Guardado en este dispositivo · ${new Intl.DateTimeFormat("es-PE", {
+            hour: "2-digit",
+            minute: "2-digit",
+          }).format(new Date(updatedAt))}`,
+        );
+      } catch {
+        setDraftStatus(
+          "No se pudo guardar localmente. Mantén esta página abierta o vuelve a intentarlo.",
+        );
+      }
+    },
+    [draftConsentKey, draftEnabled, draftStorageKey, fieldsFromForm],
+  );
 
   const scheduleDraft = useCallback(() => {
     if (!draftEnabled || !draftReady) return;
@@ -175,7 +219,9 @@ export function WorklogComposer({
       .then((draft) => {
         if (!active) return;
         if (!draft) {
-          setDraftStatus("Borrador local activo. Los cambios se guardarán automáticamente.");
+          setDraftStatus(
+            "Borrador local activo. Los cambios se guardarán automáticamente.",
+          );
           return;
         }
         setRestoredFields(draft.fields);
@@ -189,16 +235,23 @@ export function WorklogComposer({
         photoFilesRef.current = draft.photos;
         pendingPhotos.current = draft.photos;
         if (draft.serverWorklogId) {
+          submissionFields.current = draft.fields;
           savedWorklogId.current = draft.serverWorklogId;
           setSaved(true);
-          setMessage("La bitácora ya estaba guardada. Reanuda las fotos pendientes sin crear otro registro.");
+          setStep(3);
+          setMessage(
+            "La bitácora ya estaba guardada. Reanuda las fotos pendientes sin crear otro registro.",
+          );
         }
         operationKey.current = draft.operationKey || crypto.randomUUID();
         setDraftRenderKey((current) => current + 1);
         setDraftStatus("Borrador recuperado de este dispositivo.");
       })
       .catch(() => {
-        if (active) setDraftStatus("No pudimos leer el borrador local. Puedes continuar y volver a activarlo.");
+        if (active)
+          setDraftStatus(
+            "No pudimos leer el borrador local. Puedes continuar y volver a activarlo.",
+          );
       })
       .finally(() => {
         if (active) setDraftReady(true);
@@ -259,8 +312,11 @@ export function WorklogComposer({
   function selectPhotos(event: ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(event.target.files || []);
     try {
-      validateWorklogPhotos(selected);
-      setPhotoFiles(selected);
+      if (!selected.length) return;
+      const combined = [...photoFiles, ...selected];
+      validateWorklogPhotos(combined);
+      setPhotoFiles(combined);
+      event.target.value = "";
       setMessage("");
     } catch (error) {
       event.target.value = "";
@@ -274,64 +330,69 @@ export function WorklogComposer({
     );
   }
 
-  const captureLocation = useCallback(async (): Promise<CapturedLocation | null> => {
-    if (!navigator.geolocation) {
-      setLocationStatus("Este dispositivo no permite capturar la ubicación. Puedes escribir el lugar.");
-      return null;
-    }
-
-    setLocating(true);
-    setLocationStatus("Obteniendo ubicación segura…");
-    const captured = await new Promise<CapturedLocation | null>((resolve) => {
-      navigator.geolocation.getCurrentPosition(
-        ({ coords }) =>
-          resolve({
-            latitude: coords.latitude,
-            longitude: coords.longitude,
-            accuracy: coords.accuracy,
-            capturedAt: new Date().toISOString(),
-          }),
-        (error) => {
-          setLocationStatus(
-            error.code === error.PERMISSION_DENIED
-              ? "Permiso de ubicación bloqueado. Puedes escribir el lugar manualmente o habilitarlo en el navegador."
-              : "No pudimos obtener la ubicación. La publicación puede continuar con el lugar escrito manualmente.",
-          );
-          resolve(null);
-        },
-        { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
-      );
-    });
-
-    if (!captured) {
-      setLocating(false);
-      return null;
-    }
-
-    setLocation(captured);
-    setLocationStatus(`Ubicación capturada · precisión aproximada ${Math.round(captured.accuracy)} m`);
-    try {
-      const params = new URLSearchParams({
-        latitude: String(captured.latitude),
-        longitude: String(captured.longitude),
-      });
-      const response = await fetch(`/api/locations/reverse?${params}`);
-      const payload = await response.json().catch(() => ({}));
-      const resolvedLabel = String(payload?.data?.label || "").trim();
-      if (response.ok && resolvedLabel) {
-        if (!locationLabelRef.current.trim()) {
-          locationLabelRef.current = resolvedLabel;
-          setLocationLabel(resolvedLabel);
-        }
-        setLocationStatus(`Ubicación identificada como ${resolvedLabel}.`);
+  const captureLocation =
+    useCallback(async (): Promise<CapturedLocation | null> => {
+      if (!navigator.geolocation) {
+        setLocationStatus(
+          "Este dispositivo no permite capturar la ubicación. Puedes escribir el lugar.",
+        );
+        return null;
       }
-    } catch {
-      // La geocodificación es una mejora; las coordenadas privadas siguen siendo válidas.
-    } finally {
-      setLocating(false);
-    }
-    return captured;
-  }, []);
+
+      setLocating(true);
+      setLocationStatus("Obteniendo ubicación segura…");
+      const captured = await new Promise<CapturedLocation | null>((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          ({ coords }) =>
+            resolve({
+              latitude: coords.latitude,
+              longitude: coords.longitude,
+              accuracy: coords.accuracy,
+              capturedAt: new Date().toISOString(),
+            }),
+          (error) => {
+            setLocationStatus(
+              error.code === error.PERMISSION_DENIED
+                ? "Permiso de ubicación bloqueado. Puedes escribir el lugar manualmente o habilitarlo en el navegador."
+                : "No pudimos obtener la ubicación. La publicación puede continuar con el lugar escrito manualmente.",
+            );
+            resolve(null);
+          },
+          { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
+        );
+      });
+
+      if (!captured) {
+        setLocating(false);
+        return null;
+      }
+
+      setLocation(captured);
+      setLocationStatus(
+        `Ubicación capturada · precisión aproximada ${Math.round(captured.accuracy)} m`,
+      );
+      try {
+        const params = new URLSearchParams({
+          latitude: String(captured.latitude),
+          longitude: String(captured.longitude),
+        });
+        const response = await fetch(`/api/locations/reverse?${params}`);
+        const payload = await response.json().catch(() => ({}));
+        const resolvedLabel = String(payload?.data?.label || "").trim();
+        if (response.ok && resolvedLabel) {
+          if (!locationLabelRef.current.trim()) {
+            locationLabelRef.current = resolvedLabel;
+            setLocationLabel(resolvedLabel);
+          }
+          setLocationStatus(`Ubicación identificada como ${resolvedLabel}.`);
+        }
+      } catch {
+        // La geocodificación es una mejora; las coordenadas privadas siguen siendo válidas.
+      } finally {
+        setLocating(false);
+      }
+      return captured;
+    }, []);
 
   useEffect(() => {
     if (!("permissions" in navigator) || !navigator.geolocation) return;
@@ -339,9 +400,16 @@ export function WorklogComposer({
     let permission: PermissionStatus | null = null;
     const syncPermission = () => {
       if (!mounted || !permission) return;
-      if (permission.state === "granted" && includeAutomaticLocation && !location) void captureLocation();
+      if (
+        permission.state === "granted" &&
+        includeAutomaticLocation &&
+        !location
+      )
+        void captureLocation();
       if (permission.state === "denied") {
-        setLocationStatus("Permiso de ubicación bloqueado. Puedes escribir el lugar manualmente.");
+        setLocationStatus(
+          "Permiso de ubicación bloqueado. Puedes escribir el lugar manualmente.",
+        );
       }
     };
     void navigator.permissions
@@ -380,6 +448,28 @@ export function WorklogComposer({
       return;
     }
 
+    if (!savedWorklogId.current) {
+      for (const control of form.querySelectorAll<
+        HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+      >(
+        "section[data-step] input, section[data-step] textarea, section[data-step] select",
+      )) {
+        const group = Number(
+          control.closest("section[data-step]")?.getAttribute("data-step"),
+        );
+        if (group > step || control.validity.valid) continue;
+        if (group !== step) setStep(group);
+        requestAnimationFrame(() => control.reportValidity());
+        return;
+      }
+      if (step < 3) {
+        setReviewTitle(String(data.get("title") || ""));
+        setReviewSummary(String(data.get("summary") || ""));
+        changeStep(step + 1);
+        return;
+      }
+    }
+    if (!savedWorklogId.current) submissionFields.current = fieldsFromForm();
     busy.current = true;
     setSubmitting(true);
     try {
@@ -398,8 +488,7 @@ export function WorklogComposer({
         pendingPhotos.current = prepared;
         setMessage("Guardando la bitácora…");
         const requestKey =
-          operationKey.current ||
-          (operationKey.current = crypto.randomUUID());
+          operationKey.current || (operationKey.current = crypto.randomUUID());
         window.sessionStorage.setItem(operationStorageKey, requestKey);
         const response = await fetch("/api/terraqo/worklog", {
           method: "POST",
@@ -455,7 +544,10 @@ export function WorklogComposer({
           );
         savedWorklogId.current = payload.data.id;
         setSaved(true);
-        await persistDraft({ photos: prepared, serverWorklogId: payload.data.id });
+        await persistDraft({
+          photos: prepared,
+          serverWorklogId: payload.data.id,
+        });
       }
       const id = savedWorklogId.current!;
       while (pendingPhotos.current.length) {
@@ -464,12 +556,18 @@ export function WorklogComposer({
         );
         await uploadWorklogPhoto(id, pendingPhotos.current[0]);
         pendingPhotos.current.shift();
-        await persistDraft({ photos: pendingPhotos.current, serverWorklogId: id });
+        await persistDraft({
+          photos: pendingPhotos.current,
+          serverWorklogId: id,
+        });
       }
 
       savedWorklogId.current = null;
+      submissionFields.current = null;
       setSaved(false);
       form.reset();
+      setStep(1);
+      setSelectedPhoto(0);
       setWorkspaceId(workspaces[0]?.id || "");
       setProjectId("");
       setPreviousWorklogId("");
@@ -478,12 +576,15 @@ export function WorklogComposer({
       setIncludeAutomaticLocation(true);
       setLocationLabel("");
       locationLabelRef.current = "";
-      setLocationStatus("La ubicación se capturará automáticamente al publicar.");
-      if (draftEnabled) {
-        await deleteWorklogLocalDraft(draftStorageKey).catch(() => undefined);
+      setLocationStatus(
+        "La ubicación se capturará automáticamente al publicar.",
+      );
       window.sessionStorage.removeItem(operationStorageKey);
       operationKey.current = null;
-        setRestoredFields(null);
+      setRestoredFields(null);
+      setDraftRenderKey((value) => value + 1);
+      if (draftEnabled) {
+        await deleteWorklogLocalDraft(draftStorageKey).catch(() => undefined);
         setDraftStatus("Publicado y retirado del almacenamiento local.");
       }
       setMessage(
@@ -509,6 +610,7 @@ export function WorklogComposer({
     <form
       id="registrar-trabajo"
       ref={formRef}
+      noValidate
       onSubmit={submit}
       onChangeCapture={scheduleDraft}
       className="min-w-0 rounded-2xl border bg-white p-4 shadow-technical sm:rounded-lg sm:p-6"
@@ -518,350 +620,426 @@ export function WorklogComposer({
         disabled={submitting || saved}
         className="min-w-0"
       >
-        <div className="flex items-start gap-3">
-          <span className="grid h-10 w-10 place-items-center rounded-md bg-primary/10 text-primary">
-            <NotebookPen className="h-5 w-5" />
-          </span>
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">
-              Nueva evidencia
-            </p>
-            <h2 className="font-display text-2xl font-bold">
-              Documenta lo que resolviste
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Una entrada breve, concreta y vinculada al trabajo real.
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-5 grid min-w-0 gap-4 sm:mt-6 md:grid-cols-2">
-          <label className="grid gap-2 text-sm font-semibold">
-            Workspace
-            <select
-              name="workspaceId"
-              value={workspaceId}
-              onChange={(event) => {
-                setWorkspaceId(event.target.value);
-                setProjectId("");
-                setPreviousWorklogId("");
-              }}
-              className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm"
-            >
-              {workspaces.map((workspace) => (
-                <option key={workspace.id} value={workspace.id}>
-                  {workspace.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-2 text-sm font-semibold">
-            Proyecto vinculado
-            <select
-              name="projectId"
-              value={projectId}
-              onChange={(event) => {
-                setProjectId(event.target.value);
-                setPreviousWorklogId("");
-              }}
-              className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm"
-            >
-              <option value="">Sin proyecto vinculado</option>
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.title}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-2 text-sm font-semibold md:col-span-2">
-            Continuidad del trabajo
-            <input
-              type="search"
-              value={continuityQuery}
-              onChange={(event) => setContinuityQuery(event.target.value)}
-              className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm"
-              placeholder="Buscar registro anterior por título o ID"
-            />
-            <select
-              name="previousWorklogId"
-              value={previousWorklogId}
-              onChange={(event) => setPreviousWorklogId(event.target.value)}
-              className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm"
-            >
-              <option value="">Es un trabajo nuevo</option>
-              {continuationOptions.map((item) => (
-                <option key={item.id} value={item.id}>
-                  Continúa: {item.title} ·{" "}
-                  {new Intl.DateTimeFormat("es-PE", {
-                    dateStyle: "medium",
-                  }).format(new Date(item.occurredAt))}{" "}
-                  · ID {item.id}
-                </option>
-              ))}
-            </select>
-            <span className="text-xs font-normal text-muted-foreground">
-              Puedes enlazar cualquier registro de tu perfil. Los registros que
-              ya tienen una continuación no se muestran para evitar cadenas
-              duplicadas.
-            </span>
-          </label>
-          <label className="grid gap-2 text-sm font-semibold md:col-span-2">
-            Titulo
-            <input
-              name="title"
-              className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm"
-              placeholder="Ej. Control de ejes completado en torre B"
-              defaultValue={restoredFields?.title || ""}
-              required
-              minLength={4}
-              maxLength={180}
-            />
-          </label>
-          <div className="grid gap-2 text-sm font-semibold md:col-span-2">
-            <span>Qué hiciste y qué problema resolviste</span>
-            <AiWritingTextarea
-              name="summary"
-              purpose="worklog"
-              className="min-h-32"
-              placeholder="Describe el trabajo, la decisión técnica y el contexto necesario para entenderlo."
-              defaultValue={restoredFields?.summary || ""}
-              required
-              minLength={20}
-              maxLength={2400}
-            />
-          </div>
-          <div className="grid gap-2 text-sm font-semibold md:col-span-2">
-            <span>Resultado observable</span>
-            <AiWritingTextarea
-              name="outcome"
-              purpose="worklog"
-              className="min-h-20"
-              placeholder="Ej. Se liberaron los frentes sin observaciones y se entregó el reporte de control."
-              defaultValue={restoredFields?.outcome || ""}
-              required
-              minLength={10}
-              maxLength={800}
-            />
-          </div>
-          <label className="grid gap-2 text-sm font-semibold md:col-span-2">
-            Tu aporte en este trabajo <span className="font-normal text-muted-foreground">(opcional)</span>
-            <input
-              name="contributionRole"
-              className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm"
-              placeholder="Ej. Responsable del control geométrico"
-              defaultValue={restoredFields?.contributionRole || ""}
-              maxLength={180}
-            />
-          </label>
-          <label className="grid gap-2 text-sm font-semibold md:col-span-2">
-            Responsabilidades <span className="font-normal text-muted-foreground">(una por línea o separadas por coma)</span>
-            <textarea
-              name="responsibilities"
-              className="min-h-24 rounded-xl border bg-background px-3 py-3 text-base sm:rounded-md sm:text-sm"
-              placeholder="Replanteo de ejes\nControl de tolerancias"
-              defaultValue={restoredFields?.responsibilities || ""}
-              maxLength={1200}
-            />
-          </label>
-          <label className="grid gap-2 text-sm font-semibold">
-            Métodos aplicados
-            <textarea
-              name="methods"
-              className="min-h-24 rounded-xl border bg-background px-3 py-3 text-base sm:rounded-md sm:text-sm"
-              placeholder="Poligonal cerrada, nivelación geométrica"
-              defaultValue={restoredFields?.methods || ""}
-              maxLength={800}
-            />
-          </label>
-          <label className="grid gap-2 text-sm font-semibold">
-            Herramientas y equipos
-            <textarea
-              name="tools"
-              className="min-h-24 rounded-xl border bg-background px-3 py-3 text-base sm:rounded-md sm:text-sm"
-              placeholder="Estación total, nivel automático, AutoCAD"
-              defaultValue={restoredFields?.tools || ""}
-              maxLength={800}
-            />
-          </label>
-          <label className="grid gap-2 text-sm font-semibold">
-            Tipo de evidencia
-            <select
-              name="type"
-              defaultValue={restoredFields?.type || "FIELD_UPDATE"}
-              className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm"
-            >
-              <option value="FIELD_UPDATE">Avance de trabajo</option>
-              <option value="DELIVERABLE">Entregable</option>
-              <option value="PROBLEM_SOLVED">Problema resuelto</option>
-              <option value="MILESTONE">Hito alcanzado</option>
-              <option value="LEARNING">Aprendizaje tecnico</option>
-            </select>
-          </label>
-          <label className="grid gap-2 text-sm font-semibold">
-            Quien puede verlo
-            <select
-              name="visibility"
-              className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm"
-              defaultValue={restoredFields?.visibility || "PRIVATE"}
-            >
-              <option value="PRIVATE">Solo yo</option>
-              <option value="WORKSPACE">Empresa vinculada</option>
-              <option value="COMMUNITY">Comunidad Terraqo</option>
-              <option value="PUBLIC">Publico</option>
-            </select>
-          </label>
-          <label className="grid gap-2 text-sm font-semibold">
-            Habilidades, separadas por coma
-            <input
-              name="skills"
-              className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm"
-              placeholder="Topografia, GNSS, AutoCAD"
-              defaultValue={restoredFields?.skills || ""}
-            />
-          </label>
-          <div className="flex min-h-11 items-center gap-3 rounded-md border bg-[#f2f8f7] px-3 text-sm text-[#35485b]">
-            <CalendarClock className="h-4 w-4 shrink-0 text-primary" />
-            <span>
-              <b>Fecha y hora automáticas.</b> Se registran al guardar y no
-              podrán modificarse.
-            </span>
-          </div>
-          <div className="grid gap-3 rounded-xl border bg-[#f7fafc] p-4 md:col-span-2">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-              <label className="grid min-w-0 flex-1 gap-2 text-sm font-semibold">
-                <span className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4" /> Lugar de la evidencia
-                </span>
+        <header className="mb-5 rounded-xl bg-[#0a1b2d] p-5 text-white">
+          <p className="text-sm text-sky-200">
+            {step} de 3 · {["Evidencias", "Contexto", "Visibilidad"][step - 1]}
+          </p>
+          <h2
+            ref={headingRef}
+            tabIndex={-1}
+            className="mt-1 text-2xl font-bold"
+          >
+            {
+              [
+                "Registrar trabajo",
+                "Revisa tu registro",
+                "Revisa la visibilidad",
+              ][step - 1]
+            }
+          </h2>
+        </header>
+        <section data-step="1" hidden={step !== 1}>
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="grid gap-2 text-sm font-semibold md:col-span-2">
+              <span className="flex items-center gap-2">
+                <ImagePlus className="h-4 w-4" /> Fotos desde tu dispositivo
+              </span>
+              <span className="rounded-md border border-dashed bg-muted/25 p-4 text-sm font-medium text-muted-foreground">
                 <input
-                  name="locationLabel"
-                  value={locationLabel}
-                  onChange={(event) => {
-                    locationLabelRef.current = event.target.value;
-                    setLocationLabel(event.target.value);
-                  }}
-                  maxLength={180}
-                  className="h-12 min-w-0 rounded-xl border bg-white px-3 text-base sm:h-11 sm:rounded-md sm:text-sm"
-                  placeholder="Ej. Santa Rosa de Asia, Cañete"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/avif"
+                  multiple
+                  onChange={selectPhotos}
+                  className="block w-full min-w-0 text-sm file:mb-2 file:mr-4 file:min-h-11 file:w-full file:rounded-xl file:border-0 file:bg-primary file:px-4 file:py-2 file:font-bold file:text-primary-foreground sm:file:mb-0 sm:file:w-auto sm:file:rounded-md"
                 />
-              </label>
-              {location && includeAutomaticLocation ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void captureLocation()}
-                  disabled={locating}
-                  className="min-h-12 rounded-xl sm:min-h-11 sm:rounded-md"
-                >
-                  <LocateFixed className="mr-2 h-4 w-4" />
-                  {locating ? "Actualizando…" : "Actualizar ubicación"}
-                </Button>
-              ) : null}
-            </div>
-            <div className="flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between" role="status" aria-live="polite">
-              <span>{locating ? "Obteniendo ubicación segura…" : locationStatus}</span>
-              {location && includeAutomaticLocation ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLocation(null);
-                    setIncludeAutomaticLocation(false);
-                    setLocationStatus("Ubicación automática desactivada para esta publicación.");
-                  }}
-                  className="w-fit font-bold text-primary hover:underline"
-                >
-                  No incluir ubicación automática
-                </button>
-              ) : !includeAutomaticLocation ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIncludeAutomaticLocation(true);
-                    setLocationStatus("La ubicación se capturará automáticamente al publicar.");
-                  }}
-                  className="w-fit font-bold text-primary hover:underline"
-                >
-                  Activar ubicación automática
-                </button>
-              ) : null}
-            </div>
-            <p className="text-xs leading-5 text-muted-foreground">
-              Al publicar, el navegador solicitará permiso si todavía no lo concediste.
-              En el perfil público se muestra solo el nombre aproximado del lugar;
-              las coordenadas exactas permanecen privadas. Datos de ubicación © OpenStreetMap contributors.
-            </p>
-          </div>
-          <label className="grid gap-2 text-sm font-semibold md:col-span-2">
-            <span className="flex items-center gap-2">
-              <Link2 className="h-4 w-4" /> Evidencias externas, una URL por
-              linea
-            </span>
-            <textarea
-              name="evidenceUrls"
-              defaultValue={restoredFields?.evidenceUrls || ""}
-              className="min-h-24 min-w-0 rounded-xl border bg-background p-3 text-base sm:rounded-md sm:text-sm"
-              placeholder="https://..."
-            />
-          </label>
-          <label className="grid gap-2 text-sm font-semibold md:col-span-2">
-            <span className="flex items-center gap-2">
-              <ImagePlus className="h-4 w-4" /> Fotos desde tu dispositivo
-            </span>
-            <span className="rounded-md border border-dashed bg-muted/25 p-4 text-sm font-medium text-muted-foreground">
+                <small className="mt-2 block">
+                  Hasta 6 fotos en JPG, PNG, WEBP o AVIF. Máximo 8 MB por
+                  archivo. Las fotos grandes se optimizan antes de subirlas, una
+                  por una.
+                </small>
+              </span>
+            </label>
+            <label className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border bg-slate-50 px-4 py-2 text-sm font-semibold focus-within:ring-2">
+              <Camera size={18} aria-hidden="true" />
+              Tomar foto
               <input
                 type="file"
                 accept="image/jpeg,image/png,image/webp,image/avif"
-                multiple
+                capture="environment"
                 onChange={selectPhotos}
-                className="block w-full min-w-0 text-sm file:mb-2 file:mr-4 file:min-h-11 file:w-full file:rounded-xl file:border-0 file:bg-primary file:px-4 file:py-2 file:font-bold file:text-primary-foreground sm:file:mb-0 sm:file:w-auto sm:file:rounded-md"
+                className="sr-only"
               />
-              <small className="mt-2 block">
-                Hasta 6 fotos en JPG, PNG, WEBP o AVIF. Máximo 8 MB por archivo.
-                Las fotos grandes se optimizan antes de subirlas, una por una.
-              </small>
-            </span>
-          </label>
-          {photoPreviews.length ? (
-            <div className="grid grid-cols-2 gap-3 md:col-span-2 sm:grid-cols-3">
-              {photoPreviews.map((preview, index) => (
-                <figure
-                  key={preview}
-                  className="group relative aspect-[4/3] overflow-hidden rounded-md border bg-muted"
-                >
+            </label>
+            {photoPreviews.length ? (
+              <div className="grid grid-cols-2 gap-3 md:col-span-2 sm:grid-cols-3">
+                {photoPreviews.map((preview, index) => (
+                  <figure
+                    key={preview}
+                    className="group relative aspect-[4/3] overflow-hidden rounded-md border bg-muted"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={preview}
+                      alt={`Vista previa ${index + 1}`}
+                      className="h-full w-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removePhoto(index)}
+                      className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-md bg-black/70 text-white"
+                      aria-label={`Quitar foto ${index + 1}`}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </figure>
+                ))}
+              </div>
+            ) : null}
+            <label className="grid gap-2 text-sm font-semibold md:col-span-2">
+              <span className="flex items-center gap-2">
+                <Link2 className="h-4 w-4" /> Evidencias externas, una URL por
+                linea
+              </span>
+              <textarea
+                name="evidenceUrls"
+                defaultValue={restoredFields?.evidenceUrls || ""}
+                className="min-h-24 min-w-0 rounded-xl border bg-background p-3 text-base sm:rounded-md sm:text-sm"
+                placeholder="https://..."
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-semibold md:col-span-2">
+              Título
+              <input
+                name="title"
+                className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm"
+                placeholder="Ej. Control de ejes completado en torre B"
+                defaultValue={restoredFields?.title || ""}
+                required
+                minLength={4}
+                maxLength={180}
+              />
+            </label>
+            <div className="grid gap-2 text-sm font-semibold md:col-span-2">
+              <span>Qué hiciste y qué problema resolviste</span>
+              <AiWritingTextarea
+                name="summary"
+                purpose="worklog"
+                className="min-h-32"
+                placeholder="Describe el trabajo, la decisión técnica y el contexto necesario para entenderlo."
+                defaultValue={restoredFields?.summary || ""}
+                required
+                minLength={20}
+                maxLength={2400}
+              />
+            </div>
+          </div>
+        </section>
+        <section data-step="2" hidden={step !== 2}>
+          <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+            <div className="min-w-0 space-y-3">
+              {photoPreviews.length > 0 ? (
+                <>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={preview}
-                    alt={`Vista previa ${index + 1}`}
-                    className="h-full w-full object-cover"
+                    src={photoPreviews[selectedPhoto] || photoPreviews[0]}
+                    alt="Evidencia seleccionada"
+                    className="max-h-96 w-full rounded-xl bg-slate-100 object-contain"
                   />
+                  <div className="flex flex-wrap gap-2">
+                    {photoPreviews.map((src, i) => (
+                      <button
+                        type="button"
+                        key={src}
+                        aria-label={`Ver foto ${i + 1}`}
+                        aria-pressed={i === selectedPhoto}
+                        onClick={() => setSelectedPhoto(i)}
+                        className="overflow-hidden rounded-lg border-2 aria-pressed:border-blue-600"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={src}
+                          alt=""
+                          className="h-14 w-16 object-cover"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+              <p className="break-words text-lg font-bold">{reviewTitle}</p>
+              <p className="whitespace-pre-line break-words text-sm text-muted-foreground">
+                {reviewSummary}
+              </p>
+            </div>
+            <div className="grid min-w-0 gap-4 md:grid-cols-2">
+              <div className="grid gap-2 text-sm font-semibold md:col-span-2">
+                <span>Resultado observable</span>
+                <AiWritingTextarea
+                  name="outcome"
+                  purpose="worklog"
+                  className="min-h-20"
+                  placeholder="Ej. Se liberaron los frentes sin observaciones y se entregó el reporte de control."
+                  defaultValue={restoredFields?.outcome || ""}
+                  required
+                  minLength={10}
+                  maxLength={800}
+                />
+              </div>
+              <label className="grid gap-2 text-sm font-semibold md:col-span-2">
+                Tu aporte en este trabajo{" "}
+                <span className="font-normal text-muted-foreground">
+                  (opcional)
+                </span>
+                <input
+                  name="contributionRole"
+                  className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm"
+                  placeholder="Ej. Responsable del control geométrico"
+                  defaultValue={restoredFields?.contributionRole || ""}
+                  maxLength={180}
+                />
+              </label>
+              <details className="rounded-xl border p-3 md:col-span-2">
+                <summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold">
+                  Proyecto, métodos y otros detalles
+                </summary>
+                <div className="mt-3 grid gap-4 md:grid-cols-2">
+                  <label className="grid gap-2 text-sm font-semibold md:col-span-2">
+                    Responsabilidades{" "}
+                    <span className="font-normal text-muted-foreground">
+                      (una por línea o separadas por coma)
+                    </span>
+                    <textarea
+                      name="responsibilities"
+                      className="min-h-24 rounded-xl border bg-background px-3 py-3 text-base sm:rounded-md sm:text-sm"
+                      placeholder="Replanteo de ejes\nControl de tolerancias"
+                      defaultValue={restoredFields?.responsibilities || ""}
+                      maxLength={1200}
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm font-semibold">
+                    Métodos aplicados
+                    <textarea
+                      name="methods"
+                      className="min-h-24 rounded-xl border bg-background px-3 py-3 text-base sm:rounded-md sm:text-sm"
+                      placeholder="Poligonal cerrada, nivelación geométrica"
+                      defaultValue={restoredFields?.methods || ""}
+                      maxLength={800}
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm font-semibold">
+                    Herramientas y equipos
+                    <textarea
+                      name="tools"
+                      className="min-h-24 rounded-xl border bg-background px-3 py-3 text-base sm:rounded-md sm:text-sm"
+                      placeholder="Estación total, nivel automático, AutoCAD"
+                      defaultValue={restoredFields?.tools || ""}
+                      maxLength={800}
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm font-semibold">
+                    Tipo de evidencia
+                    <select
+                      name="type"
+                      defaultValue={restoredFields?.type || "FIELD_UPDATE"}
+                      className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm"
+                    >
+                      <option value="FIELD_UPDATE">Avance de trabajo</option>
+                      <option value="DELIVERABLE">Entregable</option>
+                      <option value="PROBLEM_SOLVED">Problema resuelto</option>
+                      <option value="MILESTONE">Hito alcanzado</option>
+                      <option value="LEARNING">Aprendizaje tecnico</option>
+                    </select>
+                  </label>
+                  <label className="grid gap-2 text-sm font-semibold">
+                    Espacio de trabajo
+                    <select
+                      name="workspaceId"
+                      value={workspaceId}
+                      onChange={(event) => {
+                        setWorkspaceId(event.target.value);
+                        setProjectId("");
+                        setPreviousWorklogId("");
+                      }}
+                      className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm"
+                    >
+                      {!workspaces.length && (
+                        <option value="">Espacio personal</option>
+                      )}
+                      {workspaces.map((workspace) => (
+                        <option key={workspace.id} value={workspace.id}>
+                          {workspace.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="grid gap-2 text-sm font-semibold">
+                    Proyecto vinculado
+                    <select
+                      name="projectId"
+                      value={projectId}
+                      onChange={(event) => {
+                        setProjectId(event.target.value);
+                        setPreviousWorklogId("");
+                      }}
+                      className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm"
+                    >
+                      <option value="">Sin proyecto vinculado</option>
+                      {projects.map((project) => (
+                        <option key={project.id} value={project.id}>
+                          {project.title}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="grid gap-2 text-sm font-semibold md:col-span-2">
+                    Continuidad del trabajo
+                    <input
+                      type="search"
+                      value={continuityQuery}
+                      onChange={(event) =>
+                        setContinuityQuery(event.target.value)
+                      }
+                      className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm"
+                      placeholder="Buscar registro anterior por título o ID"
+                    />
+                    <select
+                      name="previousWorklogId"
+                      value={previousWorklogId}
+                      onChange={(event) =>
+                        setPreviousWorklogId(event.target.value)
+                      }
+                      className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm"
+                    >
+                      <option value="">Es un trabajo nuevo</option>
+                      {continuationOptions.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          Continúa: {item.title} ·{" "}
+                          {new Intl.DateTimeFormat("es-PE", {
+                            dateStyle: "medium",
+                          }).format(new Date(item.occurredAt))}{" "}
+                          · ID {item.id}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="text-xs font-normal text-muted-foreground">
+                      Puedes enlazar cualquier registro de tu perfil. Los
+                      registros que ya tienen una continuación no se muestran
+                      para evitar cadenas duplicadas.
+                    </span>
+                  </label>
+                  <label className="grid gap-2 text-sm font-semibold">
+                    Habilidades, separadas por coma
+                    <input
+                      name="skills"
+                      className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm"
+                      placeholder="Topografia, GNSS, AutoCAD"
+                      defaultValue={restoredFields?.skills || ""}
+                    />
+                  </label>
+                </div>
+              </details>
+            </div>
+          </div>
+        </section>
+        <section data-step="3" hidden={step !== 3}>
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="grid gap-2 text-sm font-semibold">
+              Quien puede verlo
+              <select
+                name="visibility"
+                className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm"
+                defaultValue={restoredFields?.visibility || "PRIVATE"}
+              >
+                <option value="PRIVATE">Solo yo</option>
+                <option value="WORKSPACE">Empresa vinculada</option>
+                <option value="COMMUNITY">Comunidad Terraqo</option>
+                <option value="PUBLIC">Publico</option>
+              </select>
+            </label>
+            <div className="flex min-h-11 items-center gap-3 rounded-md border bg-[#f2f8f7] px-3 text-sm text-[#35485b]">
+              <CalendarClock className="h-4 w-4 shrink-0 text-primary" />
+              <span>
+                <b>Fecha y hora automáticas.</b> Se registran al guardar y no
+                podrán modificarse.
+              </span>
+            </div>
+            <div className="grid gap-3 rounded-xl border bg-[#f7fafc] p-4 md:col-span-2">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <label className="grid min-w-0 flex-1 gap-2 text-sm font-semibold">
+                  <span className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4" /> Lugar de la evidencia
+                  </span>
+                  <input
+                    name="locationLabel"
+                    value={locationLabel}
+                    onChange={(event) => {
+                      locationLabelRef.current = event.target.value;
+                      setLocationLabel(event.target.value);
+                    }}
+                    maxLength={180}
+                    className="h-12 min-w-0 rounded-xl border bg-white px-3 text-base sm:h-11 sm:rounded-md sm:text-sm"
+                    placeholder="Ej. Santa Rosa de Asia, Cañete"
+                  />
+                </label>
+                {location && includeAutomaticLocation ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void captureLocation()}
+                    disabled={locating}
+                    className="min-h-12 rounded-xl sm:min-h-11 sm:rounded-md"
+                  >
+                    <LocateFixed className="mr-2 h-4 w-4" />
+                    {locating ? "Actualizando…" : "Actualizar ubicación"}
+                  </Button>
+                ) : null}
+              </div>
+              <div
+                className="flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between"
+                role="status"
+                aria-live="polite"
+              >
+                <span>
+                  {locating ? "Obteniendo ubicación segura…" : locationStatus}
+                </span>
+                {location && includeAutomaticLocation ? (
                   <button
                     type="button"
-                    onClick={() => removePhoto(index)}
-                    className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-md bg-black/70 text-white"
-                    aria-label={`Quitar foto ${index + 1}`}
+                    onClick={() => {
+                      setLocation(null);
+                      setIncludeAutomaticLocation(false);
+                      setLocationStatus(
+                        "Ubicación automática desactivada para esta publicación.",
+                      );
+                    }}
+                    className="w-fit font-bold text-primary hover:underline"
                   >
-                    <X className="h-4 w-4" />
+                    No incluir ubicación automática
                   </button>
-                </figure>
-              ))}
+                ) : !includeAutomaticLocation ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIncludeAutomaticLocation(true);
+                      setLocationStatus(
+                        "La ubicación se capturará automáticamente al publicar.",
+                      );
+                    }}
+                    className="w-fit font-bold text-primary hover:underline"
+                  >
+                    Activar ubicación automática
+                  </button>
+                ) : null}
+              </div>
+              <p className="text-xs leading-5 text-muted-foreground">
+                Al publicar, el navegador solicitará permiso si todavía no lo
+                concediste. En el perfil público se muestra solo el nombre
+                aproximado del lugar; las coordenadas exactas permanecen
+                privadas. Datos de ubicación © OpenStreetMap contributors.
+              </p>
             </div>
-          ) : null}
-        </div>
-
-        <div className="mt-5 rounded-xl border border-[#cbd7e6] bg-[#f7fafc] p-4">
-          <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#4374ba]">
-            Cómo aumenta tu confianza
-          </p>
-          <div className="mt-3 grid gap-2 text-xs text-[#52657a] sm:grid-cols-3">
-            <span>1. Describe trabajo y resultado</span>
-            <span>2. Adjunta evidencia real</span>
-            <span>3. Solicita validación responsable</span>
           </div>
-          <p className="mt-3 text-xs leading-5 text-[#607083]">
-            Los TQ permanecen 7 días en espera. Duplicados, evidencia falsa o
-            validaciones coordinadas no generan reputación.
-          </p>
-        </div>
+        </section>
         <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50/70 p-4">
           <label className="flex min-h-11 items-start gap-3 text-sm font-semibold text-slate-800">
             <input
@@ -873,11 +1051,15 @@ export function WorklogComposer({
                 if (enabled) {
                   window.localStorage.setItem(draftConsentKey, "1");
                   setDraftStatus("Activando guardado local…");
-                  setTimeout(() => void persistDraft(), 0);
                 } else {
+                  if (draftTimer.current) clearTimeout(draftTimer.current);
                   window.localStorage.removeItem(draftConsentKey);
-                  void deleteWorklogLocalDraft(draftStorageKey).catch(() => undefined);
-                  setDraftStatus("Borrador local desactivado y eliminado de este dispositivo.");
+                  void deleteWorklogLocalDraft(draftStorageKey).catch(
+                    () => undefined,
+                  );
+                  setDraftStatus(
+                    "Borrador local desactivado y eliminado de este dispositivo.",
+                  );
                 }
               }}
               className="mt-1 h-5 w-5 accent-primary"
@@ -885,20 +1067,31 @@ export function WorklogComposer({
             <span>
               Guardar un borrador en este dispositivo
               <small className="mt-1 block font-normal leading-5 text-slate-600">
-                Conserva texto y fotos para recuperarlos tras perder conexión o cerrar la página. No lo actives en un equipo compartido.
+                Conserva texto y fotos para recuperarlos tras perder conexión o
+                cerrar la página. No lo actives en un equipo compartido.
               </small>
             </span>
           </label>
-          <p className="mt-2 text-xs font-medium text-slate-600" role="status" aria-live="polite">
+          <p
+            className="mt-2 text-xs font-medium text-slate-600"
+            role="status"
+            aria-live="polite"
+          >
             {draftReady ? draftStatus : "Preparando almacenamiento local…"}
           </p>
         </div>
       </fieldset>
       <div className="sticky bottom-[4.8rem] z-20 -mx-4 mt-5 flex flex-col gap-3 border-t bg-white/95 px-4 py-4 backdrop-blur-xl sm:static sm:mx-0 sm:flex-row sm:items-center sm:justify-between sm:bg-transparent sm:px-0 sm:pb-0 sm:pt-5">
-        <p className="flex items-center gap-2 text-sm text-muted-foreground">
-          <CheckCircle2 className="h-4 w-4 text-primary" /> Privada por defecto.
-          Tu decides cuando compartirla.
-        </p>
+        {step > 1 && !saved && (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={submitting}
+            onClick={() => changeStep(step - 1)}
+          >
+            Volver
+          </Button>
+        )}
         <Button
           type="submit"
           disabled={submitting}
@@ -908,7 +1101,11 @@ export function WorklogComposer({
             ? "Guardando…"
             : saved
               ? "Reintentar fotos pendientes"
-              : "Guardar en mi bitacora"}
+              : step === 1
+                ? "Continuar"
+                : step === 2
+                  ? "Revisar visibilidad"
+                  : "Guardar en mi bitácora"}
         </Button>
       </div>
       {message ? (
