@@ -1,5 +1,13 @@
 # Remaining platform execution — 3 November 2026
 
+## 15 de noviembre — S01/S02, recorrido autenticado en staging
+
+El marcador público confirmó el candidato `6c0e759abfda295b360fe70fbd11c3343ef2e15b` y el despliegue Netlify `6af9b0d19d4799073dd41424`. Chromium abrió una invitación sintética como visitante, inició sesión mediante el formulario de credenciales real en una segunda pestaña, comprobó la identidad devuelta por Auth.js y volvió a la primera. Se verificó que el acceso de evaluador solo se concedía al pulsar Aceptar y que después se abrían las evaluaciones autorizadas.
+
+El portal autenticado mostró el pendiente de documentos y la bitácora del profesional a 1280, 375 y 320 px. Se comprobó la disposición lateral de pendientes en escritorio, su posición antes de actividad en móvil y la ausencia de desbordamiento horizontal. La comparación visual local de la pantalla completa empleó tres entradas sintéticas, con capturas en output/s01/full-trajectory-{1280,375,320}.png. El estado sin fotografía usa el icono del registro. La suite S22 completa pasó en este despliegue. Una ejecución anterior había llegado al final de ambos recorridos con un fallo agregado de consola cuya causa no se pudo atribuir; no se reprodujo con el diagnóstico adicional y el candidato final.
+
+El verificador retiró sus filas y confirmó cero fixtures S22. Los cuatro objetos preparados se retiraron y su ausencia se verificó por lectura. No se enviaron correos ni se desplegó en producción. Próximo bloque visual: S03/S04, captura y revisión del borrador.
+
 ## S01/S02 — Retorno a la invitación y borrador prioritario, validación local
 
 Referencia contrastada: páginas 2 y 3 de 02-ui-ux-pantallas.pdf. En S01 la invitación permanece en la pestaña original mientras se inicia sesión o se crea una cuenta en otra. Al volver se consulta la sesión y la aceptación sigue siendo explícita. El secreto del fragmento se mantiene en memoria. En S02 el inicio profesional cuenta con acceso prioritario al borrador local consentido del perfil y destinos a captura, organización, respaldo y documentos según los módulos disponibles.
