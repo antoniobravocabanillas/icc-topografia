@@ -1,3 +1,4 @@
+import { recordAvailabilityDeclaration } from "@/lib/terraqo/professional-availability";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import type { WorkspacePortalToken } from "./workspace-portal-session";
@@ -33,12 +34,13 @@ export async function updateProfessionalProfile(token: WorkspacePortalToken, inp
   return prisma.$transaction(async tx => {
     // Both ownership and version are part of the write predicate. A profile ID
     // supplied by another user can never authorize a cross-account change.
-    const current = await tx.terraqoProfessionalProfile.findFirst({ where: { id, userId: token.sub }, select: { id: true } });
+    const current = await tx.terraqoProfessionalProfile.findFirst({ where: { id, userId: token.sub }, select: { id: true, status: true, liveCvEnabled: true } });
     if (!current) return { failure: "missing" as const };
     const changed = await tx.terraqoProfessionalProfile.updateMany({ where: { id, userId: token.sub, updatedAt: new Date(version) },
       data: { ...data, headline: data.headline || null, bio: data.bio || null, generatedSummary: null, generatedSummaryUpdatedAt: null } });
     if (changed.count !== 1) return { failure: "version" as const };
     const saved = await tx.terraqoProfessionalProfile.findFirstOrThrow({ where: { id, userId: token.sub }, select });
+    if (data.status !== current.status) await recordAvailabilityDeclaration(tx, { ...saved, liveCvEnabled: current.liveCvEnabled });
     return { record: record(saved) };
   });
 }

@@ -1,3 +1,4 @@
+import { standalonePublicWorklogWhere } from "./public-cv";
 import { ordinaryWorkspaceMembership } from "@/lib/terraqo/workspace-roles";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -36,7 +37,8 @@ export function buildEvidenceReadWhere(input: {
   if (input.audience === "PUBLIC") {
     return {
       ...base,
-      visibility: "PUBLIC",
+      ...standalonePublicWorklogWhere,
+      professionalProfile: { liveCvEnabled: true },
     };
   }
   const workspaceIds = input.workspaceIds || [];
@@ -44,7 +46,7 @@ export function buildEvidenceReadWhere(input: {
     ...base,
     OR: [
       ...(input.liveCvEnabled
-        ? [{ visibility: "PUBLIC" as const }]
+        ? [{ ...standalonePublicWorklogWhere, professionalProfile: { liveCvEnabled: true } }]
         : []),
       { visibility: "COMMUNITY" },
       ...(workspaceIds.length

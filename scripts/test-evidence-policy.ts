@@ -17,10 +17,14 @@ const publicScope = buildEvidenceReadWhere({
   professionalProfileId: "profile-public",
   liveCvEnabled: true,
 });
+const published = {
+  visibility: "PUBLIC", lifecycle: "PUBLISHED", workspaceId: null, deletedAt: null,
+  OR: [{ projectId: null }, { project: { isPublic: true, deletedAt: null } }],
+  professionalProfile: { liveCvEnabled: true },
+};
 assert.deepEqual(publicScope, {
   professionalProfileId: "profile-public",
-  deletedAt: null,
-  visibility: "PUBLIC",
+  ...published,
 });
 
 const member = buildEvidenceReadWhere({
@@ -50,7 +54,7 @@ const memberWithPublicProfile = buildEvidenceReadWhere({
 assert.deepEqual(memberWithPublicProfile, {
   professionalProfileId: "profile-member",
   deletedAt: null,
-  OR: [{ visibility: "PUBLIC" }, { visibility: "COMMUNITY" }],
+  OR: [published, { visibility: "COMMUNITY" }],
 });
 
 const validations = [

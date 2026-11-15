@@ -1,5 +1,6 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { recordAvailabilityDeclaration } from "@/lib/terraqo/professional-availability";
 import type { TerraqoMemberRole, TerraqoMessagePrivacy, TerraqoProfessionalStatus, TerraqoVisibility } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -30,10 +31,13 @@ export async function updateProfessionalAvailabilityAction(formData: FormData) {
   if (!session?.user?.id) redirect("/cuenta");
   const status = String(formData.get("status") || "") as TerraqoProfessionalStatus;
   if (!PROFESSIONAL_STATUSES.includes(status)) redirect("/portal?status=availability-invalid");
-  const profile = await prisma.terraqoProfessionalProfile.update({
-    where: { userId: session.user.id },
-    data: { status },
-    select: { username: true }
+  const profile = await prisma.$transaction(async tx => {
+    const saved = await tx.terraqoProfessionalProfile.update({
+      where: { userId: session.user.id }, data: { status },
+      select: { id: true, username: true, status: true, updatedAt: true, liveCvEnabled: true },
+    });
+    await recordAvailabilityDeclaration(tx, saved);
+    return saved;
   });
   revalidatePath("/portal");
   revalidatePath("/red");

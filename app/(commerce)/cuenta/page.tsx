@@ -5,6 +5,7 @@ import { AccountAccessPanel } from "@/components/auth/account-access-panel";
 import { prisma } from "@/lib/prisma";
 import { createMetadata } from "@/lib/seo";
 import { terraqoDomains } from "@/lib/terraqo-domains";
+import { publicCvContactContinuation } from "@/lib/terraqo/public-cv-contact";
 import { endorsementContinuation } from "@/lib/terraqo/endorsement-continuation";
 import { billingContinuation } from "@/lib/terraqo/billing/continuation";
 import { resolveOAuthProviderAvailability } from "@/lib/server/oauth-provider-policy";
@@ -27,8 +28,8 @@ type AccountPageProps = {
 export default async function AccountPage({ searchParams }: AccountPageProps) {
   const params = await searchParams;
   const session = await auth();
-  const reviewPath = endorsementContinuation(params.callbackUrl);
-  if (session?.user && reviewPath) redirect(reviewPath);
+  const continuationPath = endorsementContinuation(params.callbackUrl) || publicCvContactContinuation(params.callbackUrl);
+  if (session?.user && continuationPath) redirect(continuationPath);
   // A signed-in role is not proof of an active workspace membership. Avoid the
   // account -> admin -> account redirect loop after access is revoked.
   if (session?.user && workspaceAdminRoles.has(session.user.role || "") && !await hasWorkspaceAdminAccess(session.user.id)) {

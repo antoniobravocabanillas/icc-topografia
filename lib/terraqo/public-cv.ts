@@ -6,8 +6,17 @@ export function publishedCvProfileWhere(username: string): Prisma.TerraqoProfess
   return { username, liveCvEnabled: true };
 }
 
-export const publicCvProfileInclude = {
-  user: { select: { name: true, email: true, image: true, lastSeenAt: true, onlineUntil: true } },
+export const standalonePublicWorklogWhere = {
+  visibility: "PUBLIC", lifecycle: "PUBLISHED", deletedAt: null, workspaceId: null,
+  OR: [{ projectId: null }, { project: { isPublic: true, deletedAt: null } }],
+} satisfies Prisma.TerraqoWorklogEntryWhereInput;
+
+export const publicCvProfileSelect = {
+  id: true, username: true, headline: true, bio: true, city: true, region: true,
+  country: true, locationCity: true, status: true, liveCvEnabled: true, liveCvVisibility: true,
+  messagePrivacy: true, identityVerificationStatus: true, updatedAt: true, certifications: true,
+  specialties: true, professionalCategories: true, equipment: true, software: true,
+  user: { select: { name: true, image: true, lastSeenAt: true, onlineUntil: true } },
   experiences: {
     where: { visibility: "PUBLIC" },
     include: {
@@ -19,7 +28,7 @@ export const publicCvProfileInclude = {
           id: true,
           title: true,
           slug: true,
-          clientName: true,
+          isPublic: true, deletedAt: true,
           location: true,
           category: true,
           status: true,
@@ -35,6 +44,7 @@ export const publicCvProfileInclude = {
     take: 50
   },
   affiliations: {
+    where: { visibility: "PUBLIC" },
     include: {
       workspace: { select: { name: true, brandName: true, logoUrl: true } },
       company: { select: { legalName: true, tradeName: true, logoUrl: true } }
@@ -53,6 +63,8 @@ export const publicCvProfileInclude = {
     take: 12
   },
   documents: {
+    // Verification files have no public disclosure setting.
+    where: { id: { in: [] } },
     select: {
       id: true,
       type: true,
@@ -63,14 +75,14 @@ export const publicCvProfileInclude = {
     orderBy: { uploadedAt: "desc" }
   },
   worklogs: {
-    where: { visibility: "PUBLIC", deletedAt: null },
+    where: standalonePublicWorklogWhere,
     include: {
       project: {
         select: {
           id: true,
           title: true,
           slug: true,
-          clientName: true,
+          isPublic: true, deletedAt: true,
           location: true,
           category: true,
           status: true,
@@ -104,14 +116,25 @@ export const publicCvProfileInclude = {
     // without downloading the complete public history into the document.
     take: 81
   }
-} satisfies Prisma.TerraqoProfessionalProfileInclude;
+} satisfies Prisma.TerraqoProfessionalProfileSelect;
 
 export type PublicCvProfile = Prisma.TerraqoProfessionalProfileGetPayload<{
-  include: typeof publicCvProfileInclude;
+  select: typeof publicCvProfileSelect;
 }>;
 
 // Archive routes only need the first page; the selected record is resolved separately.
-export const publicCvArchiveProfileInclude = {
-  ...publicCvProfileInclude,
-  worklogs: { ...publicCvProfileInclude.worklogs, take: 21 },
-} satisfies Prisma.TerraqoProfessionalProfileInclude;
+export const publicCvArchiveProfileSelect = {
+  ...publicCvProfileSelect,
+  worklogs: { ...publicCvProfileSelect.worklogs, take: 21 },
+} satisfies Prisma.TerraqoProfessionalProfileSelect;
+
+// A published employment entry does not automatically publish its linked project.
+export function redactPrivateProjects(profile: PublicCvProfile): PublicCvProfile {
+  const visible = (project: { isPublic: boolean; deletedAt: Date | null } | null) =>
+    project?.isPublic && !project.deletedAt;
+  return {
+    ...profile,
+    experiences: profile.experiences.map(row => visible(row.project) ? row : { ...row, projectId: null, project: null }),
+    worklogs: profile.worklogs.map(row => visible(row.project) ? row : { ...row, projectId: null, project: null }),
+  };
+}

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createExecutiveCvPdf } from "@/lib/terraqo/cv-pdf";
-import { publicCvProfileInclude, publishedCvProfileWhere } from "@/lib/terraqo/public-cv";
+import { publicCvProfileSelect, redactPrivateProjects, publishedCvProfileWhere } from "@/lib/terraqo/public-cv";
 import { prisma } from "@/lib/prisma";
 
 type CvPdfRouteProps = {
@@ -19,14 +19,14 @@ export async function GET(request: Request, { params }: CvPdfRouteProps) {
   const { username } = await params;
   const profile = await prisma.terraqoProfessionalProfile.findUnique({
     where: publishedCvProfileWhere(username),
-    include: publicCvProfileInclude
+    select: publicCvProfileSelect
   });
 
   if (!profile) {
     return missingCv();
   }
 
-  const pdf = await createExecutiveCvPdf(profile, request.url);
+  const pdf = await createExecutiveCvPdf(redactPrivateProjects(profile), request.url);
   // Rendering can outlast a withdrawal. Check publication/version again before
   // releasing the bytes; do not serve a CV generated from a revoked snapshot.
   const current = await prisma.terraqoProfessionalProfile.findFirst({

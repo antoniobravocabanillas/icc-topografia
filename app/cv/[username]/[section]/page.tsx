@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { PublicCVSectionPage, isPublicCvSection } from "@/components/terraqo/public-cv";
-import { publicCvArchiveProfileInclude, publicCvProfileInclude, publishedCvProfileWhere } from "@/lib/terraqo/public-cv";
+import { publicCvArchiveProfileSelect, publicCvProfileSelect, redactPrivateProjects, publishedCvProfileWhere } from "@/lib/terraqo/public-cv";
 import { prisma } from "@/lib/prisma";
 import { createMetadata } from "@/lib/seo";
 
@@ -51,10 +51,10 @@ export default async function PublicCvSectionRoute({ params }: PublicCvSectionPa
 
   const profile = await prisma.terraqoProfessionalProfile.findUnique({
     where: publishedCvProfileWhere(username),
-    include: section === "evidencias" ? publicCvArchiveProfileInclude : publicCvProfileInclude
+    select: section === "evidencias" ? publicCvArchiveProfileSelect : publicCvProfileSelect
   });
 
   if (!profile) notFound();
 
-  return <PublicCVSectionPage profile={profile} section={section} />;
+  return <PublicCVSectionPage profile={redactPrivateProjects(profile)} section={section} />;
 }

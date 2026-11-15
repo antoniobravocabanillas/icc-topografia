@@ -1,3 +1,4 @@
+import { standalonePublicWorklogWhere } from "@/lib/terraqo/public-cv";
 import { worklogMediaResponse } from "@/lib/server/worklog-media-response";
 import { prisma } from "@/lib/prisma";
 import { getWorklogEvidenceStore } from "@/lib/server/media";
@@ -14,8 +15,7 @@ export async function GET(request: Request, { params }: RouteContext) {
   const where = {
     id: mediaId,
     worklog: {
-      visibility: "PUBLIC" as const,
-      deletedAt: null,
+      ...standalonePublicWorklogWhere,
       professionalProfile: { username, liveCvEnabled: true }
     }
   };

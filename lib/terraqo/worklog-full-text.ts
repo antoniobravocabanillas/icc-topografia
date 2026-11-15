@@ -22,15 +22,20 @@ export function isWorklogFullTextEnabled() {
 
 function visibilityCondition(scope?: EvidenceReadScope) {
   if (!scope || scope.audience === "OWNER") return null;
-  if (scope.audience === "PUBLIC") {
-    return Prisma.sql`w."visibility"::text = 'PUBLIC'`;
-  }
+  const published = Prisma.sql`(
+      w."visibility"::text = 'PUBLIC' AND w."lifecycle"::text = 'PUBLISHED' AND w."workspaceId" IS NULL
+      AND (w."projectId" IS NULL OR EXISTS (SELECT 1 FROM icc."Project" j
+        WHERE j.id = w."projectId" AND j."isPublic" AND j."deletedAt" IS NULL))
+      AND EXISTS (SELECT 1 FROM icc."TerraqoProfessionalProfile" p
+        WHERE p.id = w."professionalProfileId" AND p."liveCvEnabled")
+    )`;
+  if (scope.audience === "PUBLIC") return published;
 
   const alternatives: Prisma.Sql[] = [
     Prisma.sql`w."visibility"::text = 'COMMUNITY'`,
   ];
   if (scope.profile.liveCvEnabled) {
-    alternatives.push(Prisma.sql`w."visibility"::text = 'PUBLIC'`);
+    alternatives.push(published);
   }
   if (scope.workspaceIds.length) {
     alternatives.push(

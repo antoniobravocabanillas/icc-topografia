@@ -1,4 +1,4 @@
-import { publishedCvProfileWhere } from "./public-cv";
+import { standalonePublicWorklogWhere, publishedCvProfileWhere } from "./public-cv";
 import { cache } from "react";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -13,6 +13,7 @@ const publicCvSeoProfileSelect = {
   country: true,
   locationCity: true,
   status: true,
+  publicationOperations: { where: { operationKey: "availability-declaration", action: "DECLARE_AVAILABILITY" }, select: { fingerprint: true } },
   liveCvEnabled: true,
   liveCvVisibility: true,
   identityVerificationStatus: true,
@@ -49,11 +50,8 @@ const publicCvSeoProfileSelect = {
     orderBy: [{ position: "asc" }, { createdAt: "asc" }],
     take: 12
   },
-  documents: {
-    select: { reviewStatus: true }
-  },
   worklogs: {
-    where: { visibility: "PUBLIC", deletedAt: null },
+    where: standalonePublicWorklogWhere,
     select: {
       projectId: true,
       evidenceStatus: true,
@@ -128,17 +126,15 @@ export function publicCvSeoFacts(profile: PublicCvSeoProfile, fallbackUsername: 
   const verifiedPercent = profile.experiences.length
     ? Math.round((verifiedExperiences / profile.experiences.length) * 100)
     : 0;
-  const verifiedDocuments = profile.documents.filter((document) => document.reviewStatus === "VERIFIED").length;
   const verifiedActivity = profile.worklogs.filter(
     (worklog) => worklog.evidenceStatus === "VERIFIED" || worklog.validations.length > 0
   ).length;
   const completedTrustAreas = [
     profile.identityVerificationStatus === "VERIFIED",
-    verifiedDocuments > 0,
     verifiedExperiences > 0,
     verifiedActivity > 0
   ].filter(Boolean).length;
-  const trustScore = Math.round((completedTrustAreas / 4) * 100);
+  const trustScore = Math.round((completedTrustAreas / 3) * 100);
   const projects = new Set(
     [...profile.experiences.map((experience) => experience.projectId), ...profile.worklogs.map((worklog) => worklog.projectId)].filter(Boolean)
   ).size;
@@ -167,13 +163,12 @@ export function publicCvSeoFacts(profile: PublicCvSeoProfile, fallbackUsername: 
     totalMonths,
     verifiedExperiences,
     verifiedPercent,
-    verifiedDocuments,
     trustScore,
     completedTrustAreas,
     projects,
     location,
     skills,
-    status: STATUS_COPY[profile.status] || "Perfil activo",
+    status: profile.publicationOperations.some(row => row.fingerprint === profile.status) ? STATUS_COPY[profile.status] : "Disponibilidad sin confirmar",
     isPublic
   };
 }

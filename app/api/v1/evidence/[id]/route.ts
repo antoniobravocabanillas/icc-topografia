@@ -48,10 +48,8 @@ export async function GET(
       },
       {
         headers: {
-          "Cache-Control":
-            scope.audience === "PUBLIC"
-              ? "public, max-age=30, stale-while-revalidate=60"
-              : "private, no-store",
+          "Cache-Control": "private, no-store",
+          "Netlify-CDN-Cache-Control": "no-store",
           Vary: "Cookie",
         },
       },

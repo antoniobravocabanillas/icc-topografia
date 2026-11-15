@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { PublicCVPage } from "@/components/terraqo/public-cv";
-import { publicCvProfileInclude, publishedCvProfileWhere } from "@/lib/terraqo/public-cv";
+import { publicCvProfileSelect, redactPrivateProjects, publishedCvProfileWhere } from "@/lib/terraqo/public-cv";
 import { getPublicCvSeoProfile, publicCvJsonLd, publicCvSeoFacts } from "@/lib/terraqo/public-cv-seo";
 import { prisma } from "@/lib/prisma";
 import { listedCvSelections } from "@/lib/terraqo/publication-projection";
 import { publicWorkCaseCards } from "@/lib/terraqo/public-work-case";
 import { absoluteUrl } from "@/lib/utils";
+import { declaredAvailabilityDate } from "@/lib/terraqo/professional-availability";
 
 type PublicCvPageProps = {
   params: Promise<{ username: string }>;
@@ -87,14 +88,17 @@ export default async function PublicCvRoute({ params }: PublicCvPageProps) {
   const [profile, seoProfile, cases] = await Promise.all([
     prisma.terraqoProfessionalProfile.findUnique({
       where: publishedCvProfileWhere(username),
-      include: publicCvProfileInclude
+      select: publicCvProfileSelect
     }),
     getPublicCvSeoProfile(username),
     publicWorkCaseCards(username, 2)
   ]);
 
   if (!profile) notFound();
-  const selections = await listedCvSelections(prisma, profile.id);
+  const [selections, availabilityUpdatedAt] = await Promise.all([
+    listedCvSelections(prisma, profile.id),
+    declaredAvailabilityDate(profile),
+  ]);
 
   const canonical = absoluteUrl(`/cv/${username}`);
   const jsonLd = seoProfile ? publicCvJsonLd(seoProfile, username, canonical) : null;
@@ -107,7 +111,7 @@ export default async function PublicCvRoute({ params }: PublicCvPageProps) {
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
         />
       ) : null}
-      <PublicCVPage profile={profile} cases={cases.cards} selections={selections} />
+      <PublicCVPage profile={redactPrivateProjects(profile)} cases={cases.cards} selections={selections} availabilityUpdatedAt={availabilityUpdatedAt} />
     </>
   );
 }

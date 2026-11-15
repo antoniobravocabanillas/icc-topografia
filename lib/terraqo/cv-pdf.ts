@@ -90,7 +90,6 @@ export async function createExecutiveCvPdf(profile: PublicCvProfile, requestUrl:
   drawSimpleList(flow, fonts, [
     `Identidad: ${profile.identityVerificationStatus === "VERIFIED" ? "verificada" : "pendiente de verificación"}`,
     `Experiencias validadas: ${metrics.validatedExperiences} de ${profile.experiences.length}`,
-    `Documentos revisados: ${metrics.verifiedDocuments}`,
     `Evidencias públicas: ${metrics.publicEvidence}`,
   ], name, publicUrl);
 
@@ -343,7 +342,7 @@ function truncateText(text: string, font: PDFFont, size: number, maxWidth: numbe
 }
 
 function companyName(experience: Experience) {
-  return clean(experience.companyName || experience.project?.clientName || experience.workspace?.brandName || experience.workspace?.name || "Organización no publicada");
+  return clean(experience.companyName || experience.workspace?.brandName || experience.workspace?.name || "Organización no publicada");
 }
 
 function companyLogoSource(profile: PublicCvProfile, experience: Experience) {
@@ -372,15 +371,13 @@ function collectSkills(profile: PublicCvProfile) {
 function getMetrics(profile: PublicCvProfile) {
   return {
     validatedExperiences: profile.experiences.filter((item) => item.verifiedByTerraqo || item.verificationStatus === "APPROVED").length,
-    verifiedDocuments: profile.documents.filter((item) => item.reviewStatus === "VERIFIED").length,
     publicEvidence: profile.worklogs.length,
   };
 }
 
 function profileLocation(profile: PublicCvProfile) {
   const location = [profile.locationCity || profile.city, profile.region].filter(Boolean).join(", ");
-  const status: Record<string, string> = { AVAILABLE: "Disponible", WORKING: "Trabajando", OPEN_TO_PROJECTS: "Disponible para proyectos", NOT_AVAILABLE: "No disponible" };
-  return [location, status[profile.status] || "Perfil activo"].filter(Boolean).join(" | ");
+  return location;
 }
 
 function cleanSummary(summary: string | null) {

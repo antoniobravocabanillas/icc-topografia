@@ -3,8 +3,8 @@ import { publicWorkCase } from "@/lib/terraqo/public-work-case";
 import { notFound } from "next/navigation";
 import { PublicCVSectionPage } from "@/components/terraqo/public-cv";
 import {
-  publicCvArchiveProfileInclude as publicCvProfileInclude,
-  publishedCvProfileWhere,
+  publicCvArchiveProfileSelect as publicCvProfileSelect,
+  redactPrivateProjects, publishedCvProfileWhere,
 } from "@/lib/terraqo/public-cv";
 import { prisma } from "@/lib/prisma";
 import { createMetadata } from "@/lib/seo";
@@ -24,7 +24,7 @@ export const revalidate = 0;
 async function loadPublicEvidence(username: string, recordId: string) {
   const profile = await prisma.terraqoProfessionalProfile.findUnique({
     where: publishedCvProfileWhere(username),
-    include: publicCvProfileInclude,
+    select: publicCvProfileSelect,
   });
   if (!profile) return null;
 
@@ -37,7 +37,7 @@ async function loadPublicEvidence(username: string, recordId: string) {
   if (!scope) return null;
   const record = await prisma.terraqoWorklogEntry.findFirst({
     where: scopeEvidenceWhere(scope, { id: recordId }),
-    include: publicCvProfileInclude.worklogs.include,
+    include: publicCvProfileSelect.worklogs.include,
   });
   if (!record) return null;
 
@@ -86,7 +86,7 @@ export default async function PublicEvidencePermalink({
 
   return (
     <PublicCVSectionPage
-      profile={result.profile}
+      profile={redactPrivateProjects(result.profile)}
       section="evidencias"
       initialRecordId={recordId}
     />

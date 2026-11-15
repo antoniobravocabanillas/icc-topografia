@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { PublicCvWorkShowcase } from "@/components/terraqo/public-cv-work-showcase";
-import Image from "next/image";
 import {
   ArrowRight,
   Award,
@@ -16,7 +15,6 @@ import {
   FileCheck2,
   FileText,
   FolderKanban,
-  Gauge,
   GraduationCap,
   Grid2X2,
   IdCard,
@@ -26,7 +24,6 @@ import {
   Plus,
   ShieldCheck,
   Target,
-  UserRoundCheck,
   type LucideIcon
 } from "lucide-react";
 import type { PublicCvProfile } from "@/lib/terraqo/public-cv";
@@ -36,7 +33,6 @@ import { TerraqoAvatar } from "@/components/terraqo/terraqo-avatar";
 import { TerraqoPublicHeader } from "@/components/terraqo/terraqo-public-header";
 import { PublicCvActivityExplorer, type PublicCvActivityRecord } from "@/components/terraqo/public-cv-activity-explorer";
 import { PublicCvProjectExplorer } from "@/components/terraqo/public-cv-project-explorer";
-import { publicCvEvidenceHref } from "@/lib/terraqo/public-cv-permalink";
 import {
   encodeWorklogArchiveCursor,
   parseWorklogArchiveFilters,
@@ -45,6 +41,10 @@ import {
 import type { PublicWorkCaseCard } from "@/lib/terraqo/public-work-case";
 
 type PublicCVPageProps = {
+  /** Server-authorized destination; never inferred from private contact details. */
+  contactHref?: string;
+  /** Timestamp for the availability declaration, not the general profile update. */
+  availabilityUpdatedAt?: Date | null;
   cases?: PublicWorkCaseCard[];
   selections?: Array<{ slug: string; title: string; count: number }>;
   profile: PublicCvProfile;
@@ -64,19 +64,12 @@ export type ProjectSnapshot = {
 };
 
 const STATUS_COPY: Record<string, string> = {
-  AVAILABLE: "Disponible ahora",
+  AVAILABLE: "Disponible",
   WORKING: "Trabajando",
   OPEN_TO_PROJECTS: "Disponible para proyectos",
   NOT_AVAILABLE: "No disponible"
 };
 
-const PROJECT_STATUS_COPY: Record<string, string> = {
-  PLANNING: "Planificado",
-  IN_PROGRESS: "En ejecucion",
-  FINISHED: "Completado",
-  PUBLISHED: "Publicado",
-  ARCHIVED: "Archivado"
-};
 
 const DOCUMENT_COPY: Record<string, { label: string; icon: LucideIcon }> = {
   CV: { label: "CV", icon: FileText },
@@ -130,7 +123,7 @@ export function isPublicCvSection(value: string): value is PublicCvSection {
 
 function formatDate(date?: Date | null, options: Intl.DateTimeFormatOptions = { day: "2-digit", month: "short", year: "numeric" }) {
   if (!date) return "Fecha por confirmar";
-  return new Intl.DateTimeFormat("es-PE", options).format(date).replace(".", "");
+  return new Intl.DateTimeFormat("es-PE", { timeZone: "America/Lima", ...options }).format(date).replace(".", "");
 }
 
 function formatPeriod(start?: Date | null, end?: Date | null) {
@@ -152,18 +145,6 @@ function publicCvCallback(username: string, section?: PublicCvSection) {
   return `/cuenta?callbackUrl=${encodeURIComponent(path)}`;
 }
 
-function projectHref(project: ProjectSnapshot) {
-  const slug = project.slug?.trim();
-  if (!slug || slug === "#") return null;
-  if (/^https?:\/\//i.test(slug)) return slug;
-  if (slug.startsWith("/")) return slug;
-  return `/proyectos/${slug}`;
-}
-
-function isExternalHref(href: string) {
-  return /^https?:\/\//i.test(href);
-}
-
 function uniqueProjects(profile: PublicCvProfile, limit: number | null = 3): ProjectSnapshot[] {
   const map = new Map<string, ProjectSnapshot>();
   for (const experience of profile.experiences) {
@@ -172,7 +153,7 @@ function uniqueProjects(profile: PublicCvProfile, limit: number | null = 3): Pro
       id: experience.project.id,
       title: experience.project.title,
       slug: experience.project.slug,
-      clientName: experience.project.clientName,
+      clientName: null,
       location: experience.project.location,
       category: experience.project.category,
       status: experience.project.status,
@@ -185,7 +166,7 @@ function uniqueProjects(profile: PublicCvProfile, limit: number | null = 3): Pro
       id: worklog.project.id,
       title: worklog.project.title,
       slug: worklog.project.slug,
-      clientName: worklog.project.clientName,
+      clientName: null,
       location: worklog.project.location,
       category: worklog.project.category,
       status: worklog.project.status,
@@ -194,19 +175,6 @@ function uniqueProjects(profile: PublicCvProfile, limit: number | null = 3): Pro
   }
   const projects = Array.from(map.values());
   return typeof limit === "number" ? projects.slice(0, limit) : projects;
-}
-
-function verifiedDocumentCount(profile: PublicCvProfile) {
-  return profile.documents.filter((document) => document.reviewStatus === "VERIFIED").length;
-}
-
-function publicEvidenceCount(profile: PublicCvProfile) {
-  return profile.worklogs.reduce((total, worklog) => total + 1 + worklog.evidenceUrls.length + worklog.media.length, 0);
-}
-
-function latestActivity(profile: PublicCvProfile) {
-  const latestWorklog = profile.worklogs[0]?.occurredAt;
-  return latestWorklog || profile.updatedAt;
 }
 
 function currentHeadline(profile: PublicCvProfile) {
@@ -255,60 +223,51 @@ function profileCapabilities(profile: PublicCvProfile, limit = 6) {
   return Array.from(new Set(values)).slice(0, limit);
 }
 
-export function PublicCVPage({ profile, cases = [], selections = [] }: PublicCVPageProps) {
+export function PublicCVPage({ profile, cases = [], selections = [], contactHref, availabilityUpdatedAt }: PublicCVPageProps) {
   const name = profile.user.name || profile.username || "Profesional Terraqo";
   const username = profile.username || "perfil";
   const isPublicCv = profile.liveCvEnabled && profile.liveCvVisibility === "PUBLIC";
-  const projects = uniqueProjects(profile, null);
   const specialties = profileCapabilities(profile, 12);
-  const evidence = profile.worklogs.slice(0, 3);
-  const lastActivity = latestActivity(profile);
-  const verifiedDocs = verifiedDocumentCount(profile);
-  const totalExperienceMonths = profile.experiences.reduce((sum, experience) => sum + monthsBetween(experience.startedAt, experience.currentlyWorking ? null : experience.endedAt), 0);
+  const context = `/cv/${encodeURIComponent(username)}`;
+  const contactDestination = contactHref || `${context}/contacto`;
 
   return (
     <div className="terraqo-brand-surface tq-cv-v3 min-h-screen bg-[#07111f] text-white">
       <TerraqoPublicHeader tone="dark" />
-      <main>
+      <main data-testid="s09-profile" className="[&_a]:outline-offset-4 [&_a:focus-visible]:outline [&_a:focus-visible]:outline-2 [&_a:focus-visible]:outline-sky-300 [&_p]:break-words [&_h1]:break-words [&_h2]:break-words">
         <section className="mx-auto w-[min(100%-32px,1440px)] py-8 text-white sm:w-[min(100%-80px,1440px)] sm:py-10">
           <ProfileHero profile={profile} name={name} username={username} specialties={specialties} isPublicCv={isPublicCv} />
           <div className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,2.2fr)_minmax(280px,1fr)]">
             <LiveCvPulse cases={cases} profile={profile} username={username} />
-            <aside className="rounded-xl border border-[#294259] bg-[#0a1927] p-6 lg:mt-16">
+            <aside aria-label="Antes de colaborar" className="min-w-0 rounded-xl border border-[#294259] bg-[#0a1927] p-6 lg:mt-16">
               <h2 className="text-xl font-semibold text-white">Antes de colaborar</h2>
               <p className="mt-2 text-[13px] text-slate-400">Perfil actualizado el {formatDate(profile.updatedAt)}</p>
               <dl className="mt-5 divide-y divide-white/10 border-y border-white/10 text-sm text-white">
-                <div className="grid gap-2 py-5"><dt className="flex items-center gap-2 text-slate-400"><CalendarDays className="h-5 w-5 text-sky-400" />Disponibilidad</dt><dd>{STATUS_COPY[profile.status] || "Por confirmar"}</dd></div>
+                <div data-testid="s09-availability" className="grid gap-2 py-5"><dt className="flex items-center gap-2 text-slate-300"><CalendarDays aria-hidden="true" className="h-5 w-5 text-sky-400" />Disponibilidad declarada</dt><dd>{availabilityUpdatedAt ? STATUS_COPY[profile.status] || "Por confirmar" : "Sin declaración fechada"}<span className="mt-2 block text-[13px] leading-5 text-slate-300">{availabilityUpdatedAt ? <>Declaración actualizada el <time dateTime={availabilityUpdatedAt.toISOString()}>{formatDate(availabilityUpdatedAt)}</time>.</> : "La actualización del perfil no confirma su disponibilidad actual."}</span></dd></div>
                 <div className="grid gap-2 py-5"><dt className="flex items-center gap-2 text-slate-400"><MapPin className="h-5 w-5 text-sky-400" />Ubicación declarada</dt><dd>{profile.city || "No indicada"}</dd></div>
               </dl>
-              <Link href={publicCvCallback(username)} prefetch={false} className="mt-5 flex min-h-11 items-center justify-center gap-3 rounded-lg bg-[#2869c7] px-4 text-sm font-semibold text-white">Contactar<ArrowRight className="h-4 w-4" /></Link>
+              {profile.messagePrivacy !== "NOBODY" ? <>
+                <Link data-testid="s09-contact" data-context-href={context} href={contactDestination} prefetch={false} className="mt-5 flex min-h-11 items-center justify-center gap-3 rounded-lg bg-[#2869c7] px-4 text-sm font-semibold text-white hover:bg-[#347bdc]">Contactar<ArrowRight aria-hidden="true" className="h-4 w-4" /></Link>
+                <p className="mt-3 text-[13px] leading-5 text-slate-300">La consulta conserva este perfil como referencia. Si necesitas acceder, podrás continuar después de identificarte.</p>
+              </> : <p className="mt-5 text-sm leading-6 text-slate-300">Este profesional no recibe consultas por Terraqo.</p>}
               <a href={`/api/terraqo/cv/${encodeURIComponent(username)}/pdf`} className="mt-3 flex min-h-11 items-center justify-center gap-3 rounded-lg border border-[#294259] px-4 text-sm text-white">Descargar CV<Download className="h-4 w-4" /></a>
             </aside>
           </div>
         </section>
         <section id="respaldo" aria-label="Trayectoria y respaldo" className="mx-auto grid w-[min(100%-32px,1440px)] scroll-mt-24 gap-5 pb-10">
           <h2 className="text-2xl font-semibold text-white">Trayectoria y respaldo</h2>
-          <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-            <MetricStrip experienceLabel={formatExperienceDuration(totalExperienceMonths)} projects={projects.length} validation={profile.experiences.filter(item => item.verifiedByTerraqo).length} evidence={publicEvidenceCount(profile)} lastActivity={lastActivity} />
-            <VerificationPanel profile={profile} verifiedDocs={verifiedDocs} username={username} />
-          </div>
-          <ExperienceTimeline profile={profile} username={username} />
-          <EducationTimeline profile={profile} username={username} />
-          <FeaturedProjects projects={projects} profile={profile} username={username} />
-          <PublicEvidence worklogs={evidence} username={username} />
+          <p className="max-w-3xl text-base leading-7 text-slate-300">Cada registro muestra su propio estado y sus fuentes. Un respaldo se limita al trabajo y al alcance indicado; no certifica al profesional en su conjunto.</p>
+          {profile.experiences.length > 0 && <ExperienceTimeline profile={profile} username={username} />}
+          {profile.education.length > 0 && <EducationTimeline profile={profile} username={username} />}
           {selections.length > 0 && <section aria-label="Selecciones públicas" className="rounded-xl border border-[#294259] bg-[#0a1927] p-6">
             <h2 className="text-xl font-semibold text-white">Selecciones públicas</h2>
             <ul className="mt-3 divide-y divide-white/10">{selections.map(item => <li key={item.slug}>
               <Link href={`/selecciones/${item.slug}`} className="flex min-h-12 items-center justify-between gap-4 py-2 text-sky-200 hover:underline">
-                <strong>{item.title}</strong><span className="text-sm text-slate-300">{item.count} {item.count === 1 ? "registro" : "registros"}</span>
+                <strong>{item.title}</strong><ArrowRight aria-hidden="true" className="h-4 w-4 shrink-0" />
               </Link>
             </li>)}</ul>
           </section>}
-          <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
-            <SkillsAndTools profile={profile} username={username} />
-            <DocumentsPanel profile={profile} username={username} />
-          </div>
-          <PublicCVCTA username={username} isPublicCv={isPublicCv} />
+          {specialties.length > 0 && <SkillsAndTools profile={profile} username={username} />}
         </section>
       </main>
       <PublicCVFooter updatedAt={profile.updatedAt} />
@@ -360,7 +319,7 @@ export function PublicCVSectionPage({
       evidenceUrls: worklog.evidenceUrls,
       project: worklog.project ? {
         title: normalizeSpanishCopy(worklog.project.title) || worklog.project.title,
-        clientName: worklog.project.clientName ? normalizeSpanishCopy(worklog.project.clientName) || worklog.project.clientName : null,
+        clientName: null,
         location: worklog.project.location ? normalizeSpanishCopy(worklog.project.location) || worklog.project.location : null,
         category: worklog.project.category ? normalizeSpanishCopy(worklog.project.category) || worklog.project.category : null,
         image: worklog.project.images[0]?.url || null
@@ -409,7 +368,7 @@ export function PublicCVSectionPage({
         evidenceUrls: experience.evidence.filter((item) => /^(https?:\/\/|\/)/i.test(item)),
         project: experience.project ? {
           title: normalizeSpanishCopy(experience.project.title) || experience.project.title,
-          clientName: experience.project.clientName ? normalizeSpanishCopy(experience.project.clientName) || experience.project.clientName : company,
+          clientName: null,
           location: experience.project.location ? normalizeSpanishCopy(experience.project.location) || experience.project.location : location,
           category: experience.project.category ? normalizeSpanishCopy(experience.project.category) || experience.project.category : null,
           image: experience.project.images[0]?.url || null
@@ -503,7 +462,7 @@ export function PublicCVSectionPage({
       return {
         id: `project-${project.id}`,
         title: `Proyecto vinculado: ${normalizeSpanishCopy(project.title) || project.title}`,
-        summary: [project.clientName, project.category, project.location].filter(Boolean).map((item) => normalizeSpanishCopy(item || "") || item).join(" · ") || "Proyecto asociado a la trayectoria pública del profesional.",
+        summary: [project.category, project.location].filter(Boolean).map((item) => normalizeSpanishCopy(item || "") || item).join(" · ") || "Proyecto asociado a la trayectoria pública del profesional.",
         outcome: null,
         type: "PROJECT_ACTIVITY",
         evidenceStatus: experience.verifiedByTerraqo || experience.verificationStatus === "APPROVED" ? "VERIFIED" : "LINKED",
@@ -516,7 +475,7 @@ export function PublicCVSectionPage({
         evidenceUrls: [],
         project: {
           title: normalizeSpanishCopy(project.title) || project.title,
-          clientName: project.clientName ? normalizeSpanishCopy(project.clientName) || project.clientName : null,
+          clientName: null,
           location: project.location ? normalizeSpanishCopy(project.location) || project.location : null,
           category: project.category ? normalizeSpanishCopy(project.category) || project.category : null,
           image: project.images[0]?.url || null
@@ -609,7 +568,7 @@ function ProfileHero({ profile, name, username, isPublicCv }: { profile: PublicC
       <TerraqoAvatar src={profile.user.image} name={name} className="h-24 w-24 shrink-0 rounded-full border border-[#294259] text-3xl sm:h-32 sm:w-32 sm:text-4xl" />
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-3xl font-semibold leading-tight text-white sm:text-4xl lg:text-5xl">{name}</h1>
+          <h1 className="text-3xl font-semibold leading-tight text-white sm:text-4xl lg:text-[40px]">{name}</h1>
           <span className="rounded-full border border-[#294259] px-3 py-1 text-xs text-slate-300">{isPublicCv ? "Perfil público" : "CV vivo"}</span>
           {profile.identityVerificationStatus === "VERIFIED" ? <BadgeCheck aria-label="Identidad verificada" className="h-6 w-6 text-sky-400" /> : null}
         </div>
@@ -629,7 +588,7 @@ function PublicCvExperiencePage({ profile, username }: { profile: PublicCvProfil
     0
   );
   const verifiedExperiences = experiences.filter((experience) => experience.verifiedByTerraqo || experience.verificationStatus === "APPROVED");
-  const companies = new Set(experiences.map((experience) => experience.companyName || experience.project?.clientName).filter(Boolean));
+  const companies = new Set(experiences.map((experience) => experience.companyName).filter(Boolean));
   const leadershipMonths = experiences.reduce((sum, experience) => {
     const leadershipCopy = `${experience.title} ${experience.role || ""}`;
     return /gerente|director|jefe|lider|líder|lead|ceo|fundador/i.test(leadershipCopy)
@@ -792,57 +751,6 @@ function PublicCvProjectsPage({ profile, username, projects }: { profile: Public
   );
 }
 
-function VerificationPanel({ profile, verifiedDocs, username }: { profile: PublicCvProfile; verifiedDocs: number; username: string }) {
-  const verifiedExperiences = profile.experiences.filter((experience) => experience.verifiedByTerraqo).length;
-  const approvedWorklogs = profile.worklogs.filter((worklog) => worklog.validations.length > 0 || worklog.evidenceStatus === "VERIFIED").length;
-  const items = [
-    { label: "Identidad verificada", detail: profile.identityVerificationStatus === "VERIFIED" ? "DNI validado" : "Pendiente de validación", done: profile.identityVerificationStatus === "VERIFIED", icon: IdCard },
-    { label: "Documentos revisados", detail: `${verifiedDocs} de ${profile.documents.length || 0} documentos`, done: verifiedDocs > 0, icon: FileCheck2 },
-    { label: "Experiencia validada", detail: `${verifiedExperiences} experiencias`, done: verifiedExperiences > 0, icon: BriefcaseBusiness },
-    { label: "Actividad comprobada", detail: `${approvedWorklogs} registros y evidencias`, done: approvedWorklogs > 0, icon: ClipboardCheck }
-  ];
-  return (
-    <aside className="rounded-[18px] border border-[#488ac9]/35 bg-[#07111f]/82 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_18px_45px_rgba(0,0,0,0.22)]">
-      <h2 className="flex items-center gap-3 font-mono text-[11px] font-black uppercase tracking-[0.12em] text-white/80"><ShieldCheck className="h-5 w-5 text-[#488ac9]" />Confianza y verificación</h2>
-      <div className="mt-5 space-y-2 border-t border-white/10 pt-4">
-        {items.map((item) => (
-          <div key={item.label} className="grid grid-cols-[22px_1fr_20px] items-center gap-2.5 rounded-lg px-1 py-1.5" title={item.detail}>
-            <span className={item.done ? "text-[#25c0d5]" : "text-[#d99a2b]"}><item.icon className="h-4 w-4" /></span>
-            <div><strong className="text-sm font-semibold text-white/80">{item.label}</strong><p className="mt-1 text-xs text-slate-400">{item.detail}</p></div>
-            <span className={item.done ? "text-[#25c0d5]" : "text-[#d99a2b]"} title={item.done ? "Validado" : "Pendiente"}>
-              {item.done ? <CheckCircle2 className="h-4 w-4" /> : <Clock3 className="h-4 w-4" />}
-            </span>
-          </div>
-        ))}
-      </div>
-      <Link href={publicCvPath(username, "documentos")} className="mt-5 flex items-center justify-between border-t border-white/10 pt-4 text-xs font-black text-[#9fc4ff] transition hover:text-[#25c0d5]">Ver validaciones <ArrowRight className="h-4 w-4" /></Link>
-    </aside>
-  );
-}
-
-function MetricStrip({ experienceLabel, projects, validation, evidence, lastActivity }: { experienceLabel: string; projects: number; validation: number; evidence: number; lastActivity: Date }) {
-  const metrics = [
-    { label: "Experiencia acumulada", value: experienceLabel, icon: UserRoundCheck },
-    { label: "Proyectos vinculados", value: projects, icon: FolderKanban },
-    { label: "Experiencias validadas", value: validation, icon: Grid2X2 },
-    { label: "Evidencias públicas", value: evidence, icon: ClipboardCheck }
-  ];
-  return (
-    <div className="grid grid-cols-2 overflow-hidden rounded-[16px] border border-white/10 bg-[#07111f]/72 xl:grid-cols-[repeat(4,minmax(0,1fr))]">
-      {metrics.map((metric) => (
-        <div key={metric.label} className="flex min-h-[92px] items-center gap-3 border-b border-r border-white/10 px-4 even:border-r-0 md:border-b-0 md:border-r md:px-5 md:even:border-r">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[11px] border border-[#488ac9]/20 bg-[#4374ba]/10 text-[#488ac9]"><metric.icon className="h-5 w-5" /></span>
-          <span><strong className="block font-display text-2xl font-black text-white sm:text-[1.7rem]">{metric.value}</strong><small className="font-semibold text-white/50">{metric.label}</small></span>
-        </div>
-      ))}
-      <div className="col-span-2 flex min-h-[92px] items-center gap-3 px-4 md:col-span-1 md:px-5">
-        <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#25c0d5] shadow-[0_0_14px_rgba(37,192,213,0.72)]" />
-        <span><small className="block text-xs text-white/40">Última actualización</small><strong className="text-sm text-white/80">{formatDate(lastActivity, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</strong></span>
-      </div>
-    </div>
-  );
-}
-
 function ExperienceTimeline({ profile, username, extended = false }: { profile: PublicCvProfile; username: string; extended?: boolean }) {
   const experiences = extended ? profile.experiences : profile.experiences.slice(0, 3);
   return (
@@ -916,10 +824,10 @@ function ExperienceCard({ experience, username }: { experience: PublicCvProfile[
         <small className="mt-2 block text-white/40">{experience.locationCity || experience.location || experience.project?.location || "Ubicación no pública"}</small>
         <small className="mt-2 block text-[#25c0d5]">{formatExperienceDuration(monthsBetween(experience.startedAt, experience.currentlyWorking ? null : experience.endedAt))}</small>
       </div>
-      <CompanyTile label={experience.companyName || experience.project?.clientName || "Empresa"} />
+      <CompanyTile label={experience.companyName || "Empresa"} />
       <div>
         <div className="flex flex-wrap items-center gap-2"><h3 className="font-display text-xl font-black text-white">{experience.title}</h3>{experience.currentlyWorking ? <span className="rounded-full border border-[#25c0d5]/25 bg-[#25c0d5]/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-[#25c0d5]">Cargo actual</span> : null}</div>
-        <p className="mt-1 text-sm font-black text-[#488ac9]">{experience.companyName || experience.project?.clientName || "Empresa no pública"}</p>
+        <p className="mt-1 text-sm font-black text-[#488ac9]">{experience.companyName || "Empresa no pública"}</p>
         <p className="mt-3 text-sm leading-6 text-white/60">{experience.role || "Experiencia profesional declarada por el profesional."}</p>
         {experience.summary ? <p className="mt-3 line-clamp-3 text-sm leading-6 text-white/50">{normalizeSpanishCopy(experience.summary) || experience.summary}</p> : null}
         {experience.highlights.length ? <div className="mt-4 flex flex-wrap gap-2">{experience.highlights.slice(0, 3).map((highlight) => <span key={highlight} className="rounded-full border border-[#488ac9]/20 bg-[#4374ba]/10 px-2.5 py-1 text-[11px] font-bold text-[#9fc4ff]">{normalizeSpanishCopy(highlight) || highlight}</span>)}</div> : null}
@@ -935,12 +843,8 @@ function ExperienceCard({ experience, username }: { experience: PublicCvProfile[
   );
 }
 
-function FeaturedProjects({ projects, profile, username }: { projects: ProjectSnapshot[]; profile: PublicCvProfile; username: string }) {
-  return <ProjectsSection projects={projects} profile={profile} username={username} />;
-}
-
 function LiveCvPulse({ profile, username, cases }: { cases: PublicWorkCaseCard[]; profile: PublicCvProfile; username: string }) {
-  return <PublicCvWorkShowcase cases={cases} username={username} records={profile.worklogs.slice(0, 2).map(worklog => ({
+  return <PublicCvWorkShowcase cases={cases} username={username} canContact={profile.messagePrivacy !== "NOBODY"} records={profile.worklogs.slice(0, 2).map(worklog => ({
     id: worklog.id,
     title: normalizeSpanishCopy(worklog.title) || worklog.title,
     summary: worklog.summary,
@@ -950,93 +854,8 @@ function LiveCvPulse({ profile, username, cases }: { cases: PublicWorkCaseCard[]
       ? `/api/public/cv/${encodeURIComponent(username)}/worklogs/${encodeURIComponent(worklog.media.find(media => media.contentType.startsWith("image/"))!.id)}`
       : null,
     skills: worklog.skills,
-    status: worklog.evidenceStatus === "VERIFIED" ? "Evidencia verificada" : worklog.evidenceStatus === "CONFIRMED" ? "Participación confirmada" : worklog.evidenceStatus === "LINKED" ? "Participación vinculada" : "Participación declarada",
+    status: worklog.evidenceStatus === "VERIFIED" ? "Revisado" : worklog.evidenceStatus === "CONFIRMED" ? "Confirmado" : "Declarado",
   }))} />;
-}
-
-function ProjectsSection({ projects, profile, username, extended = false }: { projects: ProjectSnapshot[]; profile: PublicCvProfile; username?: string; extended?: boolean }) {
-  const fallback = profile.worklogs.filter((worklog) => !worklog.project).slice(0, extended ? 24 : 4);
-  return (
-    <section id="proyectos" className="rounded-[22px] border border-white/10 bg-[#0e1a26]/58 p-5 shadow-[0_22px_70px_rgba(0,0,0,0.22)]">
-      <SectionHeader title="Proyectos destacados" description="Proyectos en los que ha participado y generado impacto." action={extended ? undefined : "Ver todos los proyectos"} href={extended ? undefined : publicCvPath(username || profile.username || "perfil", "proyectos")} />
-      <div className={extended ? "mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" : "mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"}>
-        {projects.map((project) => <ProjectCard key={project.id} project={project} />)}
-        {!projects.length && fallback.map((worklog) => <ProjectCard key={worklog.id} project={{ id: worklog.id, title: worklog.title, slug: "#", clientName: worklog.workspace?.brandName || worklog.workspace?.name || "Terraqo", location: null, category: worklog.type, status: "PUBLISHED" }} />)}
-        {!projects.length && !fallback.length ? <EmptyState title="Sin proyectos públicos" description="Los proyectos seleccionados aparecerán cuando el profesional active su visibilidad pública." /> : null}
-      </div>
-    </section>
-  );
-}
-
-function ProjectCard({ project }: { project: ProjectSnapshot }) {
-  const href = projectHref(project);
-  const className =
-    "group block overflow-hidden rounded-[14px] border border-white/10 bg-[#07111f]/74 text-white transition duration-200 hover:-translate-y-1 hover:border-[#488ac9]/50 hover:shadow-[0_18px_42px_rgba(0,0,0,0.25)]";
-  const content = (
-    <>
-      <VisualFrame src={project.image} label={project.title} />
-      <div className="p-4">
-        <span className="inline-flex rounded-[7px] border border-[#488ac9]/20 bg-[#4374ba]/10 px-2 py-1 text-xs font-black text-[#9fc4ff]">{PROJECT_STATUS_COPY[project.status] || "Proyecto"}</span>
-        <h3 className="mt-3 min-h-[48px] font-display text-base font-black leading-tight">{project.title}</h3>
-        <p className="mt-2 text-xs font-semibold text-white/50">{project.clientName || project.location || project.category || "Proyecto Terraqo"}</p>
-        <span className="mt-4 inline-flex items-center gap-2 text-xs font-black text-[#9fc4ff] transition group-hover:translate-x-1 group-hover:text-[#25c0d5]">
-          {href ? "Ver proyecto" : "Detalle no público"}
-          {href ? <ArrowRight className="h-3.5 w-3.5" /> : null}
-        </span>
-      </div>
-    </>
-  );
-
-  if (!href) {
-    return <article className={className}>{content}</article>;
-  }
-
-  if (isExternalHref(href)) {
-    return (
-      <a href={href} target="_blank" rel="noreferrer" className={className} aria-label={`Ver proyecto ${project.title}`}>
-        {content}
-      </a>
-    );
-  }
-
-  return (
-    <Link href={href} className={className} aria-label={`Ver proyecto ${project.title}`}>
-      {content}
-    </Link>
-  );
-}
-
-function PublicEvidence({ worklogs, username }: { worklogs: PublicCvProfile["worklogs"]; username: string }) {
-  return <EvidenceSection worklogs={worklogs} username={username} />;
-}
-
-function EvidenceSection({ worklogs, username, extended = false }: { worklogs: PublicCvProfile["worklogs"]; username?: string; extended?: boolean }) {
-  return (
-    <section id="evidencias" className="rounded-[22px] border border-white/10 bg-[#0e1a26]/58 p-5 shadow-[0_22px_70px_rgba(0,0,0,0.22)] sm:p-6">
-      <SectionHeader title="Evidencias públicas" description="Muestra del trabajo real documentado en campo." action={extended ? "Volver al CV vivo" : "Ver todas las evidencias"} href={extended && username ? publicCvPath(username) : publicCvPath(username || "perfil", "evidencias")} />
-      <div className={extended ? "mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" : "mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-6"}>
-        {worklogs.length ? worklogs.map((worklog) => <EvidenceCard key={worklog.id} worklog={worklog} username={username} />) : <EmptyState title="Sin evidencias públicas" description="Las evidencias públicas seleccionadas aparecerán en esta sección." />}
-      </div>
-    </section>
-  );
-}
-
-function EvidenceCard({ worklog, username }: { worklog: PublicCvProfile["worklogs"][number]; username?: string }) {
-  const uploadedPhoto = username && worklog.media[0]
-    ? `/api/public/cv/${encodeURIComponent(username)}/worklogs/${encodeURIComponent(worklog.media[0].id)}`
-    : undefined;
-  const src = uploadedPhoto || worklog.evidenceUrls.find((url) => url.startsWith("http") || url.startsWith("/")) || projectImage(worklog.project);
-  const content = (
-    <article id={worklog.id} className="group scroll-mt-24 overflow-hidden rounded-[14px] border border-white/10 bg-[#07111f]/74 transition hover:border-[#488ac9]/45">
-      <VisualFrame src={src} label={worklog.title} compact />
-      <div className="p-3">
-        <h3 className="line-clamp-2 min-h-[36px] text-sm font-black text-white">{normalizeSpanishCopy(worklog.title) || worklog.title}</h3>
-        {worklog.locationLabel ? <p className="mt-2 flex items-center gap-1.5 text-xs font-bold text-[#9fc4ff]"><MapPin className="h-3.5 w-3.5" />{worklog.locationLabel}</p> : null}
-        <p className="mt-2 font-mono text-xs text-white/40">{formatDate(worklog.occurredAt, { year: "numeric" })}</p>
-      </div>
-    </article>
-  );
-  return username ? <Link href={publicCvEvidenceHref(username, worklog.id)} aria-label={`Ver actividad: ${worklog.title}`}>{content}</Link> : content;
 }
 
 function SkillsAndTools({ profile, username, extended = false }: { profile: PublicCvProfile; username?: string; extended?: boolean }) {
@@ -1167,28 +986,6 @@ function DocumentStatusCard({ document }: { document: { type: string; reviewStat
       <span className={isVerified ? "absolute bottom-2 right-2 text-[#25c0d5]" : document.reviewStatus === "NOT_PROVIDED" ? "absolute bottom-2 right-2 text-white/20" : "absolute bottom-2 right-2 text-[#f0b84b]"}>
         {isVerified ? <CheckCircle2 className="h-4 w-4" /> : document.reviewStatus === "NOT_PROVIDED" ? <Plus className="h-4 w-4" /> : <Clock3 className="h-4 w-4" />}
       </span>
-    </div>
-  );
-}
-
-function VisualFrame({ src, label, compact = false }: { src?: string; label: string; compact?: boolean }) {
-  return (
-    <div className={compact ? "relative h-28 overflow-hidden bg-[#0e1a26]" : "relative h-36 overflow-hidden bg-[#0e1a26]"}>
-      {src ? (
-        <Image
-          src={src}
-          alt={label}
-          fill
-          sizes={compact ? "(max-width: 768px) 100vw, 280px" : "(max-width: 768px) 100vw, 420px"}
-          unoptimized
-          className="object-cover transition duration-500 group-hover:scale-[1.03]"
-        />
-      ) : (
-        <div className="grid h-full w-full place-items-center bg-[radial-gradient(circle_at_45%_35%,rgba(72,138,201,0.24),transparent_35%),linear-gradient(135deg,#0e1a26,#07111f)]">
-          <Gauge className="h-8 w-8 text-[#488ac9]" />
-        </div>
-      )}
-      <div className="absolute inset-0 bg-gradient-to-t from-[#07111f]/75 via-[#07111f]/5 to-transparent" />
     </div>
   );
 }
