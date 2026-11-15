@@ -28,7 +28,8 @@ async function exerciseLocal() {
     assert.deepEqual(await db.$queryRaw`SELECT current_user AS role, current_database() AS database`,
       [{ role: "terraqo_s22_test", database: "postgres" }]);
     const { exerciseVisitor } = await import("./lib/s09-visitor-scenario");
-    await exerciseVisitor(db, origin, phase => console.log("S09 local", phase));
+    const run = await exerciseVisitor(db, origin, phase => console.log("S09 local", phase));
+    console.log("S09 local verified fixture cleanup", run);
   } finally { await db.$disconnect(); }
 }
 
@@ -68,11 +69,6 @@ async function rehearse() {
       await cp(path.join(root, name), path.join(app, name), { recursive: true });
     for (const name of ["node_modules", "public"])
       await symlink(path.join(root, name), path.join(app, name), process.platform === "win32" ? "junction" : "dir");
-    for (const blob of s24BlobFixtures(run).flat()) {
-      const file = path.join(app, ".next/local-media/terraqo-worklog-evidence", blob.key);
-      await mkdir(path.dirname(file), { recursive: true });
-      await writeFile(file, blob.bytes, { flag: "wx" });
-    }
     next = spawn(process.execPath, [path.join(root, "node_modules/next/dist/bin/next"), "dev", "--hostname", "127.0.0.1", "--port", String(webPort)],
       { cwd: app, env, stdio: ["ignore", log.fd, log.fd], windowsHide: true });
     for (let i = 0; i < 90; i++) {
@@ -81,14 +77,33 @@ async function rehearse() {
       assert.ok(i < 89, "Loopback app did not start");
       await new Promise(resolve => setTimeout(resolve, 500));
     }
+    // Next cleans its development directory on startup. Stage local bytes after readiness.
+    for (const blob of s24BlobFixtures(run).flat()) {
+      const file = path.join(app, ".next/local-media/terraqo-worklog-evidence", blob.key);
+      await mkdir(path.dirname(file), { recursive: true });
+      await writeFile(file, blob.bytes, { flag: "wx" });
+    }
     const test = spawn(process.execPath, ["--import", "tsx", "scripts/test-s09-visitor-local.ts", "--loopback"],
       { cwd: root, env, stdio: "inherit", windowsHide: true });
     const code = await new Promise<number | null>((resolve, reject) => test.on("error", reject).once("exit", resolve));
     assert.equal(code, 0, "Loopback S09 journey failed");
   } finally {
     try {
-      if (next?.pid && next.exitCode === null) {
-        if (process.platform === "win32") await exec("taskkill", ["/PID", String(next.pid), "/T", "/F"], { windowsHide: true });
+      if (next?.pid && next.exitCode === null && next.signalCode === null) {
+        if (process.platform === "win32") {
+          // taskkill can return 255 while Node is still delivering the process exit event.
+          const exited = new Promise<void>(resolve => next!.once("exit", () => resolve()));
+          try { await exec("taskkill", ["/PID", String(next.pid), "/T", "/F"], { windowsHide: true }); }
+          catch (error) {
+            let deadline: NodeJS.Timeout | undefined;
+            try {
+              await Promise.race([exited, new Promise<never>((_, reject) => {
+                deadline = setTimeout(() => reject(error), 8000);
+              })]);
+            } finally { clearTimeout(deadline); }
+          }
+          await exited;
+        }
         else next.kill("SIGTERM");
       }
     } finally {
@@ -104,6 +119,10 @@ async function rehearse() {
 (process.argv[2] === "--loopback" ? exerciseLocal() : rehearse()).catch(error => {
   // Local diagnostics show assertion locations without including credentials or response bodies.
   const location = error instanceof Error ? error.stack?.split("\n").filter(line => /\bat .*s0[69]-/.test(line)).slice(0, 3) : [];
-  console.error("S09 local rejected", location);
+  const diagnostic = error as NodeJS.ErrnoException & { actual?: unknown; expected?: unknown; cmd?: string };
+  console.error("S09 local rejected", { location, code: diagnostic.code, syscall: diagnostic.syscall,
+    command: diagnostic.cmd?.split(" ")[0]?.split(/[\\/]/).pop(),
+    actual: typeof diagnostic.actual === "number" ? diagnostic.actual : undefined,
+    expected: typeof diagnostic.expected === "number" ? diagnostic.expected : undefined });
   process.exitCode = 1;
 });

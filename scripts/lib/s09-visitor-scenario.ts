@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { expect } from "@playwright/test";
 import { chromium } from "playwright";
 import type { PrismaClient } from "@prisma/client";
 import { seedSharing, cleanSharing } from "./s06-sharing-fixtures";
-import { sharingSession, compose } from "./s06-sharing-browser";
+import { sharingSession } from "./s06-sharing-browser";
 import { asSession, checkSelection, denied, fixedSession } from "./s06-sharing-reads";
 import { s24BlobFixtures } from "./s24-blob-fixtures.mjs";
 import { visitorJourney, emptyContact } from "./s09-visitor-browser";
@@ -52,7 +53,17 @@ export async function exerciseVisitor(db: PrismaClient, origin: string, phase: (
     const page = await visitor.newPage();
     await anonymousSession(visitor);
     phase("limited-grant");
-    const collection = await compose(await writer.newPage(), origin, fixture, "Lectura S09 " + run, "invited", [personal]);
+    const created = await writer.request.post("/api/v1/share-collections", { maxRedirects: 0,
+      headers: { Origin: origin, "Idempotency-Key": randomUUID() }, data: { title: "Lectura S09 " + run,
+        items: [{ revisionId: personal.revision, allowedFields: ["summary"], includeMedia: true }] } });
+    assert.equal(created.status(), 201);
+    const collection = (await created.json()).data;
+    assert.equal(collection.version, 1);
+    assert.deepEqual(collection.grants, []);
+    const issued = await writer.request.post("/api/v1/share-collections/" + collection.id + "/grants", {
+      maxRedirects: 0, headers: { Origin: origin, "Idempotency-Key": randomUUID() }, data: { expectedVersion: collection.version,
+        inviteEmail: recipient + "@example.invalid", scopes: ["VIEW_COLLECTION"], expiresAt: new Date(Date.now() + 3600000).toISOString() } });
+    assert.equal(issued.status(), 201);
     const root = "/api/v1/shared-selections/" + collection.id;
     const fixed = await fixedSession(reader, origin);
     await checkSelection(fixed, root, [personal]);
