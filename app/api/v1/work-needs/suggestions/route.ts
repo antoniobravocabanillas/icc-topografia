@@ -10,8 +10,8 @@ import { reserveMonthlyUsage } from "@/lib/terraqo/billing/entitlements";
 import { BillingError } from "@/lib/terraqo/billing/provider";
 
 const inputSchema = z.object({
-  activity: z.string().trim().min(2).max(2400),
-  context: z.string().trim().max(1600),
+  activity: z.string().trim().min(2).max(180),
+  context: z.string().trim().max(2400),
 });
 const suggestionsSchema = z.object({
   suggestions: z.array(z.object({

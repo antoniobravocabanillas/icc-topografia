@@ -27,7 +27,8 @@ export async function needJourney(page: Page, db: PrismaClient, f: NeedFixture, 
   requirementIds: string[], phase: (name: string) => void) {
   const work = "Nivelación";
   const context = "Losa de obra";
-  const changed = "Segundo tramo de la losa";
+  // Exercise the maximum context accepted by the editor on both suggestion and revision endpoints.
+  const changed = "Segundo tramo de la losa. ".repeat(100).slice(0, 2399) + ".";
   const calls: string[] = [];
   const runtimeErrors: string[] = [];
   page.on("pageerror", err => runtimeErrors.push(err.name));
