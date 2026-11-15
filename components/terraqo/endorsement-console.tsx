@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { BadgeCheck, Clock3, FileText, LoaderCircle, Send, UserCheck } from "lucide-react";
 import { EndorsementReviewForm } from "./endorsement-review-form";
-import { BadgeCheck, Clock3, LoaderCircle, MessageSquareText, Send, UserCheck } from "lucide-react";
 
 const aspects = [
   ["title", "Título"], ["summary", "Descripción"], ["outcome", "Resultado"],
@@ -12,67 +13,61 @@ const aspects = [
   ["locationLabel", "Lugar"],
 ] as const;
 type Aspect = (typeof aspects)[number][0];
-
-type Revision = {
-  id: string;
-  revisionNo: number;
-  contentHash: string;
-  title?: string;
-  summary?: string;
-  outcome?: string | null;
-  contributionRole?: string | null;
-  responsibilities?: string[];
-  methods?: string[];
-  tools?: string[];
+export type EndorsementRevision = {
+  id: string; revisionNo: number; contentHash: string; title?: string | null; summary?: string | null;
+  outcome?: string | null; contributionRole?: string | null; responsibilities?: string[];
+  methods?: string[]; tools?: string[];
   worklog?: { id: string; occurredAt?: string; locationLabel?: string | null };
+  thumbnailMediaId?: string;
 };
-type RequestItem = {
-  id: string;
-  requesterId: string;
-  reviewerUserId: string | null;
-  reviewerEmail: string | null;
-  relationshipLabel: string;
-  requestedScope: string[];
-  revisionHash: string;
-  status: string;
-  version: number;
-  expiresAt: string;
-  sentAt: string | null;
-  revision: Revision;
+export type EndorsementRequestItem = {
+  id: string; requesterId: string; reviewerUserId: string | null; reviewerEmail: string | null;
+  relationshipLabel: string; requestedScope: string[]; revisionHash: string; status: string;
+  version: number; expiresAt: string; sentAt: string | null; updatedAt?: string;
+  revision: EndorsementRevision;
   requester: { id: string; name: string | null; image: string | null };
   reviewerUser: { id: string; name: string | null; email: string; image: string | null } | null;
   organization: { id: string; name: string; brandName: string | null; logoUrl: string | null } | null;
   decisions: Array<{ id: string; responses: unknown; summaryComment: string | null; decidedAt: string; reviewer: { name: string | null } }>;
 };
-
-function key() { return crypto.randomUUID(); }
-function requestedValue(revision: Revision, field: string) {
-  const value = field === "occurredAt"
-    ? revision.worklog?.occurredAt
-    : field === "locationLabel"
-      ? revision.worklog?.locationLabel
-      : revision[field as keyof Revision];
+const statusLabels: Record<string, string> = {
+  DRAFT: "Borrador", PENDING: "Pendiente", IN_REVIEW: "En revisión", PARTIAL: "Parcial",
+  CHANGES_REQUESTED: "Solicita cambios", DECLINED: "No confirmado", CONFIRMED: "Confirmado",
+  EXPIRED: "Caducado", CANCELLED: "Cancelado", REVOKED: "Revocado",
+};
+const control = "mt-2 min-h-11 w-full min-w-0 rounded-lg border border-[#385873] bg-[#0b2033] px-3 text-sm font-normal text-white placeholder:text-[#adc2d6] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#69b9ff] disabled:opacity-50";
+const secondary = "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-[#486a88] px-4 text-sm font-semibold text-[#e2edf8] hover:bg-[#18354e] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#69b9ff] disabled:cursor-not-allowed disabled:opacity-50";
+const primary = "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[#316cce] px-4 text-sm font-semibold text-white hover:bg-[#245dbb] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#69b9ff] disabled:cursor-not-allowed disabled:opacity-50";
+function requestedValue(revision: EndorsementRevision, field: string) {
+  const value = field === "occurredAt" ? revision.worklog?.occurredAt : field === "locationLabel" ? revision.worklog?.locationLabel : revision[field as keyof EndorsementRevision];
   if (Array.isArray(value)) return value.join(" · ");
-  if (typeof value === "string") return value;
-  return null;
+  return typeof value === "string" ? value : null;
+}
+function dateLabel(value: string) {
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toLocaleString("es-PE", { timeZone: "America/Lima", dateStyle: "medium", timeStyle: "short" }) : "Fecha no disponible";
+}
+function OwnerThumbnail({ mediaId }: { mediaId?: string }) {
+  const [failed, setFailed] = useState(false);
+  if (!mediaId || failed) return <FileText aria-hidden="true" className="mt-1 h-5 w-5 shrink-0 text-[#79bdff]" />;
+  // Native img preserves authenticated private evidence delivery and avoids image proxy caching.
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={`/api/terraqo/worklog/evidence/${encodeURIComponent(mediaId)}`} alt="" width={96} height={72} onError={() => setFailed(true)} className="h-[72px] w-24 shrink-0 rounded-md object-cover" />;
 }
 async function api(url: string, init: RequestInit) {
   const response = await fetch(url, init);
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload?.error?.message || "No se pudo completar la operación.");
+  if (!response.ok) throw new Error(response.status === 429 ? "Aún no puedes reenviar. Espera 24 horas desde la última actualización e inténtalo de nuevo." : payload?.error?.message || "No se pudo completar la operación. Inténtalo de nuevo.");
   return payload.data;
 }
 
-const statusLabels: Record<string, string> = {
-  DRAFT: "Borrador", PENDING: "Pendiente", IN_REVIEW: "En revisión", PARTIAL: "Parcial",
-  CHANGES_REQUESTED: "Requiere aclaración", DECLINED: "No confirmado", CONFIRMED: "Confirmado",
-  EXPIRED: "Caducado", CANCELLED: "Cancelado", REVOKED: "Revocado",
-};
-
-export function EndorsementConsole({ currentUserId, revisions, requests }: { currentUserId: string; revisions: Revision[]; requests: RequestItem[] }) {
+export function EndorsementConsole({ currentUserId, revisions, requests, initialRevisionId }: { currentUserId: string; revisions: EndorsementRevision[]; requests: EndorsementRequestItem[]; initialRevisionId?: string }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [revisionId, setRevisionId] = useState("");
+  // A synchronous lock also blocks a second click before React renders pending.
+  const inFlight = useRef(false);
+  const operation = useRef<{ fingerprint: string; key: string } | null>(null);
+  const [revisionId, setRevisionId] = useState(() => revisions.some(revision => revision.id === initialRevisionId) ? initialRevisionId! : "");
   const [reviewerEmail, setReviewerEmail] = useState("");
   const [relationship, setRelationship] = useState("");
   const [expiry, setExpiry] = useState("");
@@ -80,70 +75,100 @@ export function EndorsementConsole({ currentUserId, revisions, requests }: { cur
   const [sendNow, setSendNow] = useState(false);
   const [confirmedSend, setConfirmedSend] = useState<string | null>(null);
   const [confirmedDrafts, setConfirmedDrafts] = useState<Record<string, string>>({});
+  const [revokeId, setRevokeId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ error: boolean; text: string } | null>(null);
-  const selectedRevision = useMemo(() => revisions.find((revision) => revision.id === revisionId), [revisionId, revisions]);
+  const [completed, setCompleted] = useState<Record<string, string>>({});
+  const selectedRevision = useMemo(() => revisions.find(revision => revision.id === revisionId), [revisionId, revisions]);
+  const expires = new Date(expiry).getTime();
+  const validExpiry = Number.isFinite(expires) && expires > Date.now() + 3600000 && expires <= Date.now() + 30 * 86400000;
+  const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reviewerEmail.trim());
+  const valid = Boolean(selectedRevision && validEmail && relationship.trim().length >= 3 && validExpiry && scope.length);
+  const sendFingerprint = JSON.stringify([reviewerEmail, revisionId, relationship, expiry, scope]);
 
   function run(action: () => Promise<void>) {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setNotice(null);
     startTransition(async () => {
       try { await action(); router.refresh(); }
       catch (error) { setNotice({ error: true, text: error instanceof Error ? error.message : "Ocurrió un error inesperado." }); }
+      finally { inFlight.current = false; }
+    });
+  }
+  function create(send: boolean) {
+    if (!valid || (send && confirmedSend !== sendFingerprint)) return;
+    const payload = { revisionId, reviewerEmail: reviewerEmail.trim().toLowerCase(), relationshipLabel: relationship.trim(), requestedScope: scope, expiresAt: new Date(expiry).toISOString(), sendNow: send };
+    const fingerprint = JSON.stringify(payload);
+    // Retain the key after an uncertain response; changing the payload creates a new operation.
+    if (operation.current?.fingerprint !== fingerprint) operation.current = { fingerprint, key: crypto.randomUUID() };
+    const operationKey = operation.current.key;
+    run(async () => {
+      await api("/api/v1/endorsement-requests", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": operationKey }, body: JSON.stringify(payload) });
+      operation.current = null;
+      setRevisionId(""); setReviewerEmail(""); setRelationship(""); setExpiry(""); setScope([]); setSendNow(false); setConfirmedSend(null);
+      setNotice({ error: false, text: send ? "Solicitud enviada con alcance fijo." : "Borrador guardado sin enviar. No se notificó al revisor." });
     });
   }
 
-  // Consent belongs to the displayed recipient, revision and scope, not to any later edit.
-  const sendFingerprint = JSON.stringify([reviewerEmail, revisionId, relationship, expiry, scope]);
-  const canCreate = Boolean(selectedRevision && reviewerEmail && relationship.trim().length >= 3 && expiry && scope.length && (!sendNow || confirmedSend === sendFingerprint));
-
-  return <div className="space-y-8">
-    {notice ? <div role="status" className={`rounded-xl border px-4 py-3 text-sm font-semibold ${notice.error ? "border-red-200 bg-red-50 text-red-900" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`}>{notice.text}</div> : null}
-    <section className="overflow-hidden rounded-2xl border bg-white shadow-technical">
-      <div className="border-b bg-gradient-to-r from-[#071c2d] via-[#0a354d] to-[#0c5b62] p-6 text-white sm:p-8">
-        <p className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-cyan-300">Nueva solicitud</p>
-        <h2 className="mt-2 font-display text-2xl font-bold">Pide respaldo sobre una versión inmutable</h2>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">Elige evidencia, persona, relación y aspectos concretos. Guardar como borrador no envía la solicitud.</p>
-      </div>
-      <div className="grid gap-6 p-5 lg:grid-cols-[minmax(0,1fr)_22rem] sm:p-7">
-        <div className="space-y-5">
-          <label className="block text-sm font-bold">Versión de evidencia
-            <select value={revisionId} onChange={(event) => setRevisionId(event.target.value)} className="mt-2 min-h-12 w-full rounded-xl border bg-white px-3 font-normal outline-none focus:border-primary focus:ring-2 focus:ring-primary/15">
-              <option value="">Selecciona una versión</option>{revisions.map((revision) => <option key={revision.id} value={revision.id}>{revision.title || "Evidencia profesional"} · v{revision.revisionNo}</option>)}
+  return <div aria-busy={pending} className="s07-endorsements grid min-w-0 gap-6 rounded-2xl bg-[#061523] p-4 text-[#edf4fc] selection:bg-[#295b93] selection:text-white sm:p-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(20rem,1fr)] [&_input]:accent-[#69b9ff] [&_input]:[color-scheme:dark] [&_input]:caret-[#69b9ff]">
+    {notice && <div data-testid="endorsement-notice" role={notice.error ? "alert" : "status"} className={`break-words rounded-lg border px-4 py-3 text-sm xl:col-span-2 ${notice.error ? "border-[#9d5764] bg-[#391e2b] text-[#ffd5dd]" : "border-[#41807a] bg-[#123835] text-[#ccf4e9]"}`}>{notice.text}</div>}
+    <section aria-label="Solicitar respaldo" className="min-w-0 rounded-xl border border-[#294963] bg-[#091d2e] p-4 sm:p-6">
+      {(selectedRevision?.worklog?.id || (revisions[0]?.worklog?.id && revisions.every(revision => revision.worklog?.id === revisions[0].worklog?.id))) && <Link href={`/portal/bitacora?registro=${encodeURIComponent(selectedRevision?.worklog?.id || revisions[0].worklog!.id)}#worklog-${encodeURIComponent(selectedRevision?.worklog?.id || revisions[0].worklog!.id)}`} className="mb-4 inline-flex min-h-11 items-center text-sm text-[#79bdff] underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#69b9ff]">Volver al registro</Link>}
+      <h1 className="font-display text-2xl font-semibold tracking-tight">Solicitar respaldo</h1>
+      <p className="mt-2 text-sm leading-6 text-[#b2c9de]">Elige una versión y los aspectos concretos que revisará esta persona.</p>
+      <form className="mt-6 space-y-5" onSubmit={event => { event.preventDefault(); create(true); }}>
+        <fieldset disabled={pending} className="min-w-0 space-y-5">
+          <label className="block text-sm font-semibold">Versión de evidencia
+            <select required value={revisionId} onChange={event => { setRevisionId(event.target.value); setConfirmedSend(null); }} className={control}>
+              <option value="">Selecciona una versión</option>{revisions.map(revision => <option key={revision.id} value={revision.id}>{revision.title || "Evidencia profesional"} · v{revision.revisionNo}</option>)}
             </select>
           </label>
-          {selectedRevision ? <div className="rounded-xl border border-primary/20 bg-primary/[0.035] p-4"><div className="flex items-center justify-between gap-3"><strong>{selectedRevision.title || "Evidencia profesional"}</strong><span className="font-mono text-[10px] text-slate-500">{selectedRevision.contentHash.slice(0, 12)}</span></div><p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-600">{selectedRevision.summary || "Versión inmutable lista para solicitar respaldo."}</p></div> : null}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="text-sm font-bold">Correo del revisor<input type="email" value={reviewerEmail} onChange={(event) => setReviewerEmail(event.target.value)} placeholder="supervisor@empresa.com" className="mt-2 min-h-11 w-full rounded-lg border px-3 font-normal outline-none focus:border-primary" /></label>
-            <label className="text-sm font-bold">Relación profesional<input value={relationship} onChange={(event) => setRelationship(event.target.value)} placeholder="Supervisor directo" maxLength={120} className="mt-2 min-h-11 w-full rounded-lg border px-3 font-normal outline-none focus:border-primary" /></label>
+          {!revisions.length && <p className="text-sm leading-6 text-[#b2c9de]">Aún no tienes versiones disponibles. Guarda un registro de trabajo antes de solicitar respaldo.</p>}
+          {selectedRevision && <div className="flex min-w-0 items-start gap-3 border-y border-[#294963] py-4"><OwnerThumbnail key={selectedRevision.id} mediaId={selectedRevision.thumbnailMediaId} /><div className="min-w-0"><h3 className="break-words font-semibold">{selectedRevision.title || "Evidencia profesional"}</h3><p className="mt-1 text-sm text-[#b2c9de]">Versión {selectedRevision.revisionNo} · Contenido fijo</p><p className="mt-2 break-all font-mono text-xs text-[#b2c9de]">Huella {selectedRevision.contentHash.slice(0, 16)}</p></div></div>}
+          <div className="grid min-w-0 gap-5 sm:grid-cols-2">
+            <label className="block min-w-0 text-sm font-semibold">Correo del revisor<input required type="email" autoComplete="email" maxLength={254} value={reviewerEmail} onChange={event => { setReviewerEmail(event.target.value); setConfirmedSend(null); }} placeholder="nombre@empresa.com" className={control} /></label>
+            <label className="block min-w-0 text-sm font-semibold">Relación profesional<input required minLength={3} maxLength={120} value={relationship} onChange={event => { setRelationship(event.target.value); setConfirmedSend(null); }} placeholder="Supervisor directo" className={control} /></label>
           </div>
-          <label className="block text-sm font-bold">Vigencia<input type="datetime-local" value={expiry} onChange={(event) => setExpiry(event.target.value)} className="mt-2 min-h-11 w-full rounded-lg border px-3 font-normal outline-none focus:border-primary" /></label>
-          <fieldset><legend className="text-sm font-bold">Aspectos que podrá revisar</legend><p className="mt-1 text-xs text-slate-500">No hay respuestas ni aspectos preseleccionados.</p><div className="mt-3 flex flex-wrap gap-2">{aspects.map(([value, label]) => <label key={value} className={`inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2 ${scope.includes(value) ? "border-primary bg-primary text-white" : "bg-white hover:border-primary/40"}`}><input type="checkbox" className="h-4 w-4 accent-primary" checked={scope.includes(value)} onChange={() => setScope((current) => current.includes(value) ? current.filter((item) => item !== value) : [...current, value])} />{label}</label>)}</div></fieldset>
-        </div>
-        <aside className="h-fit rounded-xl border bg-slate-50 p-5 lg:sticky lg:top-24">
-          <MessageSquareText className="h-6 w-6 text-primary" /><h3 className="mt-3 font-display text-lg font-bold">Confirmación previa</h3>
-          {selectedRevision && scope.length ? <section aria-label="Contenido que revisará el destinatario" className="mt-4 rounded-lg border bg-white p-4 text-sm"><h4 className="font-bold">Solo podrá revisar estos aspectos</h4><dl className="mt-3 space-y-3 break-words">{aspects.filter(([field]) => scope.includes(field)).map(([field, label]) => <div key={field}><dt className="text-xs font-semibold text-slate-500">{label}</dt><dd className="mt-1 whitespace-pre-wrap">{requestedValue(selectedRevision, field) || "Sin información registrada"}</dd></div>)}</dl><p className="mt-3 border-t pt-3 text-xs text-slate-500">Los campos no seleccionados y los archivos quedan fuera de esta solicitud.</p></section> : null}
-          <dl className="mt-4 space-y-3 text-sm"><div><dt className="text-slate-500">Persona</dt><dd className="font-semibold">{reviewerEmail || "Sin elegir"}</dd></div><div><dt className="text-slate-500">Relación</dt><dd className="font-semibold">{relationship || "Sin indicar"}</dd></div><div><dt className="text-slate-500">Alcance</dt><dd className="font-semibold">{scope.length ? `${scope.length} aspectos` : "Sin elegir"}</dd></div></dl>
-          <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-lg border bg-white p-3 text-sm"><input type="checkbox" checked={sendNow} onChange={(event) => { setSendNow(event.target.checked); setConfirmedSend(null); }} className="mt-1 h-4 w-4 accent-primary" /><span><strong>{sendNow ? "Enviar al crear" : "Guardar como borrador"}</strong><span className="mt-1 block text-xs leading-5 text-slate-500">{sendNow ? "La solicitud quedará pendiente de revisión." : "No se notificará al revisor."}</span></span></label>
-          {sendNow ? <label className="mt-4 flex min-h-11 items-start gap-3 rounded-lg border border-primary/30 bg-white p-3 text-sm break-words"><input type="checkbox" checked={confirmedSend === sendFingerprint} onChange={(event) => setConfirmedSend(event.target.checked ? sendFingerprint : null)} className="mt-1 h-4 w-4 shrink-0 accent-primary" /><span className="min-w-0">Confirmo enviar a <strong>{reviewerEmail || "la persona indicada"}</strong> los {scope.length} aspectos seleccionados.</span></label> : null}
-          <button disabled={!canCreate || pending} onClick={() => run(async () => { await api("/api/v1/endorsement-requests", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": key() }, body: JSON.stringify({ revisionId, reviewerEmail, relationshipLabel: relationship.trim(), requestedScope: scope, expiresAt: new Date(expiry).toISOString(), sendNow }) }); setRevisionId(""); setReviewerEmail(""); setRelationship(""); setExpiry(""); setScope([]); setSendNow(false); setNotice({ error: false, text: sendNow ? "Solicitud enviada con alcance fijo." : "Borrador guardado sin enviar." }); })} className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-white hover:bg-primary/90 disabled:opacity-45">{pending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : sendNow ? <Send className="h-4 w-4" /> : <Clock3 className="h-4 w-4" />}{sendNow ? "Crear y enviar" : "Guardar borrador"}</button>
-        </aside>
-      </div>
+          <label className="block min-w-0 text-sm font-semibold">Vigencia<input required type="datetime-local" value={expiry} aria-describedby="s07-expiry-help" onChange={event => { setExpiry(event.target.value); setConfirmedSend(null); }} className={control} /><span id="s07-expiry-help" className="mt-2 block text-xs font-normal leading-5 text-[#b2c9de]">Entre una hora y 30 días. Introduce la hora local de tu dispositivo.</span></label>
+          {expiry && !validExpiry && <p role="alert" className="text-sm text-[#ffbecb]">Elige una vigencia de más de una hora y hasta 30 días.</p>}
+          <fieldset aria-label="Aspectos que podrá revisar"><legend className="text-sm font-semibold">Alcance de la solicitud</legend><p className="mt-1 text-xs leading-5 text-[#b2c9de]">Selecciona solo lo que esta persona puede respaldar. No hay aspectos preseleccionados.</p><div className="mt-3 grid gap-2 sm:grid-cols-3">{aspects.map(([value, label]) => <label key={value} className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 text-sm focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[#69b9ff] ${scope.includes(value) ? "border-[#69b9ff] bg-[#143858]" : "border-[#385873] hover:bg-[#12304a]"}`}><input type="checkbox" className="h-4 w-4 shrink-0" checked={scope.includes(value)} onChange={() => { setScope(current => current.includes(value) ? current.filter(item => item !== value) : [...current, value]); setConfirmedSend(null); }} />{label}</label>)}</div></fieldset>
+        </fieldset>
+        <section aria-label="Contenido que revisará el destinatario" className="border-y border-[#294963] py-5">
+          <h3 className="text-sm font-semibold">Vista previa del alcance</h3>
+          <p className="mt-2 break-words text-sm leading-6 text-[#b2c9de]">{validEmail ? `A ${reviewerEmail.trim()}: ` : "Al revisor: "}solicito respaldo de {scope.length ? aspects.filter(([field]) => scope.includes(field)).map(([, label]) => label.toLowerCase()).join(", ") : "los aspectos que seleccione"}{selectedRevision ? ` de la versión ${selectedRevision.revisionNo}` : " de una versión del registro"}{relationship.trim() ? `, por nuestra relación profesional: ${relationship.trim()}.` : "."}</p>
+          {selectedRevision && scope.length > 0 && <dl className="mt-4 space-y-3 break-words text-sm">{aspects.filter(([field]) => scope.includes(field)).map(([field, label]) => <div key={field}><dt className="font-semibold text-[#c3dbf0]">{label}</dt><dd className="mt-1 whitespace-pre-wrap">{requestedValue(selectedRevision, field) || "Sin información registrada"}</dd></div>)}</dl>}
+          <p className="mt-4 text-xs leading-5 text-[#b2c9de]">Solo se conceden los campos seleccionados. Los archivos y demás campos quedan fuera. La solicitud no cambia el estado del registro.</p>
+        </section>
+        {sendNow && <div className="space-y-3 rounded-lg border border-[#4f86b7] p-4" data-testid="endorsement-send-confirmation"><h3 className="font-semibold">Confirma el destinatario y el alcance</h3><label className="flex min-h-11 cursor-pointer items-start gap-3 text-sm leading-6"><input type="checkbox" disabled={pending} checked={confirmedSend === sendFingerprint} onChange={event => setConfirmedSend(event.target.checked ? sendFingerprint : null)} className="mt-1 h-4 w-4 shrink-0" /><span className="min-w-0 break-words">Confirmo enviar a <strong>{reviewerEmail || "la persona indicada"}</strong> {scope.length === 1 ? "el" : "los"} {scope.length} {scope.length === 1 ? "aspecto" : "aspectos"} de la versión {selectedRevision?.revisionNo || "seleccionada"}. Se notificará al revisor.</span></label><div className="flex flex-wrap gap-3"><button type="submit" disabled={!valid || pending || confirmedSend !== sendFingerprint} className={primary}>{pending ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Send aria-hidden="true" className="h-4 w-4" />}Confirmar y enviar</button><button type="button" disabled={pending} className={secondary} onClick={() => { setSendNow(false); setConfirmedSend(null); }}>Seguir editando</button></div></div>}
+        <div className="flex flex-wrap justify-end gap-3"><button type="button" disabled={!valid || pending} className={secondary} onClick={() => create(false)}><Clock3 aria-hidden="true" className="h-4 w-4" />Guardar borrador</button><button type="button" disabled={!valid || pending || sendNow} className={primary} onClick={() => { setSendNow(true); setConfirmedSend(null); }}><Send aria-hidden="true" className="h-4 w-4" />Enviar solicitud</button></div>
+        <p className="text-xs leading-5 text-[#b2c9de]">Guardar borrador no envía ni notifica. Enviar requiere una confirmación final en este formulario.</p>
+      </form>
     </section>
-
-    <section><div className="flex items-end justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Historial verificable</p><h2 className="mt-1 font-display text-2xl font-bold">Solicitudes y revisiones</h2></div><span className="text-sm text-slate-500">{requests.length} registros</span></div>
-      <div className="mt-5 grid gap-5 xl:grid-cols-2">{requests.map((request) => {
+    <section aria-label="Mis solicitudes de respaldo" className="min-w-0 rounded-xl border border-[#294963] bg-[#091d2e] p-4 sm:p-6">
+      <h2 className="font-display text-xl font-semibold">Mis solicitudes de respaldo</h2><p className="mt-2 text-sm leading-6 text-[#b2c9de]">{requests.length} {requests.length === 1 ? "solicitud" : "solicitudes"} · Fechas en hora de Lima</p>
+      <div className="mt-5 space-y-4">{requests.map(request => {
         const incoming = request.requesterId !== currentUserId;
-        const actionable = incoming && ["PENDING", "IN_REVIEW"].includes(request.status) && new Date(request.expiresAt) > new Date();
-        const draftFingerprint = JSON.stringify([request.version, request.reviewerEmail, request.reviewerUserId, request.revisionHash, request.requestedScope, request.expiresAt]);
-        return <article key={request.id} className="rounded-2xl border bg-white p-5 shadow-technical sm:p-6">
-          <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{incoming ? "Para revisar" : "Solicitada por ti"}</p><h3 className="mt-1 font-display text-xl font-bold">{request.revision.title || "Solicitud de respaldo"}</h3><p className="mt-1 text-sm text-slate-500">{request.relationshipLabel} · v{request.revision.revisionNo}</p></div><span className={`rounded-full px-3 py-1 text-xs font-bold ${request.status === "CONFIRMED" ? "bg-emerald-100 text-emerald-800" : request.status === "CHANGES_REQUESTED" ? "bg-amber-100 text-amber-900" : "bg-slate-100 text-slate-700"}`}>{statusLabels[request.status] || request.status}</span></div>
-          <div className="mt-4 rounded-lg border bg-slate-50 p-3 text-sm"><p className="line-clamp-3 leading-6 text-slate-600">{request.revision.summary || "Solo se muestran los aspectos incluidos por quien solicitó el respaldo."}</p><p className="mt-2 font-mono text-[10px] text-slate-400">Huella {request.revisionHash.slice(0, 16)}</p></div>
-          {actionable ? <EndorsementReviewForm key={`${request.id}:${request.version}:${request.revisionHash}`} requestId={request.id} version={request.version} fields={request.requestedScope.map(field => ({ field, label: aspects.find(([value]) => value === field)?.[1] || field, value: requestedValue(request.revision, field) }))} /> : null}
-          {!incoming && !["REVOKED", "CANCELLED", "EXPIRED"].includes(request.status) ? <button disabled={pending} onClick={() => run(async () => { await api(`/api/v1/endorsement-requests/${request.id}/decisions`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedVersion: request.version }) }); setNotice({ error: false, text: "Solicitud revocada; el historial de decisiones se conserva." }); })} className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-lg border px-3 text-xs font-bold text-red-700 hover:bg-red-50">Revocar solicitud</button> : null}
-          {!incoming && request.status === "DRAFT" ? <label className="mt-4 flex min-h-11 items-start gap-3 rounded-lg border p-3 text-sm break-words"><input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-primary" checked={confirmedDrafts[request.id] === draftFingerprint} onChange={(event) => setConfirmedDrafts(current => ({ ...current, [request.id]: event.target.checked ? draftFingerprint : "" }))} /><span className="min-w-0">Confirmo enviar este borrador a <strong>{request.reviewerEmail || request.reviewerUser?.email || "la persona asignada"}</strong> con {request.requestedScope.length} aspectos.</span></label> : null}
-          {!incoming && request.status === "DRAFT" ? <button disabled={pending || confirmedDrafts[request.id] !== draftFingerprint} onClick={() => run(async () => { await api(`/api/v1/endorsement-requests/${request.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedVersion: request.version }) }); setNotice({ error: false, text: "Solicitud enviada; el alcance y la versión quedaron fijados." }); })} className="ml-2 mt-4 inline-flex min-h-10 items-center gap-2 rounded-lg bg-primary px-3 text-xs font-bold text-white hover:bg-primary/90"><Send className="h-4 w-4" /> Enviar borrador</button> : null}
-          {request.decisions.length ? <div className="mt-4 border-t pt-4 text-sm"><div className="flex items-center gap-2 font-bold text-emerald-800"><BadgeCheck className="h-4 w-4" /> Decisión registrada</div>{request.decisions[0].summaryComment ? <p className="mt-2 leading-6 text-slate-600">{request.decisions[0].summaryComment}</p> : null}</div> : null}
+        const expired = new Date(request.expiresAt).getTime() <= Date.now();
+        const status = completed[`${request.id}:${request.version}`] === "REVOKED" ? "REVOKED" : expired && ["DRAFT", "PENDING", "IN_REVIEW"].includes(request.status) ? "EXPIRED" : request.status;
+        const hidden = incoming && (expired || ["EXPIRED", "REVOKED", "CANCELLED"].includes(status));
+        const actionable = incoming && ["PENDING", "IN_REVIEW"].includes(status);
+        const terminal = ["REVOKED", "CANCELLED", "EXPIRED"].includes(status);
+        const fingerprint = JSON.stringify([request.version, request.reviewerEmail, request.reviewerUserId, request.revisionHash, request.requestedScope, request.expiresAt]);
+        const cooldownUntil = request.updatedAt ? new Date(request.updatedAt).getTime() + 86400000 : NaN;
+        const resendAllowed = Number.isFinite(cooldownUntil) && cooldownUntil <= Date.now() && completed[`${request.id}:${request.version}`] !== "RESENT";
+        const recipient = request.reviewerEmail || request.reviewerUser?.email || "la persona asignada";
+        return <article key={request.id} data-testid={`endorsement-request-${request.id}`} className="min-w-0 rounded-lg border border-[#294963] p-4">
+          {!incoming && request.revision.thumbnailMediaId && <div className="mb-3"><OwnerThumbnail key={request.revision.id} mediaId={request.revision.thumbnailMediaId} /></div>}<div className="flex flex-wrap items-start justify-between gap-3"><h3 className="min-w-0 break-words font-semibold">{hidden ? "Solicitud de respaldo" : request.revision.title || "Solicitud de respaldo"}</h3><span data-testid="endorsement-status" className={`rounded-full border px-3 py-1 text-xs font-semibold ${status === "CONFIRMED" ? "border-[#41807a] bg-[#123835] text-[#ccf4e9]" : status === "PENDING" ? "border-[#856323] bg-[#403014] text-[#ffe19d]" : status === "CHANGES_REQUESTED" ? "border-[#9d5764] bg-[#391e2b] text-[#ffd5dd]" : "border-[#486078] bg-[#1b3044] text-[#d9e6f2]"}`}>{statusLabels[status] || "Estado no disponible"}</span></div>
+          <p className="mt-3 break-words text-sm text-[#c3dbf0]">{incoming ? `Solicitada por ${request.requester.name || "un profesional"}` : recipient}</p><p className="mt-1 break-words text-xs leading-5 text-[#b2c9de]">{request.relationshipLabel} · v{request.revision.revisionNo}</p>
+          <dl className="mt-3 space-y-1 text-xs leading-5 text-[#b2c9de]">{request.sentAt && <div><dt className="inline">Primer envío: </dt><dd className="inline">{dateLabel(request.sentAt)}</dd></div>}<div><dt className="inline">Vigencia: </dt><dd className="inline">{dateLabel(request.expiresAt)}</dd></div></dl>
+          {hidden ? <p className="mt-3 text-sm leading-6 text-[#b2c9de]">El contenido ya no está disponible. Se conserva el estado y la trazabilidad de la solicitud.</p> : <><dl className="mt-4 space-y-3 border-t border-[#294963] pt-3 text-sm">{request.requestedScope.map(field => <div key={field}><dt className="text-xs font-semibold text-[#b2c9de]">{aspects.find(([value]) => value === field)?.[1] || field}</dt><dd className="mt-1 whitespace-pre-wrap break-words">{requestedValue(request.revision, field) || "Sin información registrada"}</dd></div>)}</dl>{request.decisions.length > 0 && <div className="mt-4 border-t border-[#294963] pt-3 text-sm"><p className="flex items-center gap-2 font-semibold text-[#a9dfce]"><BadgeCheck aria-hidden="true" className="h-4 w-4" />Decisión registrada</p>{request.decisions[0].summaryComment && <p className="mt-2 break-words leading-6">{request.decisions[0].summaryComment}</p>}<p className="mt-2 text-xs text-[#b2c9de]">Revocar conserva las decisiones y su trazabilidad.</p></div>}</>}
+          {actionable && <div className="mt-4 rounded-lg bg-white p-3 text-slate-900"><EndorsementReviewForm key={`${request.id}:${request.version}:${request.revisionHash}`} requestId={request.id} version={request.version} fields={request.requestedScope.map(field => ({ field, label: aspects.find(([value]) => value === field)?.[1] || field, value: requestedValue(request.revision, field) }))} /></div>}
+          {!incoming && request.status === "DRAFT" && !terminal && completed[`${request.id}:${request.version}`] !== "SENT" && <div className="mt-4 space-y-3"><label className="flex min-h-11 cursor-pointer items-start gap-3 text-sm leading-6"><input type="checkbox" disabled={pending} className="mt-1 h-4 w-4 shrink-0" checked={confirmedDrafts[request.id] === fingerprint} onChange={event => setConfirmedDrafts(current => ({ ...current, [request.id]: event.target.checked ? fingerprint : "" }))} /><span className="min-w-0 break-words">Confirmo enviar este borrador a <strong>{recipient}</strong> con {request.requestedScope.length} {request.requestedScope.length === 1 ? "aspecto" : "aspectos"}.</span></label><button type="button" disabled={pending || confirmedDrafts[request.id] !== fingerprint} className={primary} onClick={() => run(async () => { await api(`/api/v1/endorsement-requests/${request.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedVersion: request.version }) }); setCompleted(current => ({ ...current, [`${request.id}:${request.version}`]: "SENT" })); setNotice({ error: false, text: "Solicitud enviada; el alcance y la versión quedaron fijados." }); })}>Enviar borrador</button></div>}
+          {!incoming && ["PENDING", "IN_REVIEW"].includes(status) && <div className="mt-4 space-y-2"><button type="button" disabled={pending || !resendAllowed} className={secondary} onClick={() => run(async () => { await api(`/api/v1/endorsement-requests/${request.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "resend", expectedVersion: request.version }) }); setCompleted(current => ({ ...current, [`${request.id}:${request.version}`]: "RESENT" })); setNotice({ error: false, text: "Solicitud reenviada. Podrás volver a reenviar después de 24 horas." }); })}>Reenviar solicitud</button><p className="text-xs leading-5 text-[#b2c9de]">{completed[`${request.id}:${request.version}`] === "RESENT" ? "Reenvío registrado; espera 24 horas." : !Number.isFinite(cooldownUntil) ? "Actualiza la página para consultar la disponibilidad de reenvío." : !resendAllowed ? `Disponible desde ${dateLabel(new Date(cooldownUntil).toISOString())}.` : "Un reenvío cada 24 horas. No crea otra solicitud."}</p></div>}
+          {!incoming && !terminal && <div className="mt-4">{revokeId === request.id ? <div className="space-y-3 border-t border-[#294963] pt-3"><p className="text-sm leading-6">¿Revocar esta solicitud? Las decisiones emitidas y su historial se conservarán.</p><div className="flex flex-wrap gap-3"><button type="button" disabled={pending} className={secondary} onClick={() => run(async () => { await api(`/api/v1/endorsement-requests/${request.id}/decisions`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedVersion: request.version }) }); setCompleted(current => ({ ...current, [`${request.id}:${request.version}`]: "REVOKED" })); setRevokeId(null); setNotice({ error: false, text: "Solicitud revocada; el historial de decisiones se conserva." }); })}>Confirmar revocación</button><button type="button" disabled={pending} className={secondary} onClick={() => setRevokeId(null)}>Conservar solicitud</button></div></div> : <button type="button" disabled={pending || completed[`${request.id}:${request.version}`] === "SENT" || completed[`${request.id}:${request.version}`] === "RESENT"} className={secondary} onClick={() => setRevokeId(request.id)}>Revocar solicitud</button>}</div>}
         </article>;
-      })}{!requests.length ? <div className="rounded-2xl border border-dashed bg-white p-10 text-center xl:col-span-2"><UserCheck className="mx-auto h-7 w-7 text-slate-400" /><h3 className="mt-3 font-display text-lg font-bold">Sin solicitudes todavía</h3><p className="mt-2 text-sm text-slate-500">Cuando pidas o recibas un respaldo aparecerá aquí.</p></div> : null}</div>
+      })}</div>
+      {!requests.length && <div className="py-12 text-center"><UserCheck aria-hidden="true" className="mx-auto h-7 w-7 text-[#79bdff]" /><h3 className="mt-4 font-semibold">Sin solicitudes todavía</h3><p className="mt-2 text-sm leading-6 text-[#b2c9de]">Tus borradores, solicitudes y revisiones aparecerán aquí.</p></div>}
     </section>
   </div>;
 }

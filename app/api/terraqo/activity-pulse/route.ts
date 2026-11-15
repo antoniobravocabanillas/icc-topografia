@@ -1,3 +1,4 @@
+import { pendingEndorsementNotice } from "@/lib/terraqo/scoped-endorsement";
 import { accessibleConversation } from "@/lib/terraqo/messaging";
 import { ordinaryWorkspaceFor } from "@/lib/terraqo/workspace-roles";
 import { prisma } from "@/lib/prisma";
@@ -33,7 +34,7 @@ export async function GET() {
       ],
     };
 
-    const [unreadMessages, latestMessage, unreadNotifications, latestNotification] =
+    const [unreadMessages, latestMessage, unreadNotifications, latestNotification, endorsements] =
       await Promise.all([
         unreadWindows.length
           ? prisma.terraqoDirectMessage.count({
@@ -77,6 +78,7 @@ export async function GET() {
           },
           orderBy: { createdAt: "desc" },
         }),
+        process.env.TERRAQO_SCOPED_ENDORSEMENTS_V1 === "true" ? pendingEndorsementNotice(userId) : { count: 0, latest: null },
       ]);
 
     const messageEvent = latestMessage
@@ -103,13 +105,18 @@ export async function GET() {
           createdAt: latestNotification.createdAt,
         }
       : null;
-    const latestEvent = [messageEvent, notificationEvent]
+    const endorsementEvent = endorsements.latest ? {
+      id: `endorsement:${endorsements.latest.id}:${endorsements.latest.version}`,
+      channel: "notification" as const, title: "Solicitud de respaldo", body: "Tienes una solicitud pendiente de revisión.",
+      href: "/portal/respaldos", createdAt: endorsements.latest.updatedAt,
+    } : null;
+    const latestEvent = [messageEvent, notificationEvent, endorsementEvent]
       .filter((event): event is NonNullable<typeof event> => Boolean(event))
       .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())[0];
 
     return ok({
       unreadMessages,
-      unreadNotifications,
+      unreadNotifications: unreadNotifications + endorsements.count,
       latestEvent: latestEvent
         ? {
             ...latestEvent,

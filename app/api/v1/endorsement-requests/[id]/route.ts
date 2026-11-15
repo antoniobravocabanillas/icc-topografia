@@ -4,7 +4,7 @@ import { requireUser } from "@/lib/server/authz";
 import { ScopedEndorsementError, sendEndorsementRequest } from "@/lib/terraqo/scoped-endorsement";
 
 type Context = { params: Promise<{ id: string }> };
-const sendSchema = z.object({ expectedVersion: z.number().int().positive() });
+const sendSchema = z.object({ expectedVersion: z.number().int().positive(), action: z.enum(["send", "resend"]).optional() });
 
 export async function PATCH(request: Request, { params }: Context) {
   if (process.env.TERRAQO_SCOPED_ENDORSEMENTS_V1 !== "true") return fail("Recurso no disponible.", 404);
@@ -12,7 +12,7 @@ export async function PATCH(request: Request, { params }: Context) {
   if (response) return response;
   try {
     const [{ id }, payload] = await Promise.all([params, parseJson(request, sendSchema)]);
-    return ok(await sendEndorsementRequest({ userId: session.user.id, requestId: id, expectedVersion: payload.expectedVersion }));
+    return ok(await sendEndorsementRequest({ userId: session.user.id, requestId: id, expectedVersion: payload.expectedVersion, action: payload.action }));
   } catch (error) {
     if (error instanceof ScopedEndorsementError) return fail(error.message, error.status);
     return handleApiError(error);

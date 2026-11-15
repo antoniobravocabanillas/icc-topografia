@@ -74,9 +74,11 @@ export function projectEndorsementRevisionForScope(revision: EndorsementRevision
 }
 
 function projectReviewerRequest(request: EndorsementRequestRecord) {
+  const hidden = request.expiresAt.getTime() <= Date.now() || ["CANCELLED", "REVOKED", "EXPIRED"].includes(request.status);
   return {
     ...request,
-    revision: projectEndorsementRevisionForScope(request.revision, request.requestedScope),
+    decisions: hidden ? [] : request.decisions,
+    revision: projectEndorsementRevisionForScope(request.revision, hidden ? [] : request.requestedScope),
   };
 }
 
@@ -88,7 +90,7 @@ function hashOperation(value: unknown) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
-function isRetryableDecisionConflict(error: unknown) {
+function isRetryableEndorsementConflict(error: unknown) {
   if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
   if (error.code === "P2002" || error.code === "P2034") return true;
   if (error.code !== "P2010") return false;
@@ -108,20 +110,41 @@ async function professionalProfile(userId: string) {
   return profile;
 }
 
-export async function listEndorsementRequests(userId: string, email: string) {
-  const normalizedEmail = email.toLowerCase();
+async function reviewerIdentity(db: Pick<Prisma.TransactionClient, "user">, userId: string) {
+  const user = await db.user.findUnique({ where: { id: userId }, select: { email: true, emailVerified: true } });
+  const recipients: Prisma.TerraqoEndorsementRequestWhereInput[] = [{ reviewerUserId: userId }];
+  if (user?.emailVerified) recipients.push({ reviewerUserId: null, reviewerEmail: user.email.toLowerCase() });
+  return recipients;
+}
+
+export async function pendingEndorsementNotice(userId: string) {
+  const where: Prisma.TerraqoEndorsementRequestWhereInput = {
+    OR: await reviewerIdentity(prisma, userId), sentAt: { not: null },
+    status: { in: ["PENDING", "IN_REVIEW"] }, expiresAt: { gt: new Date() },
+    revision: { worklog: { deletedAt: null } },
+  };
+  const [count, latest] = await Promise.all([
+    prisma.terraqoEndorsementRequest.count({ where }),
+    prisma.terraqoEndorsementRequest.findFirst({ where, orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      select: { id: true, version: true, updatedAt: true } }),
+  ]);
+  return { count, latest };
+}
+
+export async function listEndorsementRequests(userId: string) {
   const requests = await prisma.terraqoEndorsementRequest.findMany({
-    where: {
-      OR: [
-        { requesterId: userId },
-        { reviewerUserId: userId, status: { not: "DRAFT" }, sentAt: { not: null } },
-        { reviewerUserId: null, reviewerEmail: normalizedEmail, status: { not: "DRAFT" }, sentAt: { not: null } },
-      ],
-    },
+    where: { OR: [
+      { requesterId: userId },
+      { OR: await reviewerIdentity(prisma, userId), status: { not: "DRAFT" }, sentAt: { not: null }, revision: { worklog: { deletedAt: null } } },
+    ] },
     include: requestInclude,
     orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
   });
-  return requests.map((request) => projectRequestForViewer(request, userId));
+  return requests.map(request => {
+    if (["PENDING", "IN_REVIEW", "DRAFT"].includes(request.status) && request.expiresAt.getTime() <= Date.now())
+      request.status = "EXPIRED";
+    return projectRequestForViewer(request, userId);
+  });
 }
 
 export async function createEndorsementRequest(input: {
@@ -133,15 +156,11 @@ export async function createEndorsementRequest(input: {
   const profile = await professionalProfile(input.userId);
   const expiresAt = new Date(input.payload.expiresAt);
   const now = new Date();
-  if (expiresAt.getTime() <= now.getTime() + 60 * 60_000)
-    throw new ScopedEndorsementError("La solicitud debe tener al menos una hora de vigencia.", 422);
-  if (expiresAt.getTime() > now.getTime() + 30 * 86_400_000)
-    throw new ScopedEndorsementError("La vigencia máxima de una solicitud es de 30 días.", 422);
   if (input.payload.reviewerUserId === input.userId || input.payload.reviewerEmail === input.userEmail.toLowerCase())
     throw new ScopedEndorsementError("El autor no puede respaldar su propia evidencia.", 422);
 
   const operationFingerprint = hashOperation(input.payload);
-  return prisma.$transaction(async (tx) => {
+  const create = () => prisma.$transaction(async (tx) => {
     await tx.$queryRaw(Prisma.sql`SELECT id FROM icc."TerraqoProfessionalProfile" WHERE id=${profile.id} FOR UPDATE`);
     const existing = await tx.terraqoEndorsementRequest.findUnique({
       where: { requesterId_operationKey: { requesterId: input.userId, operationKey: input.operationKey } },
@@ -152,6 +171,11 @@ export async function createEndorsementRequest(input: {
         throw new ScopedEndorsementError("La clave de reintento ya fue usada con otra solicitud.", 409);
       return existing;
     }
+
+    if (expiresAt.getTime() <= now.getTime() + 60 * 60_000)
+      throw new ScopedEndorsementError("La solicitud debe tener al menos una hora de vigencia.", 422);
+    if (expiresAt.getTime() > now.getTime() + 30 * 86_400_000)
+      throw new ScopedEndorsementError("La vigencia máxima de una solicitud es de 30 días.", 422);
 
     const revision = await tx.terraqoWorklogRevision.findFirst({
       where: {
@@ -207,6 +231,13 @@ export async function createEndorsementRequest(input: {
       include: requestInclude,
     });
   }, { isolationLevel: "Serializable" });
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await create();
+    } catch (error) {
+      if (attempt >= 3 || !isRetryableEndorsementConflict(error)) throw error;
+    }
+  }
 }
 
 export async function decideEndorsementRequest(input: {
@@ -228,10 +259,8 @@ export async function decideEndorsementRequest(input: {
             id: input.requestId,
             status: { not: "DRAFT" },
             sentAt: { not: null },
-            OR: [
-              { reviewerUserId: input.userId },
-              { reviewerUserId: null, reviewerEmail: input.userEmail.toLowerCase() },
-            ],
+            OR: await reviewerIdentity(tx, input.userId),
+            revision: { worklog: { deletedAt: null } },
           },
           select: {
             id: true,
@@ -319,7 +348,7 @@ export async function decideEndorsementRequest(input: {
         return projectReviewerRequest(updated);
       }, { isolationLevel: "Serializable" });
     } catch (error) {
-      if (isRetryableDecisionConflict(error) && attempt < 2) {
+      if (isRetryableEndorsementConflict(error) && attempt < 2) {
         await new Promise((resolve) => setTimeout(resolve, 25 * (attempt + 1)));
         continue;
       }
@@ -333,6 +362,7 @@ export async function sendEndorsementRequest(input: {
   userId: string;
   requestId: string;
   expectedVersion: number;
+  action?: "send" | "resend";
 }) {
   return prisma.$transaction(async (tx) => {
     const request = await tx.terraqoEndorsementRequest.findFirst({
@@ -343,10 +373,21 @@ export async function sendEndorsementRequest(input: {
     await tx.$queryRaw(Prisma.sql`SELECT id FROM icc."TerraqoEndorsementRequest" WHERE id=${request.id} FOR UPDATE`);
     const locked = await tx.terraqoEndorsementRequest.findUnique({
       where: { id: request.id },
-      select: { version: true, status: true, expiresAt: true },
+      select: { version: true, status: true, expiresAt: true, updatedAt: true, revision: { select: { worklog: { select: { deletedAt: true } } } } },
     });
-    if (!locked || locked.version !== input.expectedVersion)
+    if (!locked || locked.revision.worklog.deletedAt) throw new ScopedEndorsementError("Solicitud no disponible.", 404);
+    if (locked.version !== input.expectedVersion)
       throw new ScopedEndorsementError("La solicitud cambió en otra sesión.", 409);
+    if (input.action === "resend") {
+      if (!["PENDING", "IN_REVIEW"].includes(locked.status))
+        throw new ScopedEndorsementError("Solo puedes recordar solicitudes pendientes.", 409);
+      if (locked.expiresAt.getTime() <= Date.now())
+        throw new ScopedEndorsementError("La solicitud ha caducado.", 410);
+      if (Date.now() - locked.updatedAt.getTime() < 86_400_000)
+        throw new ScopedEndorsementError("Puedes enviar un recordatorio cada 24 horas.", 429);
+      return tx.terraqoEndorsementRequest.update({ where: { id: request.id },
+        data: { version: { increment: 1 } }, include: requestInclude });
+    }
     if (locked.status !== "DRAFT")
       throw new ScopedEndorsementError("Solo un borrador puede enviarse.", 409);
     if (locked.expiresAt.getTime() <= Date.now())
@@ -356,7 +397,7 @@ export async function sendEndorsementRequest(input: {
       data: { status: "PENDING", sentAt: new Date(), version: { increment: 1 } },
       include: requestInclude,
     });
-  }, { isolationLevel: "Serializable" });
+  }, { isolationLevel: "ReadCommitted" });
 }
 
 export async function revokeEndorsementRequest(input: {
@@ -381,5 +422,5 @@ export async function revokeEndorsementRequest(input: {
       data: { status: "REVOKED", revokedAt: new Date(), version: { increment: 1 } },
       include: requestInclude,
     });
-  }, { isolationLevel: "Serializable" });
+  }, { isolationLevel: "ReadCommitted" });
 }

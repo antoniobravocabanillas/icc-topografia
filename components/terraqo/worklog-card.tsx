@@ -259,6 +259,11 @@ export function WorklogCard({
             ))}
         </div>
       ) : null}
+      {process.env.TERRAQO_SCOPED_ENDORSEMENTS_V1 === "true" && worklog.authorId === viewerId && worklog.currentRevisionId ? (
+        <Link href={`/portal/respaldos?registro=${encodeURIComponent(worklog.id)}`} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-lg border px-4 text-sm font-semibold focus-visible:outline-primary">
+          <BadgeCheck aria-hidden="true" className="h-4 w-4" /> Solicitar respaldo
+        </Link>
+      ) : null}
       {worklog.authorId === viewerId && worklog.workspaceId ? (
         <div className="mt-5 border-t pt-4">
           <WorklogValidationControl

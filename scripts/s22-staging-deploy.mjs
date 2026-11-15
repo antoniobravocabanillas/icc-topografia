@@ -11,7 +11,8 @@ async function main() {
   const requested = process.argv[2];
   const probe = ["probe-configure", "probe-trigger"].includes(requested);
   const s06 = ["s06-configure", "s06-trigger"].includes(requested);
-  const mode = probe ? requested.slice(6) : s06 ? requested.slice(4) : requested;
+  const s07 = ["s07-configure", "s07-trigger"].includes(requested);
+  const mode = probe ? requested.slice(6) : (s06 || s07) ? requested.slice(4) : requested;
   assert.ok(["inspect", "configure", "trigger", "status"].includes(mode));
   const require = createRequire(new URL("../node_modules/netlify-cli/package.json", import.meta.url));
   const { getAPIToken } = await import(pathToFileURL(require.resolve("@netlify/dev-utils")).href);
@@ -64,6 +65,8 @@ async function main() {
   const recover = process.argv[4] ?? "off";
   if (recover !== "off") { assert.ok(probe); assert.match(recover, /^[a-f0-9-]{36}\/[a-f0-9]{12}$/); }
   const expected = {
+    S07_STAGING_ENDORSEMENT_GATE: s07 ? "request" : "off",
+    ...(s07 ? { TERRAQO_SCOPED_ENDORSEMENTS_V1: "true" } : {}),
     S06_STAGING_VISIBILITY_GATE: s06 ? "visibility" : "off",
     S24_STAGING_RECOVER_INTERRUPTED: recover,
     S24_STAGING_DIAGNOSTIC_TARGET: probeTarget,

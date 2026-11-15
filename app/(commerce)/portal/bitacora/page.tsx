@@ -33,7 +33,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 type WorklogPageProps = {
-  searchParams: Promise<WorklogArchiveInput>;
+  searchParams: Promise<WorklogArchiveInput & { registro?: string }>;
 };
 
 const typeOptions = [
@@ -108,6 +108,7 @@ export default async function WorklogPage({ searchParams }: WorklogPageProps) {
 
   const archiveRequest = {
     professionalProfileId: profile.id,
+    ...(typeof params.registro === "string" && params.registro ? { scopeWhere: { id: params.registro } } : {}),
     filters,
   };
   const archivePagePromise = getWorklogArchivePage({

@@ -17,7 +17,7 @@ export async function GET() {
   const { response, session } = await requireUser();
   if (response) return response;
   try {
-    return ok(await listEndorsementRequests(session.user.id, session.user.email));
+    return ok(await listEndorsementRequests(session.user.id));
   } catch (error) {
     if (error instanceof ScopedEndorsementError) return fail(error.message, error.status);
     return handleApiError(error);
