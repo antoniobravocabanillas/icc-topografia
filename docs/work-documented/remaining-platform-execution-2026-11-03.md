@@ -1,5 +1,13 @@
 # Remaining platform execution — 3 November 2026
 
+## 15 de noviembre — S12, definir necesidad empresarial
+
+Netlify confirmó `PASS S12 need` para `cbfe11ab76c25ffa5d12cff5021ec30e781d968f`, despliegue `6afa42b4edc76bf8717f985d`. El marcador servido coincidió. La prueba usó una empresa sintética con sesión real y Chromium a 1440, 375 y 320 px. La acción principal guardó una necesidad nueva y buscó evidencia con el ID devuelto. La acción secundaria guardó el borrador sin buscar.
+
+Se reabrió la versión 1, se aceptó un criterio sugerido y se descartó otro, se añadieron requisitos obligatorios y deseables y se guardaron ubicación, disponibilidad, herramientas y respaldo. Las sugerencias pendientes bloquearon la búsqueda. La versión 2 conservó el contexto completo de 2400 caracteres. Una consulta verificó que la versión 1 y su evaluación permanecían intactas. Se comprobó la limpieza en otra conexión y se retiró el acceso piloto de la empresa sintética.
+
+Se verificaron el contrato de descubrimiento, los permisos, la recuperación, TypeScript, ESLint y la presentación adaptativa. Para el recorrido alojado se probó el proveedor local de sugerencias; la generación con un proveedor externo no formó parte del ensayo. S13 (explorar experiencia relacionada) es la siguiente pantalla.
+
 ## 15 de noviembre — S11, detalle público y trazabilidad en staging
 
 Netlify confirmó `PASS S11 record` en el candidato `f66348ebabfa4a390115ffacca50e67c292dac57`, despliegue `6afa3ca9cc5af6b7ac10190a`. Se comprobó el marcador servido. Chromium anónimo recorrió archivo, detalle, galería, descarga, respaldo, historial y retorno al archivo con foco y filtro conservados a 1440, 375 y 320 px. El enlace histórico con fragmento abrió la ficha y la acción de compartir copió el enlace canónico.
