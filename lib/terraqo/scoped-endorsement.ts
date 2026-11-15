@@ -31,7 +31,8 @@ const requestInclude = {
       tools: true,
       contentHash: true,
       createdAt: true,
-      worklog: { select: { id: true, occurredAt: true, locationLabel: true, workspaceId: true } },
+      sourceMetadata: true,
+      worklog: { select: { id: true, currentRevisionId: true, occurredAt: true, locationLabel: true, workspaceId: true } },
     },
   },
   requester: { select: { id: true, name: true, image: true } },
@@ -48,11 +49,24 @@ type EndorsementRequestRecord = Prisma.TerraqoEndorsementRequestGetPayload<{
 }>;
 type EndorsementRevisionRecord = EndorsementRequestRecord["revision"];
 
+// Only return the place label and work date recorded with this revision.
+function endorsementContext(revision: EndorsementRevisionRecord) {
+  const meta = revision.sourceMetadata;
+  const saved = meta && typeof meta === "object" && !Array.isArray(meta) ? meta.workContext : null;
+  if (saved && typeof saved === "object" && !Array.isArray(saved) && typeof saved.occurredAt === "string" &&
+      (typeof saved.locationLabel === "string" || saved.locationLabel === null)) {
+    const occurredAt = new Date(saved.occurredAt);
+    if (Number.isFinite(occurredAt.getTime())) return { occurredAt, locationLabel: saved.locationLabel };
+  }
+  return revision.worklog.currentRevisionId === revision.id ? revision.worklog : null;
+}
+
 /** Reviewers receive only the immutable fields that the requester explicitly
  * selected. Request metadata is retained for replay/version checks, while
  * unrelated professional details and workspace context stay private. */
 export function projectEndorsementRevisionForScope(revision: EndorsementRevisionRecord, requestedScope: string[]) {
   const allowed = new Set(requestedScope);
+  const context = endorsementContext(revision);
   return {
       id: revision.id,
       revisionNo: revision.revisionNo,
@@ -67,8 +81,10 @@ export function projectEndorsementRevisionForScope(revision: EndorsementRevision
       ...(allowed.has("tools") ? { tools: revision.tools } : {}),
       worklog: {
         id: revision.worklog.id,
-        ...(allowed.has("occurredAt") ? { occurredAt: revision.worklog.occurredAt } : {}),
-        ...(allowed.has("locationLabel") ? { locationLabel: revision.worklog.locationLabel } : {}),
+        ...(revision.worklog.currentRevisionId && revision.id !== revision.worklog.currentRevisionId ? { newerRevisionAvailable: true } : {}),
+        ...(!context && (allowed.has("occurredAt") || allowed.has("locationLabel")) ? { historicalContextUnavailable: true } : {}),
+        ...(allowed.has("occurredAt") && context ? { occurredAt: context.occurredAt } : {}),
+        ...(allowed.has("locationLabel") && context ? { locationLabel: context.locationLabel } : {}),
       },
   };
 }
@@ -76,8 +92,17 @@ export function projectEndorsementRevisionForScope(revision: EndorsementRevision
 function projectReviewerRequest(request: EndorsementRequestRecord) {
   const hidden = request.expiresAt.getTime() <= Date.now() || ["CANCELLED", "REVOKED", "EXPIRED"].includes(request.status);
   return {
-    ...request,
-    decisions: hidden ? [] : request.decisions,
+    id: request.id, revisionId: request.revisionId, requesterId: request.requesterId,
+    reviewerEmail: request.reviewerEmail, reviewerUserId: request.reviewerUserId, organizationId: request.organizationId,
+    requester: request.requester, reviewerUser: request.reviewerUser, organization: request.organization,
+    relationshipLabel: request.relationshipLabel, requestedScope: request.requestedScope, revisionHash: request.revisionHash,
+    status: request.status, version: request.version, sentAt: request.sentAt, expiresAt: request.expiresAt,
+    revokedAt: request.revokedAt, cancelledAt: request.cancelledAt, createdAt: request.createdAt, updatedAt: request.updatedAt,
+    decisions: hidden ? [] : request.decisions.map(decision => ({
+      id: decision.id, reviewer: decision.reviewer, reviewerId: decision.reviewerId, decidedAt: decision.decidedAt,
+      revisionHash: decision.revisionHash, responses: decision.responses, summaryComment: decision.summaryComment,
+      authoritySnapshot: decision.authoritySnapshot,
+    })),
     revision: projectEndorsementRevisionForScope(request.revision, hidden ? [] : request.requestedScope),
   };
 }
@@ -114,12 +139,17 @@ async function reviewerIdentity(db: Pick<Prisma.TransactionClient, "user">, user
   const user = await db.user.findUnique({ where: { id: userId }, select: { email: true, emailVerified: true } });
   const recipients: Prisma.TerraqoEndorsementRequestWhereInput[] = [{ reviewerUserId: userId }];
   if (user?.emailVerified) recipients.push({ reviewerUserId: null, reviewerEmail: user.email.toLowerCase() });
-  return recipients;
+  return {
+    requesterId: { not: userId },
+    OR: recipients,
+    AND: [{ OR: [{ organizationId: null }, { organization: { active: true, deletedAt: null,
+      members: { some: { userId, active: true, role: { in: ORGANIZATION_REVIEWER_ROLES } } } } }] }],
+  } satisfies Prisma.TerraqoEndorsementRequestWhereInput;
 }
 
 export async function pendingEndorsementNotice(userId: string) {
   const where: Prisma.TerraqoEndorsementRequestWhereInput = {
-    OR: await reviewerIdentity(prisma, userId), sentAt: { not: null },
+    ...await reviewerIdentity(prisma, userId), sentAt: { not: null },
     status: { in: ["PENDING", "IN_REVIEW"] }, expiresAt: { gt: new Date() },
     revision: { worklog: { deletedAt: null } },
   };
@@ -131,11 +161,11 @@ export async function pendingEndorsementNotice(userId: string) {
   return { count, latest };
 }
 
-export async function listEndorsementRequests(userId: string) {
+export async function listEndorsementRequests(userId: string, requestId?: string) {
   const requests = await prisma.terraqoEndorsementRequest.findMany({
-    where: { OR: [
+    where: { ...(requestId ? { id: requestId } : {}), OR: [
       { requesterId: userId },
-      { OR: await reviewerIdentity(prisma, userId), status: { not: "DRAFT" }, sentAt: { not: null }, revision: { worklog: { deletedAt: null } } },
+      { ...await reviewerIdentity(prisma, userId), status: { not: "DRAFT" }, sentAt: { not: null }, revision: { worklog: { deletedAt: null } } },
     ] },
     include: requestInclude,
     orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
@@ -186,7 +216,7 @@ export async function createEndorsementRequest(input: {
           deletedAt: null,
         },
       },
-      select: { id: true, contentHash: true, worklog: { select: { workspaceId: true } } },
+      select: { id: true, contentHash: true, worklog: { select: { workspaceId: true, currentRevisionId: true, locationLabel: true, occurredAt: true } } },
     });
     if (!revision) throw new ScopedEndorsementError("Revisión no disponible.", 404);
 
@@ -209,6 +239,17 @@ export async function createEndorsementRequest(input: {
     } else if (input.payload.reviewerUserId) {
       const reviewer = await tx.user.findUnique({ where: { id: input.payload.reviewerUserId }, select: { id: true } });
       if (!reviewer) throw new ScopedEndorsementError("Revisor no disponible.", 404);
+    }
+
+    if (revision.id === revision.worklog.currentRevisionId &&
+        input.payload.requestedScope.some(field => field === "occurredAt" || field === "locationLabel")) {
+      // Older current revisions may predate immutable work context. Pin it before sending the request.
+      await tx.terraqoWorklogRevision.updateMany({
+        where: { id: revision.id, sourceMetadata: { equals: Prisma.DbNull } },
+        data: { sourceMetadata: { workContext: {
+          occurredAt: revision.worklog.occurredAt.toISOString(), locationLabel: revision.worklog.locationLabel,
+        } } },
+      });
     }
 
     return tx.terraqoEndorsementRequest.create({
@@ -259,11 +300,12 @@ export async function decideEndorsementRequest(input: {
             id: input.requestId,
             status: { not: "DRAFT" },
             sentAt: { not: null },
-            OR: await reviewerIdentity(tx, input.userId),
+            ...await reviewerIdentity(tx, input.userId),
             revision: { worklog: { deletedAt: null } },
           },
           select: {
             id: true,
+            revision: requestInclude.revision,
             requestedScope: true,
             revisionHash: true,
             organizationId: true,
@@ -292,6 +334,14 @@ export async function decideEndorsementRequest(input: {
           throw new ScopedEndorsementError("La solicitud ya fue resuelta.", 409);
         if (locked.expiresAt.getTime() <= Date.now())
           throw new ScopedEndorsementError("La solicitud caducó y ya no admite decisiones.", 410);
+
+        if (current.revisionHash !== current.revision.contentHash ||
+            (input.payload.expectedRevisionId && input.payload.expectedRevisionId !== current.revision.id) ||
+            (input.payload.expectedRevisionHash && input.payload.expectedRevisionHash !== current.revisionHash))
+          throw new ScopedEndorsementError("La versión mostrada no corresponde a esta solicitud.", 409);
+        if (current.requestedScope.some(field => field === "occurredAt" || field === "locationLabel") &&
+            !endorsementContext(current.revision))
+          throw new ScopedEndorsementError("Falta el contexto histórico de esta versión. Solicita un nuevo respaldo.", 409);
 
         const responseFields = input.payload.responses.map((response) => response.field);
         const responseFieldSet = new Set<string>(responseFields);

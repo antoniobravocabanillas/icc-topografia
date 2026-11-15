@@ -61,7 +61,7 @@ export async function expectPulse(read: Read, baseline: number, id?: string, ver
   assert.equal(unreadNotifications, baseline + (id ? 1 : 0));
   if (id) {
     assert.equal(latestEvent?.id, "endorsement:" + id + ":" + version);
-    assert.equal(latestEvent.href, inbox);
+    assert.equal(latestEvent.href, inbox + "?solicitud=" + id);
     assert.equal(latestEvent.channel, "notification");
   } else {
     assert.ok(!latestEvent?.id.startsWith("endorsement:"));

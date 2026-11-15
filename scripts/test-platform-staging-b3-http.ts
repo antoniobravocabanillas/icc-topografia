@@ -435,7 +435,7 @@ async function main() {
         data: { expectedVersion: enterprise.version, responses: [{ field: "title", decision: "CONFIRMED" }] },
       },
     );
-    assert.equal(lostAuthority.status(), 403);
+    assert.equal(lostAuthority.status(), 404);
 
     const ownerPage = await ownerContext.newPage();
     await ownerPage.goto(new URL("/portal/selecciones", origin).toString(), { waitUntil: "domcontentloaded", timeout: 60_000 });

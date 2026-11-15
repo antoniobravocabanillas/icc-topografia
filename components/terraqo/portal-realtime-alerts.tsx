@@ -24,6 +24,7 @@ type AlertEvent = {
 type PulseData = {
   unreadMessages: number;
   unreadNotifications: number;
+  pendingEndorsementHref?: string | null;
   latestEvent: AlertEvent | null;
 };
 
@@ -136,6 +137,11 @@ export function PortalRealtimeAlerts({
             </div>
             <Settings2 className="h-5 w-5 text-[#315f9f]" aria-hidden="true" />
           </div>
+          {pulse.pendingEndorsementHref && (
+            <Link href={pulse.pendingEndorsementHref} className="mb-3 flex min-h-11 items-center rounded-xl border px-4 text-sm font-semibold text-[#315f9f]">
+              Revisar solicitud de respaldo
+            </Link>
+          )}
           <AlertPreferencesPanel />
           <Link
             href="/portal#actividad"

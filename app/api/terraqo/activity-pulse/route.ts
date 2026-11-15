@@ -108,7 +108,7 @@ export async function GET() {
     const endorsementEvent = endorsements.latest ? {
       id: `endorsement:${endorsements.latest.id}:${endorsements.latest.version}`,
       channel: "notification" as const, title: "Solicitud de respaldo", body: "Tienes una solicitud pendiente de revisión.",
-      href: "/portal/respaldos", createdAt: endorsements.latest.updatedAt,
+      href: `/portal/respaldos?solicitud=${encodeURIComponent(endorsements.latest.id)}`, createdAt: endorsements.latest.updatedAt,
     } : null;
     const latestEvent = [messageEvent, notificationEvent, endorsementEvent]
       .filter((event): event is NonNullable<typeof event> => Boolean(event))
@@ -117,6 +117,7 @@ export async function GET() {
     return ok({
       unreadMessages,
       unreadNotifications: unreadNotifications + endorsements.count,
+      pendingEndorsementHref: endorsementEvent?.href ?? null,
       latestEvent: latestEvent
         ? {
             ...latestEvent,

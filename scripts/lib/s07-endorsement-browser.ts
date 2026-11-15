@@ -144,8 +144,9 @@ export async function readRecipient(page: Page, id: string, record: SharingRecor
   if (record.photo) {
     await expect(card.locator('img[src*="' + record.photo.id + '"]')).toHaveCount(0);
   }
-  const form = card.getByRole("region", { name: "Revisar aspectos solicitados" });
+  const form = page.getByRole("region", { name: "Revisar aspectos solicitados" });
   if (available) {
+    await card.getByRole("link", { name: "Revisar solicitud", exact: true }).click();
     await expect(form).toBeVisible();
     await expect(form.getByRole("group", { name: "Descripción", exact: true })).toContainText(record.summary);
     await expect(form.getByRole("radio")).toHaveCount(3);

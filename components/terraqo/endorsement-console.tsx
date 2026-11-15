@@ -4,7 +4,7 @@ import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { BadgeCheck, Clock3, FileText, LoaderCircle, Send, UserCheck } from "lucide-react";
-import { EndorsementReviewForm } from "./endorsement-review-form";
+import { EndorsementReviewPanel } from "./endorsement-review-panel";
 
 const aspects = [
   ["title", "Título"], ["summary", "Descripción"], ["outcome", "Resultado"],
@@ -17,7 +17,7 @@ export type EndorsementRevision = {
   id: string; revisionNo: number; contentHash: string; title?: string | null; summary?: string | null;
   outcome?: string | null; contributionRole?: string | null; responsibilities?: string[];
   methods?: string[]; tools?: string[];
-  worklog?: { id: string; occurredAt?: string; locationLabel?: string | null };
+  worklog?: { id: string; occurredAt?: string; locationLabel?: string | null; newerRevisionAvailable?: boolean; historicalContextUnavailable?: boolean };
   thumbnailMediaId?: string;
 };
 export type EndorsementRequestItem = {
@@ -61,7 +61,7 @@ async function api(url: string, init: RequestInit) {
   return payload.data;
 }
 
-export function EndorsementConsole({ currentUserId, revisions, requests, initialRevisionId }: { currentUserId: string; revisions: EndorsementRevision[]; requests: EndorsementRequestItem[]; initialRevisionId?: string }) {
+export function EndorsementConsole({ currentUserId, revisions, requests, initialRevisionId, selectedRequestId }: { currentUserId: string; revisions: EndorsementRevision[]; requests: EndorsementRequestItem[]; initialRevisionId?: string; selectedRequestId?: string }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   // A synchronous lock also blocks a second click before React renders pending.
@@ -84,6 +84,8 @@ export function EndorsementConsole({ currentUserId, revisions, requests, initial
   const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reviewerEmail.trim());
   const valid = Boolean(selectedRevision && validEmail && relationship.trim().length >= 3 && validExpiry && scope.length);
   const sendFingerprint = JSON.stringify([reviewerEmail, revisionId, relationship, expiry, scope]);
+
+  const selectedRequest = requests.find(request => request.id === selectedRequestId);
 
   function run(action: () => Promise<void>) {
     if (inFlight.current) return;
@@ -109,6 +111,11 @@ export function EndorsementConsole({ currentUserId, revisions, requests, initial
       setNotice({ error: false, text: send ? "Solicitud enviada con alcance fijo." : "Borrador guardado sin enviar. No se notificó al revisor." });
     });
   }
+
+  // Selection comes from the authorized SSR projection, never from a client-side lookup.
+  if (selectedRequestId) return selectedRequest && selectedRequest.requesterId !== currentUserId
+    ? <EndorsementReviewPanel key={`${selectedRequest.id}:${selectedRequest.version}:${selectedRequest.revisionHash}`} request={selectedRequest} />
+    : <section role="status" className="rounded-xl bg-[#061523] p-6 text-[#edf4fc]">Solicitud no disponible. <Link className="underline" href="/portal/respaldos">Volver a solicitudes</Link></section>;
 
   return <div aria-busy={pending} className="s07-endorsements grid min-w-0 gap-6 rounded-2xl bg-[#061523] p-4 text-[#edf4fc] selection:bg-[#295b93] selection:text-white sm:p-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(20rem,1fr)] [&_input]:accent-[#69b9ff] [&_input]:[color-scheme:dark] [&_input]:caret-[#69b9ff]">
     {notice && <div data-testid="endorsement-notice" role={notice.error ? "alert" : "status"} className={`break-words rounded-lg border px-4 py-3 text-sm xl:col-span-2 ${notice.error ? "border-[#9d5764] bg-[#391e2b] text-[#ffd5dd]" : "border-[#41807a] bg-[#123835] text-[#ccf4e9]"}`}>{notice.text}</div>}
@@ -162,7 +169,7 @@ export function EndorsementConsole({ currentUserId, revisions, requests, initial
           <p className="mt-3 break-words text-sm text-[#c3dbf0]">{incoming ? `Solicitada por ${request.requester.name || "un profesional"}` : recipient}</p><p className="mt-1 break-words text-xs leading-5 text-[#b2c9de]">{request.relationshipLabel} · v{request.revision.revisionNo}</p>
           <dl className="mt-3 space-y-1 text-xs leading-5 text-[#b2c9de]">{request.sentAt && <div><dt className="inline">Primer envío: </dt><dd className="inline">{dateLabel(request.sentAt)}</dd></div>}<div><dt className="inline">Vigencia: </dt><dd className="inline">{dateLabel(request.expiresAt)}</dd></div></dl>
           {hidden ? <p className="mt-3 text-sm leading-6 text-[#b2c9de]">El contenido ya no está disponible. Se conserva el estado y la trazabilidad de la solicitud.</p> : <><dl className="mt-4 space-y-3 border-t border-[#294963] pt-3 text-sm">{request.requestedScope.map(field => <div key={field}><dt className="text-xs font-semibold text-[#b2c9de]">{aspects.find(([value]) => value === field)?.[1] || field}</dt><dd className="mt-1 whitespace-pre-wrap break-words">{requestedValue(request.revision, field) || "Sin información registrada"}</dd></div>)}</dl>{request.decisions.length > 0 && <div className="mt-4 border-t border-[#294963] pt-3 text-sm"><p className="flex items-center gap-2 font-semibold text-[#a9dfce]"><BadgeCheck aria-hidden="true" className="h-4 w-4" />Decisión registrada</p>{request.decisions[0].summaryComment && <p className="mt-2 break-words leading-6">{request.decisions[0].summaryComment}</p>}<p className="mt-2 text-xs text-[#b2c9de]">Revocar conserva las decisiones y su trazabilidad.</p></div>}</>}
-          {actionable && <div className="mt-4 rounded-lg bg-white p-3 text-slate-900"><EndorsementReviewForm key={`${request.id}:${request.version}:${request.revisionHash}`} requestId={request.id} version={request.version} fields={request.requestedScope.map(field => ({ field, label: aspects.find(([value]) => value === field)?.[1] || field, value: requestedValue(request.revision, field) }))} /></div>}
+          {actionable && <Link className={`${primary} mt-4`} href={`/portal/respaldos?solicitud=${encodeURIComponent(request.id)}`}>Revisar solicitud</Link>}
           {!incoming && request.status === "DRAFT" && !terminal && completed[`${request.id}:${request.version}`] !== "SENT" && <div className="mt-4 space-y-3"><label className="flex min-h-11 cursor-pointer items-start gap-3 text-sm leading-6"><input type="checkbox" disabled={pending} className="mt-1 h-4 w-4 shrink-0" checked={confirmedDrafts[request.id] === fingerprint} onChange={event => setConfirmedDrafts(current => ({ ...current, [request.id]: event.target.checked ? fingerprint : "" }))} /><span className="min-w-0 break-words">Confirmo enviar este borrador a <strong>{recipient}</strong> con {request.requestedScope.length} {request.requestedScope.length === 1 ? "aspecto" : "aspectos"}.</span></label><button type="button" disabled={pending || confirmedDrafts[request.id] !== fingerprint} className={primary} onClick={() => run(async () => { await api(`/api/v1/endorsement-requests/${request.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedVersion: request.version }) }); setCompleted(current => ({ ...current, [`${request.id}:${request.version}`]: "SENT" })); setNotice({ error: false, text: "Solicitud enviada; el alcance y la versión quedaron fijados." }); })}>Enviar borrador</button></div>}
           {!incoming && ["PENDING", "IN_REVIEW"].includes(status) && <div className="mt-4 space-y-2"><button type="button" disabled={pending || !resendAllowed} className={secondary} onClick={() => run(async () => { await api(`/api/v1/endorsement-requests/${request.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "resend", expectedVersion: request.version }) }); setCompleted(current => ({ ...current, [`${request.id}:${request.version}`]: "RESENT" })); setNotice({ error: false, text: "Solicitud reenviada. Podrás volver a reenviar después de 24 horas." }); })}>Reenviar solicitud</button><p className="text-xs leading-5 text-[#b2c9de]">{completed[`${request.id}:${request.version}`] === "RESENT" ? "Reenvío registrado; espera 24 horas." : !Number.isFinite(cooldownUntil) ? "Actualiza la página para consultar la disponibilidad de reenvío." : !resendAllowed ? `Disponible desde ${dateLabel(new Date(cooldownUntil).toISOString())}.` : "Un reenvío cada 24 horas. No crea otra solicitud."}</p></div>}
           {!incoming && !terminal && <div className="mt-4">{revokeId === request.id ? <div className="space-y-3 border-t border-[#294963] pt-3"><p className="text-sm leading-6">¿Revocar esta solicitud? Las decisiones emitidas y su historial se conservarán.</p><div className="flex flex-wrap gap-3"><button type="button" disabled={pending} className={secondary} onClick={() => run(async () => { await api(`/api/v1/endorsement-requests/${request.id}/decisions`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedVersion: request.version }) }); setCompleted(current => ({ ...current, [`${request.id}:${request.version}`]: "REVOKED" })); setRevokeId(null); setNotice({ error: false, text: "Solicitud revocada; el historial de decisiones se conserva." }); })}>Confirmar revocación</button><button type="button" disabled={pending} className={secondary} onClick={() => setRevokeId(null)}>Conservar solicitud</button></div></div> : <button type="button" disabled={pending || completed[`${request.id}:${request.version}`] === "SENT" || completed[`${request.id}:${request.version}`] === "RESENT"} className={secondary} onClick={() => setRevokeId(request.id)}>Revocar solicitud</button>}</div>}

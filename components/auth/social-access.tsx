@@ -12,9 +12,11 @@ export type SocialProviders = {
 export function SocialAccess({
   providers,
   intent = "signin",
+  reviewPath,
 }: {
   providers: SocialProviders;
   intent?: "signin" | "register";
+  reviewPath?: string | null;
 }) {
   const [message, setMessage] = useState<string | null>(null);
   const [pendingProvider, setPendingProvider] = useState<string | null>(null);
@@ -30,7 +32,7 @@ export function SocialAccess({
     }
     setPendingProvider(provider);
     try {
-      await signIn(provider, { redirectTo: "/cuenta?social=complete" });
+      await signIn(provider, { redirectTo: reviewPath ? "/cuenta?social=complete&callbackUrl=" + encodeURIComponent(reviewPath) : "/cuenta?social=complete" });
     } catch {
       setPendingProvider(null);
       setMessage("No pudimos abrir el proveedor de acceso. Intenta nuevamente.");

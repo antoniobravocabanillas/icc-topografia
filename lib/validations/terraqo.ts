@@ -215,6 +215,8 @@ export const terraqoEndorsementRequestCreateSchema = z.object({
 });
 
 export const terraqoEndorsementDecisionSchema = z.object({
+  expectedRevisionId: z.string().cuid().optional(),
+  expectedRevisionHash: z.string().min(1).max(128).optional(),
   expectedVersion: z.number().int().positive(),
   responses: z.array(z.object({
     field: terraqoShareableEvidenceField,

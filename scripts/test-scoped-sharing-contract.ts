@@ -54,7 +54,7 @@ assert.equal(terraqoEndorsementRequestCreateSchema.safeParse({
   expiresAt: "2027-01-01T00:00:00-05:00",
 }).success, false, "Un alcance duplicado produciría una solicitud imposible de responder.");
 
-const projectedRevision = projectEndorsementRevisionForScope({
+const originalRevision = {
   id: "revision-1",
   revisionNo: 3,
   title: "Título privado",
@@ -66,8 +66,10 @@ const projectedRevision = projectEndorsementRevisionForScope({
   tools: ["Herramienta privada"],
   contentHash: "hash-1",
   createdAt: new Date("2026-10-30T00:00:00Z"),
-  worklog: { id: "worklog-1", occurredAt: new Date("2026-10-29T00:00:00Z"), locationLabel: "Lugar privado", workspaceId: "workspace-private" },
-}, ["summary"]);
+  sourceMetadata: null,
+  worklog: { id: "worklog-1", currentRevisionId: "revision-1", occurredAt: new Date("2026-10-29T00:00:00Z"), locationLabel: "Lugar privado", workspaceId: "workspace-private" },
+};
+const projectedRevision = projectEndorsementRevisionForScope(originalRevision, ["summary"]);
 assert.equal(projectedRevision.summary, "Resumen autorizado");
 assert.equal("title" in projectedRevision, false);
 assert.equal("outcome" in projectedRevision, false);
@@ -79,6 +81,18 @@ assert.equal(terraqoEndorsementDecisionSchema.safeParse({
   responses: [{ field: "summary", decision: "CHANGES_REQUESTED" }],
 }).success, false, "Pedir cambios exige comentario.");
 
+const laterWorklog = { ...originalRevision.worklog, currentRevisionId: "revision-2", locationLabel: "Sede posterior" };
+const oldRevision = { ...originalRevision, worklog: laterWorklog };
+const unavailable = projectEndorsementRevisionForScope(oldRevision, ["locationLabel", "occurredAt"]);
+assert.equal(unavailable.worklog.historicalContextUnavailable, true);
+assert.equal("locationLabel" in unavailable.worklog, false);
+assert.equal("occurredAt" in unavailable.worklog, false);
+const historical = projectEndorsementRevisionForScope({
+  ...oldRevision, sourceMetadata: { workContext: { occurredAt: "2026-10-29T00:00:00Z", locationLabel: "Sede original" } },
+}, ["locationLabel", "occurredAt"]);
+assert.equal(historical.worklog.newerRevisionAvailable, true);
+assert.equal(historical.worklog.locationLabel, "Sede original");
+assert.equal(historical.worklog.occurredAt?.toISOString(), "2026-10-29T00:00:00.000Z");
 assert.equal(deriveEndorsementStatus([]), "IN_REVIEW");
 assert.equal(deriveEndorsementStatus(["CONFIRMED", "CONFIRMED"]), "CONFIRMED");
 assert.equal(deriveEndorsementStatus(["UNABLE_TO_CONFIRM"]), "DECLINED");

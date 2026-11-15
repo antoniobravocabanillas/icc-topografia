@@ -1,62 +1,79 @@
-import { notFound } from "next/navigation";
+import { auth } from "@/auth";
+import { notFound, redirect } from "next/navigation";
 import { EndorsementConsole } from "@/components/terraqo/endorsement-console";
 import { prisma } from "@/lib/prisma";
 import { listEndorsementRequests } from "@/lib/terraqo/scoped-endorsement";
-import { requireProfessionalPortal } from "@/lib/terraqo/professional-portal";
 
 export const dynamic = "force-dynamic";
 
 export default async function EndorsementsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ registro?: string }>;
+  searchParams: Promise<{ registro?: string; solicitud?: string }>;
 }) {
   if (process.env.TERRAQO_SCOPED_ENDORSEMENTS_V1 !== "true") notFound();
-  const { session, profile } = await requireProfessionalPortal();
-  const { registro } = await searchParams;
+  const { registro, solicitud } = await searchParams;
+  const focused = typeof solicitud === "string" && solicitud.length > 0;
+  const session = await auth();
+  if (!session?.user?.id)
+    redirect(
+      focused
+        ? `/cuenta?callbackUrl=${encodeURIComponent("/portal/respaldos?solicitud=" + encodeURIComponent(solicitud))}`
+        : "/cuenta",
+    );
+  const profile = focused
+    ? null
+    : await prisma.terraqoProfessionalProfile.findUnique({
+        where: { userId: session.user.id },
+        select: { id: true },
+      });
   const [revisions, requests] = await Promise.all([
-    prisma.terraqoWorklogRevision.findMany({
-      where: {
-        ...(typeof registro === "string" ? { worklogId: registro } : {}),
-        worklog: {
-          professionalProfileId: profile.id,
-          authorId: session.user.id,
-          deletedAt: null,
-        },
-      },
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      take: 80,
-      select: {
-        id: true,
-        title: true,
-        summary: true,
-        revisionNo: true,
-        contentHash: true,
-        outcome: true,
-        contributionRole: true,
-        responsibilities: true,
-        methods: true,
-        tools: true,
-        worklog: {
-          select: {
-            id: true,
-            occurredAt: true,
-            locationLabel: true,
-            currentRevisionId: true,
-            media: {
-              where: { contentType: "image/webp" },
-              orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
-              take: 1,
-              select: { id: true },
+    profile
+      ? prisma.terraqoWorklogRevision.findMany({
+          where: {
+            ...(typeof registro === "string" ? { worklogId: registro } : {}),
+            worklog: {
+              professionalProfileId: profile.id,
+              authorId: session.user.id,
+              deletedAt: null,
             },
           },
-        },
-      },
-    }),
-    listEndorsementRequests(session.user.id),
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          take: 80,
+          select: {
+            id: true,
+            title: true,
+            summary: true,
+            revisionNo: true,
+            contentHash: true,
+            outcome: true,
+            contributionRole: true,
+            responsibilities: true,
+            methods: true,
+            tools: true,
+            worklog: {
+              select: {
+                id: true,
+                occurredAt: true,
+                locationLabel: true,
+                currentRevisionId: true,
+                media: {
+                  where: { contentType: "image/webp" },
+                  orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+                  take: 1,
+                  select: { id: true },
+                },
+              },
+            },
+          },
+        })
+      : [],
+    listEndorsementRequests(session.user.id, focused ? solicitud : undefined),
   ]);
+  if (focused && !requests.length) notFound();
   return (
     <EndorsementConsole
+      selectedRequestId={focused ? solicitud : undefined}
       initialRevisionId={registro ? revisions[0]?.id : undefined}
       currentUserId={session.user.id}
       revisions={revisions.map((revision) => ({

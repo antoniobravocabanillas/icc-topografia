@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { ArrowRight, BriefcaseBusiness, Building2, CheckCircle2, Eye, EyeOff, Fingerprint, LockKeyhole, Mail, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { endorsementContinuation } from "@/lib/terraqo/endorsement-continuation";
 import { billingContinuation } from "@/lib/terraqo/billing/continuation";
 import { terraqoDomains } from "@/lib/terraqo-domains";
 import { SocialAccess, type SocialProviders } from "@/components/auth/social-access";
@@ -17,6 +18,8 @@ function safeRelativeCallback(value: string | null) {
 }
 
 function destinationForRole(role: string | undefined, callbackUrl: string | null) {
+  const reviewPath = endorsementContinuation(callbackUrl);
+  if (reviewPath) return reviewPath;
   let billing = billingContinuation(callbackUrl);
   try {
     const saved = JSON.parse(sessionStorage.getItem("terraqo-membership-continuation") || "null");
@@ -193,7 +196,7 @@ export function SignInForm({
         {emailNeedsVerification ? <Button type="button" variant="outline" className="w-full" disabled={resendBusy || isPending} onClick={(event) => { const form = event.currentTarget.form; if (form) void resendVerification(new FormData(form)); }}>{resendBusy ? "Enviando verificación…" : "Reenviar correo de verificación"}</Button> : null}
       </div>
 
-      <SocialAccess providers={socialProviders} />
+      <SocialAccess providers={socialProviders} reviewPath={endorsementContinuation(callbackUrl)} />
       {onRegister ? <p className="tq-auth-switch">¿No tienes una cuenta? <button type="button" onClick={onRegister}>Regístrate <ArrowRight aria-hidden="true" /></button></p> : null}
     </form>
   );

@@ -347,7 +347,7 @@ export async function createProfessionalWorklog(input: {
         occurredAt: resolveWorklogOccurrence(input.payload.workDate),
         evidenceStatus: input.payload.projectId ? "LINKED" : "DECLARED",
       },
-      select: { id: true },
+      select: { id: true, occurredAt: true, locationLabel: true },
     });
     const revision = await tx.terraqoWorklogRevision.create({
       data: {
@@ -361,6 +361,7 @@ export async function createProfessionalWorklog(input: {
         methods: input.payload.methods || [],
         tools: input.payload.tools || [],
         contentHash: worklogRevisionHash(input.payload),
+        sourceMetadata: { workContext: { occurredAt: created.occurredAt.toISOString(), locationLabel: created.locationLabel } },
         createdById: input.userId,
       },
       select: { id: true },
@@ -428,13 +429,21 @@ export async function reviseProfessionalWorklog(input: {
     await tx.$queryRaw(Prisma.sql`SELECT id FROM icc."TerraqoProfessionalProfile" WHERE id=${current.professionalProfileId} FOR UPDATE`);
     const locked = await tx.terraqoWorklogEntry.findUnique({
       where: { id: current.id },
-      select: { version: true },
+      select: { version: true, currentRevisionId: true, occurredAt: true, locationLabel: true },
     });
     if (!locked || locked.version !== input.payload.expectedVersion)
       throw new TerraqoWorklogError(
         "La bitácora cambió en otra sesión. Recarga y compara la versión actual antes de guardar.",
         409,
       );
+    const workContext = { occurredAt: locked.occurredAt.toISOString(), locationLabel: locked.locationLabel };
+    // Preserve the context of pre-snapshot revisions while the original entry is still current.
+    if (locked.currentRevisionId) {
+      await tx.terraqoWorklogRevision.updateMany({
+        where: { id: locked.currentRevisionId, sourceMetadata: { equals: Prisma.DbNull } },
+        data: { sourceMetadata: { workContext } },
+      });
+    }
     const nextVersion = locked.version + 1;
     const revision = await tx.terraqoWorklogRevision.create({
       data: {
@@ -448,6 +457,7 @@ export async function reviseProfessionalWorklog(input: {
         methods: input.payload.methods,
         tools: input.payload.tools,
         contentHash: worklogRevisionHash(input.payload),
+        sourceMetadata: { workContext },
         createdById: input.userId,
       },
       select: { id: true },

@@ -85,6 +85,14 @@ async function main() {
     };
     step = "served-candidate";
     await assertServed();
+    if (process.env.S08_STAGING_REVIEW_GATE === "review") {
+      step = "s08-review";
+      const { verifyS08Review } = await import("./verify-s08-review");
+      await verifyS08Review(origin);
+      await assertServed();
+      console.log(`PASS S08 staging: commit=${commit}; deploy=${marker.deployId}; reviewer journey verified.`);
+      return;
+    }
     if (process.env.S07_STAGING_ENDORSEMENT_GATE === "request") {
       step = "s07-endorsement";
       const { verifyS07Endorsement } = await import("./verify-s07-endorsement");
@@ -121,7 +129,7 @@ async function main() {
 }
 main().catch(error => {
   // Assertions may contain tokens/URLs. Log only structural diagnostics.
-  const location = typeof error?.stack === "string" ? error.stack.match(/(?:workspace-administration-test-target|run-workspace-administration-staging|verify-worklog-draft-conflict|verify-s22-evaluator-browser|verify-hosted-worklog-clips|verify-s07-endorsement|s07-[a-z-]+|verify-s06-sharing|s06-[a-z-]+)\.ts:\d+:\d+/)?.[0] : undefined;
+  const location = typeof error?.stack === "string" ? error.stack.match(/(?:workspace-administration-test-target|run-workspace-administration-staging|verify-worklog-draft-conflict|verify-s22-evaluator-browser|verify-hosted-worklog-clips|verify-s08-review|s08-[a-z-]+|verify-s07-endorsement|s07-[a-z-]+|verify-s06-sharing|s06-[a-z-]+)\.ts:\d+:\d+/)?.[0] : undefined;
   console.error(JSON.stringify({ s22Step: step, s22Failed: true, location, code: typeof error?.code === "string" && /^[A-Z0-9_]{1,32}$/.test(error.code) ? error.code : "GATE_REJECTED" }));
   process.exitCode = 1;
 });
