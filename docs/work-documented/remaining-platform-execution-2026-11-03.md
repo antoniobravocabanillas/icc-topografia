@@ -1,5 +1,15 @@
 # Remaining platform execution — 3 November 2026
 
+## 14 de noviembre — Calendario y galería pública en staging
+
+Netlify sirve el commit `7ffa85a3fefe1e4d2ead956f7cea49207360798d` en el despliegue `6aed0e62e406fbe3eec5b74c`. El registro confirma PASS S22 con retirada de sus fixtures. Las pruebas locales del contrato del archivo, los parámetros de navegación y los cuatro objetos sintéticos pasaron.
+
+En el diagnóstico `6af9296c8fa8e6c9bdd4c8e3`, la API anónima devolvió 200 y dos bitácoras. Un segundo Chromium abrió el archivo y la galería del mismo perfil sintético en escritorio y móvil. Las capturas muestran las fechas 28 y 29 de octubre en Perú y el segundo plano seleccionado dentro de la página. Las imágenes están en `output/s10/` del checkout de validación.
+
+S10/S11 sigue abierto. El Chromium del diagnóstico se detuvo al buscar el botón del 28 de octubre con un registro, antes de aplicar el rango. El informe no incluye la respuesta de la consulta mensual. La siguiente comprobación debe capturar el estado HTTP y los conteos de la consulta de actividad de octubre y compararlos con el mes y las etiquetas renderizadas en cada ancho. Quedan sin acreditar el regreso con rango conservado, la ejecución a 320 px y S24 contra este candidato.
+
+Se desactivó el diagnóstico y se confirmó la ausencia de sus cuatro objetos. Una consulta independiente en staging devolvió un usuario, un workspace, una invitación con checksum histórico conservado, 48 migraciones y cero concesiones, expedientes, casos, bitácoras, medios y revisiones. Producción quedó fuera de esta ejecución.
+
 ## 5 November, 14:00 Lima — S24 verificado y calendario del archivo corregido
 
 **S24 pasó contra el candidato servido** `e1428e5b5f6f7719850b4f49d257664574974022` en Terraqo Platform Staging, despliegue `6aecc73d152fd923d7860673`. El diagnóstico anterior contra `fa8c412` aisló el fallo en la creación del expediente (Prisma P2028). La concesión privada había devuelto 200 al revisor, 404 a otra persona y 404 para descarga. El nuevo servicio carga las revisiones en lote, reutiliza las proyecciones vigentes, inserta las fuentes en conjunto y mantiene la transacción serializable con un plazo explícito. El ensayo local reproduce los permisos de lectura y escritura sin facultad de crear esquema.
