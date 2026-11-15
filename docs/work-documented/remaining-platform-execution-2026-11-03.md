@@ -1,5 +1,11 @@
 # Remaining platform execution — 3 November 2026
 
+## 15 de noviembre — S03/S04, captura y revisión web en staging
+
+El candidato 583f84cc0100dc6e7895dfb3e098341ef7e06dc3, despliegue 6af9b5e10d4a902bb123b293, pasó la suite S22 y el nuevo recorrido autenticado S03/S04. Se seleccionaron dos imágenes, se abrió la segunda en la galería, se revisó el resultado y se volvió desde la visibilidad privada. El conteo en PostgreSQL acreditó que avanzar y volver no creó una publicación. El primer candidato había fallado antes de llegar al recorrido en la API de miembros (500); no se reprodujo en la ejecución final. La limpieza confirmó cero fixtures S22 y cuatro objetos externos ausentes.
+
+Chromium local a 1280, 375 y 320 px comprobó edición sin red en la página abierta, restauración del borrador consentido al recargar tras reconectar y reintento de fotos después de una publicación simulada. Se corrigió la reposición de una foto ya adjuntada en la cola local al recargar. Las pruebas simularon fallo de primera o segunda foto y comprobaron una creación y solo los reintentos pendientes. La maqueta incluye audio/vídeo y fecha editable; el contrato web comprobado admite fotos y enlaces y conserva la fecha real de registro. Quedan pendientes la reconciliación de conflictos de revisión entre dispositivos y la validación de captura móvil nativa.
+
 ## 15 de noviembre — S01/S02, recorrido autenticado en staging
 
 El marcador público confirmó el candidato `6c0e759abfda295b360fe70fbd11c3343ef2e15b` y el despliegue Netlify `6af9b0d19d4799073dd41424`. Chromium abrió una invitación sintética como visitante, inició sesión mediante el formulario de credenciales real en una segunda pestaña, comprobó la identidad devuelta por Auth.js y volvió a la primera. Se verificó que el acceso de evaluador solo se concedía al pulsar Aceptar y que después se abrían las evaluaciones autorizadas.
