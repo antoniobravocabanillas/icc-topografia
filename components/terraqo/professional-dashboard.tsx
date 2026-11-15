@@ -195,33 +195,15 @@ function WorklogPreview({ worklog }: { worklog: ProfessionalDashboardProfile["wo
   const media = worklog.media[0];
   const validated = worklog.evidenceStatus === "VERIFIED" || worklog.validations.some((validation) => validation.status === "APPROVED");
   return (
-    <Link href="/portal/bitacora" className="group grid min-h-[138px] overflow-hidden rounded-xl border border-[#dfe7ef] bg-white transition duration-200 hover:-translate-y-0.5 hover:border-[#b9d4ee] hover:shadow-[0_16px_34px_rgba(14,26,38,0.09)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1768b0] focus-visible:ring-offset-2 sm:grid-cols-[132px_minmax(0,1fr)]">
-      <div className="relative min-h-36 overflow-hidden bg-[linear-gradient(145deg,#dce7ef,#edf3f6)] sm:min-h-0">
-        {media ? (
-          <Image src={`/api/terraqo/worklog/evidence/${media.id}`} alt="" fill sizes="(max-width: 640px) 100vw, 132px" className="object-cover transition duration-500 group-hover:scale-[1.03]" unoptimized />
-        ) : (
-          <span className="absolute inset-0 grid place-items-center text-[#6b8497]">
-            <NotebookPen className="h-7 w-7" aria-hidden="true" />
-          </span>
-        )}
-      </div>
-      <div className="min-w-0 p-4">
-        <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[#1768b0]">
-          <span>Bitácora</span>
-          <span className="text-[#8392a1]">· {relativeDate(worklog.occurredAt)}</span>
-          {validated ? <span className="rounded-full bg-[#e8f7f1] px-2 py-1 text-[#087b70]">Validada</span> : null}
-        </div>
-        <h3 className="mt-2 line-clamp-2 font-display text-base font-bold leading-5 text-[#0e1a26]">{worklog.title}</h3>
-        <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[#607083]">
-          {worklog.locationLabel ? (
-            <span className="inline-flex items-center gap-1">
-              <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
-              {worklog.locationLabel}
-            </span>
-          ) : null}
-          {worklog.workspace ? <span>{worklog.workspace.brandName || worklog.workspace.name}</span> : null}
-        </div>
-      </div>
+    <Link href={`/portal/bitacora?fecha=${new Intl.DateTimeFormat("sv-SE", { timeZone: "America/Lima" }).format(worklog.occurredAt)}#worklog-${encodeURIComponent(worklog.id)}`} className="group flex min-w-0 items-center gap-3 rounded-lg border border-[#294057] bg-[#102030] p-2 hover:border-[#5888af] sm:gap-5">
+      <span className="relative grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-md bg-[#182d41] text-sky-200 sm:w-28">
+        {media ? <Image src={`/api/terraqo/worklog/evidence/${media.id}`} alt="" fill sizes="112px" className="object-cover" unoptimized /> : <NotebookPen size={20} />}
+      </span>
+      <time dateTime={worklog.occurredAt.toISOString()} className="hidden w-24 shrink-0 text-xs text-slate-300 sm:block">{worklog.occurredAt.toLocaleString("es-PE", { timeZone: "America/Lima", dateStyle: "medium", timeStyle: "short" })}</time>
+      <span className="min-w-0 flex-1"><strong className="block break-words text-sm">{worklog.title}</strong>
+        <span className="text-xs text-sky-200">{validated ? "Validada" : worklog.lifecycle === "DRAFT" ? "Borrador" : "Registrada"}</span>
+        <span className="block text-xs text-slate-300 sm:hidden">{worklog.occurredAt.toLocaleDateString("es-PE", { timeZone: "America/Lima" })}</span>
+        {worklog.summary && <span className="line-clamp-1 text-sm text-slate-300">{worklog.summary}</span>}</span><ChevronRight size={16} aria-hidden="true" />
     </Link>
   );
 }
@@ -288,7 +270,51 @@ export function ProfessionalDashboard({ profile, workspaceId, dashboard }: { pro
 
   return (
     <div className="min-w-0 space-y-5 py-5 lg:py-7">
+      <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,1.8fr)_minmax(280px,1fr)]">
       <TrajectoryActions profileId={profile.id} workCases={process.env.TERRAQO_WORK_CASES_V1 === "true"} endorsements={process.env.TERRAQO_SCOPED_ENDORSEMENTS_V1 === "true"} />
+      <section className="min-w-0 rounded-2xl border border-[#294057] bg-[#091827] p-4 shadow-[0_12px_34px_rgba(14,26,38,0.05)] sm:p-5">
+        <div className="mb-4 flex items-center gap-2">
+          <h2 className="font-display text-xl font-bold tracking-[-0.02em] text-white">Pendientes</h2>
+          {attentionTotal ? (
+            <span className="grid h-6 min-w-6 place-items-center rounded-full bg-[#d92d20] px-1.5 text-xs font-bold text-white" aria-label={`${attentionTotal} pendientes`}>
+              {attentionTotal}
+            </span>
+          ) : null}
+        </div>
+        {attentionTotal ? (
+          <div className="grid gap-2">
+            {dashboard.pendingExperienceValidations ? <AttentionCard icon={FileCheck2} value={dashboard.pendingExperienceValidations} label="Experiencia esperando validación" href="/portal/experiencias" tone="red" /> : null}
+            {dashboard.unreadMessages ? <AttentionCard icon={MessageSquareText} value={dashboard.unreadMessages} label="Mensajes nuevos" href="/portal/mensajes" tone="blue" /> : null}
+            {dashboard.pendingTeamInvitations ? <AttentionCard icon={FolderKanban} value={dashboard.pendingTeamInvitations} label="Invitaciones a equipo o proyecto" href="/portal/equipos" tone="teal" /> : null}
+            {pendingDocuments ? <AttentionCard icon={FileText} value={pendingDocuments} label="Documentos pendientes" href="/portal/documentos" tone="amber" /> : null}
+          </div>
+        ) : (
+          <div className="flex min-h-[86px] items-center gap-3 rounded-xl border border-[#d7eee6] bg-[#f4fbf8] px-4 py-3 text-sm text-[#315d52]">
+            <CheckCircle2 className="h-5 w-5 text-[#087b70]" aria-hidden="true" />
+            No tienes acciones urgentes. Tu espacio está al día.
+          </div>
+        )}
+      </section>
+
+      </div>
+      <section aria-labelledby="trajectory-activity" className="rounded-2xl border border-[#294057] bg-[#091827] p-4 text-white sm:p-5">
+        <header className="flex items-center justify-between gap-3"><h2 id="trajectory-activity" className="text-xl font-bold">Actividad reciente</h2>
+          <Link href="/portal/bitacora" className="inline-flex min-h-11 items-center text-sm font-semibold text-sky-300">Ver todas</Link></header>
+            {profile.worklogs.length ? (
+              <div className="mt-4 grid gap-2">
+                {profile.worklogs.slice(0, 3).map((worklog) => (
+                  <WorklogPreview key={worklog.id} worklog={worklog} />
+                ))}
+              </div>
+            ) : (
+              <div className="mt-4 flex min-h-28 flex-col items-start justify-center rounded-xl border border-dashed border-[#cbd7e2] bg-[#fbfcfd] p-5">
+                <p className="font-semibold text-[#0e1a26]">Tu trabajo todavía no tiene registros.</p>
+                <Link href="/portal/bitacora" className="mt-2 inline-flex min-h-11 items-center gap-1 text-sm font-bold text-[#1768b0]">
+                  Registrar primera bitácora <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+            )}
+      </section>
       <section className="relative overflow-hidden rounded-2xl border border-[#163b54] bg-[radial-gradient(circle_at_82%_10%,rgba(37,192,213,0.16),transparent_30%),linear-gradient(125deg,#081b2b_0%,#0c3143_62%,#103b45_100%)] px-5 py-6 text-white shadow-[0_20px_48px_rgba(8,27,43,0.16)] sm:px-7 lg:px-8">
         <div className="absolute inset-y-0 right-0 hidden w-[44%] opacity-35 lg:block [background-image:repeating-radial-gradient(ellipse_at_100%_50%,transparent_0,transparent_18px,rgba(102,220,224,0.18)_19px,transparent_20px)]" />
         <div className="relative flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
@@ -339,30 +365,6 @@ export function ProfessionalDashboard({ profile, workspaceId, dashboard }: { pro
         </div>
       </section>
 
-      <section className="rounded-2xl border border-[#dce5ed] bg-white p-4 shadow-[0_12px_34px_rgba(14,26,38,0.05)] sm:p-5">
-        <div className="mb-4 flex items-center gap-2">
-          <h2 className="font-display text-xl font-bold tracking-[-0.02em] text-[#0e1a26]">Requiere tu atención</h2>
-          {attentionTotal ? (
-            <span className="grid h-6 min-w-6 place-items-center rounded-full bg-[#d92d20] px-1.5 text-xs font-bold text-white" aria-label={`${attentionTotal} pendientes`}>
-              {attentionTotal}
-            </span>
-          ) : null}
-        </div>
-        {attentionTotal ? (
-          <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
-            {dashboard.pendingExperienceValidations ? <AttentionCard icon={FileCheck2} value={dashboard.pendingExperienceValidations} label="Experiencia esperando validación" href="/portal/experiencias" tone="red" /> : null}
-            {dashboard.unreadMessages ? <AttentionCard icon={MessageSquareText} value={dashboard.unreadMessages} label="Mensajes nuevos" href="/portal/mensajes" tone="blue" /> : null}
-            {dashboard.pendingTeamInvitations ? <AttentionCard icon={FolderKanban} value={dashboard.pendingTeamInvitations} label="Invitaciones a equipo o proyecto" href="/portal/equipos" tone="teal" /> : null}
-            {pendingDocuments ? <AttentionCard icon={FileText} value={pendingDocuments} label="Documentos pendientes" href="/portal/documentos" tone="amber" /> : null}
-          </div>
-        ) : (
-          <div className="flex min-h-[86px] items-center gap-3 rounded-xl border border-[#d7eee6] bg-[#f4fbf8] px-4 py-3 text-sm text-[#315d52]">
-            <CheckCircle2 className="h-5 w-5 text-[#087b70]" aria-hidden="true" />
-            No tienes acciones urgentes. Tu espacio está al día.
-          </div>
-        )}
-      </section>
-
       <div className="grid items-start gap-5 2xl:grid-cols-[minmax(0,1fr)_350px]">
         <div className="min-w-0 space-y-5">
           {workspaceId ? (
@@ -387,20 +389,6 @@ export function ProfessionalDashboard({ profile, workspaceId, dashboard }: { pro
               <WeeklyMetric icon={Sparkles} value={`+${dashboard.weekTrust}`} label="Confianza aportada" />
               <WeeklyMetric icon={UserRoundPlus} value={dashboard.newConnections} label="Nuevas conexiones" />
             </div>
-            {profile.worklogs.length ? (
-              <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                {profile.worklogs.slice(0, 2).map((worklog) => (
-                  <WorklogPreview key={worklog.id} worklog={worklog} />
-                ))}
-              </div>
-            ) : (
-              <div className="mt-4 flex min-h-28 flex-col items-start justify-center rounded-xl border border-dashed border-[#cbd7e2] bg-[#fbfcfd] p-5">
-                <p className="font-semibold text-[#0e1a26]">Tu trabajo todavía no tiene registros.</p>
-                <Link href="/portal/bitacora" className="mt-2 inline-flex min-h-11 items-center gap-1 text-sm font-bold text-[#1768b0]">
-                  Registrar primera bitácora <ArrowRight className="h-4 w-4" />
-                </Link>
-              </div>
-            )}
           </section>
 
           <div className="grid gap-5 xl:grid-cols-2">

@@ -45,6 +45,18 @@ export function SignInForm({
 }) {
   const searchParams = useSearchParams();
   const callbackUrl = safeRelativeCallback(searchParams.get("callbackUrl"));
+  function finishLogin(role: string | undefined) {
+    if (searchParams.get("origen") === "invitacion") {
+      if (typeof BroadcastChannel === "function") {
+        const channel = new BroadcastChannel("terraqo-invitation-login");
+        channel.postMessage("session-changed");
+        channel.close();
+      }
+      window.location.assign("/portal");
+      return;
+    }
+    window.location.assign(destinationForRole(role, callbackUrl));
+  }
   const verification = searchParams.get("verification");
   const sessionReason = searchParams.get("reason");
   const audience = searchParams.get("audience");
@@ -93,7 +105,7 @@ export function SignInForm({
         else window.localStorage.removeItem("terraqo-remembered-email");
       } catch {}
       const session = await fetch("/api/auth/session").then((res) => res.json()).catch(() => null);
-      window.location.assign(destinationForRole(session?.user?.role, callbackUrl));
+      finishLogin(session?.user?.role);
     });
   }
 
@@ -141,7 +153,7 @@ export function SignInForm({
       const result = await signIn("credentials", { email: verifyPayload.data.email, passkeyToken: verifyPayload.data.token, redirect: false });
       if (result?.error) throw new Error("El acceso seguro venció. Inténtalo nuevamente.");
       const session = await fetch("/api/auth/session").then((res) => res.json());
-      window.location.assign(destinationForRole(session?.user?.role, callbackUrl));
+      finishLogin(session?.user?.role);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No pudimos usar el acceso seguro.");
     } finally { setPasskeyBusy(false); }

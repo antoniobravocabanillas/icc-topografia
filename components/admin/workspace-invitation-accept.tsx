@@ -35,10 +35,13 @@ export function WorkspaceInvitationAccept({ signedIn, email, evaluatorsEnabled =
         if (!controller.signal.aborted) setReturnedEmail(session?.user?.email || null);
       } catch { /* The invitation remains available when the connection returns. */ }
     }
+    const channel = typeof BroadcastChannel === "function" ? new BroadcastChannel("terraqo-invitation-login") : null;
+    if (channel) channel.onmessage = checkSession;
     window.addEventListener("focus", checkSession);
     window.addEventListener("online", checkSession);
     document.addEventListener("visibilitychange", checkSession);
     return () => {
+      channel?.close();
       request?.abort();
       window.removeEventListener("focus", checkSession);
       window.removeEventListener("online", checkSession);
@@ -61,7 +64,7 @@ export function WorkspaceInvitationAccept({ signedIn, email, evaluatorsEnabled =
     {done ? <div role="status"><p>Tu acceso quedó registrado. Si ya eras miembro, conservas tu rol anterior.</p><div className={styles.actions}><Link prefetch={false} className={styles.primary} href="/cuenta">Continuar a mi cuenta</Link>{evaluator && <Link prefetch={false} href="/portal/evaluaciones">Ver evaluaciones autorizadas</Link>}</div>{evaluator && <p>Aquí encontrarás los expedientes que el administrador te asigne.</p>}</div> : ready && !/^[A-Za-z0-9_-]{43}$/.test(token) ? <p role="alert" className={styles.notice}>Este enlace está incompleto. Abre el enlace original que compartió el administrador.</p> : !signedIn && !returnedEmail ? <>
       <p>Entra con el correo que recibió la invitación. El acceso se abre en otra pestaña. Al volver aquí podrás aceptar.</p>
       <div className={styles.actions}>
-        <a className={styles.primary} href="/cuenta" target="_blank" rel="noopener noreferrer">Iniciar sesión</a>
+        <a className={styles.primary} href="/cuenta?origen=invitacion" target="_blank" rel="noopener noreferrer">Iniciar sesión</a>
         <a href="/registro" target="_blank" rel="noopener noreferrer">Crear cuenta</a>
       </div>
     </> : <><p>Sesión actual: <strong>{returnedEmail || email}</strong>. Solo puedes aceptar una invitación dirigida a este correo verificado.</p>

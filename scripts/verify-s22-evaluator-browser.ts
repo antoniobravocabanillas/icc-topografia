@@ -6,7 +6,7 @@ import type { BrowserContext } from "playwright";
 // Called only by the destination-checked synthetic S22 browser suite.
 export async function verifyEvaluatorBrowser(input: {
   db: PrismaClient; owner: BrowserContext; reviewer: BrowserContext; origin: string;
-  workspaceId: string; ownerId: string; reviewerId: string; email: string;
+  workspaceId: string; ownerId: string; reviewerId: string; email: string; password: string;
 }) {
   const { db, owner, reviewer, origin, workspaceId, ownerId, reviewerId, email } = input;
   const headers = { Origin: origin };
@@ -19,6 +19,47 @@ export async function verifyEvaluatorBrowser(input: {
   assert.equal(issue.delivery, "disabled");
   const page = await reviewer.newPage();
   await page.goto(origin + "/invitacion-workspace#" + issue.token, { timeout: 120000 });
+  const targetProfile = await db.terraqoProfessionalProfile.create({ data: { userId: reviewerId } });
+  const entryId = randomUUID();
+  try {
+    await db.terraqoWorklogEntry.create({ data: { id: entryId, authorId: reviewerId, professionalProfileId: targetProfile.id,
+      title: "Nivelación de control", summary: "Registro sintético de trayectoria.", occurredAt: new Date(), visibility: "PRIVATE" } });
+    console.log("S01/S02: invitation opened");
+    const popup = reviewer.waitForEvent("page");
+    await page.getByRole("link", { name: "Iniciar sesión", exact: true }).click();
+    const loginPage = await popup;
+    loginPage.setDefaultTimeout(60_000);
+    await loginPage.locator("#terraqo-login-panel input[name=email]").fill(email);
+    await loginPage.locator("#terraqo-login-panel input[name=password]").fill(input.password);
+    console.log("S01/S02: credential form ready");
+    await loginPage.getByRole("button", { name: "Iniciar sesión", exact: true }).click();
+    await loginPage.waitForURL(origin + "/portal", { timeout: 90_000 });
+    console.log("S01/S02: portal reached");
+    const session = await (await reviewer.request.get("/api/auth/session")).json();
+    assert.equal(session.user.id, reviewerId);
+    for (const width of [1280, 375, 320]) {
+      await loginPage.setViewportSize({ width, height: 900 });
+      const trajectory = loginPage.getByRole("region", { name: "Mi trayectoria" });
+      const pending = loginPage.getByRole("heading", { name: "Pendientes", exact: true });
+      const recent = loginPage.getByRole("region", { name: "Actividad reciente" });
+      await recent.getByText("Nivelación de control", { exact: true }).waitFor();
+      await loginPage.getByRole("link", { name: /Documentos pendientes/ }).first().waitFor();
+      const [a,b,c] = await Promise.all([trajectory.boundingBox(), pending.boundingBox(), recent.boundingBox()]);
+      assert.ok(a && b && c);
+      assert.ok(width >= 1024 ? b.x >= a.x+a.width : b.y >= a.y+a.height);
+      assert.ok(c.y > b.y);
+      assert.ok(await loginPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    }
+    console.log("S01/S02: trajectory inspected");
+    await page.bringToFront();
+    await page.getByText(email, { exact: true }).waitFor({ timeout: 60000 });
+    assert.equal(await db.terraqoWorkspaceEvaluator.count({ where: { workspaceId, userId: reviewerId } }), 0);
+    await loginPage.close();
+    console.log("PASS S01 two tabs, real credential login and explicit invitation; S02 pending and recent activity at 1280/375/320.");
+  } finally {
+    await db.terraqoWorklogEntry.deleteMany({ where: { id: entryId, authorId: reviewerId } });
+    await db.terraqoProfessionalProfile.deleteMany({ where: { id: targetProfile.id, userId: reviewerId } });
+  }
   await page.getByRole("button", { name: "Aceptar invitación", exact: true }).click();
   await page.getByRole("link", { name: "Ver evaluaciones autorizadas", exact: true }).click();
   await page.getByRole("heading", { name: "Evaluaciones autorizadas", exact: true }).waitFor();

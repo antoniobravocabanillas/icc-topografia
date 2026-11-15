@@ -145,8 +145,8 @@ export async function verifyWorkspaceAdministration(db: PrismaClient, base: stri
       phase = "evaluator-assignment";
       const evaluator = await db.user.create({ data: { id: userIds[3], email: `evaluator-${suffix}@s22.invalid`, passwordHash, emailVerified: new Date() } });
       const reviewer = await context();
-      await login(reviewer, evaluator.email);
-      await verifyEvaluatorBrowser({ db, owner: admin, reviewer, origin: base, workspaceId, ownerId: owner.id, reviewerId: evaluator.id, email: evaluator.email });
+
+      await verifyEvaluatorBrowser({ db, owner: admin, reviewer, origin: base, workspaceId, ownerId: owner.id, reviewerId: evaluator.id, email: evaluator.email, password });
     }
     let pulseRequests = 0;
     phase = "revoked-authority";
