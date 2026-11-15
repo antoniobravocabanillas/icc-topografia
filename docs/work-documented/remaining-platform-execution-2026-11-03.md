@@ -1,5 +1,15 @@
 # Remaining platform execution — 3 November 2026
 
+## 15 de noviembre — S09, recorrido público del visitante validado en staging
+
+Netlify devolvió `PASS S09 visitor` para el commit `c816b89dd4908cfb8ea8089502917525bb2e904e` y el despliegue `6afa2db0e17e6b757ef93e69`. El marcador servido por Terraqo Platform Staging coincidió después de la prueba. La producción quedó fuera del alcance.
+
+Chromium recorrió el CV como visitante anónimo a 1440, 375 y 320 px. Abrió la bitácora desde la portada y desde el archivo, visualizó la evidencia, volvió al CV y descargó un PDF válido. El perfil vacío conservó el contacto permitido. Una cuenta de prueba inició sesión desde ese enlace y volvió al destinatario correcto. Se comprobó la diferencia entre un estado predeterminado y una disponibilidad declarada con fecha.
+
+Las lecturas HTTP comprobaron la descripción y los bytes exactos de los adjuntos autorizados. Registros privados, borradores, registros archivados o eliminados y material empresarial fuera de la selección quedaron inaccesibles por sus enlaces directos. La autorización empresarial se probó con un caso de dos bitácoras, solo su contribución y las fotos seleccionadas. Al revocarla se volvieron a comprobar el CV, el caso, las páginas de detalle y los archivos. La invitación limitada también se verificó antes y después de su revocación. Los controles buscaron datos de cliente, documentos y coordenadas privadas en las respuestas públicas.
+
+La prueba alojada comprobó la limpieza de filas sintéticas. La lectura independiente posterior confirmó la ausencia de los cuatro objetos del lote `b8f22de2-aaaf-4f67-af0f-910c46d97239`. El ensayo local completo `b278dc80-92bb-471f-b6ea-d80b97e21956` también pasó. El commit posterior `d871752` ajusta únicamente la preparación de datos en el verificador y su ejecución local. Véase [el contrato visual S09](../design/s09-ui-verifier-contract.md). La siguiente fase es S10.
+
 ## 15 de noviembre — S08, revisión por aspecto validada en staging
 
 Netlify confirmó `PASS S08 review` para el despliegue `6afa26bbf1e891029796a88c`. El marcador independiente devolvió el mismo despliegue y commit `116d8655e6887059a5d04d5ef0e8b5f64306ef08`.
