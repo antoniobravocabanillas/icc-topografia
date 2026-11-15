@@ -1,6 +1,6 @@
-# S07 · Solicitar respaldo
+# S07 Â· Solicitar respaldo
 
-Referencia visual: pantalla 7 de 02-ui-ux-pantallas.pdf (página 8).
+Referencia visual: pantalla 7 de 02-ui-ux-pantallas.pdf (pÃ¡gina 8).
 
 Selectores de la prueba de interfaz:
 - region `Solicitar respaldo` / `Mis solicitudes de respaldo`.

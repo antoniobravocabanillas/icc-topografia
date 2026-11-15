@@ -107,7 +107,7 @@ export async function GET() {
       : null;
     const endorsementEvent = endorsements.latest ? {
       id: `endorsement:${endorsements.latest.id}:${endorsements.latest.version}`,
-      channel: "notification" as const, title: "Solicitud de respaldo", body: "Tienes una solicitud pendiente de revisión.",
+      channel: "notification" as const, title: "Solicitud de respaldo", body: "Tienes una solicitud pendiente de revisiÃ³n.",
       href: "/portal/respaldos", createdAt: endorsements.latest.updatedAt,
     } : null;
     const latestEvent = [messageEvent, notificationEvent, endorsementEvent]
