@@ -1,5 +1,15 @@
 # Remaining platform execution — 3 November 2026
 
+## 15 de noviembre — S10, archivo y calendario validados en staging
+
+Netlify confirmó `PASS S10 archive` para el commit `9bee2e469be9d2d6b0bee6f272ea192e515665c1`, despliegue `6afa382872b2aa61dc8cd628`. El marcador del sitio coincidió. Chromium anónimo recorrió el archivo a 1440, 375 y 320 px. El primer lote trajo 20 de 28 bitácoras y el segundo las ocho restantes. Tras abrir una bitácora de la segunda página y volver, se conservaron los registros cargados, el foco, la selección y el desplazamiento (tolerancia de 4 px).
+
+Se comprobaron búsqueda, tipo, estado, proyecto y rango combinados, los puntos del calendario, la aplicación explícita del rango seleccionado en orden inverso, la retirada del chip, el estado vacío y el reinicio del cursor. El visitante recibió conteos de 28 registros autorizados. Quedaron fuera de la lista, el calendario y las lecturas directas los cuatro controles privados, borrador, empresa y proyecto reservado. Se verificaron los límites de medianoche y fin de mes en Lima. PostgreSQL local también pasó los conteos con la búsqueda de texto completo activada y desactivada.
+
+En el primer intento alojado se bloqueó el toque en «Cargar más bitácoras» a 375 px. El segundo identificó el iframe del distintivo de Netlify sobre el botón. El candidato final reserva espacio inferior en móvil. Otro navegador comprobó que el botón recibía el toque y cargaba los ocho registros restantes. La comprobación alojada confirmó la limpieza con una conexión independiente y una consulta posterior encontró cero perfiles sintéticos S10.
+
+Referencia visual y contrato: [S10, archivo y calendario](../design/s10-ui-verifier-contract.md). La siguiente fase es S11. Esta entrega corresponde al entorno de staging.
+
 ## 15 de noviembre — S09, recorrido público del visitante validado en staging
 
 Netlify devolvió `PASS S09 visitor` para el commit `c816b89dd4908cfb8ea8089502917525bb2e904e` y el despliegue `6afa2db0e17e6b757ef93e69`. El marcador servido por Terraqo Platform Staging coincidió después de la prueba. La producción quedó fuera del alcance.
