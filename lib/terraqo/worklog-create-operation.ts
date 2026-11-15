@@ -21,6 +21,7 @@ export function worklogCreateOperationFingerprint(
         workspaceId: workspaceId || null,
         projectId: payload.projectId || null,
         previousWorklogId: payload.previousWorklogId || null,
+        ...(payload.workDate ? { workDate: payload.workDate } : {}),
         title: payload.title,
         summary: payload.summary,
         outcome: payload.outcome || null,

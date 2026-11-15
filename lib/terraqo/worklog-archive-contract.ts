@@ -152,6 +152,11 @@ export function formatWorklogDay(date: Date, timeZone: string) {
   return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
 }
 
+export function resolveWorklogOccurrence(workDate?: string, now = new Date()) {
+  if (!workDate || workDate === formatWorklogDay(now, DEFAULT_TIME_ZONE)) return now;
+  return localDateStartUtc(workDate, DEFAULT_TIME_ZONE);
+}
+
 export function currentWorklogMonth(now: Date, timeZone: string) {
   return formatWorklogDay(now, timeZone).slice(0, 7);
 }

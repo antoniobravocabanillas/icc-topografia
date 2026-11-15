@@ -5,6 +5,8 @@ import { readFile, writeFile } from "node:fs/promises";
 import { PrismaClient } from "@prisma/client";
 import { assertWorkspaceAdministrationTestTarget } from "./lib/workspace-administration-test-target";
 import { migrationSourceChecksums } from "./lib/migration-source-checksums";
+import { verifyHostedWorklogClips } from "./verify-hosted-worklog-clips";
+import { verifyWorklogDraftConflict } from "./verify-worklog-draft-conflict";
 import { verifyWorkspaceAdministration } from "./test-workspace-administration-authenticated";
 import { verifyHostedPublication } from "./lib/hosted-public-acceptance";
 
@@ -85,6 +87,10 @@ async function main() {
     await assertServed();
     step = "authenticated-browser";
     await verifyWorkspaceAdministration(db, origin);
+    step = "worklog-draft-devices";
+    await verifyWorklogDraftConflict(origin);
+    step = "worklog-clips";
+    await verifyHostedWorklogClips(origin);
     if (process.env.S24_STAGING_VERIFICATION === "independent") {
       console.log("S24 requires a separate diagnostic receipt for this served commit.");
     } else if (process.env.PLATFORM_STAGING_S24_CONFIRM) {
@@ -99,7 +105,7 @@ async function main() {
 }
 main().catch(error => {
   // Assertions may contain tokens/URLs. Log only structural diagnostics.
-  const location = typeof error?.stack === "string" ? error.stack.match(/(?:workspace-administration-test-target|run-workspace-administration-staging)\.ts:\d+:\d+/)?.[0] : undefined;
+  const location = typeof error?.stack === "string" ? error.stack.match(/(?:workspace-administration-test-target|run-workspace-administration-staging|verify-worklog-draft-conflict|verify-s22-evaluator-browser|verify-hosted-worklog-clips)\.ts:\d+:\d+/)?.[0] : undefined;
   console.error(JSON.stringify({ s22Step: step, s22Failed: true, location, code: typeof error?.code === "string" && /^[A-Z0-9_]{1,32}$/.test(error.code) ? error.code : "GATE_REJECTED" }));
   process.exitCode = 1;
 });

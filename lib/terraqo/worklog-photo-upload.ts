@@ -1,3 +1,5 @@
+import { WORKLOG_CLIP_LIMIT, isWorklogClip } from "./worklog-clip-types";
+
 // Keep binary multipart requests comfortably below the hosting gateway limit.
 export const PHOTO_REQUEST_LIMIT = 3 * 1024 * 1024;
 export const PHOTO_SOURCE_LIMIT = 8 * 1024 * 1024;
@@ -10,11 +12,16 @@ const photoTypes = new Set([
 
 export function validateWorklogPhotos(files: File[]) {
   if (files.length > 6)
-    throw new Error("Puedes adjuntar hasta 6 fotos por bitácora.");
+    throw new Error("Puedes adjuntar hasta 6 evidencias por bitácora.");
   for (const file of files) {
+    if (isWorklogClip(file.type)) {
+      if (!file.size || file.size > WORKLOG_CLIP_LIMIT)
+        throw new Error(`${file.name}: el clip debe pesar entre 1 byte y 3 MB.`);
+      continue;
+    }
     if (!photoTypes.has(file.type) || !file.size)
       throw new Error(
-        `${file.name}: selecciona una foto JPG, PNG, WEBP o AVIF válida.`,
+        `${file.name}: selecciona una foto compatible o un clip WebM o MP4.`,
       );
     if (file.size > PHOTO_SOURCE_LIMIT)
       throw new Error(`${file.name}: supera el máximo de 8 MB por foto.`);
@@ -68,7 +75,7 @@ export async function prepareWorklogPhoto(file: File): Promise<File> {
 
 export async function uploadWorklogPhoto(worklogId: string, file: File) {
   if (file.size > PHOTO_REQUEST_LIMIT)
-    throw new Error("La foto necesita optimizarse antes de enviarla.");
+    throw new Error("El archivo supera el límite de carga antes de enviarla.");
   const body = new FormData();
   body.append("photos", file);
   let response: Response;
@@ -83,21 +90,21 @@ export async function uploadWorklogPhoto(worklogId: string, file: File) {
     );
   } catch {
     throw new Error(
-      "Se interrumpió la conexión. Reintenta las fotos pendientes; no se creará otra bitácora.",
+      "Se interrumpió la conexión. Reintenta las evidencias pendientes; no se creará otra bitácora.",
     );
   }
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
     const fallback =
       response.status === 413
-        ? "El servidor rechazó el tamaño de la foto. Selecciona una copia más pequeña."
+        ? "El servidor rechazó el tamaño del archivo. Selecciona una copia más pequeña."
         : response.status === 401
           ? "Tu sesión venció. Inicia sesión de nuevo antes de reintentar."
-          : "No pudimos adjuntar esta foto. Reintenta las fotos pendientes.";
+          : "No pudimos adjuntar este archivo. Reintenta las evidencias pendientes.";
     throw new Error(payload?.error?.message || fallback);
   }
   if (!Array.isArray(payload?.data?.media) || !payload.data.media.length)
     throw new Error(
-      "No recibimos confirmación de la foto. Reintenta para verificar su guardado.",
+      "No recibimos confirmación del archivo. Reintenta para verificar su guardado.",
     );
 }

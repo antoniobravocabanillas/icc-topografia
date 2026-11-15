@@ -18,6 +18,7 @@ import {
   WorklogContinuityControl,
   type WorklogContinuityOption,
 } from "@/components/terraqo/worklog-continuity-control";
+import { WorklogMediaPreview } from "./worklog-media-preview";
 import { EvidenceGallery } from "@/components/terraqo/evidence-gallery";
 import { formatWorklogDay } from "@/lib/terraqo/worklog-archive-contract";
 
@@ -225,7 +226,7 @@ export function WorklogCard({
       {worklog.media.length ? (
         <EvidenceGallery
           className="mt-5"
-          items={worklog.media.map((media, index) => ({
+          items={worklog.media.filter(media => media.contentType.startsWith("image/")).map((media, index) => ({
             id: media.id,
             src: `/api/terraqo/worklog/evidence/${media.id}`,
             downloadHref: `/api/terraqo/worklog/evidence/${media.id}?download=1`,
@@ -233,6 +234,14 @@ export function WorklogCard({
           }))}
         />
       ) : null}
+
+      {worklog.media.filter(media => /^(audio|video)\//.test(media.contentType)).map(media => (
+        <figure key={media.id} className="mt-4 min-w-0 space-y-2">
+          <figcaption className="break-words text-sm font-semibold">{media.fileName}</figcaption>
+          <WorklogMediaPreview type={media.contentType} src={`/api/terraqo/worklog/evidence/${media.id}`}
+            label={media.fileName} className="w-full max-h-96 rounded-lg" />
+        </figure>
+      ))}
 
       {worklog.comments.length ? (
         <div className="mt-5 space-y-2 border-t pt-4">

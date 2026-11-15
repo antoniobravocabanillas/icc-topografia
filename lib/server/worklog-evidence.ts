@@ -1,3 +1,6 @@
+import { sanitizeWorklogClip } from "./worklog-clip";
+import { WORKLOG_CLIP_LIMIT, isWorklogClip } from "../terraqo/worklog-clip-types";
+import { worklogMediaResponse } from "./worklog-media-response";
 import { prisma } from "@/lib/prisma";
 import { reserveStorage } from "@/lib/terraqo/billing/storage-quota";
 import { createHash } from "node:crypto";
@@ -31,12 +34,14 @@ export const MAX_WORKLOG_EVIDENCE_MULTIPART_BYTES =
 function getPhotos(formData: FormData) {
   return formData
     .getAll("photos")
-    .filter((value): value is File => value instanceof File && value.size > 0);
+    .filter((value): value is File => value instanceof File);
 }
 
 function validatePhoto(file: File) {
+  if (!file.size) return "El archivo está vacío.";
+  if (isWorklogClip(file.type) && file.size > WORKLOG_CLIP_LIMIT) return "Cada clip admite hasta 3 MB.";
   if (!ALLOWED_WORKLOG_EVIDENCE_TYPES.has(file.type)) {
-    return "Las evidencias deben estar en formato JPG, PNG, WEBP o AVIF.";
+    return "Las evidencias deben estar en formato JPG, PNG, WEBP, AVIF, MP4 o WebM.";
   }
   if (file.size > MAX_WORKLOG_EVIDENCE_SIZE)
     return "Cada foto debe pesar como maximo 8 MB.";
@@ -92,20 +97,20 @@ export async function uploadWorklogEvidence(
     const parts = [...formData.entries()];
     if (parts.length > MAX_WORKLOG_EVIDENCE_FILES)
       return fail(
-        `Cada bitácora admite hasta ${MAX_WORKLOG_EVIDENCE_FILES} fotos.`,
+        `Cada bitácora admite hasta ${MAX_WORKLOG_EVIDENCE_FILES} evidencias.`,
         400,
       );
     if (parts.some(([name, value]) => name !== "photos" || !(value instanceof File)))
       return fail("El formulario contiene campos de evidencia no permitidos.", 400);
     const photos = getPhotos(formData);
     if (!photos.length)
-      return fail("Selecciona al menos una foto como evidencia.", 400);
+      return fail("Selecciona al menos un archivo como evidencia.", 400);
     // Reject an abusive multipart set before any image is decoded or copied.
     // The per-file check below remains necessary for a small set containing one
     // oversized image.
     if (photos.length > MAX_WORKLOG_EVIDENCE_FILES)
       return fail(
-        `Cada bitácora admite hasta ${MAX_WORKLOG_EVIDENCE_FILES} fotos.`,
+        `Cada bitácora admite hasta ${MAX_WORKLOG_EVIDENCE_FILES} evidencias.`,
         400,
       );
     const sourceBytes = photos.reduce((total, photo) => total + photo.size, 0);
@@ -130,6 +135,9 @@ export async function uploadWorklogEvidence(
     const unique = [
       ...new Map(candidates.map((item) => [item.sha256, item])).values(),
     ];
+    const typeByHash = new Map(unique.map(item => [item.sha256, item.file.type]));
+    if (candidates.some(item => typeByHash.get(item.sha256) !== item.file.type))
+      return fail("Hay formatos contradictorios para la misma evidencia.", 422);
     const mediaSelect = {
       id: true,
       fileName: true,
@@ -143,16 +151,19 @@ export async function uploadWorklogEvidence(
       where: { worklogId, sha256: { in: unique.map((item) => item.sha256) } },
       select: { ...mediaSelect, sha256: true },
     });
+    if (existing.some(item => item.sha256 && (isWorklogClip(item.contentType) || isWorklogClip(typeByHash.get(item.sha256) || "")) &&
+      typeByHash.get(item.sha256) !== item.contentType))
+      return fail("El formato declarado no coincide con la evidencia guardada.", 422);
     const known = new Set(existing.map((item) => item.sha256));
     const pendingCandidates = unique.filter((item) => !known.has(item.sha256));
     if (!pendingCandidates.length)
       return ok({
         media: existing,
-        message: "Las fotos ya están adjuntas a esta bitácora.",
+        message: "Las evidencias ya están adjuntas a esta bitácora.",
       });
     if (worklog._count.media + pendingCandidates.length > MAX_WORKLOG_EVIDENCE_FILES)
       return fail(
-        `Cada bitácora admite hasta ${MAX_WORKLOG_EVIDENCE_FILES} fotos.`,
+        `Cada bitácora admite hasta ${MAX_WORKLOG_EVIDENCE_FILES} evidencias.`,
         400,
       );
     const hashes = pendingCandidates.map((item) => item.sha256);
@@ -166,7 +177,7 @@ export async function uploadWorklogEvidence(
     });
     if (duplicate)
       return fail(
-        "Esta evidencia visual ya fue utilizada en otra bitácora. Adjunta una foto original del trabajo.",
+        "Esta evidencia ya fue utilizada en otra bitácora. Adjunta un archivo original del trabajo.",
         409,
       );
 
@@ -176,18 +187,21 @@ export async function uploadWorklogEvidence(
       safeFileName: string;
       safeContentType: string;
       sourceFormat: string;
-      width: number;
-      height: number;
+      width?: number;
+      height?: number;
       sha256: string;
     }> = [];
     // Decode only the unique, authorized images that still fit the remaining
     // worklog quota. Sequential decoding also caps native/WASM peak memory.
     for (const candidate of pendingCandidates) {
-      const sanitized = await sanitizeWorklogEvidenceImage({
-        bytes: await candidate.file.arrayBuffer(),
-        claimedContentType: candidate.file.type,
-        fileName: candidate.file.name,
-      });
+      const bytes = await candidate.file.arrayBuffer();
+      const sanitized = isWorklogClip(candidate.file.type)
+        ? await sanitizeWorklogClip(bytes, candidate.file.type, candidate.file.name)
+        : await sanitizeWorklogEvidenceImage({
+            bytes,
+            claimedContentType: candidate.file.type,
+            fileName: candidate.file.name,
+          });
       prepared.push({
         file: candidate.file,
         bytes: sanitized.bytes,
@@ -209,7 +223,7 @@ export async function uploadWorklogEvidence(
     }> = [];
     const reservation = await reserveStorage(
       userId,
-      prepared.reduce((sum, item) => sum + item.file.size, 0),
+      prepared.reduce((sum, item) => sum + item.bytes.byteLength, 0),
     );
 
     try {
@@ -254,7 +268,7 @@ export async function uploadWorklogEvidence(
           // Serialize finalization by author; network/blob I/O stays outside the lock.
           await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`worklog-evidence:${userId}`}))`;
           const current = await tx.terraqoWorklogEntry.findFirst({
-            where: { id: worklogId, authorId: userId, deletedAt: null },
+            where: { id: worklogId, authorId: userId, deletedAt: null, ...(requiredWorkspaceId ? { workspaceId: requiredWorkspaceId } : {}) },
             select: { id: true },
           });
           if (!current) throw new Error("WORKLOG_UNAVAILABLE");
@@ -309,8 +323,8 @@ export async function uploadWorklogEvidence(
         media: [...existing, ...media],
         message:
           prepared.length === 1
-            ? "Foto agregada a tu bitacora."
-            : "Fotos agregadas a tu bitacora.",
+            ? "Evidencia agregada a tu bitacora."
+            : "Evidencias agregadas a tu bitacora.",
       });
     } catch (error) {
       await reservation.release();
@@ -327,15 +341,15 @@ export async function uploadWorklogEvidence(
         if (confirmed.length === prepared.length)
           return ok({
             media: [...existing, ...confirmed],
-            message: "Las fotos ya están adjuntas.",
+            message: "Las evidencias ya están adjuntas.",
           });
         return fail(
-          "La evidencia cambió durante la carga. Reintenta las fotos pendientes.",
+          "La evidencia cambió durante la carga. Reintenta los archivos pendientes.",
           409,
         );
       }
       if (error instanceof Error && error.message === "EVIDENCE_LIMIT")
-        return fail("Esta bitácora ya tiene 6 fotos.", 409);
+        return fail("Esta bitácora ya tiene 6 evidencias.", 409);
       throw error;
     }
   } catch (error) {
@@ -353,7 +367,7 @@ export async function uploadWorklogEvidence(
     if (error instanceof NativeWorklogLegacyGuardError) return fail(error.message, error.status);
     console.error("worklog-evidence: upload failed", { worklogId, error });
     return fail(
-      "No pudimos guardar la foto en el almacenamiento. Reintenta; tu bitácora permanece guardada.",
+      "No pudimos guardar el archivo en el almacenamiento. Reintenta; tu bitácora permanece guardada.",
       503,
     );
   }
@@ -363,6 +377,7 @@ export async function getWorklogEvidenceFile(
   userId: string,
   mediaId: string,
   requiredWorkspaceId?: string,
+  request?: Request,
 ) {
   try {
     const media = await prisma.terraqoWorklogMedia.findUnique({
@@ -394,16 +409,7 @@ export async function getWorklogEvidenceFile(
     );
     if (!entry) return fail("La evidencia ya no esta disponible.", 404);
 
-    const safeName = media.fileName.replace(/[\r\n"]/g, "-");
-    return new Response(entry.data, {
-      headers: {
-        "Content-Type": media.contentType,
-        "Content-Disposition": `inline; filename="${safeName}"`,
-        "Cache-Control": "private, no-store, max-age=0",
-        "X-Content-Type-Options": "nosniff",
-        ETag: entry.etag || "",
-      },
-    });
+    return worklogMediaResponse(entry, media, request);
   } catch (error) {
     return handleApiError(error);
   }

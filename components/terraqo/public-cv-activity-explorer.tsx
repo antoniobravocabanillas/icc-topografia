@@ -1,5 +1,8 @@
 "use client";
 
+import { worklogToday } from "@/lib/terraqo/worklog-date";
+import { isWorklogClip } from "@/lib/terraqo/worklog-clip-types";
+import { WorklogMediaPreview } from "./worklog-media-preview";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -1078,11 +1081,12 @@ function ActivityDetail({
 }) {
   const [active, setActive] = useState(0);
   const [tab, setTab] = useState("evidence");
-  const images = record.media.filter((media) =>
-    media.contentType.startsWith("image/"),
+  const playable = record.media.filter((media) =>
+    media.contentType.startsWith("image/") || isWorklogClip(media.contentType),
   );
   const fallback = evidenceImage(record);
-  const current = images[active]?.href || fallback;
+  const selected = playable[active] || playable[0];
+  const current = selected?.href || fallback;
   const status =
     record.evidenceStatus === "VERIFIED"
       ? "Validado"
@@ -1103,7 +1107,8 @@ function ActivityDetail({
             <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-[#b8c9da]">
               <span className="inline-flex items-center gap-2">
                 <CalendarDays size={17} />
-                {formatDay(record.occurredAt)} · {formatTime(record.occurredAt)}
+                {formatDay(record.occurredAt)}
+                {worklogToday(new Date(record.occurredAt)) === worklogToday(new Date(record.createdAt)) && ` · ${formatTime(record.occurredAt)}`}
               </span>
               {record.locationLabel && (
                 <span className="inline-flex items-center gap-2">
@@ -1132,27 +1137,32 @@ function ActivityDetail({
         >
           {current ? (
             <div className="relative aspect-[16/9] overflow-hidden rounded-lg bg-[#050d16]">
-              <Image
+              {selected && isWorklogClip(selected.contentType) ? (
+                <div className="flex h-full items-center justify-center px-3">
+                  <WorklogMediaPreview src={current} type={selected.contentType} label={selected.fileName}
+                    className="max-h-full w-full object-contain" />
+                </div>
+              ) : <Image
                 src={current}
                 alt={`${record.title}, evidencia ${active + 1}`}
                 fill
                 unoptimized
                 sizes="(min-width:1024px) 900px,100vw"
                 className="object-contain"
-              />
+              />}
             </div>
           ) : (
             <div className="flex aspect-[16/9] flex-col items-center justify-center gap-3 text-[#b8c9da]">
               <FileText size={36} />
-              <p>Este registro no incluye imágenes públicas.</p>
+              <p>Este registro no incluye archivos multimedia públicos.</p>
             </div>
           )}
-          {images.length > 1 && (
+          {playable.length > 1 && (
             <div
               className="mt-2 flex gap-2 overflow-x-auto pb-1"
-              aria-label="Elegir imagen"
+              aria-label="Elegir evidencia"
             >
-              {images.map((media, index) => (
+              {playable.map((media, index) => (
                 <button
                   key={media.id}
                   type="button"
@@ -1161,14 +1171,16 @@ function ActivityDetail({
                   aria-pressed={active === index}
                   className={`relative h-24 min-w-28 flex-1 overflow-hidden rounded-lg border-2 ${active === index ? "border-[#67afff]" : "border-transparent"}`}
                 >
-                  <Image
+                  {isWorklogClip(media.contentType) ? <span className="text-sm font-semibold text-white">
+                    {media.contentType.startsWith("audio/") ? "Audio" : "Video"} {index + 1}
+                  </span> : <Image
                     src={media.href}
                     alt=""
                     fill
                     unoptimized
                     sizes="200px"
                     className="object-cover"
-                  />
+                  />}
                 </button>
               ))}
             </div>

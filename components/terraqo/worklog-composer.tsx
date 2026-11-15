@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { worklogDateLabel, worklogToday } from "@/lib/terraqo/worklog-date";
 import { useRouter } from "next/navigation";
 import {
   CalendarClock,
@@ -19,7 +20,11 @@ import {
   MapPin,
   X,
 } from "lucide-react";
+import { WorklogClipRecorder } from "./worklog-clip-recorder";
+import { WorklogMediaPreview } from "./worklog-media-preview";
+import { WORKLOG_CLIP_TYPES } from "@/lib/terraqo/worklog-clip-types";
 import { Button } from "@/components/ui/button";
+import { WorklogAccountDraftControl } from "./worklog-account-draft-control";
 import { AiWritingTextarea } from "@/components/portal/ai-writing-textarea";
 import {
   prepareWorklogPhoto,
@@ -72,6 +77,8 @@ export function WorklogComposer({
   const operationStorageKey = `terraqo:worklog-operation:${draftOwnerKey}`;
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [draftReady, setDraftReady] = useState(false);
+  const [accountDraftLocked, setAccountDraftLocked] = useState(false);
+  const edited = useRef(false);
   const [draftRenderKey, setDraftRenderKey] = useState(0);
   const [draftEnabled, setDraftEnabled] = useState(false);
   const [draftStatus, setDraftStatus] = useState("Borrador local desactivado.");
@@ -82,8 +89,10 @@ export function WorklogComposer({
   const [previousWorklogId, setPreviousWorklogId] = useState("");
   const [continuityQuery, setContinuityQuery] = useState("");
   const [step, setStep] = useState(1);
+  const [reviewDate, setReviewDate] = useState("");
   const [reviewTitle, setReviewTitle] = useState("");
   const [reviewSummary, setReviewSummary] = useState("");
+  const [recording, setRecording] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState(0);
   const headingRef = useRef<HTMLHeadingElement>(null);
   function changeStep(next: number) {
@@ -120,6 +129,7 @@ export function WorklogComposer({
       workspaceId: String(data.get("workspaceId") || ""),
       projectId: String(data.get("projectId") || ""),
       previousWorklogId: String(data.get("previousWorklogId") || ""),
+      workDate: String(data.get("workDate") || "") || undefined,
       title: String(data.get("title") || ""),
       summary: String(data.get("summary") || ""),
       outcome: String(data.get("outcome") || ""),
@@ -135,6 +145,17 @@ export function WorklogComposer({
       includeAutomaticLocation,
     };
   }, [includeAutomaticLocation]);
+
+  const applyDraftFields = useCallback((fields: WorklogDraftFields) => {
+    setRestoredFields(fields);
+    setWorkspaceId(fields.workspaceId);
+    setProjectId(fields.projectId);
+    setPreviousWorklogId(fields.previousWorklogId);
+    setLocationLabel(fields.locationLabel);
+    locationLabelRef.current = fields.locationLabel;
+    setIncludeAutomaticLocation(fields.includeAutomaticLocation);
+    setDraftRenderKey(current => current + 1);
+  }, []);
 
   const persistDraft = useCallback(
     async (options?: { photos?: File[]; serverWorklogId?: string | null }) => {
@@ -229,13 +250,8 @@ export function WorklogComposer({
           );
           return;
         }
-        setRestoredFields(draft.fields);
-        setWorkspaceId(draft.fields.workspaceId);
-        setProjectId(draft.fields.projectId);
-        setPreviousWorklogId(draft.fields.previousWorklogId);
-        setLocationLabel(draft.fields.locationLabel);
-        locationLabelRef.current = draft.fields.locationLabel;
-        setIncludeAutomaticLocation(draft.fields.includeAutomaticLocation);
+        edited.current = true;
+        applyDraftFields(draft.fields);
         setPhotoFiles(draft.photos);
         photoFilesRef.current = draft.photos;
         pendingPhotos.current = [...draft.photos];
@@ -249,7 +265,6 @@ export function WorklogComposer({
           );
         }
         operationKey.current = draft.operationKey || crypto.randomUUID();
-        setDraftRenderKey((current) => current + 1);
         setDraftStatus("Borrador recuperado de este dispositivo.");
       })
       .catch(() => {
@@ -264,7 +279,7 @@ export function WorklogComposer({
     return () => {
       active = false;
     };
-  }, [draftConsentKey, draftStorageKey, operationStorageKey]);
+  }, [applyDraftFields, draftConsentKey, draftStorageKey, operationStorageKey]);
 
   useEffect(() => {
     photoFilesRef.current = photoFiles;
@@ -273,7 +288,7 @@ export function WorklogComposer({
 
   useEffect(() => {
     if (draftEnabled && draftReady) scheduleDraft();
-  }, [draftEnabled, draftReady, scheduleDraft]);
+  }, [draftEnabled, draftReady, draftRenderKey, scheduleDraft]);
 
   useEffect(
     () => () => {
@@ -316,15 +331,18 @@ export function WorklogComposer({
 
   function selectPhotos(event: ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(event.target.files || []);
+    event.target.value = "";
+    addMedia(selected);
+  }
+
+  function addMedia(selected: File[]) {
     try {
       if (!selected.length) return;
       const combined = [...photoFiles, ...selected];
       validateWorklogPhotos(combined);
       setPhotoFiles(combined);
-      event.target.value = "";
       setMessage("");
     } catch (error) {
-      event.target.value = "";
       setMessage((error as Error).message);
     }
   }
@@ -433,7 +451,7 @@ export function WorklogComposer({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy.current) return;
+    if (recording || busy.current || accountDraftLocked) return;
     const form = event.currentTarget;
     const data = new FormData(form);
     setMessage("");
@@ -448,7 +466,7 @@ export function WorklogComposer({
       !evidenceLinks.length
     ) {
       setMessage(
-        "Agrega al menos una foto o un enlace de evidencia para documentar trabajo verificable.",
+        "Agrega al menos una foto, un clip o un enlace de evidencia para documentar trabajo verificable.",
       );
       return;
     }
@@ -468,6 +486,7 @@ export function WorklogComposer({
         return;
       }
       if (step < 3) {
+        setReviewDate(String(data.get("workDate") || ""));
         setReviewTitle(String(data.get("title") || ""));
         setReviewSummary(String(data.get("summary") || ""));
         changeStep(step + 1);
@@ -488,7 +507,7 @@ export function WorklogComposer({
         validateWorklogPhotos(photoFiles);
         const prepared: File[] = [];
         for (const [index, photo] of photoFiles.entries()) {
-          setMessage(`Preparando foto ${index + 1} de ${photoFiles.length}…`);
+          setMessage(`Preparando evidencia ${index + 1} de ${photoFiles.length}…`);
           prepared.push(await prepareWorklogPhoto(photo));
         }
         pendingPhotos.current = prepared;
@@ -507,6 +526,7 @@ export function WorklogComposer({
             projectId: String(data.get("projectId") || "") || undefined,
             previousWorklogId:
               String(data.get("previousWorklogId") || "") || undefined,
+            workDate: String(data.get("workDate") || "") || undefined,
             title: String(data.get("title") || ""),
             summary: String(data.get("summary") || ""),
             outcome: String(data.get("outcome") || "") || undefined,
@@ -558,7 +578,7 @@ export function WorklogComposer({
       const id = savedWorklogId.current!;
       while (pendingPhotos.current.length) {
         setMessage(
-          `Adjuntando fotos · ${pendingPhotos.current.length} pendientes. No cierres esta página.`,
+          `Adjuntando evidencias · ${pendingPhotos.current.length} pendientes. No cierres esta página.`,
         );
         await uploadWorklogPhoto(id, pendingPhotos.current[0]);
         pendingPhotos.current.shift();
@@ -600,7 +620,7 @@ export function WorklogComposer({
     } catch (error) {
       setMessage(
         (savedWorklogId.current
-          ? `La bitácora ya está guardada. ${pendingPhotos.current.length === 1 ? "Queda 1 foto pendiente." : `Quedan ${pendingPhotos.current.length} fotos pendientes.`} No cierres esta página hasta completar la carga. `
+          ? `La bitácora ya está guardada. ${pendingPhotos.current.length === 1 ? "Queda 1 evidencia pendiente." : `Quedan ${pendingPhotos.current.length} evidencias pendientes.`} No cierres esta página hasta completar la carga. `
           : "") +
           (error instanceof Error
             ? error.message
@@ -618,11 +638,12 @@ export function WorklogComposer({
       ref={formRef}
       noValidate
       onSubmit={submit}
-      onChangeCapture={scheduleDraft}
+      onChangeCapture={() => { edited.current = true; scheduleDraft(); }}
       className="min-w-0 rounded-2xl border bg-white p-4 shadow-technical sm:rounded-lg sm:p-6"
     >
       <fieldset
         key={draftRenderKey}
+        inert={accountDraftLocked}
         disabled={submitting || saved}
         className="min-w-0"
       >
@@ -648,20 +669,18 @@ export function WorklogComposer({
           <div className="grid gap-4 md:grid-cols-2">
             <label className="grid gap-2 text-sm font-semibold md:col-span-2">
               <span className="flex items-center gap-2">
-                <ImagePlus className="h-4 w-4" /> Fotos desde tu dispositivo
+                <ImagePlus className="h-4 w-4" /> Fotos, audio y video
               </span>
               <span className="rounded-md border border-dashed bg-muted/25 p-4 text-sm font-medium text-muted-foreground">
                 <input
                   type="file"
-                  accept="image/jpeg,image/png,image/webp,image/avif"
+                  accept={["image/jpeg", "image/png", "image/webp", "image/avif", ...WORKLOG_CLIP_TYPES].join(",")}
                   multiple
                   onChange={selectPhotos}
                   className="block w-full min-w-0 text-sm file:mb-2 file:mr-4 file:min-h-11 file:w-full file:rounded-xl file:border-0 file:bg-primary file:px-4 file:py-2 file:font-bold file:text-primary-foreground sm:file:mb-0 sm:file:w-auto sm:file:rounded-md"
                 />
                 <small className="mt-2 block">
-                  Hasta 6 fotos en JPG, PNG, WEBP o AVIF. Máximo 8 MB por
-                  archivo. Las fotos grandes se optimizan antes de subirlas, una
-                  por una.
+                  Hasta 6 archivos. Fotos JPG, PNG, WEBP o AVIF de hasta 8 MB. Audio y video WebM o MP4 de hasta 3 MB por clip.
                 </small>
               </span>
             </label>
@@ -676,24 +695,21 @@ export function WorklogComposer({
                 className="sr-only"
               />
             </label>
+            <WorklogClipRecorder onFile={file => addMedia([file])} onBusy={setRecording} onError={setMessage} />
             {photoPreviews.length ? (
               <div className="grid grid-cols-2 gap-3 md:col-span-2 sm:grid-cols-3">
                 {photoPreviews.map((preview, index) => (
                   <figure
                     key={preview}
-                    className="group relative aspect-[4/3] overflow-hidden rounded-md border bg-muted"
+                    className="group relative grid min-w-0 content-end overflow-hidden rounded-md border bg-muted pt-9"
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={preview}
-                      alt={`Vista previa ${index + 1}`}
-                      className="h-full w-full object-cover"
-                    />
+                    <WorklogMediaPreview type={photoFiles[index]?.type} src={preview}
+                      label={`Vista previa ${index + 1}`} className="max-h-48 w-full object-contain" />
                     <button
                       type="button"
                       onClick={() => removePhoto(index)}
                       className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-md bg-black/70 text-white"
-                      aria-label={`Quitar foto ${index + 1}`}
+                      aria-label={`Quitar ${photoFiles[index]?.type.startsWith("image/") ? "foto" : "clip"} ${index + 1}`}
                     >
                       <X className="h-4 w-4" />
                     </button>
@@ -725,6 +741,16 @@ export function WorklogComposer({
                 maxLength={180}
               />
             </label>
+            <label className="grid gap-2 text-sm font-semibold">
+              Fecha del trabajo
+              <input
+                type="date"
+                name="workDate"
+                defaultValue={restoredFields?.workDate || worklogToday()}
+                className="h-12 min-w-0 rounded-xl border bg-background px-3 text-base sm:h-11 sm:rounded-md sm:text-sm"
+                required
+              />
+            </label>
             <div className="grid gap-2 text-sm font-semibold md:col-span-2">
               <span>Qué hiciste y qué problema resolviste</span>
               <AiWritingTextarea
@@ -745,10 +771,10 @@ export function WorklogComposer({
             <div className="min-w-0 space-y-3">
               {photoPreviews.length > 0 ? (
                 <>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <WorklogMediaPreview
+                    type={(photoFiles[selectedPhoto] || photoFiles[0])?.type}
                     src={photoPreviews[selectedPhoto] || photoPreviews[0]}
-                    alt="Evidencia seleccionada"
+                    label="Evidencia seleccionada"
                     className="max-h-96 w-full rounded-xl bg-slate-100 object-contain"
                   />
                   <div className="flex flex-wrap gap-2">
@@ -756,17 +782,15 @@ export function WorklogComposer({
                       <button
                         type="button"
                         key={src}
-                        aria-label={`Ver foto ${i + 1}`}
+                        aria-label={`Ver ${photoFiles[i]?.type.startsWith("image/") ? "foto" : "clip"} ${i + 1}`}
                         aria-pressed={i === selectedPhoto}
                         onClick={() => setSelectedPhoto(i)}
                         className="overflow-hidden rounded-lg border-2 aria-pressed:border-blue-600"
                       >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={src}
-                          alt=""
-                          className="h-14 w-16 object-cover"
-                        />
+                        {photoFiles[i]?.type.startsWith("image/") ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={src} alt="" className="h-14 w-16 object-cover" />
+                        ) : <span className="grid h-14 min-w-16 place-items-center px-2 text-sm">{photoFiles[i]?.type.startsWith("audio/") ? "Audio" : "Video"} {i + 1}</span>}
                       </button>
                     ))}
                   </div>
@@ -965,8 +989,10 @@ export function WorklogComposer({
             <div className="flex min-h-11 items-center gap-3 rounded-md border bg-[#f2f8f7] px-3 text-sm text-[#35485b]">
               <CalendarClock className="h-4 w-4 shrink-0 text-primary" />
               <span>
-                <b>Fecha y hora automáticas.</b> Se registran al guardar y no
-                podrán modificarse.
+                <b>Fecha del trabajo</b>{" "}
+                <time dateTime={reviewDate || restoredFields?.workDate || worklogToday()}>
+                  {worklogDateLabel(reviewDate || restoredFields?.workDate || worklogToday())}
+                </time>. La hora de publicación se registra al guardar.
               </span>
             </div>
             <div className="grid gap-3 rounded-xl border bg-[#f7fafc] p-4 md:col-span-2">
@@ -1073,7 +1099,7 @@ export function WorklogComposer({
             <span>
               Guardar un borrador en este dispositivo
               <small className="mt-1 block font-normal leading-5 text-slate-600">
-                Conserva texto y fotos para recuperarlos tras perder conexión o
+                Conserva texto y evidencias para recuperarlos tras perder conexión o
                 cerrar la página. No lo actives en un equipo compartido.
               </small>
             </span>
@@ -1087,6 +1113,17 @@ export function WorklogComposer({
           </p>
         </div>
       </fieldset>
+      <WorklogAccountDraftControl key={draftOwnerKey} profileId={draftOwnerKey}
+        disabled={!draftReady || recording || locating || submitting || saved} lock={setAccountDraftLocked}
+        readFields={fieldsFromForm} isPristine={() => !edited.current}
+        applyFields={fields => {
+          edited.current = true;
+          applyDraftFields(fields);
+          setLocation(null);
+          setContinuityQuery("");
+          changeStep(1);
+        }}
+      />
       <div className="sticky bottom-[4.8rem] z-20 -mx-4 mt-5 flex flex-col gap-3 border-t bg-white/95 px-4 py-4 backdrop-blur-xl sm:static sm:mx-0 sm:flex-row sm:items-center sm:justify-between sm:bg-transparent sm:px-0 sm:pb-0 sm:pt-5">
         {step > 1 && !saved && (
           <Button
@@ -1100,13 +1137,13 @@ export function WorklogComposer({
         )}
         <Button
           type="submit"
-          disabled={submitting}
+          disabled={recording || submitting || accountDraftLocked}
           className="min-h-12 w-full rounded-xl text-base sm:min-h-10 sm:w-auto sm:rounded-md sm:text-sm"
         >
           {submitting
             ? "Guardando…"
             : saved
-              ? "Reintentar fotos pendientes"
+              ? (photoFiles.some(file => !file.type.startsWith("image/")) ? "Reintentar evidencias pendientes" : "Reintentar fotos pendientes")
               : step === 1
                 ? "Continuar"
                 : step === 2

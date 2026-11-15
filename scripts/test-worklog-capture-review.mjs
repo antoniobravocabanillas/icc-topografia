@@ -31,6 +31,7 @@ try {
     await form
       .locator("input[capture]")
       .setInputFiles("scripts/fixtures/public-archive/media/replanteo.webp");
+    await form.locator("[name=workDate]").fill("2024-02-29");
     await form.locator("[name=title]").fill("Control de nivelación");
     await form
       .locator("[name=summary]")
@@ -45,6 +46,7 @@ try {
         .getByText(/Borrador recuperado|Guardado en este dispositivo/)
         .first(),
     ).toBeVisible();
+    await expect(form.locator("[name=workDate]")).toHaveValue("2024-02-29");
     await expect(form.locator("[name=title]")).toHaveValue(
       "Control de nivelación",
     );
@@ -85,6 +87,7 @@ try {
     ).toBeVisible();
     assert.equal(writes.length, 1);
     assert.equal(uploads, 3);
+    assert.equal(writes[0].workDate, "2024-02-29");
     assert.equal(writes[0].visibility, "PRIVATE");
     assert.ok(
       await page.evaluate(

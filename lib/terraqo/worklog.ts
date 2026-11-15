@@ -1,3 +1,4 @@
+import { resolveWorklogOccurrence } from "@/lib/terraqo/worklog-archive-contract";
 import { ordinaryWorkspaceMembership } from "@/lib/terraqo/workspace-roles";
 import { Prisma } from "@prisma/client";
 import { createHash } from "node:crypto";
@@ -343,7 +344,7 @@ export async function createProfessionalWorklog(input: {
         locationAccuracyMeters: input.payload.locationAccuracyMeters,
         locationCapturedAt: input.payload.locationCapturedAt,
         contentFingerprint,
-        occurredAt: new Date(),
+        occurredAt: resolveWorklogOccurrence(input.payload.workDate),
         evidenceStatus: input.payload.projectId ? "LINKED" : "DECLARED",
       },
       select: { id: true },

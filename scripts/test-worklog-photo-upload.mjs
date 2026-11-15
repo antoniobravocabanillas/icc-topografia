@@ -45,6 +45,7 @@ const prisma = {
         : null,
   },
   terraqoWorklogMedia: {
+    findUnique: async ({ where }) => { const item = rows.find(row => row.id === where.id); return item && { ...item, worklog: { workspaceId: "fixture" } }; },
     findMany: async ({ where }) => rows.filter((row) => matches(row, where)),
     findFirst: async ({ where }) => rows.find((row) => matches(row, where)),
     count: async ({ where }) =>
@@ -63,7 +64,16 @@ const prisma = {
 };
 const boundedRequestBody = load("../lib/server/bounded-request-body.ts");
 const boundedMultipart = load("../lib/server/bounded-multipart.ts");
-const { uploadWorklogEvidence } = load("../lib/server/worklog-evidence.ts", {
+const clipTypes = load("../lib/terraqo/worklog-clip-types.ts");
+const mediaResponse = load("../lib/server/worklog-media-response.ts");
+const security = load("../lib/server/worklog-media-security.ts", { sharp: { default: require("sharp") } });
+const clip = load("../lib/server/worklog-clip.ts", {
+  "../terraqo/worklog-clip-types": clipTypes, "./worklog-media-security": security,
+});
+const { uploadWorklogEvidence, getWorklogEvidenceFile } = load("../lib/server/worklog-evidence.ts", {
+  "./worklog-clip": clip,
+  "./worklog-media-response": mediaResponse,
+  "../terraqo/worklog-clip-types": clipTypes,
   "@/lib/prisma": { prisma },
   "@/lib/terraqo/billing/storage-quota": {
     reserveStorage: async () => {
@@ -88,6 +98,7 @@ const { uploadWorklogEvidence } = load("../lib/server/worklog-evidence.ts", {
       "image/png",
       "image/webp",
       "image/avif",
+      ...clipTypes.WORKLOG_CLIP_TYPES,
     ]),
     MAX_WORKLOG_EVIDENCE_SIZE: 8 * 1024 * 1024,
     createWorklogEvidenceKey: () => randomUUID(),
@@ -96,10 +107,11 @@ const { uploadWorklogEvidence } = load("../lib/server/worklog-evidence.ts", {
         if (failStore) throw new Error("simulated storage outage");
         blobs.set(key, bytes);
       },
+      getWithMetadata: async key => blobs.has(key) ? { data: blobs.get(key) } : null,
       delete: async (key) => blobs.delete(key),
     }),
   },
-  "@/lib/terraqo/worklog": { canViewWorklog: async () => true },
+  "@/lib/terraqo/worklog": { canViewWorklog: async userId => userId === "owner" },
   "@/lib/terraqo/builders": { syncWorklogReputation: async () => {} },
   "./native-worklog-legacy-guard": {
     NativeWorklogLegacyGuardError: class NativeWorklogLegacyGuardError extends Error {},
@@ -108,7 +120,7 @@ const { uploadWorklogEvidence } = load("../lib/server/worklog-evidence.ts", {
   "./bounded-request-body": boundedRequestBody,
   "./bounded-multipart": boundedMultipart,
   "./worklog-media-security": {
-    WorklogMediaSecurityError: class WorklogMediaSecurityError extends Error {},
+    WorklogMediaSecurityError: security.WorklogMediaSecurityError,
     sanitizeWorklogEvidenceImage: async ({ bytes, claimedContentType, fileName }) => {
       decoded++;
       return {
@@ -319,7 +331,7 @@ await test("storage outage preserves retry and releases quota", async () => {
     200,
   );
 });
-const client = load("../lib/terraqo/worklog-photo-upload.ts");
+const client = load("../lib/terraqo/worklog-photo-upload.ts", { "./worklog-clip-types": clipTypes });
 await test("client validates all selected sources before creating worklog", async () => {
   assert.throws(() =>
     client.validateWorklogPhotos(Array.from({ length: 7 }, () => photo())),
@@ -344,6 +356,66 @@ await test("client sends exactly one bounded photo and handles gateway HTML", as
   } finally {
     globalThis.fetch = original;
   }
+});
+for (const [kind, format] of [["audio", "webm"], ["video", "webm"], ["audio", "mp4"], ["video", "mp4"]]) {
+  await test(`real ${kind}/${format} upload, retry, private read and ranges`, async () => {
+    const bytes = readFileSync(new URL(`./fixtures/worklog-clips/${kind}.${format}`, import.meta.url));
+    const file = new File([bytes], `fixture.${format}`, { type: `${kind}/${format}` });
+    const send = () => uploadWorklogEvidence(request([file]), "owner", "entry");
+    assert.equal((await send()).status, 200);
+    assert.equal((await send()).status, 200);
+    assert.equal(rows.length, 1);
+    assert.equal(reserved, 1);
+    const { id } = rows[0];
+    const range = value => new Request("https://test.invalid/evidence", { headers: { Range: value } });
+    assert.equal((await getWorklogEvidenceFile("other", id, undefined, range("bytes=0-7"))).status, 403);
+    assert.equal((await getWorklogEvidenceFile("owner", id, "other")).status, 403);
+    const full = await getWorklogEvidenceFile("owner", id, "fixture");
+    assert.equal(full.status, 200);
+    assert.equal(full.headers.get("content-type"), file.type);
+    const stored = Buffer.from(await full.arrayBuffer());
+    for (const [header, expected] of [["bytes=0-7", stored.subarray(0, 8)], ["bytes=-12", stored.subarray(-12)], ["bytes=10-", stored.subarray(10)]]) {
+      const partial = await getWorklogEvidenceFile("owner", id, "fixture", range(header));
+      assert.equal(partial.status, 206);
+      assert.deepEqual(Buffer.from(await partial.arrayBuffer()), expected);
+    }
+    assert.equal((await getWorklogEvidenceFile("owner", id, "fixture", range("bytes=9999999-"))).status, 416);
+    for (const bad of [new File([bytes], "wrong", { type: kind === "video" ? "audio/webm" : "video/mp4" }),
+      new File([bytes.subarray(0, 24)], "truncated", { type: file.type })]) {
+      const result = await uploadWorklogEvidence(request([bad]), "owner", "entry");
+      assert.equal(result.status, 422);
+    }
+    assert.equal(blobs.size, 1);
+    assert.equal(reserved, 1);
+  });
+}
+await test("public CV media checks the exact profile, publication and deletion before and after blob read", async () => {
+  let reads = 0, stillPublished = true, visibility = "PRIVATE", deletedAt = null, cvEnabled = true;
+  const row = { id: "clip-id", contentType: "audio/webm", fileName: "audio.webm", storageKey: "private-key" };
+  const { GET } = load("../app/api/public/cv/[username]/worklogs/[mediaId]/route.ts", {
+    "@/lib/server/worklog-media-response": mediaResponse,
+    "@/lib/prisma": { prisma: { terraqoWorklogMedia: { findFirst: async ({ where }) => {
+      assert.equal(where.worklog.visibility, "PUBLIC");
+      assert.equal(where.worklog.deletedAt, null);
+      assert.equal(where.worklog.professionalProfile.liveCvEnabled, true);
+      if (where.id !== row.id || where.worklog.professionalProfile.username !== "fixture" ||
+          visibility !== where.worklog.visibility || deletedAt !== null || !cvEnabled) return null;
+      return !where.storageKey || (stillPublished && where.storageKey === row.storageKey) ? row : null;
+    } } } },
+    "@/lib/server/media": { getWorklogEvidenceStore: () => ({ getWithMetadata: async () => {
+      reads++; return { data: Uint8Array.of(1, 2, 3).buffer };
+    } }) },
+  });
+  const request = (username = "fixture") => GET(new Request("https://test.invalid/public", { headers: { Range: "bytes=0-1" } }),
+    { params: Promise.resolve({ username, mediaId: row.id }) });
+  assert.equal((await request()).status, 404);
+  visibility = "WORKSPACE"; assert.equal((await request()).status, 404);
+  visibility = "PUBLIC"; deletedAt = new Date(); assert.equal((await request()).status, 404);
+  deletedAt = null; cvEnabled = false; assert.equal((await request()).status, 404);
+  cvEnabled = true; assert.equal((await request("different")).status, 404);
+  assert.equal(reads, 0);
+  assert.equal((await request()).status, 206);
+  stillPublished = false; assert.equal((await request()).status, 404);
 });
 const serverSource = readFileSync(new URL("../lib/server/worklog-evidence.ts", import.meta.url), "utf8");
 assert.match(serverSource, /readBoundedRequestBytes/);

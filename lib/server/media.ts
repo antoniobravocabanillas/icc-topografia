@@ -1,3 +1,4 @@
+import { WORKLOG_CLIP_TYPES } from "../terraqo/worklog-clip-types";
 import { getStore } from "@netlify/blobs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -225,6 +226,7 @@ export const ALLOWED_PROFESSIONAL_AVATAR_TYPES = new Set([
   "image/avif",
 ]);
 export const ALLOWED_WORKLOG_EVIDENCE_TYPES = new Set([
+  ...WORKLOG_CLIP_TYPES,
   "image/jpeg",
   "image/png",
   "image/webp",

@@ -1,3 +1,4 @@
+import { worklogMediaResponse } from "@/lib/server/worklog-media-response";
 import { prisma } from "@/lib/prisma";
 import { getWorklogEvidenceStore } from "@/lib/server/media";
 
@@ -37,16 +38,5 @@ export async function GET(request: Request, { params }: RouteContext) {
   });
   if (!stillPublic) return new Response("Evidencia no encontrada.", { status: 404 });
 
-  const safeName = media.fileName.replace(/[\r\n"]/g, "-");
-  const download = new URL(request.url).searchParams.get("download") === "1";
-
-  return new Response(entry.data, {
-    headers: {
-      "Content-Type": media.contentType,
-      "Content-Disposition": `${download ? "attachment" : "inline"}; filename="${safeName}"`,
-      "Cache-Control": "private, no-store, no-transform",
-      "X-Content-Type-Options": "nosniff",
-      ETag: entry.etag || ""
-    }
-  });
+  return worklogMediaResponse(entry, media, request);
 }

@@ -54,6 +54,7 @@ export async function verifyEvaluatorBrowser(input: {
     const composer = loginPage.locator("#registrar-trabajo");
     await composer.locator("input[type=file][multiple]").setInputFiles("scripts/fixtures/public-archive/media/nivelacion.webp");
     await composer.locator("input[capture]").setInputFiles("scripts/fixtures/public-archive/media/replanteo.webp");
+    await composer.locator("[name=workDate]").fill("2026-10-14");
     await composer.locator("[name=title]").fill("Control de cotas de prueba");
     await composer.locator("[name=summary]").fill("Se contrastaron las cotas de los dos planos de prueba.");
     await composer.getByRole("button", { name: "Continuar", exact: true }).click();
@@ -61,6 +62,7 @@ export async function verifyEvaluatorBrowser(input: {
     await composer.getByRole("img", { name: "Evidencia seleccionada" }).evaluate(async el => (el as HTMLImageElement).decode());
     await composer.locator("[name=outcome]").fill("Las cotas coinciden con el plano.");
     await composer.getByRole("button", { name: "Revisar visibilidad" }).click();
+    await composer.locator('time[datetime="2026-10-14"]').waitFor();
     assert.equal(await composer.locator("[name=visibility]").inputValue(), "PRIVATE");
     await composer.getByRole("button", { name: "Volver", exact: true }).click();
     assert.equal(await composer.locator("[name=outcome]").inputValue(), "Las cotas coinciden con el plano.");

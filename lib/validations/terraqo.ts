@@ -77,6 +77,7 @@ const worklogVisibility = z.enum([
 ]);
 
 export const terraqoWorklogCreateSchema = z.object({
+  workDate: z.string().date().optional(),
   workspaceId: z.string().cuid().optional(),
   projectId: z.string().cuid().optional(),
   previousWorklogId: z.string().cuid().optional(),

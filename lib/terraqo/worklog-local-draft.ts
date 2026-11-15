@@ -5,6 +5,7 @@ const STORE_NAME = "worklog-drafts";
 const DATABASE_VERSION = 1;
 
 export type WorklogDraftFields = {
+  workDate?: string;
   workspaceId: string;
   projectId: string;
   previousWorklogId: string;
