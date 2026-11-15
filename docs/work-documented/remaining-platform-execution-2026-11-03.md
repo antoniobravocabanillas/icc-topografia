@@ -1,5 +1,15 @@
 # Remaining platform execution — 3 November 2026
 
+## 15 de noviembre — S08, revisión por aspecto validada en staging
+
+Netlify confirmó `PASS S08 review` para el despliegue `6afa26bbf1e891029796a88c`. El marcador independiente devolvió el mismo despliegue y commit `116d8655e6887059a5d04d5ef0e8b5f64306ef08`.
+
+Desde el aviso de la bandeja, el revisor abrió la solicitud específica y respondió tres aspectos con las tres decisiones posibles. Se comprobaron el comentario obligatorio para pedir aclaración, el alcance visible, el resumen y el resultado persistido. Al perderse la respuesta de red después de registrar la decisión, la repetición desde la interfaz recuperó la misma decisión sin incrementar dos veces la versión.
+
+Se probaron la revisión personal, la autoridad empresarial vigente y su retirada mientras el formulario estaba abierto. Las asignaciones empresariales de prueba se prepararon en PostgreSQL; el revisor abrió y respondió desde la aplicación autenticada. La versión original siguió disponible tras editar la bitácora. Una revisión antigua sin fecha o lugar originales quedó bloqueada para esos aspectos. Las pruebas visuales cubrieron 1440, 375 y 320 px y texto al 200 %.
+
+El verificador comprobó la limpieza de las filas sintéticas. La inspección independiente encontró ausentes los cuatro objetos del lote `b80d80f1-286e-4e67-9598-0858c60794ad`. La siguiente fase es S09.
+
 ## 15 de noviembre — S07, solicitud de respaldo validada en staging
 
 Netlify confirmó `PASS S07 endorsement` para el despliegue `6af9fc02f1f2bf1e444f1ca4`. El marcador del sitio sirvió el commit `96c14fbabf50a33930c33d021ccc5b055039f981`.
