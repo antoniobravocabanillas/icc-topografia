@@ -1,5 +1,16 @@
 # Remaining platform execution — 3 November 2026
 
+## 15 de noviembre — S06, destinos y autorización empresarial validados en staging
+
+Netlify registró `PASS S06 visibility` para el commit `93e0aa96ef010513376796396125963315591eb6` y el despliegue `6af9cc4b8986b4ac75c44464`. El marcador del sitio confirmó ambos identificadores. El recorrido usó tres sesiones autenticadas de prueba y una anónima.
+
+- Privada por defecto. Guardar mantuvo los campos y adjuntos fuera del acceso público y de terceros.
+- Pública. Se comprobó la aparición en el CV cuando se elige ese destino, la continuidad de enlaces anteriores y la retirada de la publicación.
+- Por invitación. El acceso requiere el correo verificado del destinatario y respeta el alcance, la vigencia y la revocación. El enlace se comparte manualmente.
+- Material empresarial. Se probaron ambos destinos desde la solicitud hasta la revocación, con inspección de campos y fotos por el revisor. Tras recargar, el titular pudo confirmar en «Tus selecciones» el destino aprobado. Cambiar destinatario, vigencia o permiso de descarga requiere otra autorización.
+
+La primera ejecución descubrió un selector de prueba que aún esperaba la confirmación en el formulario inicial. La segunda completó el flujo persistido. La inspección posterior confirmó la ausencia de los cuatro objetos de prueba del lote `84f420ed-8eb2-4f21-b3b7-3d62059167f4`. La siguiente fase es S07.
+
 ## 15 de noviembre — S06, vista previa de archivos en staging
 
 El despliegue `6af9c06f61278dff45729fc0` sirvió el candidato `cee497b9a4607c1ecc9a0c30505fb8228fb66f77`. El verificador autenticado abrió Selecciones, mostró la descripción elegida, mantuvo oculto el título y decodificó dos fotos mediante la ruta privada del titular. Desmarcar los adjuntos retiró la galería. El plugin confirmó PASS para el candidato y el operador verificó la ausencia de sus seis objetos sintéticos.
