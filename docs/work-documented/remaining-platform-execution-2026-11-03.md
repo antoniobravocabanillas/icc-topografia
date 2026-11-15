@@ -1,5 +1,11 @@
 # Remaining platform execution — 3 November 2026
 
+## 15 de noviembre — S06, vista previa de archivos en staging
+
+El despliegue `6af9c06f61278dff45729fc0` sirvió el candidato `cee497b9a4607c1ecc9a0c30505fb8228fb66f77`. El verificador autenticado abrió Selecciones, mostró la descripción elegida, mantuvo oculto el título y decodificó dos fotos mediante la ruta privada del titular. Desmarcar los adjuntos retiró la galería. El plugin confirmó PASS para el candidato y el operador verificó la ausencia de sus seis objetos sintéticos.
+
+Chromium local pasó a 1440, 375 y 320 px e inspeccionó el payload de creación: recorrer, marcar y desmarcar antes de guardar no escribió permisos. El selector respeta el contrato actual de adjuntos WebP normalizados. Cuando el registro incluye otros formatos permite compartir los campos de texto. Siguiente pendiente de S06: contrastar el recorrido completo de visibilidad privada, pública y por invitación con el PDF, incluida la autorización empresarial cuando corresponda.
+
 ## 15 de noviembre — S03/S04, cierre web de fecha, multimedia y borradores
 
 Staging sirvió el commit `2d060e5e3138af96f08dccacb6f84677abd672c9` en el despliegue `6af9bc3a0ecdd05f329c429f`. La suite autenticada terminó con PASS para ese despliegue.
