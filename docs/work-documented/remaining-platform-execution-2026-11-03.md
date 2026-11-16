@@ -1,5 +1,13 @@
 # Remaining platform execution — 3 November 2026
 
+## 15 de noviembre — S13, descubrimiento de experiencia relacionada
+
+El candidato `6aab5e234f3e3e3d4aaafcfa9921fcb362db0e9c` pasó TypeScript, ESLint y los contratos de descubrimiento, análisis y permisos. Chromium local con dos sesiones autenticadas y PostgreSQL ejercitó filtros y agrupación por trabajo, fechas de Lima, disponibilidad publicada, vistas previas autorizadas y guardado de la versión y el permiso exactos en la evaluación. Tras revocar la selección, dejaron de mostrarse el resultado y el resumen derivado. El reintento de guardado recibió 409. Se probaron anchos de 1440, 375 y 320 px.
+
+**Validación alojada pendiente.** Netlify omitió el build `6afa508bd241fe828f9b6f28`, deploy `6afa508bd241fe828f9b6f2a`, con el motivo `Skipped due to account builds usage exceeded`. El plugin no se ejecutó. Se retiró el piloto S13 y se comprobó la ausencia de los cuatro blobs sintéticos. El marcador servido corresponde todavía a S12, commit `cbfe11a`.
+
+Cuando la cuenta vuelva a admitir builds, preparar los blobs del candidato, configurar el piloto S13 y relanzar la verificación. Comprobar el resultado `PASS S13 discovery`, el marcador servido y la limpieza antes de abrir S14.
+
 ## 15 de noviembre — S12, definir necesidad empresarial
 
 Netlify confirmó `PASS S12 need` para `cbfe11ab76c25ffa5d12cff5021ec30e781d968f`, despliegue `6afa42b4edc76bf8717f985d`. El marcador servido coincidió. La prueba usó una empresa sintética con sesión real y Chromium a 1440, 375 y 320 px. La acción principal guardó una necesidad nueva y buscó evidencia con el ID devuelto. La acción secundaria guardó el borrador sin buscar.
