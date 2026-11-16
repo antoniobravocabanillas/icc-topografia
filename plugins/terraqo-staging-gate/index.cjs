@@ -27,7 +27,7 @@ function run(stage, { utils }) {
   for (const line of diagnostics.split(/\r?\n/)) {
     try {
       const entry = JSON.parse(line);
-      if (["s06", "s07", "s08", "s09", "s10", "s11", "s12"].includes(entry.gate) && /^[a-z0-9-]{1,60}$/.test(entry.phase || "")) {
+      if (["s06", "s07", "s08", "s09", "s10", "s11", "s12", "s13"].includes(entry.gate) && /^[a-z0-9-]{1,60}$/.test(entry.phase || "")) {
         attentionSteps.push(entry.gate + ":" + entry.phase);
         for (const key of ["actual", "expected"]) if (Number.isSafeInteger(entry[key])) attentionSteps.push(key + ":" + entry[key]);
       }
@@ -36,7 +36,7 @@ function run(stage, { utils }) {
       }
     } catch { /* Never emit raw error text, credentials or customer content. */ }
   }
-  const locations = [...new Set(diagnostics.match(/(?:s24-acceptance|s24-readers|s24-cleanup|hosted-public-work-case|test-platform-staging-[a-z0-9-]+|run-platform-staging-cloud|platform-staging-cloud|workspace-administration-test-target|run-workspace-administration-staging|test-workspace-administration-authenticated|verify-s12-need|s12-[a-z-]+|verify-s11-record|s11-[a-z-]+|verify-s10-archive|s10-[a-z-]+|verify-s09-visitor|s09-[a-z-]+|verify-s08-review|s08-[a-z-]+|verify-s07-endorsement|s07-[a-z-]+|verify-s06-sharing|s06-[a-z-]+)\.ts:\d+:\d+/g) || [])].slice(0, 6);
+  const locations = [...new Set(diagnostics.match(/(?:s24-acceptance|s24-readers|s24-cleanup|hosted-public-work-case|test-platform-staging-[a-z0-9-]+|run-platform-staging-cloud|platform-staging-cloud|workspace-administration-test-target|run-workspace-administration-staging|test-workspace-administration-authenticated|verify-s13-discovery|s13-[a-z-]+|verify-s12-need|s12-[a-z-]+|verify-s11-record|s11-[a-z-]+|verify-s10-archive|s10-[a-z-]+|verify-s09-visitor|s09-[a-z-]+|verify-s08-review|s08-[a-z-]+|verify-s07-endorsement|s07-[a-z-]+|verify-s06-sharing|s06-[a-z-]+)\.ts:\d+:\d+/g) || [])].slice(0, 6);
   const codes = [...new Set(diagnostics.match(/\b(?:ERR_ASSERTION|TimeoutError|P\d{4}|SOURCE_REVOKED|PROVIDER_UNAVAILABLE)\b/g) || [])].slice(0, 6);
   if (result.status !== 0) {
     const fail = stage === "verify" ? utils.build.failPlugin : utils.build.failBuild;
@@ -44,7 +44,7 @@ function run(stage, { utils }) {
   } else if (s22 && stage === "prepare" && process.env.S24_STAGING_DIAGNOSTIC_TARGET && process.env.S24_STAGING_DIAGNOSTIC_TARGET !== "off") {
     utils.build.cancelBuild("S24 staging diagnostic completed; the existing deploy remains active.");
   } else if (stage === "verify" && utils.status?.show) {
-    utils.status.show({ title: "Staging gate verified", summary: `PASS ${process.env.S12_STAGING_NEED_GATE === "need" ? "S12 need" : process.env.S11_STAGING_RECORD_GATE === "record" ? "S11 record" : process.env.S10_STAGING_ARCHIVE_GATE === "archive" ? "S10 archive" : process.env.S09_STAGING_VISITOR_GATE === "visitor" ? "S09 visitor" : process.env.S08_STAGING_REVIEW_GATE === "review" ? "S08 review" : process.env.S07_STAGING_ENDORSEMENT_GATE === "request" ? "S07 endorsement" : process.env.S06_STAGING_VISIBILITY_GATE === "visibility" ? "S06 visibility" : process.env.PLATFORM_STAGING_CLOUD_PHASE}; commit=${process.env.COMMIT_REF}; deploy=${process.env.DEPLOY_ID}` });
+    utils.status.show({ title: "Staging gate verified", summary: `PASS ${process.env.S13_STAGING_DISCOVERY_GATE === "discovery" ? "S13 discovery" : process.env.S12_STAGING_NEED_GATE === "need" ? "S12 need" : process.env.S11_STAGING_RECORD_GATE === "record" ? "S11 record" : process.env.S10_STAGING_ARCHIVE_GATE === "archive" ? "S10 archive" : process.env.S09_STAGING_VISITOR_GATE === "visitor" ? "S09 visitor" : process.env.S08_STAGING_REVIEW_GATE === "review" ? "S08 review" : process.env.S07_STAGING_ENDORSEMENT_GATE === "request" ? "S07 endorsement" : process.env.S06_STAGING_VISIBILITY_GATE === "visibility" ? "S06 visibility" : process.env.PLATFORM_STAGING_CLOUD_PHASE}; commit=${process.env.COMMIT_REF}; deploy=${process.env.DEPLOY_ID}` });
   }
 }
 

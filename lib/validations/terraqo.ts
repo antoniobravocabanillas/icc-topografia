@@ -279,6 +279,11 @@ export const terraqoEvaluationDossierCreateSchema = z.object({
   needRevisionId: z.string().cuid(),
   professionalProfileId: z.string().cuid(),
   worklogRevisionIds: z.array(z.string().cuid()).min(1).max(50),
+  sourceRefs: z.array(z.object({
+    revisionId: z.string().cuid(),
+    accessKind: z.enum(["PUBLIC_CV", "PUBLIC_SELECTION"]),
+    accessReferenceId: z.string().min(1).max(200),
+  })).min(1).max(50).optional(),
   privateSummary: z.string().trim().max(2400).optional(),
 });
 

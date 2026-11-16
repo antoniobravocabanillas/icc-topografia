@@ -1,3 +1,6 @@
+import { matchesDiscoveryFilters, type DiscoveryFilters } from "./discovery-filters";
+import { standalonePublicWorklogWhere } from "./public-cv";
+import { publicCvEvidenceHref } from "./public-cv-permalink";
 import { publicationReviewEnabled } from "./publication-review";
 import { loadPublicationProjections, readPublicationSource, publicSelectionPolicyWhere } from "./publication-projection";
 import { createHash } from "node:crypto";
@@ -293,6 +296,18 @@ export async function reviseWorkspaceNeed(input: {
   }, { isolationLevel: "ReadCommitted" });
 }
 
+const publicWorkContext = {
+  workspaceId: true, projectId: true, project: { select: { isPublic: true, deletedAt: true } },
+} as const;
+
+function hasStandaloneScope(row: {
+  visibility: string; workspaceId: string | null; projectId: string | null;
+  project: { isPublic: boolean; deletedAt: Date | null } | null;
+}) {
+  return row.visibility === "PUBLIC" && row.workspaceId === null &&
+    (row.projectId === null || (row.project?.isPublic === true && row.project.deletedAt === null));
+}
+
 const candidateSelect = {
   id: true,
   title: true,
@@ -304,6 +319,7 @@ const candidateSelect = {
   worklog: {
     select: {
       id: true,
+      ...publicWorkContext,
       visibility: true,
       deletedAt: true,
       lifecycle: true,
@@ -314,12 +330,13 @@ const candidateSelect = {
       professionalProfile: {
         select: {
           id: true,
-          headline: true,
+          headline: true, username: true, status: true, visibility: true, liveCvVisibility: true,
           liveCvEnabled: true,
           user: { select: { name: true, image: true } },
         },
       },
-      workCaseLinks: { select: { workCaseId: true }, take: 1 },
+      media: { where: { contentType: "image/webp" }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }], take: 1, select: { id: true } },
+      workCaseLinks: { where: { relationshipStatus: "CONFIRMED" }, select: { workCaseId: true }, orderBy: { workCaseId: "asc" }, take: 1 },
     },
   },
   shareItems: {
@@ -327,133 +344,153 @@ const candidateSelect = {
     select: {
       id: true,
       allowedFields: true,
-      collection: { select: { publicProjection: { select: { id: true } } } },
+      collection: { select: { publicProjection: { select: { id: true, slug: true } } } },
     },
     orderBy: { id: "asc" },
   },
 } satisfies Prisma.TerraqoWorklogRevisionSelect;
 
-export async function discoverEvidenceForNeed(workspaceId: string, needId: string) {
+export async function discoverEvidenceForNeed(workspaceId: string, needId: string, filters: DiscoveryFilters = {}) {
   const need = await prisma.terraqoWorkNeed.findFirst({
     where: { id: needId, workspaceId, lifecycle: { not: "ARCHIVED" } },
     include: needInclude,
   });
   if (!need?.currentRevision) throw new DiscoveryNeedsError("La necesidad no tiene una versión activa.", 409);
   const revision = need.currentRevision;
-  const terms = normalizeDiscoveryTerms([
-    revision.title,
-    revision.problem,
-    ...revision.activities,
-    revision.context,
-    ...revision.requiredTools,
-    ...revision.requirements.map((requirement) => requirement.label),
-  ]).slice(0, 24);
-  const textFilters = terms.flatMap((term) => [
-    { title: { contains: term, mode: "insensitive" as const } },
-    { summary: { contains: term, mode: "insensitive" as const } },
-    { outcome: { contains: term, mode: "insensitive" as const } },
-  ]);
-  const publicCollection = { publicProjection: { ...publicSelectionPolicyWhere() }, lifecycle: { not: "ARCHIVED" as const } };
-  const visibleTextFilters = terms.flatMap((term) => (["title", "summary", "outcome"] as const).map((field) => ({
-    [field]: { contains: term, mode: "insensitive" as const },
-    shareItems: { some: { collection: publicCollection, allowedFields: { has: field } } },
-  })));
-  // Keep separate bounded candidate pools: unrelated partial selections must
-  // neither suppress matching public text nor filter through hidden fields.
-  const exposures: Prisma.TerraqoWorklogRevisionWhereInput[] = [
-    { worklog: { visibility: "PUBLIC" }, ...(textFilters.length ? { OR: textFilters } : {}) },
-    { worklog: { visibility: { not: "PUBLIC" } }, OR: visibleTextFilters },
-    { worklog: { visibility: { not: "PUBLIC" } }, shareItems: { some: {
-      collection: publicCollection,
-      allowedFields: { hasSome: ["responsibilities", "methods", "tools", "skills", "locationLabel"] },
-    } } },
-  ];
-  const pools = await Promise.all(exposures.map((exposure) => prisma.terraqoWorklogRevision.findMany({
-    where: {
-      worklog: { deletedAt: null, lifecycle: "PUBLISHED", currentRevisionId: { not: null }, professionalProfile: { liveCvEnabled: true } },
-      currentFor: { isNot: null },
-      AND: [exposure],
-    },
-    select: candidateSelect,
-    orderBy: { createdAt: "desc" },
-    take: 300,
-  })));
-  const candidates = [...new Map(pools.flat().map((candidate) => [candidate.id, candidate])).values()];
+  const publicProfile = {
+    liveCvEnabled: true,
+    ...(filters.availability ? { visibility: "PUBLIC" as const, liveCvVisibility: "PUBLIC" as const,
+      username: { not: null }, status: filters.availability } : {}),
+  };
+  const eligible = {
+    currentFor: { isNot: null },
+    worklog: { deletedAt: null, lifecycle: "PUBLISHED", professionalProfile: publicProfile },
+    OR: [
+      { worklog: { ...standalonePublicWorklogWhere, professionalProfile: { liveCvVisibility: "PUBLIC" } } },
+      { shareItems: { some: { collection: { lifecycle: { not: "ARCHIVED" }, publicProjection: publicSelectionPolicyWhere() } } } },
+    ],
+  } satisfies Prisma.TerraqoWorklogRevisionWhereInput;
 
-  const pinnedProjections = publicationReviewEnabled() ? await loadPublicationProjections(prisma,
-    candidates.flatMap(candidate => candidate.shareItems.flatMap(item => item.collection.publicProjection ? [item.collection.publicProjection.id] : []))) : null;
-  const seenWork = new Set<string>();
-  return candidates.flatMap((candidate) => {
-    const workKey = `${candidate.worklog.professionalProfile.id}:${candidate.worklog.workCaseLinks[0]?.workCaseId ?? candidate.worklog.id}`;
-    const exposures = candidate.worklog.visibility === "PUBLIC"
-      ? [{ accessKind: "PUBLIC_CV" as const, accessReferenceId: candidate.worklog.id, allowedFields: null }]
-      : candidate.shareItems.flatMap((item) => item.collection.publicProjection
-        ? [{
-            accessKind: "PUBLIC_SELECTION" as const,
-            accessReferenceId: item.collection.publicProjection.id,
-            allowedFields: item.allowedFields,
-          }]
-        : []);
-
-    return exposures.flatMap((exposure) => {
-      if (seenWork.has(workKey)) return [];
-      const pinned = exposure.accessKind === "PUBLIC_SELECTION" && pinnedProjections
-        ? pinnedProjections.get(exposure.accessReferenceId)?.items.find(item => item.revisionId === candidate.id) : undefined;
-      if (exposure.accessKind === "PUBLIC_SELECTION" && pinnedProjections && !pinned) return [];
-      const allowedFields = pinned ? Object.keys(pinned.fields) : exposure.allowedFields;
-      const data = pinned ? {
-        title: pinned.fields.title ?? "", summary: pinned.fields.summary ?? "", outcome: pinned.fields.outcome ?? null,
-        responsibilities: pinned.fields.responsibilities ?? [], methods: pinned.fields.methods ?? [], tools: pinned.fields.tools ?? [],
-        skills: [], locationLabel: pinned.fields.locationLabel ?? null,
-      } : {
-
-        title: candidate.title,
-        summary: candidate.summary,
-        outcome: candidate.outcome,
-        responsibilities: candidate.responsibilities,
-        methods: candidate.methods,
-        tools: candidate.tools,
-        skills: candidate.worklog.skills,
-        locationLabel: candidate.worklog.locationLabel,
-      };
-      const visible = projectDiscoveryEvidenceFields(data, allowedFields);
-      const reasons = explainDiscoveryMatch({ need: revision, evidence: visible });
-      if (!reasons.hasEvidence) return [];
-      seenWork.add(workKey);
-      const allowed = allowedFields === null ? null : new Set(allowedFields);
-      return [{
-        revisionId: candidate.id,
-        worklogId: candidate.worklog.id,
-        professionalProfileId: candidate.worklog.professionalProfile.id,
-        professionalName: candidate.worklog.professionalProfile.user.name ?? "Profesional Terraqo",
-        professionalImage: candidate.worklog.professionalProfile.user.image,
-        headline: candidate.worklog.professionalProfile.headline,
-        ...(allowed === null || allowed.has("title") ? { title: data.title } : {}),
-        ...(allowed === null || allowed.has("summary") ? { summary: data.summary } : {}),
-        ...(allowed === null || allowed.has("occurredAt") ? { occurredAt: pinned?.fields.occurredAt ? new Date(pinned.fields.occurredAt) : candidate.worklog.occurredAt } : {}),
-        ...(allowed === null || allowed.has("locationLabel") ? { locationLabel: data.locationLabel } : {}),
-        accessKind: exposure.accessKind,
-        accessReferenceId: exposure.accessReferenceId,
-        reasons,
-      }];
+  async function page(after?: string) {
+    return prisma.terraqoWorklogRevision.findMany({
+      where: after ? { ...eligible, id: { gt: after } } : eligible,
+      orderBy: { id: "asc" }, select: candidateSelect, take: 150,
     });
-  }).sort((left, right) => {
-    const leftRequired = left.reasons.required.length;
-    const rightRequired = right.reasons.required.length;
-    if (leftRequired !== rightRequired) return rightRequired - leftRequired;
-    const leftTotal = left.reasons.activityTerms.length + left.reasons.toolTerms.length + left.reasons.desirable.length;
-    const rightTotal = right.reasons.activityTerms.length + right.reasons.toolTerms.length + right.reasons.desirable.length;
-    return rightTotal - leftTotal || (right.occurredAt?.getTime() ?? 0) - (left.occurredAt?.getTime() ?? 0);
-  }).slice(0, 80);
+  }
+
+  async function project(candidates: Awaited<ReturnType<typeof page>>) {
+    const pinnedProjections = publicationReviewEnabled() ? await loadPublicationProjections(prisma,
+      candidates.flatMap(candidate => candidate.shareItems.flatMap(item => item.collection.publicProjection ? [item.collection.publicProjection.id] : []))) : null;
+    return candidates.flatMap((candidate) => {
+      const workKey = `${candidate.worklog.professionalProfile.id}:${candidate.worklog.workCaseLinks[0]?.workCaseId ?? candidate.worklog.id}`;
+      const standalone = hasStandaloneScope(candidate.worklog) && candidate.worklog.professionalProfile.liveCvVisibility === "PUBLIC";
+      const exposures = standalone
+        ? [{ accessKind: "PUBLIC_CV" as const, accessReferenceId: candidate.worklog.id, allowedFields: null }]
+        : candidate.shareItems.flatMap((item) => item.collection.publicProjection
+          ? [{
+              accessKind: "PUBLIC_SELECTION" as const,
+              accessReferenceId: item.collection.publicProjection.id,
+              allowedFields: item.allowedFields,
+            }]
+          : []);
+
+      return exposures.flatMap((exposure) => {
+        const publication = exposure.accessKind === "PUBLIC_SELECTION" ? pinnedProjections?.get(exposure.accessReferenceId) : undefined;
+        const index = publication?.items.findIndex(item => item.revisionId === candidate.id) ?? -1;
+        const pinned = index >= 0 ? publication?.items[index] : undefined;
+        if (exposure.accessKind === "PUBLIC_SELECTION" && pinnedProjections && !pinned) return [];
+        const allowedFields = pinned ? Object.keys(pinned.fields) : exposure.allowedFields;
+        const data = pinned ? {
+          title: pinned.fields.title ?? "", summary: pinned.fields.summary ?? "", outcome: pinned.fields.outcome ?? null,
+          responsibilities: pinned.fields.responsibilities ?? [], methods: pinned.fields.methods ?? [], tools: pinned.fields.tools ?? [],
+          skills: [], locationLabel: pinned.fields.locationLabel ?? null,
+        } : {
+          title: candidate.title,
+          summary: candidate.summary,
+          outcome: candidate.outcome,
+          responsibilities: candidate.responsibilities,
+          methods: candidate.methods,
+          tools: candidate.tools,
+          skills: candidate.worklog.skills,
+          locationLabel: standalone ? null : candidate.worklog.locationLabel,
+        };
+        const visible = projectDiscoveryEvidenceFields(data, allowedFields);
+        const reasons = explainDiscoveryMatch({ need: revision, evidence: visible });
+        if (!reasons.hasEvidence) return [];
+        const allowed = allowedFields === null ? null : new Set(allowedFields);
+        const occurredAt = pinned ? (pinned.fields.occurredAt ? new Date(pinned.fields.occurredAt) : undefined)
+          : (!allowed || allowed.has("occurredAt") ? candidate.worklog.occurredAt : undefined);
+        const profile = candidate.worklog.professionalProfile;
+        const identityPublic = profile.visibility === "PUBLIC" && profile.liveCvVisibility === "PUBLIC" && Boolean(profile.username);
+        const availability = identityPublic ? profile.status : null;
+        if (!matchesDiscoveryFilters(filters, visible, availability, occurredAt)) return [];
+        const professionalHref = identityPublic ? "/cv/" + encodeURIComponent(profile.username!) : null;
+        const slug = candidate.shareItems.find(item => item.collection.publicProjection?.id === exposure.accessReferenceId)?.collection.publicProjection?.slug;
+        const evidenceHref = exposure.accessKind === "PUBLIC_CV"
+          ? (professionalHref ? publicCvEvidenceHref(profile.username!, candidate.worklog.id) : null)
+          : (slug ? "/selecciones/" + encodeURIComponent(slug) + (publication && publication.items.length > 1 && index >= 0 ? "?registro=" + (index + 1) : "") : null);
+        const photo = standalone ? candidate.worklog.media[0]?.id : pinned?.mediaIds[0];
+        const previewHref = photo && standalone && professionalHref
+          ? "/api/public/cv/" + encodeURIComponent(profile.username!) + "/worklogs/" + encodeURIComponent(photo)
+          : photo && !standalone && slug ? "/api/v1/public/selections/" + encodeURIComponent(slug) + "/media/" + encodeURIComponent(photo) : null;
+        const result = {
+          previewHref,
+          needRevisionId: revision.id, professionalHref, evidenceHref, availability,
+          missingRequired: revision.requirements.filter(item => item.priority === "REQUIRED" &&
+            !reasons.required.some(match => match.label === item.label)).map(item => item.label),
+          revisionId: candidate.id,
+          worklogId: candidate.worklog.id,
+          professionalProfileId: profile.id,
+          professionalName: (identityPublic && profile.user.name) || "Profesional Terraqo",
+          professionalImage: identityPublic ? profile.user.image : null,
+          headline: identityPublic ? profile.headline : null,
+          ...(allowed === null || allowed.has("title") ? { title: data.title } : {}),
+          ...(allowed === null || allowed.has("summary") ? { summary: data.summary } : {}),
+          ...(occurredAt ? { occurredAt } : {}),
+          ...(visible.locationLabel ? { locationLabel: visible.locationLabel } : {}),
+          accessKind: exposure.accessKind,
+          accessReferenceId: exposure.accessReferenceId,
+          reasons,
+        };
+        return [{ workKey, result }];
+      });
+    });
+  }
+  type Row = Awaited<ReturnType<typeof project>>[number]["result"];
+  function compare(left: Row, right: Row) {
+    return right.reasons.required.length - left.reasons.required.length ||
+      (right.occurredAt?.getTime() ?? 0) - (left.occurredAt?.getTime() ?? 0) ||
+      left.revisionId.localeCompare(right.revisionId);
+  }
+  // Retain the best authorized representative per work. Media count is never a ranking input.
+  const groups = new Map<string, Row>();
+  let cursor: string | undefined;
+  while (true) {
+    const batch = await page(cursor);
+    for (const { workKey, result } of await project(batch)) {
+      const previous = groups.get(workKey);
+      if (!previous || compare(result, previous) < 0) groups.set(workKey, result);
+    }
+    if (batch.length < 150) break;
+    cursor = batch[batch.length - 1].id;
+    // A discarded group can re-enter later through a better matching revision.
+    if (groups.size > 80) {
+      for (const [key] of [...groups.entries()].sort((a,b) => compare(a[1], b[1])).slice(80)) groups.delete(key);
+    }
+  }
+  return [...groups.values()].sort(compare).slice(0, 80);
 }
 
-async function resolveDossierSources(tx: Prisma.TransactionClient, actorId: string, revisionIds: string[], profileId: string) {
+async function resolveDossierSources(tx: Prisma.TransactionClient, actorId: string, revisionIds: string[], profileId: string, sourceRefs?: DossierCreate["sourceRefs"]) {
+  const selected = new Map(sourceRefs?.map(ref => [ref.revisionId, ref]));
+  if (sourceRefs && (selected.size !== sourceRefs.length || selected.size !== revisionIds.length || revisionIds.some(id => !selected.has(id))))
+    throw new DiscoveryNeedsError("Cada evidencia requiere una referencia de acceso válida.", 422);
   const rows = await tx.terraqoWorklogRevision.findMany({
     where: { id: { in: revisionIds } },
     select: {
       id: true,
       contentHash: true,
-      worklog: { select: { id: true, professionalProfileId: true, visibility: true, deletedAt: true, lifecycle: true, currentRevisionId: true, professionalProfile: { select: { liveCvEnabled: true } } } },
+      worklog: { select: { ...publicWorkContext, id: true, professionalProfileId: true, visibility: true, deletedAt: true, lifecycle: true, currentRevisionId: true, professionalProfile: { select: { liveCvEnabled: true, liveCvVisibility: true } } } },
       shareItems: {
         where: { collection: { lifecycle: { not: "ARCHIVED" } } },
         select: {
@@ -474,7 +511,6 @@ async function resolveDossierSources(tx: Prisma.TransactionClient, actorId: stri
   });
   const byId = new Map(rows.map(row => [row.id, row]));
   const projectionIds = [...new Set(rows.flatMap(row => {
-    if (row.worklog.visibility === "PUBLIC" || row.shareItems.some(item => item.collection.grants.length)) return [];
     return row.shareItems.flatMap(item => item.collection.publicProjection && !item.collection.publicProjection.revokedAt
       ? [item.collection.publicProjection.id] : []);
   }))];
@@ -490,9 +526,14 @@ async function resolveDossierSources(tx: Prisma.TransactionClient, actorId: stri
     let accessKind: TerraqoEvaluationSourceAccessKind | null = null;
     let accessReferenceId: string | null = null;
     let allowedFields: EvaluationSourceFieldPolicy = null;
-    const privateItem = revision.shareItems.find((item) => item.collection.grants.length > 0);
-    const publicItem = revision.shareItems.find((item) => item.collection.publicProjection && !item.collection.publicProjection.revokedAt);
-    if (revision.worklog.visibility === "PUBLIC" && revision.worklog.professionalProfile.liveCvEnabled) {
+    const ref = selected.get(revisionId);
+    const privateItem = ref ? undefined : revision.shareItems.find((item) => item.collection.grants.length > 0);
+    const publicItem = revision.shareItems.find(item => {
+      const projection = item.collection.publicProjection;
+      return projection && !projection.revokedAt && (!ref || (ref.accessKind === "PUBLIC_SELECTION" && ref.accessReferenceId === projection.id))
+        && (enforceReview ? snapshots?.get(projection.id)?.items.some(pinned => pinned.revisionId === revision.id) : legacyIds.has(projection.id));
+    });
+    if (hasStandaloneScope(revision.worklog) && revision.worklog.professionalProfile.liveCvEnabled && revision.worklog.professionalProfile.liveCvVisibility === "PUBLIC" && (!ref || (ref.accessKind === "PUBLIC_CV" && ref.accessReferenceId === revision.worklog.id))) {
       accessKind = "PUBLIC_CV";
       accessReferenceId = revision.worklog.id;
     } else if (privateItem?.collection.grants[0]) {
@@ -579,7 +620,7 @@ export async function createEvaluationDossier(input: {
     if (!needRevision) throw new DiscoveryNeedsError("La versión de la necesidad no está disponible.", 404);
     const profile = await tx.terraqoProfessionalProfile.findUnique({ where: { id: input.payload.professionalProfileId }, select: { id: true } });
     if (!profile) throw new DiscoveryNeedsError("El perfil profesional no está disponible.", 404);
-    const sources = await resolveDossierSources(tx, input.userId, input.payload.worklogRevisionIds, profile.id);
+    const sources = await resolveDossierSources(tx, input.userId, input.payload.worklogRevisionIds, profile.id, input.payload.sourceRefs);
     return tx.terraqoEvaluationDossier.create({
       data: {
         workspaceId: input.workspaceId,
@@ -603,7 +644,7 @@ export async function evaluationSourceIsAccessible(
 ) {
   if (source.accessKind === "PUBLIC_CV") {
     const revision = await tx.terraqoWorklogRevision.findFirst({
-      where: { id: source.worklogRevisionId, currentFor: { visibility: "PUBLIC", deletedAt: null, lifecycle: "PUBLISHED", professionalProfile: { liveCvEnabled: true } } },
+      where: { id: source.worklogRevisionId, currentFor: { ...standalonePublicWorklogWhere, professionalProfile: { liveCvEnabled: true, liveCvVisibility: "PUBLIC" } } },
       select: { id: true },
     });
     return revision ? { allowedFields: constrainAllowedFields(null, source.accessSnapshot) } : null;
@@ -652,7 +693,7 @@ export async function listEvaluationDossiers(input: { userId: string; workspaceI
             requirements: { orderBy: [{ priority: "asc" }, { sortOrder: "asc" }] },
           },
         },
-        professionalProfile: { select: { id: true, headline: true, user: { select: { name: true, image: true } } } },
+        professionalProfile: { select: { id: true, headline: true, visibility: true, liveCvVisibility: true, liveCvEnabled: true, user: { select: { name: true, image: true } } } },
         sources: {
           include: { worklogRevision: { select: { id: true, title: true, contentHash: true } } },
           orderBy: { createdAt: "asc" },
@@ -692,7 +733,7 @@ export async function listEvaluationDossiers(input: { userId: string; workspaceI
             },
           };
         });
-      const assessments = dossier.assessments.map((assessment) => {
+      const assessments = dossier.assessments.filter(assessment => assessment.sourceLinks.every(link => accessibility.get(link.sourceId))).map((assessment) => {
         const activeSourceIds = assessment.sourceLinks.map((link) => link.sourceId).filter((sourceId) => Boolean(accessibility.get(sourceId)));
         return {
           ...assessment,
@@ -704,6 +745,11 @@ export async function listEvaluationDossiers(input: { userId: string; workspaceI
       const revokedCount = dossier.sources.length - sources.length;
       return {
         ...dossier,
+        privateSummary: revokedCount ? null : dossier.privateSummary,
+        professionalProfile: dossier.professionalProfile.liveCvEnabled && dossier.professionalProfile.visibility === "PUBLIC" &&
+          dossier.professionalProfile.liveCvVisibility === "PUBLIC"
+          ? { id: dossier.professionalProfile.id, headline: dossier.professionalProfile.headline, user: dossier.professionalProfile.user }
+          : { id: dossier.professionalProfile.id, headline: null, user: { name: null, image: null } },
         sources,
         assessments,
         effectiveAnalysisStatus: revokedCount > 0 ? "SOURCE_REVOKED" as const : sources.length === 0 ? "INSUFFICIENT" as const : dossier.analysisStatus,

@@ -85,6 +85,14 @@ async function main() {
     };
     step = "served-candidate";
     await assertServed();
+    if (process.env.S13_STAGING_DISCOVERY_GATE === "discovery") {
+      step = "s13-discovery";
+      const { verifyS13Discovery } = await import("./verify-s13-discovery");
+      await verifyS13Discovery(origin);
+      await assertServed();
+      console.log(`PASS S13 staging: commit=${commit}; deploy=${marker.deployId}; discovery journey verified.`);
+      return;
+    }
     if (process.env.S12_STAGING_NEED_GATE === "need") {
       step = "s12-need";
       const { verifyS12Need } = await import("./verify-s12-need");
@@ -161,7 +169,7 @@ async function main() {
 }
 main().catch(error => {
   // Assertions may contain tokens/URLs. Log only structural diagnostics.
-  const location = typeof error?.stack === "string" ? error.stack.match(/(?:workspace-administration-test-target|run-workspace-administration-staging|verify-worklog-draft-conflict|verify-s22-evaluator-browser|verify-hosted-worklog-clips|verify-s12-need|s12-[a-z-]+|verify-s11-record|s11-[a-z-]+|verify-s10-archive|s10-[a-z-]+|verify-s09-visitor|s09-[a-z-]+|verify-s08-review|s08-[a-z-]+|verify-s07-endorsement|s07-[a-z-]+|verify-s06-sharing|s06-[a-z-]+)\.ts:\d+:\d+/)?.[0] : undefined;
+  const location = typeof error?.stack === "string" ? error.stack.match(/(?:workspace-administration-test-target|run-workspace-administration-staging|verify-worklog-draft-conflict|verify-s22-evaluator-browser|verify-hosted-worklog-clips|verify-s13-discovery|s13-[a-z-]+|verify-s12-need|s12-[a-z-]+|verify-s11-record|s11-[a-z-]+|verify-s10-archive|s10-[a-z-]+|verify-s09-visitor|s09-[a-z-]+|verify-s08-review|s08-[a-z-]+|verify-s07-endorsement|s07-[a-z-]+|verify-s06-sharing|s06-[a-z-]+)\.ts:\d+:\d+/)?.[0] : undefined;
   console.error(JSON.stringify({ s22Step: step, s22Failed: true, location, code: typeof error?.code === "string" && /^[A-Z0-9_]{1,32}$/.test(error.code) ? error.code : "GATE_REJECTED" }));
   process.exitCode = 1;
 });

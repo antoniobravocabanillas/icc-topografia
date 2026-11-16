@@ -1,9 +1,9 @@
 "use client";
 
-import Image from "next/image";
+import { DiscoveryEvidenceExplorer, emptyDiscoveryFilters, type DiscoveryFilters, type EvidenceMatch } from "@/components/admin/discovery-evidence-explorer";
 import { DiscoveryNeedEditor, type EditableNeed } from "@/components/admin/discovery-need-editor";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Ban, BookOpenCheck, Bot, BriefcaseBusiness, Check, ChevronRight, CircleAlert, FileSearch, LoaderCircle, MapPin, MessageSquareText, Plus, RotateCcw, ShieldCheck, Sparkles, UserRoundSearch } from "lucide-react";
+import { Ban, BookOpenCheck, Bot, BriefcaseBusiness, Check, CircleAlert, FileSearch, LoaderCircle, MessageSquareText, Plus, RotateCcw, Sparkles, UserRoundSearch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,26 +11,6 @@ import { Textarea } from "@/components/ui/textarea";
 
 type Requirement = { id?: string; label: string; priority: "REQUIRED" | "DESIRED" };
 type Need = EditableNeed;
-type MatchReason = {
-  required: Array<{ label: string; terms: string[] }>;
-  desirable: Array<{ label: string; terms: string[] }>;
-  activityTerms: string[];
-  toolTerms: string[];
-  locationTerms: string[];
-};
-type EvidenceMatch = {
-  revisionId: string;
-  professionalProfileId: string;
-  professionalName: string;
-  professionalImage: string | null;
-  headline: string | null;
-  title?: string;
-  summary?: string;
-  occurredAt?: string;
-  locationLabel?: string | null;
-  accessKind: "PUBLIC_CV" | "PUBLIC_SELECTION";
-  reasons: MatchReason;
-};
 type EvaluationAssessment = {
   id: string;
   requirementId: string | null;
@@ -88,6 +68,15 @@ export function DiscoveryNeedsConsole({ contextualMessagingEnabled = false, evid
   const [needs, setNeeds] = useState<Need[]>([]);
   const [selectedNeedId, setSelectedNeedId] = useState<string | null>(null);
   const [matches, setMatches] = useState<EvidenceMatch[]>([]);
+  const [explored, setExplored] = useState(false);
+  const [discoveryError, setDiscoveryError] = useState<string | null>(null);
+  const discoveryGeneration = useRef(0);
+  const dossierGeneration = useRef(0);
+  const analysisGeneration = useRef(0);
+  const discoveryAbort = useRef<AbortController | null>(null);
+  const activeDiscovery = useRef<{ needId: string; filters: DiscoveryFilters } | null>(null);
+  const refreshDiscovery = useRef<() => void>(() => {});
+  const dossierSubmission = useRef(false);
   const [dossiers, setDossiers] = useState<EvaluationDossier[]>([]);
   const [selectedDossierId, setSelectedDossierId] = useState<string | null>(null);
   const [selectedRevisions, setSelectedRevisions] = useState<Record<string, string[]>>({});
@@ -120,11 +109,19 @@ export function DiscoveryNeedsConsole({ contextualMessagingEnabled = false, evid
   }, []);
 
   const loadDossiers = useCallback(async () => {
+    const generation = ++dossierGeneration.current;
     try {
       const data = await api<EvaluationDossier[]>("/api/v1/evaluation-dossiers", { cache: "no-store" });
+      if (generation !== dossierGeneration.current) return;
       setDossiers(data);
+      setAnalysisJobs(current => Object.fromEntries(Object.entries(current).filter(([id]) => {
+        const dossier = data.find(item => item.id === id);
+        return dossier && !dossier.revokedSourceCount && dossier.effectiveAnalysisStatus !== "SOURCE_REVOKED";
+      })));
       setSelectedDossierId((current) => current && data.some((dossier) => dossier.id === current) ? current : data[0]?.id ?? null);
     } catch (error) {
+      if (generation !== dossierGeneration.current) return;
+      setDossiers([]);
       setMessage({ type: "error", text: error instanceof Error ? error.message : "No se pudieron cargar los expedientes." });
     }
   }, []);
@@ -137,22 +134,6 @@ export function DiscoveryNeedsConsole({ contextualMessagingEnabled = false, evid
 
   const selectedNeed = useMemo(() => needs.find((need) => need.id === selectedNeedId) ?? null, [needs, selectedNeedId]);
   const selectedDossier = useMemo(() => dossiers.find((dossier) => dossier.id === selectedDossierId) ?? null, [dossiers, selectedDossierId]);
-  const groupedMatches = useMemo(() => {
-    const groups = new Map<string, { profileId: string; name: string; image: string | null; headline: string | null; matches: EvidenceMatch[] }>();
-    for (const match of matches) {
-      const group = groups.get(match.professionalProfileId) ?? {
-        profileId: match.professionalProfileId,
-        name: match.professionalName,
-        image: match.professionalImage,
-        headline: match.headline,
-        matches: [],
-      };
-      group.matches.push(match);
-      groups.set(match.professionalProfileId, group);
-    }
-    return [...groups.values()];
-  }, [matches]);
-
   async function retryInitialLoad() {
     setMessage(null);
     await Promise.all([loadNeeds(), loadDossiers()]);
@@ -171,50 +152,128 @@ export function DiscoveryNeedsConsole({ contextualMessagingEnabled = false, evid
     setEditorEpoch((current) => current + 1);
   }
 
-  async function discover(needId = selectedNeedId) {
-    if (!needId || !employerNeedsExistingWritable) return;
+  // Any authorization refresh retires derived local content before fetching new policy projections.
+  function clearDerivedContent() {
+    dossierGeneration.current += 1;
+    analysisGeneration.current += 1;
+    analysisPollTimers.current.forEach(timer => window.clearTimeout(timer));
+    analysisPollTimers.current.clear();
+    setDossiers([]);
+    setAnalysisJobs({});
+    setAnalysisPurposes({});
+  }
+
+  function resetDiscovery() {
+    discoveryGeneration.current += 1;
+    discoveryAbort.current?.abort();
+    activeDiscovery.current = null;
+    setMatches([]);
+    setSelectedRevisions({});
+    setExplored(false);
+    setDiscoveryError(null);
+    setSearching(false);
+  }
+
+  async function discover(needId = selectedNeedId, filters = emptyDiscoveryFilters) {
+    if (!needId || !employerNeedsExistingWritable) return null;
+    const generation = ++discoveryGeneration.current;
+    discoveryAbort.current?.abort();
+    const controller = new AbortController();
+    discoveryAbort.current = controller;
+    activeDiscovery.current = { needId, filters: { ...filters } };
     setSearching(true);
+    setDiscoveryError(null);
     setMessage(null);
+    setMatches([]);
     try {
-      setMatches(await api<EvidenceMatch[]>(`/api/v1/work-needs/${needId}/discover`, { cache: "no-store" }));
+      const query = new URLSearchParams();
+      for (const [key, value] of Object.entries(filters)) if (value.trim()) query.set(key, value.trim());
+      const data = await api<EvidenceMatch[]>(`/api/v1/work-needs/${encodeURIComponent(needId)}/discover${query.size ? `?${query}` : ""}`, { cache: "no-store", signal: controller.signal });
+      if (generation !== discoveryGeneration.current) return null;
+      // An older server response cannot produce a dossier bound to a guessed need revision.
+      const authorized = data.filter(match => Boolean(match.revisionId && match.needRevisionId));
+      if (matches.some(previous => !authorized.some(match => match.revisionId === previous.revisionId && match.accessKind === previous.accessKind && match.accessReferenceId === previous.accessReferenceId))) clearDerivedContent();
+      setMatches(authorized);
+      setSelectedRevisions(current => Object.fromEntries(Object.entries(current).map(([profileId, ids]) => [profileId,
+        ids.filter(id => authorized.some(match => match.revisionId === id && match.professionalProfileId === profileId && matches.some(previous => previous.revisionId === id && previous.needRevisionId === match.needRevisionId && previous.accessKind === match.accessKind && previous.accessReferenceId === match.accessReferenceId))),
+      ]).filter(([, ids]) => ids.length)));
+      setExplored(true);
+      await loadDossiers();
+      return generation === discoveryGeneration.current ? authorized : null;
     } catch (error) {
-      setMessage({ type: "error", text: error instanceof Error ? error.message : "No se pudo explorar la evidencia." });
+      if (generation !== discoveryGeneration.current) return null;
+      setMatches([]);
+      setSelectedRevisions({});
+      clearDerivedContent();
+      setDiscoveryError(error instanceof Error ? error.message : "No se pudo explorar la evidencia.");
+      return null;
     } finally {
-      setSearching(false);
+      if (generation === discoveryGeneration.current) setSearching(false);
     }
   }
 
   function toggleEvidence(profileId: string, revisionId: string) {
-    setSelectedRevisions((current) => {
+    if (searching || submitting || !matches.some(match => match.revisionId === revisionId && match.professionalProfileId === profileId)) return;
+    setSelectedRevisions(current => {
       const existing = current[profileId] ?? [];
-      return { ...current, [profileId]: existing.includes(revisionId) ? existing.filter((id) => id !== revisionId) : [...existing, revisionId] };
+      return { ...current, [profileId]: existing.includes(revisionId) ? existing.filter(id => id !== revisionId) : [...existing, revisionId] };
     });
   }
 
   async function createDossier(profileId: string) {
-    const revisionIds = selectedRevisions[profileId] ?? [];
-    if (!selectedNeed?.currentRevision || !revisionIds.length) return;
+    if (dossierSubmission.current || !employerNeedsExistingWritable || searching || editorDirty || editorBusy) return;
+    const chosen = matches.filter(match => match.professionalProfileId === profileId && selectedRevisions[profileId]?.includes(match.revisionId));
+    const needRevisionId = chosen[0]?.needRevisionId;
+    const scope = activeDiscovery.current;
+    if (!scope || !needRevisionId || !chosen.length || chosen.some(match => match.needRevisionId !== needRevisionId)) return;
+    dossierSubmission.current = true;
     setSubmitting(true);
     setMessage(null);
     try {
+      const fresh = await discover(scope.needId, scope.filters);
+      if (!fresh || chosen.some(reference => !fresh.some(match => match.revisionId === reference.revisionId && match.professionalProfileId === profileId && match.needRevisionId === needRevisionId && match.accessKind === reference.accessKind && match.accessReferenceId === reference.accessReferenceId))) {
+        setSelectedRevisions({});
+        setMessage({ type: "error", text: "La fuente o la versión de la necesidad cambió. Revisa los trabajos vigentes antes de crear el expediente." });
+        return;
+      }
       await api("/api/v1/evaluation-dossiers", {
         method: "POST",
         headers: { "Idempotency-Key": crypto.randomUUID() },
-        body: JSON.stringify({
-          needRevisionId: selectedNeed.currentRevision.id,
-          professionalProfileId: profileId,
-          worklogRevisionIds: revisionIds,
+        body: JSON.stringify({ needRevisionId, professionalProfileId: profileId, worklogRevisionIds: chosen.map(match => match.revisionId),
+          sourceRefs: chosen.map(match => ({ revisionId: match.revisionId, accessKind: match.accessKind, accessReferenceId: match.accessReferenceId })),
         }),
       });
-      setMessage({ type: "success", text: "Expediente privado creado. Las fuentes conservaron su autorización y versión exactas." });
-      setSelectedRevisions((current) => ({ ...current, [profileId]: [] }));
+      setSelectedRevisions(current => ({ ...current, [profileId]: [] }));
+      setMessage({ type: "success", text: "Expediente privado creado con las referencias y versiones autorizadas." });
       await loadDossiers();
     } catch (error) {
-      setMessage({ type: "error", text: error instanceof Error ? error.message : "No se pudo crear el expediente." });
+      resetDiscovery();
+      clearDerivedContent();
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "No se pudo crear el expediente. Vuelve a comprobar las fuentes." });
     } finally {
+      dossierSubmission.current = false;
       setSubmitting(false);
     }
   }
+
+  useEffect(() => {
+    refreshDiscovery.current = () => {
+      const scope = activeDiscovery.current;
+      if (scope && !document.hidden && !searching && !submitting && !editorBusy) void discover(scope.needId, scope.filters);
+    };
+  });
+  useEffect(() => {
+    const refresh = () => refreshDiscovery.current();
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    const timer = window.setInterval(refresh, 30_000);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, []);
+  useEffect(() => () => { discoveryAbort.current?.abort(); discoveryGeneration.current += 1; dossierGeneration.current += 1; analysisGeneration.current += 1; }, []);
 
   async function saveAssessment(event: FormEvent<HTMLFormElement>, dossier: EvaluationDossier, requirement: Requirement & { id: string }) {
     event.preventDefault();
@@ -314,13 +373,15 @@ export function DiscoveryNeedsConsole({ contextualMessagingEnabled = false, evid
   }
 
   function rememberAnalysisJob(dossierId: string, job: AnalysisJob) {
-    setAnalysisJobs((current) => ({ ...current, [dossierId]: job }));
+    setAnalysisJobs((current) => ({ ...current, [dossierId]: job.status === "SOURCE_REVOKED" ? { ...job, claims: [], missing: [] } : job }));
   }
 
   async function pollAnalysis(dossierId: string, jobId: string, attemptsLeft = 90) {
     if (attemptsLeft <= 0) return;
+    const generation = analysisGeneration.current;
     try {
       const job = await api<AnalysisJob>(`/api/v1/analysis-jobs/${jobId}`, { cache: "no-store" });
+      if (generation !== analysisGeneration.current) return;
       rememberAnalysisJob(dossierId, job);
       if (["QUEUED", "PROCESSING", "RETRY_WAIT"].includes(job.status)) {
         const timer = window.setTimeout(() => void pollAnalysis(dossierId, jobId, attemptsLeft - 1), 2_000);
@@ -336,6 +397,7 @@ export function DiscoveryNeedsConsole({ contextualMessagingEnabled = false, evid
 
   async function startAnalysis(dossier: EvaluationDossier) {
     if (!dossier.sources.length) return;
+    const generation = analysisGeneration.current;
     setSubmitting(true);
     setMessage(null);
     try {
@@ -353,6 +415,7 @@ export function DiscoveryNeedsConsole({ contextualMessagingEnabled = false, evid
           })),
         }),
       });
+      if (generation !== analysisGeneration.current) return;
       rememberAnalysisJob(dossier.id, job);
       setMessage({ type: "success", text: job.status === "READY" ? "Propuesta analítica preparada con citas verificadas." : "Análisis en cola. Puedes seguir trabajando en modo manual." });
       if (["QUEUED", "PROCESSING", "RETRY_WAIT"].includes(job.status)) void pollAnalysis(dossier.id, job.id);
@@ -365,11 +428,13 @@ export function DiscoveryNeedsConsole({ contextualMessagingEnabled = false, evid
   }
 
   async function cancelAnalysis(dossierId: string, jobId: string) {
+    const generation = analysisGeneration.current;
     setSubmitting(true);
     try {
       const timer = analysisPollTimers.current.get(jobId);
       if (timer) window.clearTimeout(timer);
       const job = await api<AnalysisJob>(`/api/v1/analysis-jobs/${jobId}/cancel`, { method: "POST" });
+      if (generation !== analysisGeneration.current) return;
       rememberAnalysisJob(dossierId, job);
       setMessage({ type: "success", text: "Cancelación registrada. Ningún borrador parcial se aplicará." });
       await loadDossiers();
@@ -381,9 +446,11 @@ export function DiscoveryNeedsConsole({ contextualMessagingEnabled = false, evid
   }
 
   async function retryAnalysis(dossierId: string, jobId: string) {
+    const generation = analysisGeneration.current;
     setSubmitting(true);
     try {
       const job = await api<AnalysisJob>(`/api/v1/analysis-jobs/${jobId}/retry`, { method: "POST" });
+      if (generation !== analysisGeneration.current) return;
       rememberAnalysisJob(dossierId, job);
       setMessage({ type: "success", text: "Reintento iniciado con el mismo ámbito autorizado." });
       if (["QUEUED", "PROCESSING", "RETRY_WAIT"].includes(job.status)) void pollAnalysis(dossierId, job.id);
@@ -418,8 +485,7 @@ export function DiscoveryNeedsConsole({ contextualMessagingEnabled = false, evid
             setEditingNeed(saved);
             setEditorDirty(false);
             if (!search) setEditorEpoch((current) => current + 1);
-            setMatches([]);
-            setSelectedRevisions({});
+            resetDiscovery();
             setMessage({ type: "success", text: `Borrador guardado · versión ${saved.version}. Las evaluaciones anteriores conservan su versión.` });
             if (search) { await discover(saved.id); setEditorEpoch((current) => current + 1); }
           }} />
@@ -432,37 +498,22 @@ export function DiscoveryNeedsConsole({ contextualMessagingEnabled = false, evid
               <Button onClick={() => void discover()} disabled={!employerNeedsExistingWritable || !selectedNeedId || selectedNeed?.lifecycle === "ARCHIVED" || searching || editorDirty || editorBusy} className="shrink-0">{searching ? <LoaderCircle className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden /> : <UserRoundSearch className="h-4 w-4" aria-hidden />}Explorar evidencia</Button>
             </CardHeader>
             <CardContent className="pt-5">
-              {loading ? <div role="status" aria-label="Cargando necesidades" className="h-24 animate-pulse rounded-xl bg-slate-100 motion-reduce:animate-none" /> : needs.length ? <div className="grid gap-3 md:grid-cols-2">{needs.map((need) => <button key={need.id} type="button" aria-pressed={need.id === selectedNeedId} disabled={editorDirty || editorBusy || searching} onClick={() => { setSelectedNeedId(need.id); setMatches([]); setSelectedRevisions({}); }} className={`min-h-24 rounded-xl border p-4 text-left transition motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${need.id === selectedNeedId ? "border-teal-600 bg-teal-50 shadow-sm" : "bg-white hover:border-slate-300 hover:bg-slate-50"}`}><span className="flex items-center justify-between gap-2"><strong className="line-clamp-2">{need.currentRevision?.title ?? "Sin versión"}</strong><span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-bold">{need.lifecycle === "DRAFT" ? "Borrador" : need.lifecycle === "ARCHIVED" ? "Archivada" : "Activa"} · v{need.version}</span></span><span className="mt-2 line-clamp-2 text-sm text-muted-foreground">{need.currentRevision?.problem}</span></button>)}</div> : <Empty icon={<BriefcaseBusiness className="h-6 w-6" />} title="Aún no hay necesidades" body="Crea la primera con el formulario. No será publicada ni convertida en una vacante automáticamente." />}
+              {loading ? <div role="status" aria-label="Cargando necesidades" className="h-24 animate-pulse rounded-xl bg-slate-100 motion-reduce:animate-none" /> : needs.length ? <div className="grid gap-3 md:grid-cols-2">{needs.map((need) => <button key={need.id} type="button" aria-pressed={need.id === selectedNeedId} disabled={editorDirty || editorBusy || searching} onClick={() => { setSelectedNeedId(need.id); resetDiscovery(); }} className={`min-h-24 rounded-xl border p-4 text-left transition motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${need.id === selectedNeedId ? "border-teal-600 bg-teal-50 shadow-sm" : "bg-white hover:border-slate-300 hover:bg-slate-50"}`}><span className="flex items-center justify-between gap-2"><strong className="line-clamp-2">{need.currentRevision?.title ?? "Sin versión"}</strong><span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-bold">{need.lifecycle === "DRAFT" ? "Borrador" : need.lifecycle === "ARCHIVED" ? "Archivada" : "Activa"} · v{need.version}</span></span><span className="mt-2 line-clamp-2 text-sm text-muted-foreground">{need.currentRevision?.problem}</span></button>)}</div> : <Empty icon={<BriefcaseBusiness className="h-6 w-6" />} title="Aún no hay necesidades" body="Crea la primera con el formulario. No será publicada ni convertida en una vacante automáticamente." />}
             </CardContent>
           </Card>
 
           {selectedNeed?.currentRevision ? <section className="rounded-xl border bg-white p-5" aria-label="Versión seleccionada de la necesidad"><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><h3 className="break-words font-bold">{selectedNeed.currentRevision.title}</h3><p className="mt-1 text-xs font-semibold text-slate-500">Versión {selectedNeed.version} · {selectedNeed.lifecycle === "DRAFT" ? "Borrador privado" : selectedNeed.lifecycle === "ARCHIVED" ? "Archivada" : "Activa"}</p></div><Button type="button" variant="outline" disabled={!employerNeedsExistingWritable || editorDirty || editorBusy || searching || selectedNeed.lifecycle === "ARCHIVED"} onClick={() => { setEditingNeed(selectedNeed); setEditorEpoch((current) => current + 1); setEditorDirty(false); }}>Editar borrador</Button></div><p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-slate-600">{selectedNeed.currentRevision.problem}</p><p className="mt-3 text-xs leading-5 text-slate-500">{selectedNeed.currentRevision.requirements.length} requisitos definidos. Las evaluaciones conservan la versión con la que se crearon.</p>{editorDirty ? <p role="status" className="mt-3 text-sm font-semibold text-amber-800">Guarda o descarta los cambios y revisa las sugerencias pendientes antes de buscar.</p> : null}</section> : null}
 
-          {selectedNeed && matches.length === 0 && !searching ? <Card><CardContent className="pt-6"><Empty icon={<FileSearch className="h-6 w-6" />} title="Exploración bajo control" body="La búsqueda muestra razones concretas y señales faltantes. Nunca genera una calificación única de la persona." /></CardContent></Card> : null}
-
-          {groupedMatches.map((group) => {
-            const chosen = selectedRevisions[group.profileId] ?? [];
-            return <Card key={group.profileId} className="overflow-hidden">
-              <CardHeader className="border-b bg-slate-50/70">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-center gap-3">
-                    {group.image ? <Image src={group.image} alt={`Foto de ${group.name}`} width={48} height={48} unoptimized className="h-12 w-12 rounded-xl object-cover" /> : <span className="grid h-12 w-12 place-items-center rounded-xl bg-slate-900 text-sm font-bold text-white" aria-hidden>{group.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("")}</span>}
-                    <div><CardTitle className="text-lg">{group.name}</CardTitle><CardDescription>{group.headline || "Trayectoria profesional documentada"}</CardDescription></div>
-                  </div>
-                  <Button variant="outline" disabled={!employerNeedsWritable || !chosen.length || submitting} onClick={() => void createDossier(group.profileId)}><ShieldCheck className="h-4 w-4" aria-hidden />Crear expediente ({chosen.length})</Button>
-                </div>
-              </CardHeader>
-              <CardContent className="divide-y p-0">
-                {group.matches.map((match) => {
-                  const selected = chosen.includes(match.revisionId);
-                  return <button key={match.revisionId} type="button" aria-pressed={selected} onClick={() => toggleEvidence(group.profileId, match.revisionId)} className="grid w-full gap-4 p-5 text-left transition motion-reduce:transition-none hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring md:grid-cols-[1fr_220px]">
-                    <div><div className="flex flex-wrap items-center gap-2"><strong>{match.title || "Evidencia profesional compartida"}</strong><span className="rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">{match.accessKind === "PUBLIC_CV" ? "Perfil público" : "Selección pública"}</span></div>{match.summary ? <p className="mt-2 line-clamp-2 text-sm leading-6 text-muted-foreground">{match.summary}</p> : null}{match.locationLabel ? <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-slate-600"><MapPin className="h-3.5 w-3.5" aria-hidden />{match.locationLabel}</span> : null}</div>
-                    <div className="rounded-xl bg-slate-50 p-3"><span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-teal-800"><Sparkles className="h-3.5 w-3.5" aria-hidden />Coincidencias observables</span><p className="mt-2 text-xs leading-5 text-slate-600">{[...match.reasons.required.map((item) => item.label), ...match.reasons.desirable.map((item) => item.label), ...match.reasons.activityTerms, ...match.reasons.toolTerms].slice(0, 5).join(" · ") || "Contexto relacionado"}</p><span className={`mt-3 inline-flex items-center gap-1 text-xs font-bold ${selected ? "text-emerald-700" : "text-slate-500"}`}>{selected ? <Check className="h-4 w-4" aria-hidden /> : <ChevronRight className="h-4 w-4" aria-hidden />}{selected ? "Incluida en expediente" : "Seleccionar evidencia"}</span></div>
-                  </button>;
-                })}
-              </CardContent>
-            </Card>;
-          })}
+          {selectedNeed?.currentRevision ? <DiscoveryEvidenceExplorer
+            key={`${selectedNeed.id}-${selectedNeed.currentRevision.id}`}
+            need={selectedNeed}
+            matches={matches} selected={selectedRevisions} searching={searching} explored={explored} error={discoveryError}
+            writable={employerNeedsExistingWritable && selectedNeed.lifecycle !== "ARCHIVED" && !editorDirty && !editorBusy}
+            submitting={submitting}
+            onSearch={filters => { void discover(selectedNeed.id, filters); }}
+            onToggle={toggleEvidence} onCreate={profileId => void createDossier(profileId)}
+            onEdit={() => { setEditingNeed(selectedNeed); setEditorEpoch(current => current + 1); setEditorDirty(false); }}
+          /> : null}
 
           <Card className="overflow-hidden">
             <CardHeader className="gap-4 border-b bg-slate-50/70 sm:flex-row sm:items-center sm:justify-between">
@@ -474,7 +525,7 @@ export function DiscoveryNeedsConsole({ contextualMessagingEnabled = false, evid
             </CardContent>
           </Card>
 
-          {selectedDossier ? <Card className="overflow-hidden">
+          {selectedDossier ? <Card key={`${selectedDossier.id}-${selectedDossier.revokedSourceCount}-${selectedDossier.sources.map(source => source.worklogRevision.id).join("-")}`} className="overflow-hidden">
             <CardHeader className="border-b bg-[linear-gradient(115deg,#f8fafc,#ecfeff)]">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-teal-700">S14 · Evaluación privada</p><CardTitle className="mt-2">{selectedDossier.professionalProfile.user.name || "Profesional Terraqo"}</CardTitle><CardDescription>{selectedDossier.needRevision.title} · necesidad v{selectedDossier.needRevision.revisionNo}</CardDescription></div><AnalysisBadge status={selectedDossier.effectiveAnalysisStatus} /></div>
               {selectedDossier.revokedSourceCount ? <div role="status" className="mt-3 flex gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />{selectedDossier.revokedSourceCount} fuente(s) perdieron autorización. Se ocultaron y los criterios afectados quedaron marcados.</div> : null}

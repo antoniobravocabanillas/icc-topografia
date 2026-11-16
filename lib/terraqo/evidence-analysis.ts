@@ -1,3 +1,4 @@
+import { standalonePublicWorklogWhere } from "./public-cv";
 import { publicationReviewEnabled } from "./publication-review";
 import { readPublicationSource, publicSelectionPolicyWhere } from "./publication-projection";
 import "@/lib/server/runtime-server-only";
@@ -397,7 +398,7 @@ async function authorizedSourceProjection(actorId: string, source: JobSourceReco
   ) return null;
   if (source.accessKind === "PUBLIC_CV") {
     const publicRevision = await client.terraqoWorklogRevision.findFirst({
-      where: { id: revision.id, currentFor: { visibility: "PUBLIC", lifecycle: "PUBLISHED", deletedAt: null } },
+      where: { id: revision.id, currentFor: { ...standalonePublicWorklogWhere, professionalProfile: { liveCvEnabled: true, liveCvVisibility: "PUBLIC" } } },
       select: { id: true },
     });
     if (!publicRevision) return null;

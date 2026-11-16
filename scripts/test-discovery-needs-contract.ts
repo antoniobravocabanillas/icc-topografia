@@ -1,3 +1,4 @@
+import { discoveryFiltersSchema, matchesDiscoveryFilters } from "../lib/terraqo/discovery-filters";
 import assert from "node:assert/strict";
 import { discoverEvidenceForNeed, explainDiscoveryMatch, normalizeDiscoveryTerms, projectDiscoveryEvidenceFields } from "../lib/terraqo/discovery-needs";
 import { prisma } from "../lib/prisma";
@@ -13,6 +14,16 @@ import {
   terraqoWorkNeedCreateSchema,
   terraqoWorkNeedRevisionSchema,
 } from "../lib/validations/terraqo";
+
+const visible = { title: "Nivelación", summary: "Registro en obra", outcome: null, methods: [],
+  responsibilities: [], skills: [], tools: ["GNSS"], locationLabel: null };
+const instant = new Date("2026-10-01T04:59:59Z");
+assert.ok(matchesDiscoveryFilters({ activity: "nivelacion", context: "obra", availability: "AVAILABLE", to: "2026-09-30" }, visible, "AVAILABLE", instant));
+assert.equal(matchesDiscoveryFilters({ from: "2026-10-01" }, visible, null, instant), false);
+assert.equal(matchesDiscoveryFilters({ from: "2026-09-30" }, visible, null), false);
+assert.equal(matchesDiscoveryFilters({ availability: "AVAILABLE" }, visible, null, instant), false);
+assert.equal(discoveryFiltersSchema.safeParse({ to: "2026-02-30" }).success, false);
+assert.equal(discoveryFiltersSchema.safeParse({ from: "2026-10-02", to: "2026-10-01" }).success, false);
 
 const cuid = "cm12345678901234567890123";
 const baseNeed = {
@@ -141,6 +152,7 @@ function matchesFixture(value: unknown, filter: Record<string, unknown>): boolea
     if (expected === null || typeof expected !== "object") return actual === expected;
     const predicate = expected as Record<string, unknown>;
     if ("in" in predicate) return (predicate.in as unknown[]).includes(actual);
+    if ("gt" in predicate) return String(actual) > String(predicate.gt);
     if ("contains" in predicate) return typeof actual === "string" && actual.toLowerCase().includes(String(predicate.contains).toLowerCase());
     if ("has" in predicate) return Array.isArray(actual) && actual.includes(predicate.has);
     if ("hasSome" in predicate) return Array.isArray(actual) && (predicate.hasSome as unknown[]).some((item) => actual.includes(item));
@@ -160,14 +172,14 @@ async function verifyDiscoveryMembership() {
     tools: ["GNSS"], methods: [], responsibilities: [], currentFor: { id: "worklog" },
     shareItems: [{ allowedFields: ["tools"], collection: { lifecycle: "ACTIVE", publicProjection: { id: "projection", revokedAt: null, policyVersion: "public-selection-v1" } } }],
     worklog: {
-      id: "worklog", visibility: "PRIVATE", deletedAt: null, lifecycle: "PUBLISHED", currentRevisionId: "revision",
-      skills: [], locationLabel: null, occurredAt: new Date(), workCaseLinks: [],
-      professionalProfile: { id: "profile", liveCvEnabled: true, headline: "Topografía", user: { name: "Synthetic", image: null } },
+      workspaceId: null, projectId: null, project: null, id: "worklog", visibility: "PRIVATE", deletedAt: null, lifecycle: "PUBLISHED", currentRevisionId: "revision",
+      skills: [], locationLabel: null, occurredAt: new Date(), media: [], workCaseLinks: [],
+      professionalProfile: { id: "profile", liveCvEnabled: true, liveCvVisibility: "PUBLIC", headline: "Topografía", user: { name: "Synthetic", image: null } },
     },
   };
   let fixtures = [row];
   prisma.terraqoWorkNeed.findFirst = (async () => ({ currentRevision: { title, problem: "", activities: [], requiredTools: [], requirements: [] } })) as unknown as typeof originalNeed;
-  prisma.terraqoWorklogRevision.findMany = (async ({ where, take }: { where: Record<string, unknown>; take: number }) => fixtures.filter((item) => matchesFixture(item, where)).slice(0, take)) as unknown as typeof originalRevisions;
+  prisma.terraqoWorklogRevision.findMany = (async ({ where, take }: { where: Record<string, unknown>; take: number }) => fixtures.filter((item) => matchesFixture(item, where)).sort((a,b) => a.id < b.id ? -1 : Number(a.id > b.id)).slice(0, take)) as unknown as typeof originalRevisions;
   try {
     const known = await discoverEvidenceForNeed("workspace", "need");
     title = "GNSS Zebra";
