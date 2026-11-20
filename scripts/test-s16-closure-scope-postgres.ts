@@ -150,6 +150,42 @@ async function main() {
     assert.deepEqual(await state(slow.collaboration.id), afterSubmit, "Submit replay and rejected writes create no duplicates or partial state");
     console.log("PASS S16 latency: save and submit succeed beyond default 5s; exact replay preserves revisions/versions; unauthorized and conflicting payloads fail closed");
 
+    const bound = await seed();
+    const scopeA = (await state(bound.collaboration.id)).proposals[0];
+    await prisma.terraqoCollaborationProposal.update({ where: { id: scopeA.id }, data: { decidedById: professional } });
+    await prisma.terraqoCollaborationAcceptance.createMany({ data: [
+      { proposalId: scopeA.id, party: "WORKSPACE", actorId: owner },
+      { proposalId: scopeA.id, party: "PROFESSIONAL", actorId: professional },
+    ] });
+    const boundSave = { ...bound.draftInput, operationKey: randomUUID(), payload: {
+      ...bound.draftInput.payload, expectedVersion: 1, expectedAcceptedProposalId: scopeA.id,
+    } };
+    const boundDraft = await saveClosureDraft(boundSave);
+    assert.equal(boundDraft.currentRevision?.acceptedScope?.id, scopeA.id);
+    await decideCollaborationProposal(bound.acceptInput);
+    const changed = await state(bound.collaboration.id);
+    await assert.rejects(saveClosureDraft({ ...boundSave, operationKey: randomUUID(), payload: {
+      ...boundSave.payload, expectedVersion: 2,
+    } }), { status: 409 });
+    await assert.rejects(submitClosure({ ...bound.submitInput, payload: { expectedRevisionNo: 2 } }), { status: 409 });
+    assert.deepEqual(await state(bound.collaboration.id), changed, "Stale scope intent must not mutate or silently rebind");
+    assert.equal((await saveClosureDraft(boundSave)).currentRevision?.acceptedScope?.id, scopeA.id,
+      "Committed retry reconciles its stored binding after scope changes");
+    const scopeB = changed.proposals[1];
+    const newBound = await saveClosureDraft({ ...boundSave, operationKey: randomUUID(), payload: {
+      ...boundSave.payload, expectedVersion: 2, expectedAcceptedProposalId: scopeB.id,
+    } });
+    assert.equal(newBound.currentRevision?.acceptedScope?.id, scopeB.id);
+    assert.equal(newBound.revisions.find(r => r.revisionNo === 2)?.acceptedScope?.id, scopeA.id);
+    await submitClosure({ ...bound.submitInput, operationKey: randomUUID(), payload: { expectedRevisionNo: 3 } });
+    const certified = await decideClosure({ ...bound.decideInput, operationKey: randomUUID(), payload: {
+      action: "ACCEPT", expectedRevisionNo: 3,
+    } });
+    assert.equal(certified.certificate?.proposalRevisionNo, 2);
+    assert.equal(certified.certificate?.scope, "SCOPE_B");
+    assert.equal(certified.certificate?.privateByDefault, true);
+    console.log("PASS S17 bound service: stale save/submit reject; historical/replay scope retained; explicit new scope produces one private certificate");
+
     const sentFirst = await seed();
     const firstRace = await contend(sentFirst.collaboration.id, [
       () => submitClosure(sentFirst.submitInput), () => decideCollaborationProposal(sentFirst.acceptInput),
@@ -238,6 +274,7 @@ async function main() {
       await prisma.$transaction(async tx => {
         await tx.terraqoCollaborationCertificate.deleteMany({ where: { closure: { collaboration: { workspaceId } } } });
         await tx.terraqoConversationContext.deleteMany({ where: { conversation: { workspaceId } } });
+        await tx.terraqoCollaborationClosure.deleteMany({ where: { collaboration: { workspaceId } } });
         await tx.terraqoCollaboration.deleteMany({ where: { workspaceId } });
         await tx.terraqoConversation.deleteMany({ where: { workspaceId } });
         await tx.terraqoWorkspace.deleteMany({ where: { id: workspaceId } });

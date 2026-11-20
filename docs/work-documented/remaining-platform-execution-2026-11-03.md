@@ -1,5 +1,15 @@
 # Remaining platform execution — 3 November 2026
 
+## 20 de noviembre — S17 procedencia: implementacion y recorrido local completos
+
+Este checkpoint sustituye los bloqueos historicos de procedencia descritos debajo. En `codex/s17-closure-provenance`: vinculo inmutable revision-propuesta, comprobacion de ambas aceptaciones, DTO historico y editor que conserva texto/alcance ante conflicto hasta revision explicita. Compatibilidad legacy NULL sin backfill; constancias privadas por defecto.
+
+Validaciones: 105 invariantes PostgreSQL, 34 comprobaciones de carreras en sesiones independientes, 28 casos de servicios con guards y cuatro comprobaciones de arranque; regresion S16 completa. Recorrido autenticado Next/PostgreSQL/Chromium PASS primer intento, run `91dbab1c-0dfc-4016-a529-41450280159e`: propuesta, borrador, evidencia protegida, correccion/reenvio, constancia privada, cancelacion/replay, aislamiento y limpieza independiente. TypeScript y ESLint focalizado pasan. Capturas 1440/375/320; inspeccion visual movil realizada, sin declarar aprobacion visual global.
+
+Migracion preparada `20261120000100_closure_accepted_proposal_provenance`, aditiva y sin backfill. **No aplicada remotamente.** Antes de desplegar cliente Prisma nuevo debe existir la columna; no basta desactivar un flag. Hace falta autorizacion especifica para esta nueva migracion en staging, luego gate alojado con fixtures sinteticas y limpieza. Produccion permanece intacta.
+
+Staging vigente validado anteriormente: candidato `c5598dcf2fcd16617ac4e808463688f5db0cc8ac`, deploy `6affea85f1fdf213a24050b3` (controles S16/S17 PASS). No confundir con el nuevo candidato local. Pendiente independiente: compartir constancia como recurso propio con consentimiento profesional y empresarial exacto, revocacion y permisos de archivos separados. **S17 no cerrado; S18 no promovido.** Detalle en `proposals/s17-writer-integration-gate.md` y `proposals/s17-accepted-proposal-provenance-notes.md`.
+
 ## 20 de noviembre — Segundo candidato S16: transaccion cerrada al enviar
 
 Candidato `f0b34c58c54bd92a9af09d66dc9e199cf43354af`, deploy `6affe6853aae467a0f0a9225`: marcador exacto verificado y build correcto; gate `failed_plugin`. Paso propuesta, aceptacion, layouts y guardado privado con referencia exacta. El envio del cierre devolvio 500 (esperado 200). El log de funcion del mismo deploy registra `PrismaClientKnownRequestError` y `Transaction API error: Transaction not found` en `terraqoClosureRevision.update`, requestId `42e885d8-3a86-4e9c-b733-c3f3d2788de4`. No es un fallo de selector ni se debe relajar el codigo esperado. Guardar/enviar conservaban el timeout predeterminado; aceptar ya usaba 20 segundos. Se unifica el presupuesto explicito Serializable/maxWait 10s/timeout 20s, sin sacar las autorizaciones de la transaccion ni reintentar automaticamente timeouts ambiguos. La hipotesis de expiracion por latencia debe confirmarse con regresion y siguiente ensayo, no darse por resuelta solo por cambiar el limite.

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync, execFile } from "node:child_process";
-import { randomBytes, randomUUID } from "node:crypto";
-import { cp, mkdir, mkdtemp, open, rm, symlink, writeFile } from "node:fs/promises";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { cp, mkdir, mkdtemp, open, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -21,8 +21,28 @@ async function rehearse() {
   const root = process.cwd();
   const s16Controls = process.argv.includes("--s16-controls");
   const s16Page = process.argv.includes("--s16-page-only");
+  const s17Provenance = process.argv.includes("--s17-provenance");
+  assert.ok(!s17Provenance || s16Controls, "S17 provenance requires the authenticated S16 controls journey");
   assert.ok(!(s16Page && (s16Controls || process.argv.includes("--route-only"))), "Choose one local journey");
   assert.ok(!(s16Controls && process.argv.includes("--route-only")), "Choose one local journey");
+  let provenanceGuards: string | undefined;
+  if (s17Provenance) {
+    // Exact reviewed proposal only; neither arbitrary SQL nor a migration input is accepted.
+    const proposed = await readFile(path.join(root, "docs/work-documented/proposals/s17-accepted-proposal-provenance.proposed.sql"));
+    assert.equal(createHash("sha256").update(proposed).digest("hex"),
+      "3a0352368d496ad59a1e9a3064da4c3d3badd6543aaf4a3c694e3b12ef273326", "S17 proposed SQL changed; review before installing guards");
+    const sql = proposed.toString("utf8");
+    provenanceGuards = sql.slice(sql.indexOf("CREATE FUNCTION icc.s17_require_serializable()"), sql.lastIndexOf("ROLLBACK;"));
+    assert.equal((provenanceGuards.match(/^CREATE FUNCTION /gm) || []).length, 7);
+    assert.equal((provenanceGuards.match(/^CREATE TRIGGER /gm) || []).length, 6);
+    assert.ok(!/^(ALTER TABLE|CREATE INDEX|COMMIT|ROLLBACK|BEGIN;)/m.test(provenanceGuards));
+    // Generated client and dependencies belong to this worktree; never generate through a shared junction.
+    for (const name of ["node_modules", "node_modules/.prisma/client", "node_modules/@prisma/client"])
+      assert.equal(await realpath(path.join(root, name)), path.join(await realpath(root), name));
+    const generated = await readFile(path.join(root, "node_modules/.prisma/client/schema.prisma"), "utf8");
+    assert.match(generated, /acceptedProposalId\s+String\?/);
+    assert.match(generated, /@relation\("TerraqoClosureAcceptedProposal", fields: \[acceptedProposalId\], references: \[id\], onDelete: Restrict, onUpdate: Restrict\)/);
+  }
   const candidate = (await exec("git", ["rev-parse", "HEAD"], { cwd: root, windowsHide: true })).stdout.trim();
   assert.match(candidate, /^[a-f0-9]{40}$/);
   const local = await mkdtemp(path.join(os.tmpdir(), "terraqo-s15-"));
@@ -58,6 +78,21 @@ async function rehearse() {
     started = true;
     // Initialize only this newly created loopback cluster from the existing schema; no migration files or remote DB.
     await exec(process.execPath, ["node_modules/prisma/build/index.js", "db", "push", "--skip-generate", "--schema", "prisma/schema.prisma"], { cwd: root, env, windowsHide: true });
+    if (provenanceGuards) {
+      // psql receives only our generated loopback target and credentials, never inherited PG settings.
+      const psql = (args: string[]) => exec(path.join(bin, "psql"), ["-X", "-h", "127.0.0.1", "-p", String(pgPort),
+        "-U", "terraqo_s22_test", "-d", "postgres", "-v", "ON_ERROR_STOP=1", ...args],
+        { cwd: local, env: { ...env, PGPASSWORD: secret }, windowsHide: true, timeout: 60_000 });
+      const identity = await psql(["-At", "-c", "SELECT json_build_object('host',host(inet_server_addr()),'port',inet_server_port(),'data',current_setting('data_directory'),'listeners',current_setting('listen_addresses'),'role',current_user,'database',current_database())"]);
+      assert.deepEqual(JSON.parse(identity.stdout.trim()), { host: "127.0.0.1", port: pgPort,
+        data: data.replaceAll("\\", "/"), listeners: "127.0.0.1", role: "terraqo_s22_test", database: "postgres" });
+      const guardsFile = path.join(local, "s17-guards.sql");
+      await writeFile(guardsFile, "BEGIN;\nSET LOCAL lock_timeout = '5s';\nSET LOCAL statement_timeout = '30s';\n" + provenanceGuards + "\nCOMMIT;\n");
+      await psql(["-f", guardsFile]);
+      const active = await psql(["-At", "-c", "SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='icc' AND t.tgname LIKE 's17_%' AND t.tgenabled='O'"]);
+      assert.equal(active.stdout.trim(), "6", "All six S17 guards must be active");
+      console.log("S17_PROVENANCE guards=6 enabled=O identity=own-loopback proposal_sha256=3a0352368d496ad59a1e9a3064da4c3d3badd6543aaf4a3c694e3b12ef273326");
+    }
     await mkdir(app);
     for (const name of ["app","lib","components","types","services","emails","auth.ts","middleware.ts","next.config.ts",
       "tsconfig.json","package.json","tailwind.config.ts","postcss.config.js"])

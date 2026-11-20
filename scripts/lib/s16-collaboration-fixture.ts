@@ -50,17 +50,32 @@ export async function sharingSnapshot(db: PrismaClient, f: S16Fixture) {
 
 export async function cleanS16(db: PrismaClient, f: S16Fixture, ids: OwnedIds) {
   const failures: unknown[] = [];
+  let provenanceRemoved = false;
   try {
-    // Certificates have RESTRICT edges to closure/revision and must go first.
-    await db.terraqoCollaborationCertificate.deleteMany({ where: { closure: { collaboration: {
+    // Keep guards active. Remove live bindings before acceptance evidence, atomically.
+    const collaboration = {
       workspaceId: f.workspace, conversation: { createdById: f.owner },
-    } } } });
+    };
+    await db.$transaction(async tx => {
+      const closure = { collaboration };
+      await tx.terraqoCollaborationCertificate.deleteMany({ where: { closure } });
+      await tx.terraqoCollaborationClosure.updateMany({ where: closure, data: { currentRevisionId: null } });
+      await tx.terraqoClosureReference.deleteMany({ where: { closureRevision: { closure } } });
+      await tx.terraqoClosureRevision.deleteMany({ where: { closure } });
+      await tx.terraqoCollaborationClosure.deleteMany({ where: closure });
+      await tx.terraqoCollaborationAcceptance.deleteMany({ where: { proposal: { collaboration } } });
+      await tx.terraqoCollaborationProposal.deleteMany({ where: { collaboration } });
+    }, { isolationLevel: "Serializable", timeout: 45_000 });
+    provenanceRemoved = true;
   } catch (error) { failures.push(error); }
   // Cancellation audit has a RESTRICT workspace edge. Delete only this owned run before workspace cleanup.
   try { await db.activityLog.deleteMany({ where: { terraqoWorkspaceId: f.workspace, actorId: f.owner,
     entityType: "TerraqoCollaboration", entityId: { in: ids.collaborations }, id: { startsWith: "collaboration-cancel:v1:" } } }); }
   catch (error) { failures.push(error); }
-  try { await cleanConversation(db, f); } catch (error) { failures.push(error); }
+  // A failed ordered teardown must not fall through to parent cascades.
+  if (provenanceRemoved) {
+    try { await cleanConversation(db, f); } catch (error) { failures.push(error); }
+  }
   const independent = new PrismaClient({ datasourceUrl: process.env.DATABASE_URL });
   try {
     try { await verifyConversationRemoved(independent, f, ids.dossiers, ids.conversations); }

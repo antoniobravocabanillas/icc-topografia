@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { closureReferenceInclude, readAuthorizedClosureReference, loadAuthorizedClosureReferences, type AuthorizedClosureReference } from "./closure-reference-access";
 
 const revisionInclude = {
+  acceptedProposal: { select: { id: true, revisionNo: true, roleTitle: true, scope: true } },
   references: {
     include: closureReferenceInclude,
   },
@@ -33,6 +34,7 @@ function projectRevision(
   return {
     id: revision.id,
     revisionNo: revision.revisionNo,
+    acceptedScope: revision.acceptedProposal ?? null,
     contribution: revision.contribution,
     deliverables: [...revision.deliverables],
     result: revision.result,

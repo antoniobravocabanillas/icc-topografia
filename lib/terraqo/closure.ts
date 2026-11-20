@@ -53,6 +53,24 @@ function assertDraftFollowsAcceptedScope(
     );
 }
 
+/** Identity, not timestamps, binds a new closure to the scope the editor reviewed.
+ * Call only after locking the parent collaboration; committed replay is handled first. */
+function assertAcceptedProposalBinding(collaboration: {
+  acceptedRevisionNo: number | null;
+  professionalUserId: string;
+  proposals: { id: string; revisionNo: number; createdById: string; decidedById: string | null;
+    acceptances: { party: string; actorId: string }[] }[];
+}, expectedId: string) {
+  const proposal = collaboration.proposals[0];
+  if (!expectedId || !proposal || proposal.id !== expectedId ||
+      proposal.revisionNo !== collaboration.acceptedRevisionNo ||
+      proposal.decidedById !== collaboration.professionalUserId ||
+      !proposal.acceptances.some(item => item.party === "WORKSPACE" && item.actorId === proposal.createdById) ||
+      !proposal.acceptances.some(item => item.party === "PROFESSIONAL" && item.actorId === collaboration.professionalUserId))
+    throw new TerraqoMessagingError("El alcance aceptado cambió o no tiene ambas confirmaciones. Revisa la propuesta antes de guardar o enviar el cierre.", 409);
+  return proposal.id;
+}
+
 export function closureOperationFingerprint(payload: unknown) {
   return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
 }
@@ -175,6 +193,7 @@ export async function saveClosureDraft(input: {
       },
       include: {
         closure: { include: { currentRevision: true } },
+        proposals: { where: { status: "ACCEPTED" }, orderBy: { revisionNo: "desc" }, take: 1, include: { acceptances: true } },
       },
     });
     if (!collaboration)
@@ -183,6 +202,10 @@ export async function saveClosureDraft(input: {
         409,
       );
 
+    // Omitted identity remains the explicitly legacy private path. Never invent
+    // a binding for old clients/replays; sharing must reject unbound certificates.
+    const acceptedProposalId = input.payload.expectedAcceptedProposalId === undefined ? null :
+      assertAcceptedProposalBinding(collaboration, input.payload.expectedAcceptedProposalId);
     const closure = collaboration.closure;
     if (closure && input.payload.expectedVersion !== closure.version)
       throw new TerraqoMessagingError(
@@ -220,6 +243,7 @@ export async function saveClosureDraft(input: {
     const revision = await tx.terraqoClosureRevision.create({
       data: {
         closureId: targetClosure.id,
+        acceptedProposalId,
         revisionNo,
         contribution: input.payload.contribution,
         deliverables: input.payload.deliverables,
@@ -280,7 +304,7 @@ export async function submitClosure(input: {
       },
       include: {
         collaboration: { include: {
-          proposals: { where: { status: "ACCEPTED" }, orderBy: { revisionNo: "desc" }, take: 1 },
+          proposals: { where: { status: "ACCEPTED" }, orderBy: { revisionNo: "desc" }, take: 1, include: { acceptances: true } },
         } },
         currentRevision: true,
       },
@@ -308,7 +332,8 @@ export async function submitClosure(input: {
       );
     if (!["ACCEPTED", "IN_PROGRESS", "CHANGES_REQUESTED"].includes(closure.collaboration.status))
       throw new TerraqoMessagingError("La colaboración no admite enviar este cierre.", 409);
-    assertDraftFollowsAcceptedScope(closure.collaboration, revision.createdAt);
+    if (revision.acceptedProposalId) assertAcceptedProposalBinding(closure.collaboration, revision.acceptedProposalId);
+    else assertDraftFollowsAcceptedScope(closure.collaboration, revision.createdAt);
     await assertReferencesStillAuthorized(
       tx,
       revision.id,
@@ -364,6 +389,7 @@ export async function decideClosure(input: {
               where: { status: "ACCEPTED" },
               orderBy: { revisionNo: "desc" },
               take: 1,
+              include: { acceptances: true },
             },
           },
         },
@@ -397,7 +423,8 @@ export async function decideClosure(input: {
     if (state.emitsCertificate) {
       if (closure.collaboration.status !== "CLOSURE_PROPOSED")
         throw new TerraqoMessagingError("La colaboración no tiene un cierre vigente en revisión.", 409);
-      assertDraftFollowsAcceptedScope(closure.collaboration, revision.createdAt);
+      if (revision.acceptedProposalId) assertAcceptedProposalBinding(closure.collaboration, revision.acceptedProposalId);
+      else assertDraftFollowsAcceptedScope(closure.collaboration, revision.createdAt);
     }
     const now = new Date();
     await tx.terraqoClosureRevision.update({

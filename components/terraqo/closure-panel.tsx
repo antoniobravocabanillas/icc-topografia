@@ -9,7 +9,10 @@ import styles from "./closure-page.module.css";
 import { ClosureReferencePicker, closureReferenceKey, type ClosureReferenceSource } from "./closure-reference-picker";
 import { ClosureReferencePreview } from "./closure-reference-preview";
 
+type AcceptedScope = { id: string; revisionNo: number; roleTitle: string; scope: string };
+
 type ClosureRevision = {
+  acceptedScope?: AcceptedScope | null;
   id: string;
   revisionNo: number;
   contribution: string;
@@ -57,7 +60,7 @@ type Collaboration = {
   acceptedRevisionNo: number | null;
   workspace: { name: string };
   professional: { name: string | null };
-  proposals: Array<{ revisionNo: number; roleTitle: string; scope: string }>;
+  proposals: Array<{ id: string; revisionNo: number; roleTitle: string; scope: string }>;
   closure: null | {
     id: string;
     version: number;
@@ -82,12 +85,13 @@ function closureDate(value: string | null | undefined) {
   }).format(date);
 }
 
-type ClosureForm = { contribution: string; deliverables: string; result: string; excerpt: string; referenceSources?: ClosureReferenceSource[] };
+type ClosureForm = { expectedAcceptedProposalId?: string; contribution: string; deliverables: string; result: string; excerpt: string; referenceSources?: ClosureReferenceSource[] };
 
-function revisionForm(revision: ClosureRevision | null | undefined): ClosureForm {
+function revisionForm(revision: ClosureRevision | null | undefined, currentScopeId?: string): ClosureForm {
   if (!revision || !["DRAFT", "CHANGES_REQUESTED", "DECLINED"].includes(revision.status))
-    return { contribution: "", deliverables: "", result: "", excerpt: "", referenceSources: [] };
+    return { expectedAcceptedProposalId: currentScopeId, contribution: "", deliverables: "", result: "", excerpt: "", referenceSources: [] };
   return {
+    expectedAcceptedProposalId: revision.acceptedScope?.id ?? currentScopeId,
     contribution: revision.contribution,
     deliverables: revision.deliverables.join("\n"),
     result: revision.result,
@@ -106,6 +110,7 @@ function errorMessage<T>(payload: Envelope<T>, fallback: string) {
 
 function ClosureSummary({ revision }: { revision: ClosureRevision }) {
   return <dl className={styles.summary}>
+    <div><dt>Alcance de esta versión</dt><dd>{revision.acceptedScope ? `v${revision.acceptedScope.revisionNo} · ${revision.acceptedScope.roleTitle}: ${revision.acceptedScope.scope}` : "Registro anterior sin vínculo de alcance documentado."}</dd></div>
     <div><dt>Contribución realizada</dt><dd>{revision.contribution}</dd></div>
     <div><dt>Entregables</dt><dd><ul>{revision.deliverables.map((item, index) => <li key={index}>{item}</li>)}</ul></dd></div>
     <div><dt>Resultado</dt><dd>{revision.result || "No se registró un resultado adicional."}</dd></div>
@@ -173,9 +178,11 @@ export function ClosurePanel({ mode, collaborationId, presentation = "embedded" 
 
   const selected = useMemo(() => items.find((item) => item.id === selectedId && (!collaborationId || item.id === collaborationId)) || null, [items, selectedId, collaborationId]);
 
-  const baseline = revisionForm(selected?.closure?.currentRevision);
+  const currentScope = selected ? acceptedProposal(selected) : undefined;
+  const baseline = revisionForm(selected?.closure?.currentRevision, currentScope?.id);
   const form = drafts[selectedId] || baseline;
   const { contribution, deliverables, result, excerpt } = form;
+  const scopeChanged = Boolean(currentScope?.id && form.expectedAcceptedProposalId !== currentScope.id);
   const dirty = JSON.stringify(form) !== JSON.stringify(baseline);
   const revisionMismatch = savedRevisionIds[selectedId] !== undefined && savedRevisionIds[selectedId] !== selected?.closure?.currentRevision?.id;
   const canEdit = selected != null && ["ACCEPTED", "IN_PROGRESS", "CHANGES_REQUESTED"].includes(selected.status);
@@ -188,7 +195,7 @@ export function ClosurePanel({ mode, collaborationId, presentation = "embedded" 
     if (working) return;
     setWorking(true);
     const refreshed = await load();
-    if (refreshed) setRefreshRequired(false);
+    if (refreshed) { setRefreshRequired(false); setMessage(null); }
     setWorking(false);
   }
 
@@ -202,8 +209,9 @@ export function ClosurePanel({ mode, collaborationId, presentation = "embedded" 
 
   async function saveDraft(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selected || working || !canEdit || refreshRequired) return;
+    if (!selected || working || !canEdit || refreshRequired || scopeChanged || !form.expectedAcceptedProposalId) return;
     const payload = {
+      expectedAcceptedProposalId: form.expectedAcceptedProposalId,
       contribution,
       deliverables: deliverables.split(/\n|,/).map((item) => item.trim()).filter(Boolean),
       result,
@@ -216,6 +224,7 @@ export function ClosurePanel({ mode, collaborationId, presentation = "embedded" 
     };
     const signature = JSON.stringify({ action: "save", selectedId: selected.id, payload });
     const key = operationKey(signature);
+    setDrafts(current => ({ ...current, [selected.id]: form }));
     setWorking(true);
     setMessage(null);
     try {
@@ -225,8 +234,10 @@ export function ClosurePanel({ mode, collaborationId, presentation = "embedded" 
         body: JSON.stringify(payload),
       });
       const body = (await response.json().catch(() => ({}))) as Envelope<{ currentRevision: { id: string } | null }>;
-      if (!response.ok)
+      if (!response.ok) {
+        if (response.status === 409) setRefreshRequired(true);
         setMessage({ kind: "error", text: errorMessage(body, "No se pudo guardar el borrador.") });
+      }
       else {
         const savedRevisionId = body.data?.currentRevision?.id || "";
         setSavedRevisionIds((current) => ({ ...current, [selected.id]: savedRevisionId }));
@@ -274,8 +285,10 @@ export function ClosurePanel({ mode, collaborationId, presentation = "embedded" 
         body: JSON.stringify(payload),
       });
       const body = (await response.json().catch(() => ({}))) as Envelope<unknown>;
-      if (!response.ok)
+      if (!response.ok) {
+        if (response.status === 409) setRefreshRequired(true);
         setMessage({ kind: "error", text: errorMessage(body, "No se pudo enviar el cierre.") });
+      }
       else {
         operationKeys.current.delete(signature);
         setMessage({ kind: "success", text: "Cierre enviado para revisión. No se publicó ni se movieron archivos." });
@@ -337,10 +350,12 @@ export function ClosurePanel({ mode, collaborationId, presentation = "embedded" 
     }
   }
 
+  const scopeNotice = scopeChanged && mode === "workspace" ? <div className={styles.notice} role="alert"><h2>El alcance aceptado cambió</h2><p>Tu texto se conserva. Revisa el alcance v{currentScope?.revisionNo} antes de vincular una nueva revisión del cierre.</p><p>{currentScope?.scope}</p><Button variant="outline" disabled={working} onClick={() => setDrafts(current => ({ ...current, [selectedId]: { ...form, expectedAcceptedProposalId: currentScope?.id } }))}>He revisado el nuevo alcance</Button></div> : null;
+
   if (dedicated) {
     const closure = selected?.closure;
     const revision = closure?.currentRevision;
-    const proposal = selected ? acceptedProposal(selected) : null;
+    const proposal = mode === "professional" ? revision?.acceptedScope : currentScope;
     const saveStatus = !canEdit ? "Este cierre no admite edición en su estado actual."
       : revisionMismatch ? "La revisión vigente cambió. Revisa el cierre y guarda de nuevo antes de enviarlo."
       : dirty ? "Cambios sin guardar. Guarda el borrador antes de enviarlo."
@@ -383,6 +398,7 @@ export function ClosurePanel({ mode, collaborationId, presentation = "embedded" 
     return <section data-testid="closure-panel" className={styles.page} aria-busy={loading || working} aria-label={mode === "workspace" ? "Preparar cierre" : "Revisar cierre"}>
       <Link className={styles.back} href={mode === "workspace" ? "/admin/mensajes" : "/portal/mensajes"}><ArrowLeft size={18} aria-hidden />Volver a las colaboraciones</Link>
       {notice}
+      {scopeNotice}
       {refreshRequired ? <div className={styles.notice}><p>Actualiza el cierre para confirmar la versión vigente. Tu texto se conserva.</p><Button variant="outline" disabled={working} onClick={() => void refresh()}>Actualizar cierre</Button></div> : null}
       {loading ? <p role="status">Cargando cierre…</p> : !selected ? <div className={styles.empty}><h1>Cierre no disponible</h1><p>No se encontró esta colaboración entre tus accesos vigentes. No se ha seleccionado otra colaboración.</p><Button variant="outline" disabled={working} onClick={() => void refresh()}>Reintentar</Button></div> : <>
         {mode === "workspace" ? <>
@@ -409,13 +425,13 @@ export function ClosurePanel({ mode, collaborationId, presentation = "embedded" 
             </div>
             <aside className={styles.sidebar}><h2>Qué se confirma</h2><p>El profesional revisará esta información antes de aceptar el cierre.</p><dl><div><dt>Profesional</dt><dd>{selected.professional.name || "Profesional"}</dd></div><div><dt>Participación</dt><dd>{proposal?.roleTitle || "Versión aceptada no disponible"}</dd></div><div><dt>Entregables</dt><dd>{(canEdit ? deliverables : revision?.deliverables.join("\n")) || "Pendientes de documentar"}</dd></div><div><dt>Resultado</dt><dd>{(canEdit ? result : revision?.result) || "Pendiente de documentar"}</dd></div><div><dt>Evidencias</dt><dd>{canEdit && form.referenceSources ? form.referenceSources.length : revision?.references.length || 0} referencias seleccionadas</dd></div></dl><div className={styles.sidebarPrivate}><LockKeyhole size={22} aria-hidden /><h2>Qué permanece privado</h2><p>Archivos del proyecto, notas y comunicaciones internas.</p><p>El cierre no publica contenido ni transfiere permisos sobre los archivos.</p></div></aside>
           </div>
-          <footer className={styles.actions}><p id="dedicated-save-status" role="status">{saveStatus}</p><div>{canEdit ? <Button type="submit" form="dedicated-closure-draft" variant="outline" disabled={working || refreshRequired}><FileCheck2 size={18} aria-hidden />Guardar borrador</Button> : null}{canEdit && revision?.status === "DRAFT" ? <Button disabled={working || dirty || refreshRequired || revisionMismatch || Boolean(selected?.closure?.currentRevision?.unavailableReferenceCount)} aria-describedby="dedicated-save-status" onClick={() => void submitCurrent(selected)}><Send size={18} aria-hidden />Enviar cierre a revisión</Button> : null}</div><p className={styles.small}>El cierre no publica archivos automáticamente.</p></footer>
+          <footer className={styles.actions}><p id="dedicated-save-status" role="status">{saveStatus}</p><div>{canEdit ? <Button type="submit" form="dedicated-closure-draft" variant="outline" disabled={working || refreshRequired || scopeChanged || !form.expectedAcceptedProposalId}><FileCheck2 size={18} aria-hidden />Guardar borrador</Button> : null}{canEdit && revision?.status === "DRAFT" ? <Button disabled={working || dirty || scopeChanged || refreshRequired || revisionMismatch || Boolean(selected?.closure?.currentRevision?.unavailableReferenceCount)} aria-describedby="dedicated-save-status" onClick={() => void submitCurrent(selected)}><Send size={18} aria-hidden />Enviar cierre a revisión</Button> : null}</div><p className={styles.small}>El cierre no publica archivos automáticamente.</p></footer>
         </> : <div className={styles.reviewGrid}>
           <aside className={styles.reviewIntro}><h1>Tu participación, documentada</h1><p>Revisa la información de tu participación y decide sobre esta versión del cierre.</p><div className={styles.ownership}><FileCheck2 size={28} aria-hidden /><h2>Tu trayectoria te pertenece</h2><p>La constancia será privada por defecto. Los archivos internos siguen en la empresa y conservan sus propios permisos.</p></div></aside>
           <div className={styles.main}>
             <article className={styles.surface}><span className={styles.state}>{revision ? closureStatusLabel[revision.status] : "Aún no hay un cierre enviado"}</span><h2 className={styles.reviewTitle}>{proposal?.roleTitle || "Colaboración"}</h2>
               <p className={styles.intro}>{selected.workspace.name} · {selected.professional.name || "Profesional"}<br />Estado de la colaboración: {collaborationStatusLabel[selected.status]}</p>
-              <div className={styles.scope}><h3>Alcance aceptado · v{selected.acceptedRevisionNo}</h3><p>{proposal?.scope || "La versión aceptada no está disponible."}</p></div>
+              <div className={styles.scope}><h3>Alcance aceptado · v{proposal?.revisionNo ?? "—"}</h3><p>{proposal?.scope || "La versión aceptada no está disponible."}</p></div>
               {revision ? <><p className={styles.small}>Versión revisada: {revision.revisionNo} · {revision.submittedAt ? `${closureDate(revision.submittedAt)} · Hora de Perú` : "Fecha de envío no disponible"}</p><ClosureSummary revision={revision} />{references}
                 {revision.decisionComment ? <div className={styles.notice}><h3>Respuesta registrada</h3><p>{revision.decisionComment}</p></div> : null}
                 {revision.status === "SUBMITTED" && closure && selected.status === "CLOSURE_PROPOSED" ? <div className={styles.decision}><label>Comentario para corrección o desacuerdo<Textarea aria-label="Comentario para corrección o desacuerdo" disabled={working || refreshRequired} value={commentById[closure.id] || ""} onChange={(event) => setCommentById((current) => ({ ...current, [closure.id]: event.target.value }))} aria-describedby="closure-decision-help" /></label><p id="closure-decision-help" className={styles.small}>Obligatorio para solicitar corrección o no aceptar. Aceptar confirma únicamente la versión {revision.revisionNo} y emite una constancia privada.</p><div className={styles.decisionActions}><Button variant="outline" disabled={working || refreshRequired} onClick={() => void decide(selected, "REQUEST_CHANGES")}><RotateCcw size={18} aria-hidden />Solicitar corrección</Button><Button disabled={working || refreshRequired || Boolean(revision.unavailableReferenceCount)} onClick={() => void decide(selected, "ACCEPT")}><Check size={18} aria-hidden />Aceptar y emitir constancia</Button><Button variant="ghost" disabled={working || refreshRequired} onClick={() => void decide(selected, "DECLINE")}>No aceptar</Button></div></div> : null}
@@ -446,6 +462,7 @@ export function ClosurePanel({ mode, collaborationId, presentation = "embedded" 
 
       {refreshRequired ? <div className="mx-5 mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3"><p role="status" className="text-sm text-amber-900">Actualiza el cierre para confirmar la versión vigente antes de continuar. Tu texto se conserva.</p><Button type="button" variant="outline" disabled={working} onClick={() => void refresh()}>Actualizar cierre</Button></div> : null}
 
+      {scopeNotice}
       {mode === "workspace" && selected ? (
         <form onSubmit={saveDraft}>
           <div className="px-5 pt-5"><label className="grid gap-2 text-sm font-semibold">Colaboración aceptada<select disabled={working || refreshRequired} value={selectedId} onChange={(event) => setSelectedId(event.target.value)} className="min-h-11 rounded-xl border bg-white px-3 text-sm">{items.map((item) => <option key={item.id} value={item.id}>{item.professional.name || "Profesional"} · {acceptedProposal(item)?.roleTitle || "Colaboración"}</option>)}</select></label></div>
@@ -457,7 +474,7 @@ export function ClosurePanel({ mode, collaborationId, presentation = "embedded" 
           <label className="grid gap-2 text-sm font-semibold lg:col-span-2">Extracto autorizado opcional<Textarea value={excerpt} onChange={(event) => updateForm("excerpt", event.target.value)} className="min-h-20" placeholder="Texto que podría incorporarse a la constancia. No publica nada." /></label>
           <div className="flex flex-wrap items-center justify-between gap-3 lg:col-span-2">
             <p id="closure-save-status" role="status" className="text-xs text-slate-600">{!canEdit ? "Este cierre no admite edición en su estado actual." : revisionMismatch ? "La revisión vigente no coincide con la guardada. Revisa el cierre y guarda de nuevo antes de enviarlo." : dirty ? "Cambios sin guardar. Guarda el borrador antes de enviarlo." : selected.closure?.currentRevision?.status === "DRAFT" ? `Borrador guardado v${selected.closure.currentRevision.revisionNo}. Enviar remitirá exactamente esta revisión.` : "Guardar crea una revisión privada y auditable."}</p>
-            <div className="flex flex-wrap gap-2"><Button type="submit" variant="outline" disabled={working}><FileCheck2 className="h-4 w-4" />Guardar borrador</Button>{selected.closure?.currentRevision?.status === "DRAFT" ? <Button type="button" disabled={working || dirty || refreshRequired || revisionMismatch || Boolean(selected?.closure?.currentRevision?.unavailableReferenceCount)} aria-describedby="closure-save-status" onClick={() => void submitCurrent(selected)}><Send className="h-4 w-4" />Enviar cierre a revisión</Button> : null}</div>
+            <div className="flex flex-wrap gap-2"><Button type="submit" variant="outline" disabled={working || scopeChanged || !form.expectedAcceptedProposalId}><FileCheck2 className="h-4 w-4" />Guardar borrador</Button>{selected.closure?.currentRevision?.status === "DRAFT" ? <Button type="button" disabled={working || dirty || scopeChanged || refreshRequired || revisionMismatch || Boolean(selected?.closure?.currentRevision?.unavailableReferenceCount)} aria-describedby="closure-save-status" onClick={() => void submitCurrent(selected)}><Send className="h-4 w-4" />Enviar cierre a revisión</Button> : null}</div>
           </div>
           </fieldset>
         </form>
@@ -468,14 +485,14 @@ export function ClosurePanel({ mode, collaborationId, presentation = "embedded" 
           const closure = collaboration.closure;
           const revision = closure?.currentRevision;
           if (!closure || !revision) return null;
-          const proposal = acceptedProposal(collaboration);
+          const proposal = revision.acceptedScope;
           return (
             <article key={collaboration.id} className="p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div><p className="text-xs font-bold uppercase tracking-[0.12em] text-[#0b6f68]">Cierre v{revision.revisionNo} · {closureStatusLabel[revision.status]}</p><h3 className="mt-1 font-display text-lg font-bold">{proposal?.roleTitle || "Colaboración"}</h3><p className="text-xs text-slate-500">{collaboration.workspace.name} · {collaboration.professional.name || "Profesional"}</p></div>
                 {closure.certificate ? <span className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1.5 text-xs font-bold text-emerald-800"><BadgeCheck className="h-4 w-4" />Constancia privada emitida</span> : null}
               </div>
-              <div className="mt-3 text-sm text-slate-700"><p className="font-semibold">Alcance aceptado v{collaboration.acceptedRevisionNo}</p><p className="mt-1 whitespace-pre-wrap leading-6">{proposal?.scope || "La versión aceptada no está disponible. Actualiza antes de continuar."}</p></div>
+              <div className="mt-3 text-sm text-slate-700"><p className="font-semibold">Alcance de esta versión v{proposal?.revisionNo ?? "—"}</p><p className="mt-1 whitespace-pre-wrap leading-6">{proposal?.scope || "La versión aceptada no está disponible. Actualiza antes de continuar."}</p></div>
               <div className="mt-4 grid gap-3 md:grid-cols-3"><div className="rounded-xl bg-slate-50 p-3 md:col-span-2"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Contribución</p><p className="mt-1 whitespace-pre-wrap text-sm leading-6">{revision.contribution}</p></div><div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Resultado</p><p className="mt-1 text-sm leading-6">{revision.result || "No se registró un resultado adicional."}</p></div></div>
               <ul className="mt-3 grid gap-1 text-sm text-slate-700 sm:grid-cols-2">{revision.deliverables.map((item) => <li key={item} className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#0b6f68]" />{item}</li>)}</ul>
               {revision.references.length ? <div className="mt-3 text-sm text-slate-700"><p className="font-semibold">Referencias autorizadas de esta revisión</p><ul className="mt-1 list-inside list-disc">{revision.references.map((reference) => <li key={reference.worklogRevisionId}>{reference.worklogRevision.title || "Referencia autorizada"}</li>)}</ul><p className="mt-1 text-xs text-slate-500">Se conservan al guardar; el acceso a archivos se autoriza por separado.</p></div> : null}

@@ -419,6 +419,7 @@ export const terraqoClosureDraftSchema = z.object({
   authorizedExcerpt: z.string().trim().max(2000).nullable().optional(),
   referenceRevisionIds: z.array(z.string().cuid()).max(30).optional(),
   referenceSources: z.array(terraqoClosureReferenceSourceSchema).max(30).optional(),
+  expectedAcceptedProposalId: z.string().cuid().optional(),
   expectedVersion: z.number().int().positive().nullable().optional(),
 }).superRefine((value, context) => {
   if (value.referenceSources !== undefined && value.referenceRevisionIds !== undefined)
@@ -433,6 +434,7 @@ export const terraqoClosureDraftSchema = z.object({
   ...(value.authorizedExcerpt !== undefined ? { authorizedExcerpt: value.authorizedExcerpt } : {}),
   referenceRevisionIds: value.referenceRevisionIds ?? [],
   ...(value.expectedVersion !== undefined ? { expectedVersion: value.expectedVersion } : {}),
+  ...(value.expectedAcceptedProposalId !== undefined ? { expectedAcceptedProposalId: value.expectedAcceptedProposalId } : {}),
   referenceSources: undefined,
 } : value);
 

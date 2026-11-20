@@ -1,4 +1,4 @@
-# S17 writer integration gate — planned, not deployed
+# S17 writer integration gate — implemented locally, not deployed
 
 Baseline hosted controls: c5598dcf2fcd16617ac4e808463688f5db0cc8ac, Netlify staging 6affea85f1fdf213a24050b3. Provenance proposal is isolated in codex/s17-closure-provenance. No new schema is applied remotely.
 
@@ -27,4 +27,8 @@ Baseline hosted controls: c5598dcf2fcd16617ac4e808463688f5db0cc8ac, Netlify stag
 
 Stale editor A after acceptance B; identical/conflicting replay; simultaneous scope acceptance/save/submit/decision in both lock orders; legacy NULL reads and new-save transition; old-writer/new-schema compatibility; rollback with retained schema; historical proposal display after amendment; private draft DTOs; unrelated/inactive tenant rejection; exact-copy certificate emission and one-certificate uniqueness; failure injection with full rollback; fixture teardown without disabling guards.
 
-This is a prepared integration contract, not evidence that the writer, sharing UI, migration, concurrency or S17 phase is complete.
+## Local checkpoint, 20 November 2026
+
+Writer, historical DTO and editor implemented together. Evidence: 105 PostgreSQL invariant checks, 34 separate-session race checks, 28 guarded service checks plus four bootstrap checks, full S16 regression, and Chromium editor conflict/retry checks at 1440/390/320. Authenticated PostgreSQL/Next/Chromium journey with all six guards passed on its first run (`91dbab1c-0dfc-4016-a529-41450280159e`): both UI saves send expectedAcceptedProposalId, historical scope survives correction, certificate remains private, protected media and tenant isolation pass. Ordered cleanup independently verified; server stopped. See `s17-accepted-proposal-provenance-notes.md` for exact scope and limitations.
+
+Prepared migration `20261120000100_closure_accepted_proposal_provenance` is additive, has no backfill, and matches the rehearsed proposal apart from COMMIT replacing ROLLBACK. It has not been applied remotely. Staging migration authorization and hosted validation remain outstanding. Sharing UI and its authorization workflow remain separate pending work; S17 is not complete.

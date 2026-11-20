@@ -306,8 +306,10 @@ async function main() {
       }
       await update('TerraqoCollaborationCertificate', cert.id, { scope: cert.scope });
       await denied('duplicate certificate rejected', () => insert('TerraqoCollaborationCertificate', { ...cert, id: id('duplicate') }), '23505', /unique constraint/);
-      await denied('revision with certificate cannot be deleted', () => remove('TerraqoClosureRevision', r), '23503', /foreign key constraint/);
-      await denied('closure with certificate cannot be deleted', () => remove('TerraqoCollaborationClosure', closure), '23503', /foreign key constraint/);
+      // PostgreSQL reports RESTRICT as restrict_violation (23001), not the
+      // foreign_key_violation used for a missing referenced row on INSERT.
+      await denied('revision with certificate cannot be deleted', () => remove('TerraqoClosureRevision', r), '23001', /foreign key constraint/);
+      await denied('closure with certificate cannot be deleted', () => remove('TerraqoCollaborationClosure', closure), '23001', /foreign key constraint/);
       const legacy2 = await insert('TerraqoClosureRevision', revisionValues({ closureId: otherClosure }));
       await update('TerraqoClosureRevision', legacy2, { contribution: 'Legacy edited', status: 'SUBMITTED' });
       await update('TerraqoClosureRevision', legacy2, { status: 'ACCEPTED' });

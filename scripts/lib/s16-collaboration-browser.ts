@@ -12,6 +12,7 @@ const expect = baseExpect.configure({ timeout: 45_000 });
 const root = "/api/v1/collaborations";
 const options = { maxRedirects: 0, timeout: 45_000 };
 type Revision = { id: string; revisionNo: number; status: string; contribution: string;
+  acceptedScope: { id: string; revisionNo: number; roleTitle: string; scope: string } | null;
   result: string; deliverables: string[]; authorizedExcerpt: string | null; submittedAt: string | null;
   references: { id: string; worklogRevisionId: string }[] };
 type Certificate = { id: string; workspaceName: string; professionalName: string; scope: string;
@@ -147,6 +148,9 @@ async function journey(s: Sessions, db: PrismaClient, f: S16Fixture, ids: OwnedI
   assert.equal(accepted.payload.expectedRevisionNo, 1);
   assert.equal(accepted.data.acceptedRevisionNo, 1);
   assert.equal(accepted.data.status, "ACCEPTED");
+  const acceptedProposal = accepted.data.proposals.find(value => value.revisionNo === 1);
+  assert.ok(acceptedProposal);
+  const acceptedScope = { id: acceptedProposal.id, revisionNo: 1, roleTitle, scope };
   const acceptances = await db.terraqoCollaborationAcceptance.findMany({ where: { proposal: { collaborationId: id, revisionNo: 1 } } });
   assert.deepEqual(acceptances.map(value => [value.party, value.actorId]).sort(), [["PROFESSIONAL", f.author], ["WORKSPACE", f.owner]].sort());
   for (const [page, isCompany] of [[company, true], [professional, false]] as const) {
@@ -170,11 +174,14 @@ async function journey(s: Sessions, db: PrismaClient, f: S16Fixture, ids: OwnedI
   const firstSave = await clickPost<NonNullable<Row["closure"]>>(company, origin, root + "/" + id + "/closures",
     draftUi.getByRole("button", { name: "Guardar borrador", exact: true }), 201);
   assert.deepEqual(firstSave.payload.referenceSources, [selectedSource]);
+  assert.equal(firstSave.payload.expectedAcceptedProposalId, acceptedProposal.id);
   assert.ok(!Object.hasOwn(firstSave.payload, "referenceRevisionIds"));
   const first = firstSave.data;
   ids.closures.push(first.id);
   noSecrets(first, []);
   assert.ok(first.currentRevision);
+  assert.deepEqual(first.currentRevision.acceptedScope, acceptedScope);
+  assert.equal((await db.terraqoClosureRevision.findUniqueOrThrow({ where: { id: first.currentRevision.id } })).acceptedProposalId, acceptedProposal.id);
   ids.revisions.push(first.currentRevision.id);
   assert.equal(first.currentRevision.status, "DRAFT");
   assert.deepEqual(first.currentRevision.references.map(ref => ref.worklogRevisionId), [f.solo.revision]);
@@ -241,14 +248,18 @@ async function journey(s: Sessions, db: PrismaClient, f: S16Fixture, ids: OwnedI
   ids.revisions.push(secondRevision.id);
   assert.equal(secondRevision.revisionNo, 2);
   assert.equal(secondRevision.status, "DRAFT");
+  assert.equal(second.payload.expectedAcceptedProposalId, acceptedProposal.id);
+  assert.deepEqual(secondRevision.acceptedScope, acceptedScope);
+  assert.equal((await db.terraqoClosureRevision.findUniqueOrThrow({ where: { id: secondRevision.id } })).acceptedProposalId, acceptedProposal.id);
   assert.deepEqual(second.payload.referenceSources, [selectedSource], "UI must preserve the exact authorized source");
   visible = (await row(s.professional, id)).closure;
   assert.equal(visible?.currentRevision?.id, submitted.id);
   assert.deepEqual(visible?.revisions.map(value => value.revisionNo), [1]);
   assert.equal(visible?.currentRevision?.contribution, draftContribution);
+  assert.deepEqual(visible?.currentRevision?.acceptedScope, acceptedScope);
   noSecrets(visible, [revisedContribution, secondRevision.id]);
   const preserved = await db.terraqoClosureRevision.findUniqueOrThrow({ where: { id: submitted.id }, include: { references: true } });
-  for (const key of ["contribution", "result", "deliverables", "authorizedExcerpt", "submittedAt", "decisionComment", "references"] as const)
+  for (const key of ["acceptedProposalId", "contribution", "result", "deliverables", "authorizedExcerpt", "submittedAt", "decisionComment", "references"] as const)
     assert.deepEqual(preserved[key], afterCorrection[key], "Prior sent content/history must survive: " + key);
   await visitClosure(professional, origin, false, id);
   assert.ok(!(await professional.locator("body").innerText()).includes(revisedContribution));
@@ -270,6 +281,7 @@ async function journey(s: Sessions, db: PrismaClient, f: S16Fixture, ids: OwnedI
     closurePanel(professional).getByRole("button", { name: "Aceptar y emitir constancia", exact: true }), 200);
   assert.equal(finalDecision.payload.expectedRevisionNo, 2);
   const certified = await row(s.professional, id);
+  assert.deepEqual(certified.closure?.revisions.map(value => value.acceptedScope), [acceptedScope, acceptedScope]);
   assert.equal(certified.status, "CLOSED");
   const certificate = certified.closure?.certificate;
   assert.ok(certificate);
@@ -282,11 +294,14 @@ async function journey(s: Sessions, db: PrismaClient, f: S16Fixture, ids: OwnedI
   const storedCertificate = await db.terraqoCollaborationCertificate.findUniqueOrThrow({ where: { id: certificate.id } });
   assert.equal(storedCertificate.closureRevisionId, secondRevision.id);
   assert.equal(storedCertificate.issuedById, f.author);
+  assert.equal(storedCertificate.roleTitle, acceptedScope.roleTitle);
+  assert.equal(storedCertificate.scope, acceptedScope.scope);
   assert.equal(certificate.workspaceName, (await db.terraqoWorkspace.findUniqueOrThrow({ where: { id: f.workspace } })).name);
   assert.equal(certificate.professionalName, (await db.user.findUniqueOrThrow({ where: { id: f.author } })).name);
   for (const [page, isCompany] of [[company, true], [professional, false]] as const) {
     await visitClosure(page, origin, isCompany, id);
     const closePanel = closurePanel(page);
+    await expect(closePanel.getByText(`v1 · ${roleTitle}: ${scope}`, { exact: true }).first()).toBeVisible();
     await expect(closePanel.getByRole("heading", { name: "Constancia de colaboración", exact: true })).toBeVisible();
     for (const label of ["Partes", "Versiones aceptadas", "Emitida · Hora de Perú", "Alcance de la constancia"])
       await expect(closePanel.getByText(label, { exact: true })).toBeVisible();
@@ -300,6 +315,8 @@ async function journey(s: Sessions, db: PrismaClient, f: S16Fixture, ids: OwnedI
     await expect(closePanel.getByText(certificate.workspaceName + " · " + certificate.professionalName, { exact: true }).last()).toBeVisible();
   }
   await captures(pages, artifactDir, "private-certificate");
+  console.log(JSON.stringify({ gate: "s17-provenance", uiIntent: "expectedAcceptedProposalId",
+    boundRevisions: 2, historicalScope: "database-dto-ui-verified", certificate: "bound-scope-private" }));
 
   phase("synthetic-second-conversation-cancellation-history-replay");
   const cancellable = await seedCancellation(db, f, ids);
