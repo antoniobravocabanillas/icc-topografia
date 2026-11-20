@@ -27,10 +27,15 @@ function run(stage, { utils }) {
   for (const line of diagnostics.split(/\r?\n/)) {
     try {
       const entry = JSON.parse(line);
-      if (["s06", "s07", "s08", "s09", "s10", "s11", "s12", "s13", "s14", "s15", "s16-s17-draft"].includes(entry.gate) && /^[a-z0-9-]{1,60}$/.test(entry.phase || "")) {
-        attentionSteps.push(entry.gate + ":" + entry.phase);
+      const phase = entry.phase || entry.failedPhase;
+      if (["s06", "s07", "s08", "s09", "s10", "s11", "s12", "s13", "s14", "s15", "s16-s17-draft"].includes(entry.gate) && /^[a-z0-9-]{1,60}$/.test(phase || "")) {
+        attentionSteps.push(entry.gate + ":" + phase);
         if (/^[a-z0-9-]{1,60}$/.test(entry.journeyPhase || "")) attentionSteps.push("journey:" + entry.journeyPhase);
         for (const key of ["actual", "expected"]) if (Number.isSafeInteger(entry[key])) attentionSteps.push(key + ":" + entry[key]);
+      }
+      if (entry.gate === "s16-s17-draft" && ["verified", "failed"].includes(entry.cleanup)) {
+        attentionSteps.push("cleanup:" + entry.cleanup);
+        if (/^[a-f0-9-]{36}$/.test(entry.run || "")) attentionSteps.push("run:" + entry.run);
       }
       for (const key of ["s22Step", "attentionStep", "authenticatedAttentionFailedAt", "attentionCleanup", "errorType", "code"]) {
         if (typeof entry[key] === "string" && /^[A-Za-z0-9_-]{1,60}$/.test(entry[key])) attentionSteps.push(`${key}:${entry[key]}`);

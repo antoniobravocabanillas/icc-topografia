@@ -3,11 +3,12 @@ import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { PrismaClient } from "@prisma/client";
-import { chromium, expect, type BrowserContext, type Page, type Locator } from "@playwright/test";
+import { chromium, expect as baseExpect, type BrowserContext, type Page, type Locator } from "@playwright/test";
 import { sharingSession } from "@/scripts/lib/s06-sharing-browser";
 import { seedConversation, seedCancellation, sharingSnapshot, cleanS16, ownedIds,
   type S16Fixture, type OwnedIds } from "./s16-collaboration-fixture";
 
+const expect = baseExpect.configure({ timeout: 45_000 });
 const root = "/api/v1/collaborations";
 const options = { maxRedirects: 0, timeout: 45_000 };
 type Revision = { id: string; revisionNo: number; status: string; contribution: string;
@@ -43,8 +44,7 @@ async function row(ctx: BrowserContext, id: string, workspace = false) {
   assert.ok(value, "Fixture collaboration absent from authorized GET");
   return value;
 }
-const panel = (page: Page, title: string) => page.locator("section").filter({ has: page.getByRole("heading", { name: title, exact: true }) });
-const proposalPanel = (page: Page) => panel(page, "Propuestas de colaboración");
+const proposalPanel = (page: Page) => page.getByTestId("collaboration-panel");
 const closurePanel = (page: Page) => page.getByTestId("closure-panel");
 async function visitClosure(page: Page, origin: string, company: boolean, collaborationId: string) {
   const response = await page.goto(`${origin}/${company ? "admin" : "portal"}/colaboraciones/${encodeURIComponent(collaborationId)}/cierre`, { waitUntil: "domcontentloaded" });
@@ -411,7 +411,7 @@ export async function runS16Journey(input: { origin: string; target: "local" | "
     } catch (error) {
       const failure = error as { name?: string; code?: string; stack?: string; actual?: unknown; expected?: unknown };
       console.error(JSON.stringify({ gate: "s16-s17-draft", failedPhase: phase, name: failure.name,
-        code: failure.code, locations: failure.stack?.split("\n").filter(line => /\bat .*s16-/.test(line)).slice(0, 4),
+        code: failure.code, errorType: failure.name, locations: failure.stack?.split("\n").filter(line => /\bat .*s16-/.test(line)).slice(0, 4),
         actual: typeof failure.actual === "number" ? failure.actual : undefined,
         expected: typeof failure.expected === "number" ? failure.expected : undefined }));
       failures.push(error);

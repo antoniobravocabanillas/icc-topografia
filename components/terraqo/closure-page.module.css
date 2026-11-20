@@ -4,6 +4,7 @@
   --closure-line: #29465d;
   --closure-muted: #b7cadd;
   color-scheme: dark;
+  container-type: inline-size;
   background: var(--closure-bg);
   color: #f4f7fc;
   padding: clamp(20px, 2.5vw, 36px);
@@ -67,7 +68,7 @@
 .notice button { margin-top: 12px; }
 .reviewGrid { display: grid; grid-template-columns: minmax(240px, .42fr) minmax(0, 1fr); gap: clamp(28px, 4vw, 56px); }
 .reviewIntro { border-right: 1px solid var(--closure-line); padding-right: clamp(24px, 3vw, 44px); }
-.reviewIntro h1 { font-size: clamp(30px, 2.8vw, 40px); max-width: 16ch; }
+.reviewIntro h1 { font-size: clamp(28px, 2.2vw, 32px); max-width: 16ch; overflow-wrap: normal; word-break: normal; }
 .reviewIntro > p { margin-top: 28px; font-size: 17px; line-height: 1.8; }
 .ownership { border-top: 1px solid var(--closure-line); margin-top: 32px; padding-top: 28px; }
 .ownership svg { color: #8ac1ff; margin-bottom: 16px; }
@@ -108,4 +109,12 @@
   .decisionActions { display: grid; }
   .private { gap: 12px; }
   .page textarea { font-size: 16px; }
+}
+
+/* The portal sidebar reduces the available width independently of the viewport. */
+@container (max-width: 850px) {
+  .reviewGrid, .workspaceGrid { grid-template-columns: minmax(0, 1fr); }
+  .reviewIntro { border-right: 0; padding-right: 0; }
+  .reviewIntro h1 { max-width: 24ch; }
+  .workspaceGrid .sidebar { display: none; }
 }

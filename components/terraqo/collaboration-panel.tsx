@@ -274,7 +274,7 @@ export function CollaborationPanel({
   if (!loading && mode === "professional" && !items.length && !message) return null;
 
   return (
-    <section aria-busy={loading || submitting} className="rounded-[1.4rem] border border-slate-200 bg-white shadow-[0_18px_60px_-44px_rgba(15,23,42,0.6)]">
+    <section data-testid="collaboration-panel" aria-busy={loading || submitting} className="rounded-[1.4rem] border border-slate-200 bg-white shadow-[0_18px_60px_-44px_rgba(15,23,42,0.6)]">
       <header className="flex flex-wrap items-center justify-between gap-4 border-b bg-[linear-gradient(120deg,#071d2a_0%,#0c3740_70%,#126a64_145%)] px-5 py-5 text-white">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-200">Acuerdo explícito</p>
