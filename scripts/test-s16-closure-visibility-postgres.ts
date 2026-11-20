@@ -22,7 +22,9 @@ async function main() {
       [{ role: "s16_projection_test", database: "s16_projection_test" }]);
     await prisma.user.createMany({ data: actors.map(id => ({ id, email: `${id}@s16.invalid` })) });
     await prisma.terraqoWorkspace.createMany({ data: [workspaceId, otherWorkspaceId].map(id => ({ id, name: "Synthetic S16", slug: id, ownerUserId: owner })) });
-    const profile = await prisma.terraqoProfessionalProfile.create({ data: { userId: professional } });
+    const profile = await prisma.terraqoProfessionalProfile.create({ data: {
+      userId: professional, liveCvEnabled: true, liveCvVisibility: "PUBLIC",
+    } });
     const otherProfile = await prisma.terraqoProfessionalProfile.create({ data: { userId: outsider } });
     const conversation = await prisma.terraqoConversation.create({ data: { workspaceId, createdById: owner } });
     const collaboration = await prisma.terraqoCollaboration.create({ data: {

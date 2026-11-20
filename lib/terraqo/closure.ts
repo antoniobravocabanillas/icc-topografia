@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
-import type { z } from "zod";
+import { z } from "zod";
+import { terraqoClosureReferenceSourceSchema } from "@/lib/validations/terraqo";
 import { prisma } from "@/lib/prisma";
 import { isWorkspaceResourceReplay } from "@/lib/terraqo/idempotency-scope";
 import type {
@@ -9,6 +10,12 @@ import type {
   terraqoClosureSubmitSchema,
 } from "@/lib/validations/terraqo";
 import { TerraqoMessagingError } from "@/lib/terraqo/messaging";
+import { closureProjectionInclude, projectAuthorizedClosure, type ClosureAudience } from "./closure-projection";
+import {
+  closureReferenceInclude,
+  loadAuthorizedClosureReferenceSources,
+  loadAuthorizedClosureReferences, resolveClosureReferenceSources, assertClosureReferenceWorkspaceActor,
+} from "./closure-reference-access";
 
 type ClosureDraft = z.infer<typeof terraqoClosureDraftSchema>;
 type ClosureSubmit = z.infer<typeof terraqoClosureSubmitSchema>;
@@ -67,27 +74,29 @@ async function assertReferencesStillAuthorized(
 ) {
   const references = await tx.terraqoClosureReference.findMany({
     where: { closureRevisionId },
-    select: { worklogRevisionId: true },
+    include: closureReferenceInclude,
   });
-  if (!references.length) return;
-  const active = await tx.terraqoWorklogRevision.count({
-    where: {
-      id: { in: references.map((reference) => reference.worklogRevisionId) },
-      currentFor: {
-        is: {
-          visibility: "PUBLIC",
-          lifecycle: "PUBLISHED",
-          deletedAt: null,
-          professionalProfile: { userId: professionalUserId },
-        },
-      },
-    },
-  });
-  if (active !== references.length)
+  const authorized = await loadAuthorizedClosureReferences(tx, references, professionalUserId, true);
+  if (references.some(reference => !authorized.has(reference.id)))
     throw new TerraqoMessagingError(
       "Una referencia dejó de estar autorizada. Revisa el cierre antes de enviarlo.",
       409,
     );
+}
+
+async function readClosureResponse(where: Prisma.TerraqoCollaborationClosureWhereInput, audience: ClosureAudience) {
+  // Replays acknowledge committed operations, but never return their stale source
+  // payload. Re-read after commit using the same live policy and audience DTO as GET.
+  const closure = await prisma.terraqoCollaborationClosure.findFirstOrThrow({
+    where,
+    include: {
+      ...closureProjectionInclude,
+      collaboration: { select: { professionalUserId: true } },
+    },
+  });
+  const projected = await projectAuthorizedClosure(prisma, closure, audience, closure.collaboration.professionalUserId);
+  if (!projected) throw new TerraqoMessagingError("Cierre no disponible.", 404);
+  return projected;
 }
 
 export async function saveClosureDraft(input: {
@@ -97,11 +106,22 @@ export async function saveClosureDraft(input: {
   operationKey: string;
   payload: ClosureDraft;
 }) {
-  const operationFingerprint = closureOperationFingerprint(input.payload);
+  // Validate descriptor contracts again for non-HTTP callers. Keep legacy payload
+  // identity byte-for-byte; only the new descriptor path has canonical ordering.
+  if (input.payload.referenceSources !== undefined && input.payload.referenceRevisionIds !== undefined)
+    throw new TerraqoMessagingError("No mezcles referencias legacy y descriptores.", 400);
+  const choices = input.payload.referenceSources === undefined ? undefined :
+    z.array(terraqoClosureReferenceSourceSchema).max(30).parse(input.payload.referenceSources)
+      .sort((a, b) => a.worklogRevisionId.localeCompare(b.worklogRevisionId));
+  const ids = choices?.map(item => item.worklogRevisionId) ?? input.payload.referenceRevisionIds ?? [];
+  if (ids.length > 30 || new Set(ids).size !== ids.length)
+    throw new TerraqoMessagingError("Referencias inválidas o repetidas.", 400);
+  const operationFingerprint = closureOperationFingerprint(choices ? { ...input.payload, referenceSources: choices } : input.payload);
   const closureId = await prisma.$transaction(async (tx) => {
     await tx.$queryRaw(
       Prisma.sql`SELECT id FROM icc."TerraqoCollaboration" WHERE id=${input.collaborationId} AND "workspaceId"=${input.workspaceId} FOR UPDATE`,
     );
+    await assertClosureReferenceWorkspaceActor(tx, input);
     const replay = await tx.terraqoClosureRevision.findUnique({
       where: {
         createdById_operationKey: {
@@ -171,28 +191,11 @@ export async function saveClosureDraft(input: {
         409,
       );
 
-    const uniqueReferenceIds = [...new Set(input.payload.referenceRevisionIds)];
-    const authorizedRevisions = uniqueReferenceIds.length
-      ? await tx.terraqoWorklogRevision.findMany({
-          where: {
-            id: { in: uniqueReferenceIds },
-            currentFor: {
-              is: {
-                visibility: "PUBLIC",
-                lifecycle: "PUBLISHED",
-                deletedAt: null,
-                professionalProfile: { userId: collaboration.professionalUserId },
-              },
-            },
-          },
-          select: { id: true, title: true, contentHash: true },
-        })
-      : [];
-    if (authorizedRevisions.length !== uniqueReferenceIds.length)
-      throw new TerraqoMessagingError(
-        "Solo puedes citar versiones públicas vigentes del profesional.",
-        403,
-      );
+    const legacy = choices === undefined ? await loadAuthorizedClosureReferenceSources(tx, ids, collaboration.professionalUserId) : [];
+    const descriptors = choices ?? legacy.map(source => ({ worklogRevisionId: source.id, accessKind: "PUBLIC_CV" as const, accessReferenceId: source.worklogId }));
+    const authorizedRevisions = await resolveClosureReferenceSources(tx, descriptors, collaboration.professionalUserId, true);
+    if (authorizedRevisions.size !== ids.length)
+      throw new TerraqoMessagingError("Solo puedes citar versiones públicas vigentes del profesional.", 403);
 
     if (closure?.currentRevision && closure.currentRevision.status !== "ACCEPTED")
       await tx.terraqoClosureRevision.update({
@@ -218,15 +221,9 @@ export async function saveClosureDraft(input: {
         operationFingerprint,
         createdAt: clock.now,
         references: {
-          create: authorizedRevisions.map((source) => ({
-            worklogRevisionId: source.id,
-            accessSnapshot: {
-              kind: "PUBLIC_CV",
-              revisionId: source.id,
-              title: source.title,
-              contentHash: source.contentHash,
-              capturedAt: new Date().toISOString(),
-            },
+          create: [...authorizedRevisions.values()].map(({ snapshot }) => ({
+            worklogRevisionId: snapshot.revisionId,
+            accessSnapshot: { ...snapshot, ...(choices === undefined ? { allowedFields: ["title"] } : {}) },
           })),
         },
       },
@@ -246,14 +243,11 @@ export async function saveClosureDraft(input: {
     return targetClosure.id;
   }, { isolationLevel: "Serializable" });
 
-  return prisma.terraqoCollaborationClosure.findFirstOrThrow({
-    where: {
-      id: closureId,
-      collaborationId: input.collaborationId,
-      collaboration: { workspaceId: input.workspaceId },
-    },
-    include: { currentRevision: { include: { references: true } }, certificate: true },
-  });
+  return readClosureResponse({
+    id: closureId,
+    collaborationId: input.collaborationId,
+    collaboration: { workspaceId: input.workspaceId },
+  }, "workspace");
 }
 
 export async function submitClosure(input: {
@@ -269,6 +263,7 @@ export async function submitClosure(input: {
     await tx.$queryRaw(
       Prisma.sql`SELECT id FROM icc."TerraqoCollaboration" WHERE id=${input.collaborationId} AND "workspaceId"=${input.workspaceId} FOR UPDATE`,
     );
+    await assertClosureReferenceWorkspaceActor(tx, input);
     const closure = await tx.terraqoCollaborationClosure.findFirst({
       where: {
         collaborationId: input.collaborationId,
@@ -325,10 +320,8 @@ export async function submitClosure(input: {
     });
     return closure.id;
   }, { isolationLevel: "Serializable" });
-  return prisma.terraqoCollaborationClosure.findUniqueOrThrow({
-    where: { id: closureId },
-    include: { currentRevision: true, certificate: true },
-  });
+  return readClosureResponse({ id: closureId, collaborationId: input.collaborationId,
+    collaboration: { workspaceId: input.workspaceId } }, "workspace");
 }
 
 export async function decideClosure(input: {
@@ -340,7 +333,7 @@ export async function decideClosure(input: {
   const decisionFingerprint = closureOperationFingerprint(input.payload);
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      return await prisma.$transaction(async (tx) => {
+      const closureId = await prisma.$transaction(async (tx) => {
     // Resolve and lock the authorized parent without reading any proposal first.
     await tx.$queryRaw(
       Prisma.sql`SELECT c.id FROM icc."TerraqoCollaboration" c
@@ -383,10 +376,7 @@ export async function decideClosure(input: {
         revision.decisionOperationKey === input.operationKey &&
         revision.decisionFingerprint === decisionFingerprint
       )
-        return tx.terraqoCollaborationClosure.findUniqueOrThrow({
-          where: { id: closure.id },
-          include: { currentRevision: true, certificate: true },
-        });
+        return closure.id;
       throw new TerraqoMessagingError("El cierre ya fue resuelto o sustituido.", 409);
     }
     if (revision.revisionNo !== input.payload.expectedRevisionNo)
@@ -463,15 +453,14 @@ export async function decideClosure(input: {
       where: { id: closure.collaborationId },
       data: { status: state.collaborationStatus, version: { increment: 1 } },
     });
-    return tx.terraqoCollaborationClosure.findUniqueOrThrow({
-      where: { id: closure.id },
-      include: { currentRevision: true, certificate: true },
-    });
+    return closure.id;
       }, {
         isolationLevel: "Serializable",
         maxWait: 10_000,
         timeout: 20_000,
       });
+      return readClosureResponse({ id: closureId,
+        collaboration: { professionalUserId: input.userId } }, "professional");
     } catch (error) {
       if (isRetryableClosureDecisionConflict(error) && attempt < 2) {
         await new Promise((resolve) => setTimeout(resolve, 25 * (attempt + 1)));

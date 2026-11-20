@@ -85,6 +85,14 @@ async function main() {
     };
     step = "served-candidate";
     await assertServed();
+    if (process.env.S16_COLLABORATION_GATE === "synthetic-only") {
+      step = "s16-collaboration";
+      const { verifyS16Collaboration } = await import("./verify-s16-collaboration");
+      await verifyS16Collaboration();
+      await assertServed();
+      console.log("PASS S16/S17 staging controls: journey verified; operator fixture-media cleanup and final review still required.");
+      return;
+    }
     if (process.env.S15_STAGING_CONVERSATION_GATE === "conversation") {
       step = "s15-conversation";
       const { verifyS15Conversation } = await import("./verify-s15-conversation");

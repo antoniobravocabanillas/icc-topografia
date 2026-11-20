@@ -51,7 +51,7 @@ async function main() {
     await exec(process.execPath, ["node_modules/prisma/build/index.js", "db", "push", "--skip-generate", "--schema", "prisma/schema.prisma"], {
       cwd: root, env, windowsHide: true, timeout: 60_000,
     });
-    for (const script of ["test-s16-closure-visibility-postgres.ts", "test-s16-closure-scope-postgres.ts"]) {
+    for (const script of ["test-s16-closure-visibility-postgres.ts", "test-s16-closure-scope-postgres.ts", "test-s16-reference-authorization-postgres.ts"]) {
       const result = await exec(process.execPath, ["--import", "tsx", `scripts/${script}`], {
         cwd: root, env, windowsHide: true, timeout: 60_000,
       });

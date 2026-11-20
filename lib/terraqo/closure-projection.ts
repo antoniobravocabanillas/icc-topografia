@@ -1,24 +1,9 @@
 import type { Prisma } from "@prisma/client";
+import { closureReferenceInclude, readAuthorizedClosureReference, loadAuthorizedClosureReferences, type AuthorizedClosureReference } from "./closure-reference-access";
 
 const revisionInclude = {
   references: {
-    include: {
-      worklogRevision: {
-        select: {
-          id: true,
-          title: true,
-          contentHash: true,
-          currentFor: {
-            select: {
-              visibility: true,
-              lifecycle: true,
-              deletedAt: true,
-              professionalProfile: { select: { userId: true } },
-            },
-          },
-        },
-      },
-    },
+    include: closureReferenceInclude,
   },
 } satisfies Prisma.TerraqoClosureRevisionInclude;
 
@@ -39,7 +24,12 @@ export type ClosureAudience = "workspace" | "professional";
 function projectRevision(
   revision: NonNullable<ClosureProjectionSource["currentRevision"]>,
   professionalUserId: string,
+  authorized?: Map<string, AuthorizedClosureReference>,
 ) {
+  const references = revision.references.flatMap((reference) => {
+    const dto = readAuthorizedClosureReference(reference, professionalUserId, authorized);
+    return dto ? [dto] : [];
+  });
   return {
     id: revision.id,
     revisionNo: revision.revisionNo,
@@ -54,22 +44,8 @@ function projectRevision(
     decidedAt: revision.decidedAt,
     // A saved accessSnapshot is evidence of past access, never a current grant.
     // Use the same public/current/owner policy as closure submission and acceptance.
-    references: revision.references.flatMap((reference) => {
-      const source = reference.worklogRevision;
-      const current = source.currentFor;
-      if (
-        !current || current.visibility !== "PUBLIC" ||
-        current.lifecycle !== "PUBLISHED" || current.deletedAt !== null ||
-        current.professionalProfile.userId !== professionalUserId
-      ) return [];
-      return [{
-        id: reference.id,
-        closureRevisionId: reference.closureRevisionId,
-        worklogRevisionId: reference.worklogRevisionId,
-        createdAt: reference.createdAt,
-        worklogRevision: { id: source.id, title: source.title, contentHash: source.contentHash },
-      }];
-    }),
+    references,
+    unavailableReferenceCount: revision.references.length - references.length,
   };
 }
 
@@ -78,6 +54,7 @@ export function projectClosure(
   closure: ClosureProjectionSource | null,
   audience: ClosureAudience,
   professionalUserId: string,
+  authorized?: Map<string, AuthorizedClosureReference>,
 ) {
   if (!closure) return null;
   // SUPERSEDED alone is ambiguous: saving another draft supersedes unsent drafts too.
@@ -95,12 +72,24 @@ export function projectClosure(
     // Do not expose the pointer, counter or update time of an unsent draft.
     version: audience === "workspace" ? closure.version : current!.revisionNo,
     currentRevisionId: current?.id ?? null,
-    currentRevision: current ? projectRevision(current, professionalUserId) : null,
-    revisions: revisions.map((revision) => projectRevision(revision, professionalUserId)),
+    currentRevision: current ? projectRevision(current, professionalUserId, authorized) : null,
+    revisions: revisions.map((revision) => projectRevision(revision, professionalUserId, authorized)),
     certificate: audience === "workspace" || revisions.some(
       (revision) => revision.id === closure.certificate?.closureRevisionId,
     ) ? closure.certificate : null,
     createdAt: audience === "workspace" ? closure.createdAt : revisions.at(-1)!.submittedAt,
     updatedAt: audience === "workspace" ? closure.updatedAt : current!.decidedAt ?? current!.submittedAt,
   };
+}
+
+/** All production read and replay paths resolve current publication permission before DTO projection. */
+export async function projectAuthorizedClosure(tx: Prisma.TransactionClient, closure: ClosureProjectionSource | null,
+  audience: ClosureAudience, professionalUserId: string) {
+  if (!closure) return null;
+  const visible = [...closure.revisions, ...(closure.currentRevision ? [closure.currentRevision] : [])]
+    .filter(revision => audience === "workspace" || (revision.submittedAt !== null && revision.status !== "DRAFT"));
+  const references = [...new Map(visible.flatMap(revision => revision.references).map(reference => [reference.id, reference])).values()];
+  const authorized = await loadAuthorizedClosureReferences(tx, references, professionalUserId, false,
+    { collaborationId: closure.collaborationId, view: audience });
+  return projectClosure(closure, audience, professionalUserId, authorized);
 }

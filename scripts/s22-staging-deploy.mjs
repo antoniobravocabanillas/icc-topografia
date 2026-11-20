@@ -17,10 +17,11 @@ async function main() {
   const s10 = ["s10-configure", "s10-trigger"].includes(requested);
   const s11 = ["s11-configure", "s11-trigger"].includes(requested);
   const s12 = ["s12-configure", "s12-trigger", "s12-release"].includes(requested);
+  const s16 = ["s16-configure", "s16-trigger", "s16-release"].includes(requested);
   const s15 = ["s15-configure", "s15-trigger", "s15-release"].includes(requested);
   const s14 = ["s14-configure", "s14-trigger", "s14-release"].includes(requested);
   const s13 = ["s13-configure", "s13-trigger", "s13-release"].includes(requested);
-  const mode = probe ? requested.slice(6) : (s06 || s07 || s08 || s09 || s10 || s11 || s12 || s13 || s14 || s15) ? requested.slice(4) : requested;
+  const mode = probe ? requested.slice(6) : (s06 || s07 || s08 || s09 || s10 || s11 || s12 || s13 || s14 || s15 || s16) ? requested.slice(4) : requested;
   assert.ok(["inspect", "configure", "trigger", "status", "release"].includes(mode));
   const require = createRequire(new URL("../node_modules/netlify-cli/package.json", import.meta.url));
   const { getAPIToken } = await import(pathToFileURL(require.resolve("@netlify/dev-utils")).href);
@@ -48,11 +49,11 @@ async function main() {
   assert.equal(execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8", windowsHide: true }).trim(), candidate);
   assert.equal(execFileSync("git", ["branch", "--show-current"], { encoding: "utf8", windowsHide: true }).trim(), branch);
   assert.equal(execFileSync("git", ["status", "--porcelain"], { encoding: "utf8", windowsHide: true }).trim(), "");
-  const fixtureWorkspace = ((s13 || s14 || s15) ? "s13-need-" : "s12-need-") + candidate.slice(0, 16);
+  const fixtureWorkspace = ((s13 || s14 || s15 || s16) ? "s13-need-" : "s12-need-") + candidate.slice(0, 16);
   const pilotKey = "TERRAQO_B5_PILOT_WORKSPACE_IDS";
   const pilotIds = (values()[pilotKey] || "").split(",").map(id => id.trim()).filter(Boolean);
   if (mode === "release") {
-    assert.ok(s12 || s13 || s14 || s15);
+    assert.ok(s12 || s13 || s14 || s15 || s16);
     // Remove only this candidate's synthetic workspace from the staging pilot.
     if (pilotIds.includes(fixtureWorkspace)) {
       await api.setEnvVarValue({ ...envArgs, key: pilotKey, body: { context: "production", value: pilotIds.filter(id => id !== fixtureWorkspace).join(",") } });
@@ -93,12 +94,15 @@ async function main() {
   if (recover !== "off") { assert.ok(probe); assert.match(recover, /^[a-f0-9-]{36}\/[a-f0-9]{12}$/); }
   const expected = {
     ...((s09 || s11) ? { TERRAQO_WORK_CASES_V1: "true" } : {}),
-    ...((s12 || s13 || s14 || s15) ? {
+    ...((s12 || s13 || s14 || s15 || s16) ? {
       TERRAQO_DISCOVERY_NEEDS_V1: "true",
       TERRAQO_NEED_SUGGESTIONS_LOCAL_WORKSPACE: fixtureWorkspace,
       TERRAQO_B5_PILOT_WORKSPACE_IDS: (pilotIds.includes("*") ? pilotIds : [...new Set([...pilotIds, fixtureWorkspace])]).join(","),
     } : {}),
-    ...(s15 ? { TERRAQO_CONTEXTUAL_MESSAGING_V1: "true", TERRAQO_COLLABORATION_V1: "true", TERRAQO_CLOSURE_V1: "true" } : {}),
+    ...((s15 || s16) ? { TERRAQO_CONTEXTUAL_MESSAGING_V1: "true", TERRAQO_COLLABORATION_V1: "true", TERRAQO_CLOSURE_V1: "true" } : {}),
+    S16_COLLABORATION_GATE: s16 ? "synthetic-only" : "off",
+    S16_ORIGIN: s16 ? origin : "off",
+    S16_EXCLUSIVE_FIXTURE_WORKSPACE: s16 ? fixtureWorkspace : "off",
     S15_STAGING_CONVERSATION_GATE: s15 ? "conversation" : "off",
     S14_STAGING_EVALUATION_GATE: s14 ? "evaluation" : "off",
     S13_STAGING_DISCOVERY_GATE: s13 ? "discovery" : "off",

@@ -15,14 +15,18 @@ function enabled() {
 export async function GET(request: Request) {
   if (!enabled()) return fail("Recurso no disponible.", 404);
   try {
-    const workspaceView = new URL(request.url).searchParams.get("view") === "workspace";
+    const params = new URL(request.url).searchParams;
+    const workspaceView = params.get("view") === "workspace";
+    const collaborationId = params.get("collaborationId") ?? undefined;
+    if (collaborationId !== undefined && !/^[a-zA-Z0-9_-]{1,128}$/.test(collaborationId))
+      return fail("Colaboración inválida.", 400);
     if (workspaceView) {
       const { session, workspace } = await requireDiscoveryWorkspaceActor();
-      return ok(await listCollaborations({ userId: session.user.id, workspaceId: workspace.id }));
+      return ok(await listCollaborations({ userId: session.user.id, workspaceId: workspace.id, collaborationId }));
     }
     const { response, session } = await requireUser();
     if (response) return response;
-    return ok(await listCollaborations({ userId: session.user.id }));
+    return ok(await listCollaborations({ userId: session.user.id, collaborationId }));
   } catch (error) {
     if (error instanceof TerraqoMessagingError || error instanceof DiscoveryNeedsError) return fail(error.message, error.status);
     return handleApiError(error);

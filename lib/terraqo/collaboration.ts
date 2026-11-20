@@ -1,3 +1,4 @@
+import { assertClosureReferenceWorkspaceActor } from "./closure-reference-access";
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
@@ -13,7 +14,7 @@ import { workspaceAdminMemberRoles } from "@/lib/terraqo/workspace-roles";
 import { isValidWorklogOperationKey } from "@/lib/terraqo/worklog-create-operation";
 import {
   closureProjectionInclude,
-  projectClosure,
+  projectAuthorizedClosure,
   type ClosureAudience,
 } from "@/lib/terraqo/closure-projection";
 
@@ -210,10 +211,10 @@ type CollaborationSource = Prisma.TerraqoCollaborationGetPayload<{
   include: typeof collaborationInclude;
 }>;
 
-function projectCollaboration(collaboration: CollaborationSource, audience: ClosureAudience) {
+async function projectCollaboration(collaboration: CollaborationSource, audience: ClosureAudience) {
   return {
     ...collaboration,
-    closure: projectClosure(collaboration.closure, audience, collaboration.professionalUserId),
+    closure: await projectAuthorizedClosure(prisma, collaboration.closure, audience, collaboration.professionalUserId),
   };
 }
 
@@ -230,14 +231,17 @@ async function getCollaboration(id: string, audience: ClosureAudience) {
 export async function listCollaborations(input: {
   userId: string;
   workspaceId?: string;
+  collaborationId?: string;
 }) {
+  if (input.workspaceId) await assertClosureReferenceWorkspaceActor(prisma, input);
   const collaborations = await prisma.terraqoCollaboration.findMany({
-    where: input.workspaceId
-      ? { workspaceId: input.workspaceId }
-      : { professionalUserId: input.userId },
+    where: {
+      ...(input.workspaceId ? { workspaceId: input.workspaceId } : { professionalUserId: input.userId }),
+      ...(input.collaborationId ? { id: input.collaborationId } : {}),
+    },
     include: collaborationInclude,
     orderBy: { updatedAt: "desc" },
-    take: 100,
+    take: input.collaborationId ? 1 : 100,
   });
   // Only fetch events for collaborations already selected by the authorized GET
   // workspace/professional scope. Never infer a historical actor from live users.
@@ -250,7 +254,7 @@ export async function listCollaborations(input: {
     },
     select: { id: true, entityId: true, terraqoWorkspaceId: true, metadata: true },
   }) : [];
-  return collaborations.map((collaboration) => {
+  return Promise.all(collaborations.map(async (collaboration) => {
     const actors = events.flatMap(event => {
       if (event.entityId !== collaboration.id || event.terraqoWorkspaceId !== collaboration.workspaceId) return [];
       const parsed = cancellationReceiptSchema.safeParse(event.metadata);
@@ -265,10 +269,10 @@ export async function listCollaborations(input: {
           ])}`) return [];
       return [{ id: receipt.actor.id, name: receipt.actor.name }];
     });
-    return { ...projectCollaboration(collaboration, input.workspaceId ? "workspace" : "professional"),
+    return { ...await projectCollaboration(collaboration, input.workspaceId ? "workspace" : "professional"),
       cancellationActor: actors.length === 1 ? actors[0] : null,
     };
-  });
+  }));
 }
 
 export async function createCollaboration(input: {

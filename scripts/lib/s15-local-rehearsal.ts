@@ -19,6 +19,10 @@ async function port() {
 async function rehearse() {
   assert.ok(process.argv.includes("--confirm=local-s15-only"), "Explicit disposable local confirmation required");
   const root = process.cwd();
+  const s16Controls = process.argv.includes("--s16-controls");
+  const s16Page = process.argv.includes("--s16-page-only");
+  assert.ok(!(s16Page && (s16Controls || process.argv.includes("--route-only"))), "Choose one local journey");
+  assert.ok(!(s16Controls && process.argv.includes("--route-only")), "Choose one local journey");
   const candidate = (await exec("git", ["rev-parse", "HEAD"], { cwd: root, windowsHide: true })).stdout.trim();
   assert.match(candidate, /^[a-f0-9]{40}$/);
   const local = await mkdtemp(path.join(os.tmpdir(), "terraqo-s15-"));
@@ -34,6 +38,10 @@ async function rehearse() {
     S15_STAGING_CONVERSATION_GATE: "conversation", TERRAQO_CONTEXTUAL_MESSAGING_V1: "true", TERRAQO_COLLABORATION_V1: "true", TERRAQO_CLOSURE_V1: "true", TERRAQO_EVIDENCE_ANALYSIS_V1: "false", TERRAQO_EVIDENCE_ANALYSIS_PROVIDER: "off", TERRAQO_DISCOVERY_NEEDS_V1: "true", TERRAQO_NEED_SUGGESTIONS_PROVIDER: "local", TERRAQO_B5_PILOT_WORKSPACE_IDS: "s13-need-" + candidate.slice(0, 16) };
   for (const [key, value] of Object.entries(process.env))
     if (/^(path|systemroot|windir|temp|tmp|home|userprofile|appdata|localappdata|comspec|pathext|programfiles.*|programdata|playwright_browsers_path)$/i.test(key)) env[key] = value;
+  if (s16Controls) Object.assign(env, {
+    S16_COLLABORATION_GATE: "synthetic-only", S16_ORIGIN: host,
+    S16_EXCLUSIVE_FIXTURE_WORKSPACE: "s13-need-" + candidate.slice(0, 16),
+  });
   const bin = process.env.PG_BIN || (process.platform === "win32" ? "C:/Program Files/PostgreSQL/18/bin" : "");
   const pg = (name: string, args: string[]) => exec(path.join(bin, name), args, { env, windowsHide: true, timeout: 60000 });
   const log = await open(path.join(local, "server.log"), "w");
@@ -74,10 +82,15 @@ async function rehearse() {
       }
     }
     const routeOnly = process.argv.includes("--route-only");
-    const test = spawn(process.execPath, ["--import", "tsx", "-e", (routeOnly ? "require(\"./scripts/verify-workspace-messaging-route.ts\").verifyWorkspaceMessagingRoute" : "require(\"./scripts/verify-s15-conversation.ts\").rehearseS15Conversation") + "(process.env.AUTH_URL,process.env.S22_STAGING_CANDIDATE_SHA).then(console.log).catch(e=>{console.error(e.stack);process.exitCode=1;})"],
+    const invocation = s16Page
+      ? "require(\"./scripts/verify-s16-closure-page.ts\").verifyS16ClosurePage()"
+      : s16Controls
+      ? "require(\"./scripts/verify-s16-collaboration.ts\").verifyS16Collaboration()"
+      : (routeOnly ? "require(\"./scripts/verify-workspace-messaging-route.ts\").verifyWorkspaceMessagingRoute" : "require(\"./scripts/verify-s15-conversation.ts\").rehearseS15Conversation") + "(process.env.AUTH_URL,process.env.S22_STAGING_CANDIDATE_SHA)";
+    const test = spawn(process.execPath, ["--import", "tsx", "-e", invocation + ".then(console.log).catch(e=>{console.error(e.stack);process.exitCode=1;})"],
       { cwd: root, env, stdio: "inherit", windowsHide: true });
     const code = await new Promise<number | null>((resolve, reject) => test.on("error", reject).once("exit", resolve));
-    assert.equal(code, 0, "Loopback S15 journey failed");
+    assert.equal(code, 0, s16Page ? "Loopback S16 page prerequisite failed" : s16Controls ? "Loopback S16 controls failed" : "Loopback S15 journey failed");
   } finally {
     try {
       if (next?.pid && next.exitCode === null && next.signalCode === null) {
@@ -105,7 +118,7 @@ async function rehearse() {
       else await rm(local, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
     }
   }
-  console.log("PASS S15 local PostgreSQL, Next.js, Chromium and fixture cleanup");
+  console.log(s16Page ? "PASS S16 page prerequisite and cleanup; full phase validation still pending" : s16Controls ? "PASS S16 local controls and cleanup; full phase validation still pending" : "PASS S15 local PostgreSQL, Next.js, Chromium and fixture cleanup");
 }
 
 rehearse().catch(error => {

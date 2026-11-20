@@ -1,7 +1,6 @@
 import { ConversationHub } from "@/components/terraqo/conversation-hub";
 import { ConversationRequestsPanel } from "@/components/terraqo/conversation-requests-panel";
 import { CollaborationPanel } from "@/components/terraqo/collaboration-panel";
-import { ClosurePanel } from "@/components/terraqo/closure-panel";
 import { getConversationHub } from "@/lib/terraqo/messaging";
 import { startConversation } from "@/lib/terraqo/messaging";
 import { redirect } from "next/navigation";
@@ -40,10 +39,7 @@ export default async function ProfessionalMessagesPage({
         <ConversationRequestsPanel basePath="/portal/mensajes" />
       ) : null}
       {process.env.TERRAQO_COLLABORATION_V1 === "true" ? (
-        <CollaborationPanel mode="professional" basePath="/portal/mensajes" />
-      ) : null}
-      {process.env.TERRAQO_CLOSURE_V1 === "true" ? (
-        <ClosurePanel mode="professional" />
+        <CollaborationPanel mode="professional" basePath="/portal/mensajes" enableClosureNavigation={process.env.TERRAQO_CLOSURE_V1 === "true"} />
       ) : null}
       <ConversationHub
         data={data}

@@ -404,17 +404,37 @@ export const terraqoCollaborationDecisionSchema = z.object({
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["comment"], message: "Explica el rechazo o los cambios solicitados." });
 });
 
+export const terraqoClosureReferenceSourceSchema = z.object({
+  worklogRevisionId: z.string().cuid(),
+  accessKind: z.enum(["PUBLIC_CV", "PUBLIC_SELECTION"]),
+  accessReferenceId: z.string().cuid(),
+}).strict();
+
 export const terraqoClosureDraftSchema = z.object({
   contribution: z.string().trim().min(12).max(5000),
   deliverables: z.array(z.string().trim().min(2).max(300)).min(1).max(30),
-  result: z.string().trim().min(4).max(5000),
+  result: z.string().trim().max(5000).refine(value => value.length === 0 || value.length >= 4, {
+    message: "El resultado debe estar vacío o tener al menos 4 caracteres.",
+  }),
   authorizedExcerpt: z.string().trim().max(2000).nullable().optional(),
-  referenceRevisionIds: z.array(z.string().cuid()).max(30).default([]),
+  referenceRevisionIds: z.array(z.string().cuid()).max(30).optional(),
+  referenceSources: z.array(terraqoClosureReferenceSourceSchema).max(30).optional(),
   expectedVersion: z.number().int().positive().nullable().optional(),
 }).superRefine((value, context) => {
-  if (new Set(value.referenceRevisionIds).size !== value.referenceRevisionIds.length)
+  if (value.referenceSources !== undefined && value.referenceRevisionIds !== undefined)
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["referenceSources"], message: "No mezcles referencias legacy y descriptores." });
+  if (new Set(value.referenceSources?.map(source => source.worklogRevisionId)).size !== (value.referenceSources?.length ?? 0))
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["referenceSources"], message: "No repitas referencias." });
+  if (new Set(value.referenceRevisionIds).size !== (value.referenceRevisionIds?.length ?? 0))
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["referenceRevisionIds"], message: "No repitas referencias." });
-});
+}).transform(value => value.referenceSources === undefined ? {
+  // Preserve historical parsed property order/defaults for legacy fingerprints.
+  contribution: value.contribution, deliverables: value.deliverables, result: value.result,
+  ...(value.authorizedExcerpt !== undefined ? { authorizedExcerpt: value.authorizedExcerpt } : {}),
+  referenceRevisionIds: value.referenceRevisionIds ?? [],
+  ...(value.expectedVersion !== undefined ? { expectedVersion: value.expectedVersion } : {}),
+  referenceSources: undefined,
+} : value);
 
 export const terraqoClosureSubmitSchema = z.object({
   expectedRevisionNo: z.number().int().positive(),

@@ -1,7 +1,6 @@
 import { ConversationHub } from "@/components/terraqo/conversation-hub";
 import { ConversationRequestsPanel } from "@/components/terraqo/conversation-requests-panel";
 import { CollaborationPanel } from "@/components/terraqo/collaboration-panel";
-import { ClosurePanel } from "@/components/terraqo/closure-panel";
 import type { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
@@ -53,10 +52,8 @@ export default async function WorkspaceMessagesPage({ searchParams }: { searchPa
           mode="workspace"
           basePath="/admin/mensajes"
           conversations={collaborationConversations}
+          enableClosureNavigation={process.env.TERRAQO_CLOSURE_V1 === "true"}
         />
-      ) : null}
-      {process.env.TERRAQO_CLOSURE_V1 === "true" ? (
-        <ClosurePanel mode="workspace" />
       ) : null}
       <ConversationHub data={data} currentUserId={session.user.id} basePath="/admin/mensajes" compactIntro projects={projects} />
     </div>

@@ -1,6 +1,7 @@
 import { created, fail, handleApiError, parseJson } from "@/lib/server/api";
 import { requireDiscoveryWorkspaceActor } from "@/lib/server/discovery-needs-auth";
 import { saveClosureDraft } from "@/lib/terraqo/closure";
+import { DiscoveryNeedsError } from "@/lib/terraqo/discovery-needs";
 import { TerraqoMessagingError } from "@/lib/terraqo/messaging";
 import { isValidWorklogOperationKey } from "@/lib/terraqo/worklog-create-operation";
 import { terraqoClosureDraftSchema } from "@/lib/validations/terraqo";
@@ -28,7 +29,7 @@ export async function POST(
       payload,
     }));
   } catch (error) {
-    if (error instanceof TerraqoMessagingError) return fail(error.message, error.status);
+    if (error instanceof TerraqoMessagingError || error instanceof DiscoveryNeedsError) return fail(error.message, error.status);
     return handleApiError(error);
   }
 }

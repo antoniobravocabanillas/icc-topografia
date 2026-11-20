@@ -40,6 +40,7 @@ type Collaboration = {
   cancelledAt?: string | null;
   cancellationReason?: string | null;
   cancellationActor?: { id: string; name: string | null } | null;
+  closure?: { currentRevision: { id: string } | null } | null;
 };
 
 type ConversationOption = {
@@ -72,10 +73,12 @@ export function CollaborationPanel({
   mode,
   basePath,
   conversations = [],
+  enableClosureNavigation = false,
 }: {
   mode: "workspace" | "professional";
   basePath: "/portal/mensajes" | "/admin/mensajes" | "/admin/terraqo/mensajes";
   conversations?: ConversationOption[];
+  enableClosureNavigation?: boolean;
 }) {
   const [items, setItems] = useState<Collaboration[]>([]);
   const [loading, setLoading] = useState(true);
@@ -293,7 +296,7 @@ export function CollaborationPanel({
         <form id="collaboration-proposal-form" onSubmit={submitProposal} className="grid gap-4 border-b p-5 lg:grid-cols-2">
           <label className="grid gap-2 text-sm font-semibold lg:col-span-2">
             Profesional y conversación
-            <select value={conversationId} onChange={(event) => setConversationId(event.target.value)} className="min-h-11 rounded-xl border bg-white px-3 text-sm">
+            <select aria-label="Profesional y conversación" value={conversationId} onChange={(event) => setConversationId(event.target.value)} className="min-h-11 rounded-xl border bg-white px-3 text-sm">
               {conversations.map((conversation) => <option key={conversation.id} value={conversation.id}>{conversation.professionalName} · {conversation.label}</option>)}
             </select>
           </label>
@@ -349,6 +352,14 @@ export function CollaborationPanel({
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-2 xl:max-w-xs xl:justify-end">
                   <Button asChild variant="outline" size="sm"><Link href={`${basePath}?conversation=${collaboration.conversationId}`}>Conversación <ArrowRight className="h-4 w-4" /></Link></Button>
+                  {enableClosureNavigation && accepted && collaboration.status !== "CANCELLED" && (mode === "workspace" || collaboration.closure?.currentRevision) ? (
+                    <Button asChild variant="outline" className="min-h-11">
+                      <Link href={`${mode === "workspace" ? "/admin" : "/portal"}/colaboraciones/${encodeURIComponent(collaboration.id)}/cierre`}>
+                        {collaboration.status === "CLOSED" ? "Ver constancia" : mode === "workspace" ? "Preparar cierre" : "Revisar cierre"}
+                        <ArrowRight aria-hidden="true" className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                  ) : null}
                   {mode === "workspace" && current.status !== "PENDING" && collaboration.status !== "CLOSED" && collaboration.status !== "CANCELLED" ? <Button type="button" variant="outline" size="sm" onClick={() => prepareRevision(collaboration)}><RotateCcw className="h-4 w-4" />Nueva versión</Button> : null}
                 </div>
               </div>
