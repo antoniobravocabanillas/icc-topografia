@@ -17,7 +17,7 @@ async function main() {
   assert.ok(stage === "prepare" || stage === "verify");
   assert.equal(process.env.NETLIFY, "true");
   assert.equal(process.env.CONTEXT, "production"); // Production context of the isolated staging site only.
-  assert.equal(process.env.BRANCH, "codex/s22-evaluator-local");
+  assert.ok(["codex/s22-evaluator-local", "codex/s17-staging-7302dba"].includes(process.env.BRANCH ?? ""), "Unexpected staging candidate branch");
   assert.equal(process.env.TERRAQO_WORKSPACE_EVALUATORS_V1, "true");
   assert.equal(process.env.PLATFORM_STAGING_CLOUD_PHASE, "workspace-administration");
   for (const file of [".env", ".env.local", ".env.production", ".env.production.local"]) assert.ok(!existsSync(file));
