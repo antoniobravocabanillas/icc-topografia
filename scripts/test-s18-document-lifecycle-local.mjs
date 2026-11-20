@@ -101,13 +101,32 @@ async function main() {
     const { withdrawProfessionalDocumentInTransaction: withdrawService, replaceProfessionalDocumentInTransaction: replaceService } = await tsImport('../lib/server/professional-document-lifecycle.ts', import.meta.url);
     // Execute the production transaction core against real PostgreSQL. Only the
     // Prisma transport is adapted; locks, predicates and writes are not mocked.
+    const transport = client => {
+      let queue = Promise.resolve();
+      const aggregate = (sql, field = 'size') => ({ aggregate: async args => {
+        // The shared storage-floor service supplies its real owner predicates.
+        const json = JSON.stringify(args.where);
+        assert.ok(json.includes('owner'));
+        const pending = queue.then(() => client.query(sql, ['owner']));
+        queue = pending.catch(() => undefined);
+        const { rows: [row] } = await pending;
+        return { _sum: { [field]: Number(row.total) } };
+      } });
+      return {
+        $queryRaw: async sql => (await client.query(sql.text, sql.values)).rows,
+        $executeRaw: async sql => (await client.query(sql.text, sql.values)).rowCount,
+        terraqoProfessionalDocument: aggregate(`SELECT COALESCE(sum(d.size),0) AS total FROM icc."TerraqoProfessionalDocument" d JOIN icc."TerraqoProfessionalProfile" p ON p.id=d."professionalProfileId" WHERE p."userId"=$1`),
+        terraqoWorklogMedia: aggregate(`SELECT COALESCE(sum(m.size),0) AS total FROM icc."TerraqoWorklogMedia" m JOIN icc."TerraqoWorklogEntry" w ON w.id=m."worklogId" WHERE w."authorId"=$1`),
+        terraqoMessageAttachment: aggregate(`SELECT COALESCE(sum(a.size),0) AS total FROM icc."TerraqoMessageAttachment" a JOIN icc."TerraqoDirectMessage" m ON m.id=a."messageId" WHERE m."senderId"=$1`),
+        terraqoExperienceEvidence: aggregate(`SELECT COALESCE(sum(e.size),0) AS total FROM icc."TerraqoExperienceEvidence" e JOIN icc."TerraqoProfessionalExperience" x ON x.id=e."experienceId" JOIN icc."TerraqoProfessionalProfile" p ON p.id=x."professionalProfileId" WHERE p."userId"=$1`),
+        terraqoEducationEvidence: aggregate(`SELECT COALESCE(sum(e.size),0) AS total FROM icc."TerraqoEducationEvidence" e JOIN icc."TerraqoProfessionalEducation" x ON x.id=e."educationId" JOIN icc."TerraqoProfessionalProfile" p ON p.id=x."professionalProfileId" WHERE p."userId"=$1`),
+        terraqoEducationEvidenceAttempt: aggregate(`SELECT COALESCE(sum(e."reservedUnits"),0) AS total FROM icc."TerraqoEducationEvidenceAttempt" e JOIN icc."TerraqoProfessionalEducation" x ON x.id=e."educationId" JOIN icc."TerraqoProfessionalProfile" p ON p.id=x."professionalProfileId" WHERE p."userId"=$1 AND e.state IN ('RESERVED','CLEANUP_PENDING','QUARANTINED')`, 'reservedUnits'),
+      };
+    };
     const call = async (client, input, rollback = false, service = withdrawService) => {
       await client.query('BEGIN');
       try {
-        const result = await service({
-          $queryRaw: async sql => (await client.query(sql.text, sql.values)).rows,
-          $executeRaw: async sql => (await client.query(sql.text, sql.values)).rowCount,
-        }, input);
+        const result = await service(transport(client), input);
         await client.query(rollback ? 'ROLLBACK' : 'COMMIT'); return result;
       } catch (error) { await client.query('ROLLBACK'); throw error; }
     };
@@ -182,7 +201,41 @@ async function main() {
     await c.query(`UPDATE icc."TerraqoWorkspaceMember" SET active=false WHERE id='member'`);
     await assert.rejects(replace(a, companyReplacement), error => error.status === 404);
     console.log('PASS replacement core: owner/key validation, rollback, concurrent exact replay, changed payload/key conflict, stable lineage, preserved verified review, new pending review, no replay resurrection, pointer preservation, mixed race and current company membership');
-    console.log('PENDING upload orchestration/compensation, readers/import workers, UI and hosted acceptance; not wired to live routes');
+    const attempts = await tsImport('../lib/server/document-replacement-attempt.ts', import.meta.url);
+    await insert(c, 'attempt-source', null, 'profile', 'CV');
+    const attemptInput = { ...replacement, documentId: 'attempt-source', operationKey: 'attempt-operation-0001' };
+    const reserve = (client, input, rollback = false) => call(client, input, rollback, attempts.reserveDocumentReplacementInTransaction);
+    const finalize = (client, id) => call(client, id, false, (tx, value) => attempts.commitDocumentReplacementInTransaction(tx, 'owner', value));
+    const fence = (client, id) => call(client, id, false, (tx, value) => attempts.fenceDocumentReplacementCleanupInTransaction(tx, 'owner', value));
+    await reserve(a, attemptInput, true);
+    assert.equal((await c.query(`SELECT count(*)::int AS n FROM icc."TerraqoDocumentReplacementAttempt"`)).rows[0].n, 0);
+    assert.equal((await c.query(`SELECT count(*)::int AS n FROM icc."TerraqoUsageBucket"`)).rows[0].n, 0);
+    const reserved = await Promise.all([reserve(a, attemptInput), reserve(b, attemptInput)]);
+    assert.ok(reserved.every(r => r.kind === 'reserved'));
+    assert.notEqual(reserved[0].attempt.storageKey, reserved[1].attempt.storageKey);
+    assert.equal((await c.query(`SELECT used FROM icc."TerraqoUsageBucket" WHERE "ownerKey"='user:owner'`)).rows[0].used, 3);
+    const confirmed = await Promise.all([finalize(a, reserved[0].attempt.id), finalize(b, reserved[1].attempt.id)]);
+    assert.deepEqual(confirmed.map(r => r.replayed).sort(), [false, true]);
+    const pending = confirmed.find(r => r.cleanupAttemptId).cleanupAttemptId;
+    const committed = reserved.find(r => r.attempt.id !== pending).attempt.id;
+    assert.equal(await fence(a, committed), 'retained');
+    await fails(c.query(`UPDATE icc."TerraqoDocumentReplacementAttempt" SET "storageKey"='foreign-key' WHERE id=$1`, [pending]), '23514');
+    await fails(c.query(`UPDATE icc."TerraqoDocumentReplacementAttempt" SET state='RESERVED' WHERE id=$1`, [pending]), '23514');
+    await fails(c.query(`DELETE FROM icc."TerraqoDocumentReplacementAttempt" WHERE id=$1`, [committed]), '23514');
+    assert.equal((await finalize(a, committed)).replayed, true);
+    await assert.rejects(finalize(a, pending), error => error.status === 409);
+    assert.equal((await c.query(`SELECT used FROM icc."TerraqoUsageBucket" WHERE "ownerKey"='user:owner'`)).rows[0].used, 3, 'no refund before physical deletion');
+    const receipt = await reserve(a, attemptInput); assert.equal(receipt.kind, 'receipt');
+    assert.equal((await c.query(`SELECT count(*)::int AS n FROM icc."TerraqoDocumentReplacementAttempt"`)).rows[0].n, 2);
+    await insert(c, 'fence-source', null, 'profile', 'CV');
+    const fenced = await reserve(a, { ...attemptInput, documentId: 'fence-source', operationKey: 'fence-operation-0001' });
+    assert.equal(await fence(a, fenced.attempt.id), 'pending');
+    await assert.rejects(finalize(a, fenced.attempt.id), error => error.status === 409);
+    await c.query(`UPDATE icc."TerraqoUsageBucket" SET used=2147483646 WHERE "ownerKey"='user:owner'`);
+    await assert.rejects(reserve(a, { ...attemptInput, documentId: 'fence-source', operationKey: 'quota-operation-0001' }), error => error.status === 409);
+    assert.equal((await c.query(`SELECT count(*)::int AS n FROM icc."TerraqoDocumentReplacementAttempt"`)).rows[0].n, 3);
+    console.log('PASS attempt ledger: atomic quota rollback, distinct reserved keys, concurrent one commit, durable replay cleanup, lost-reply recovery, live-reference protection, receipt without recharge, pending fence denies commit, quota denial without orphan');
+    console.log('PENDING storage orchestrator/recovery worker, shared floor integration, readers/import workers, UI and hosted acceptance; not wired to live routes');
   } finally {
     await Promise.allSettled(sessions.map(c => c.end()));
     if (started) await pg('pg_ctl', ['-D', data, '-m', 'fast', '-w', 'stop']);

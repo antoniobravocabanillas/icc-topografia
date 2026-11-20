@@ -10,6 +10,12 @@ export class DocumentLifecycleError extends Error {
  */
 type PreparedReplacementFile = { storageKey: string; fileName: string; contentType: string; size: number; contentSha256: string };
 
+export function documentReplacementFingerprint(documentId: string, expectedVersion: number, file: Omit<PreparedReplacementFile, "storageKey">) {
+  return createHash("sha256").update(JSON.stringify([
+    documentId, expectedVersion, file.contentSha256, file.fileName, file.contentType, file.size,
+  ])).digest("hex");
+}
+
 /** Dormant transaction core; the upload orchestrator must compensate its own
  * unused blob/reservation on replay or rollback, never the committed successor.
  */
@@ -49,9 +55,7 @@ export async function replaceProfessionalDocumentInTransaction(
   }
   // Storage allocation is attempt-specific; fingerprint binds the actual content
   // and user-visible intent so a retry can safely use a different temporary key.
-  const fingerprint = createHash("sha256").update(JSON.stringify([
-    input.documentId, input.expectedVersion, file.contentSha256, file.fileName, file.contentType, file.size,
-  ])).digest("hex");
+  const fingerprint = documentReplacementFingerprint(input.documentId, input.expectedVersion, file);
   const previous = await tx.$queryRaw<Array<{ id: string; replacesDocumentId: string; replacementFingerprint: string; lifecycleVersion: number }>>(Prisma.sql`
     SELECT id,"replacesDocumentId","replacementFingerprint","lifecycleVersion" FROM icc."TerraqoProfessionalDocument"
     WHERE "professionalProfileId"=${profiles[0].id} AND "replacementOperationKey"=${input.operationKey}`);

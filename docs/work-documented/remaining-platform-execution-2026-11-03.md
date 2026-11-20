@@ -1,5 +1,9 @@
 # Remaining platform execution — 3 November 2026
 
+## 20 de noviembre — S18: reserva y confirmación duraderas de cargas
+
+Servicios transaccionales de reserva/confirmación y marca de limpieza implementados; ledger personal propuesto fuera de migraciones. PostgreSQL real PASS: cobro de capacidad e intento atómicos, rollback, reintentos sin recobro, cargas simultáneas con claves separadas y un solo sucesor, conservación del archivo confirmado y bloqueo de confirmación tras marcar limpieza. No se elimina almacenamiento ni se reembolsa cuota todavía. Próximo obligatorio: conectar escritura/recuperación y actualizar todos los pisos de cuota compartidos antes de desplegar. Sin rutas activas, migraciones remotas ni despliegue. Detalle en `proposals/s18-document-lifecycle.md`.
+
 ## 20 de noviembre — S18: reemplazo documental transaccional validado
 
 Núcleo de reemplazo con versión esperada, huella de contenido e idempotencia implementado; conserva revisión anterior y crea sucesor pendiente. PostgreSQL local real PASS: carreras/reintentos, contenido cambiado, propietario ajeno, membresía empresarial vigente/revocada, rollback, retiro concurrente y puntero CV condicional. TypeScript/ESLint PASS. SQL propuesto ampliado fuera de migraciones; sin rutas activas, cambios remotos ni despliegue. Próximo: integrar reserva/compensación de cargas y barreras de lectura/importación antes de API/UI y staging. Detalle: `proposals/s18-document-lifecycle.md`.

@@ -31,6 +31,66 @@ CREATE UNIQUE INDEX "ProfessionalDocument_replacement_operation"
   ON icc."TerraqoProfessionalDocument" ("professionalProfileId", "replacementOperationKey")
   WHERE "replacementOperationKey" IS NOT NULL;
 
+-- Durable personal/workspace upload intent, atomic with its quota reservation.
+-- Cleanup fences are committed before storage deletion; no blind refunds.
+CREATE TABLE icc."TerraqoDocumentReplacementAttempt" (
+  id TEXT PRIMARY KEY,
+  "professionalProfileId" TEXT NOT NULL REFERENCES icc."TerraqoProfessionalProfile"(id) ON DELETE RESTRICT,
+  "documentId" TEXT NOT NULL REFERENCES icc."TerraqoProfessionalDocument"(id) ON DELETE RESTRICT,
+  "actorId" TEXT NOT NULL,
+  "operationKey" TEXT NOT NULL,
+  fingerprint TEXT NOT NULL CHECK (fingerprint ~ '^[a-f0-9]{64}$'),
+  "expectedVersion" INTEGER NOT NULL CHECK ("expectedVersion" > 0),
+  "storageKey" TEXT NOT NULL UNIQUE,
+  "fileName" TEXT NOT NULL,
+  "contentType" TEXT NOT NULL,
+  "contentSha256" TEXT NOT NULL CHECK ("contentSha256" ~ '^[a-f0-9]{64}$'),
+  size INTEGER NOT NULL CHECK (size BETWEEN 1 AND 10485760),
+  "reservedUnits" INTEGER NOT NULL CHECK ("reservedUnits" >= 0),
+  state TEXT NOT NULL DEFAULT 'RESERVED' CHECK (state IN ('RESERVED','COMMITTED','CLEANUP_PENDING','CLEANED')),
+  "resultDocumentId" TEXT REFERENCES icc."TerraqoProfessionalDocument"(id) ON DELETE RESTRICT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CHECK ((state IN ('COMMITTED','CLEANED') AND "reservedUnits"=0) OR
+    (state IN ('RESERVED','CLEANUP_PENDING') AND "reservedUnits"=ceil(size::numeric/1000000))),
+  CHECK ((state='COMMITTED' AND "resultDocumentId" IS NOT NULL) OR (state<>'COMMITTED' AND "resultDocumentId" IS NULL))
+);
+CREATE INDEX "DocumentReplacementAttempt_owner_state" ON icc."TerraqoDocumentReplacementAttempt" ("professionalProfileId",state);
+CREATE INDEX "DocumentReplacementAttempt_due" ON icc."TerraqoDocumentReplacementAttempt" (state,"createdAt");
+
+CREATE FUNCTION icc.guard_document_replacement_attempt() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP='DELETE' THEN
+    RAISE EXCEPTION 'Upload intent requires explicit retention handling' USING ERRCODE='23514';
+  END IF;
+  IF TG_OP='INSERT' THEN
+    IF NEW.state <> 'RESERVED' OR NOT EXISTS (
+      SELECT 1 FROM icc."TerraqoProfessionalDocument" d
+      JOIN icc."TerraqoProfessionalProfile" p ON p.id=d."professionalProfileId"
+      WHERE d.id=NEW."documentId" AND p.id=NEW."professionalProfileId" AND p."userId"=NEW."actorId"
+    ) THEN RAISE EXCEPTION 'Invalid attempt owner or initial state' USING ERRCODE='23514'; END IF;
+    RETURN NEW;
+  END IF;
+  IF (to_jsonb(NEW)-ARRAY['state','reservedUnits','resultDocumentId']) IS DISTINCT FROM
+     (to_jsonb(OLD)-ARRAY['state','reservedUnits','resultDocumentId']) THEN
+    RAISE EXCEPTION 'Upload intent is immutable' USING ERRCODE='23514';
+  END IF;
+  IF (OLD.state='RESERVED' AND NEW.state NOT IN ('RESERVED','COMMITTED','CLEANUP_PENDING')) OR
+     (OLD.state='CLEANUP_PENDING' AND NEW.state NOT IN ('CLEANUP_PENDING','CLEANED')) OR
+     (OLD.state IN ('COMMITTED','CLEANED') AND NEW IS DISTINCT FROM OLD) THEN
+    RAISE EXCEPTION 'Invalid upload state transition' USING ERRCODE='23514';
+  END IF;
+  IF NEW.state='COMMITTED' AND NOT EXISTS (
+    SELECT 1 FROM icc."TerraqoProfessionalDocument" d WHERE d.id=NEW."resultDocumentId"
+      AND d."professionalProfileId"=NEW."professionalProfileId" AND d."storageKey"=NEW."storageKey"
+      AND d."replacesDocumentId"=NEW."documentId" AND d."replacementOperationKey"=NEW."operationKey"
+      AND d."replacementFingerprint"=NEW.fingerprint
+  ) THEN RAISE EXCEPTION 'Committed attempt requires its exact document' USING ERRCODE='23514'; END IF;
+  RETURN NEW;
+END;
+$$;
+CREATE TRIGGER "DocumentReplacementAttempt_guard" BEFORE INSERT OR UPDATE OR DELETE
+  ON icc."TerraqoDocumentReplacementAttempt" FOR EACH ROW EXECUTE FUNCTION icc.guard_document_replacement_attempt();
+
 -- Actor is retained as historical attribution, not an ON DELETE SET NULL FK:
 -- deleting an account must not produce a partially populated withdrawal record.
 CREATE FUNCTION icc.guard_professional_document_lifecycle() RETURNS trigger LANGUAGE plpgsql AS $$
