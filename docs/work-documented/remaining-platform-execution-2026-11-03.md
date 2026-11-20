@@ -1,5 +1,9 @@
 # Remaining platform execution — 3 November 2026
 
+## 20 de noviembre — S18: recuperación de archivos y devolución única de capacidad
+
+Recuperación implementada con marca de limpieza confirmada antes de borrar, protección de archivo vigente, timeout/backoff y devolución de capacidad una sola vez. Tombstones sin cargo conservan vigilancia para escrituras tardías. PostgreSQL y archivos locales reales PASS, incluidas carreras, rollback después de borrar y cuota inconsistente. TypeScript/ESLint PASS. Falta conectar escritura/despachador y pisos globales de cuota, además de lectores/UI/staging; no hay limpieza automática ejecutándose ni cambios remotos. Ver `proposals/s18-document-lifecycle.md`.
+
 ## 20 de noviembre — S18: reserva y confirmación duraderas de cargas
 
 Servicios transaccionales de reserva/confirmación y marca de limpieza implementados; ledger personal propuesto fuera de migraciones. PostgreSQL real PASS: cobro de capacidad e intento atómicos, rollback, reintentos sin recobro, cargas simultáneas con claves separadas y un solo sucesor, conservación del archivo confirmado y bloqueo de confirmación tras marcar limpieza. No se elimina almacenamiento ni se reembolsa cuota todavía. Próximo obligatorio: conectar escritura/recuperación y actualizar todos los pisos de cuota compartidos antes de desplegar. Sin rutas activas, migraciones remotas ni despliegue. Detalle en `proposals/s18-document-lifecycle.md`.

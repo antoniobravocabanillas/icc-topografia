@@ -235,7 +235,70 @@ async function main() {
     await assert.rejects(reserve(a, { ...attemptInput, documentId: 'fence-source', operationKey: 'quota-operation-0001' }), error => error.status === 409);
     assert.equal((await c.query(`SELECT count(*)::int AS n FROM icc."TerraqoDocumentReplacementAttempt"`)).rows[0].n, 3);
     console.log('PASS attempt ledger: atomic quota rollback, distinct reserved keys, concurrent one commit, durable replay cleanup, lost-reply recovery, live-reference protection, receipt without recharge, pending fence denies commit, quota denial without orphan');
-    console.log('PENDING storage orchestrator/recovery worker, shared floor integration, readers/import workers, UI and hosted acceptance; not wired to live routes');
+    const cleanup = await tsImport('../lib/server/document-replacement-cleanup.ts', import.meta.url);
+    // Real local files stand in for the provider; never use production blob storage.
+    const keys = new Map([...reserved.map(r => r.attempt), fenced.attempt].map(row => [row.storageKey, path.join(local, `blob-${row.id}`)]));
+    for (const file of keys.values()) await writeFile(file, 'synthetic bytes');
+    const store = { delete: async key => { assert.ok(keys.has(key)); await rm(keys.get(key), { force: true }); } };
+    const database = client => ({ $transaction: async callback => {
+      await client.query('BEGIN');
+      try { const result = await callback(transport(client)); await client.query('COMMIT'); return result; }
+      catch (error) { await client.query('ROLLBACK'); throw error; }
+    } });
+    const recover = (client, id, providedStore = store, now = new Date()) => cleanup.recoverDocumentReplacementAttempt(database(client), 'owner', id, providedStore, now);
+    // Restore the deliberately exhausted synthetic bucket, preserving all charges.
+    await c.query(`UPDATE icc."TerraqoUsageBucket" SET used=4 WHERE "ownerKey"='user:owner'`);
+    const used = async () => (await c.query(`SELECT used FROM icc."TerraqoUsageBucket" WHERE "ownerKey"='user:owner'`)).rows[0].used;
+    assert.equal(await recover(a, committed), 'retained');
+    assert.equal(await recover(a, pending, { delete: async () => { throw Error('synthetic store outage'); } }), 'retry');
+    assert.equal(await used(), 4);
+    assert.equal(await recover(a, pending), 'skipped', 'backoff is durable');
+    const afterBackoff = new Date(Date.now() + 10 * 60 * 1000);
+    const recoveryRace = await Promise.all([recover(a, pending, store, afterBackoff), recover(b, pending, store, afterBackoff)]);
+    assert.equal(recoveryRace.filter(value => value === 'completed').length, 1);
+    assert.equal(await used(), 3, 'one refund across independent recovery sessions');
+    const pendingFile = keys.get(reserved.find(r => r.attempt.id === pending).attempt.storageKey);
+    await assert.rejects(access(pendingFile), { code: 'ENOENT' });
+    await writeFile(pendingFile, 'late write after lost transport acknowledgement');
+    const afterWatch = new Date(afterBackoff.getTime() + 7 * 60 * 60 * 1000);
+    assert.equal(await recover(a, pending, store, afterWatch), 'completed');
+    assert.equal(await used(), 3, 'tombstone revisit never refunds twice');
+    await assert.rejects(access(pendingFile), { code: 'ENOENT' });
+    await access(keys.get(reserved.find(r => r.attempt.id === committed).attempt.storageKey));
+    // Physical deletion followed by SQL rollback must retain charge and retry safely.
+    await call(a, fenced.attempt.id, true, (tx, id) => cleanup.recoverDocumentReplacementInTransaction(tx, 'owner', id, store));
+    assert.equal(await used(), 3);
+    assert.equal(await recover(a, fenced.attempt.id), 'completed');
+    assert.equal(await used(), 2);
+    // A pending fence created in this same transaction is not sufficient.
+    await insert(c, 'uncommitted-fence', null, 'profile', 'CV');
+    const unsafe = await reserve(a, { ...attemptInput, documentId: 'uncommitted-fence', operationKey: 'unsafe-operation-001' });
+    let forbiddenDeletes = 0;
+    await assert.rejects(call(a, unsafe.attempt.id, false, async (tx, id) => {
+      await attempts.fenceDocumentReplacementCleanupInTransaction(tx, 'owner', id);
+      return cleanup.recoverDocumentReplacementInTransaction(tx, 'owner', id, { delete: async () => { forbiddenDeletes++; } });
+    }), /DOCUMENT_CLEANUP_FENCE_NOT_COMMITTED/);
+    assert.equal(forbiddenDeletes, 0);
+    const unsafePath = path.join(local, `blob-${unsafe.attempt.id}`);
+    keys.set(unsafe.attempt.storageKey, unsafePath); await writeFile(unsafePath, 'synthetic interrupted upload');
+    const beforeTimeout = await used();
+    await c.query(`UPDATE icc."TerraqoUsageBucket" SET used=0 WHERE "ownerKey"='user:owner'`);
+    let invalidFloorDeletes = 0;
+    assert.equal(await recover(a, unsafe.attempt.id, { delete: async () => { invalidFloorDeletes++; } }), 'blocked');
+    assert.equal(invalidFloorDeletes, 0);
+    await c.query(`UPDATE icc."TerraqoUsageBucket" SET used=$1 WHERE "ownerKey"='user:owner'`, [beforeTimeout]);
+    let finishLate;
+    const delayed = new Promise(resolve => { finishLate = resolve; });
+    const slowStore = { delete: async key => { await delayed; await store.delete(key); } };
+    assert.equal(await recover(a, unsafe.attempt.id, slowStore), 'retry');
+    assert.equal(await used(), beforeTimeout);
+    finishLate();
+    await delayed;
+    assert.equal(await recover(a, unsafe.attempt.id, store, new Date(Date.now() + 10 * 60 * 1000)), 'completed');
+    assert.equal(await used(), beforeTimeout - 1);
+    console.log('PASS recovery: real local blob deletion, durable backoff, single concurrent refund, retained committed blob, late-write tombstone sweep without refund, SQL rollback after deletion, uncommitted fence denies I/O');
+    console.log('PASS insufficient quota floor blocks deletion; timed-out delete retains charge until confirmed recovery');
+    console.log('PENDING storage orchestrator/scheduler, shared floor integration, readers/import workers, UI and hosted acceptance; not wired to live routes');
   } finally {
     await Promise.allSettled(sessions.map(c => c.end()));
     if (started) await pg('pg_ctl', ['-D', data, '-m', 'fast', '-w', 'stop']);

@@ -8,7 +8,8 @@ import { DocumentLifecycleError, documentReplacementFingerprint, replaceProfessi
 type FileDescriptor = { fileName: string; contentType: string; size: number; contentSha256: string };
 type Attempt = FileDescriptor & { id: string; documentId: string; professionalProfileId: string; actorId: string;
   operationKey: string; expectedVersion: number; fingerprint: string; storageKey: string; reservedUnits: number;
-  state: "RESERVED" | "COMMITTED" | "CLEANUP_PENDING" | "CLEANED"; resultDocumentId: string | null };
+  state: "RESERVED" | "COMMITTED" | "CLEANUP_PENDING" | "CLEANED"; resultDocumentId: string | null;
+  cleanupAttempts: number; nextAttemptAt: Date | null };
 const conflict = () => new DocumentLifecycleError("El documento o el intento cambiaron. Actualiza el expediente.", 409);
 
 /** Internal only: bounded bytes/signature/hash are validated before this call.
@@ -48,8 +49,7 @@ export async function reserveDocumentReplacementInTransaction(tx: Prisma.Transac
   const plan = billing[0] ? getBillingPlan(billing[0].paidThrough && billing[0].paidThrough > now ? billing[0].planCode : "personal-free")
     : BILLING_PLANS.find(p => p.audience === "PERSONAL" && p.tier === profile.planTier) ?? getBillingPlan("personal-free");
   if (plan.audience !== "PERSONAL") throw conflict();
-  const pending = await tx.$queryRaw<{ units: bigint }[]>(Prisma.sql`SELECT COALESCE(sum("reservedUnits"),0)::bigint AS units FROM icc."TerraqoDocumentReplacementAttempt" WHERE "professionalProfileId"=${profile.id} AND state IN ('RESERVED','CLEANUP_PENDING')`);
-  const floor = await personalRetainedStorageUnits(tx, input.actorId) + Number(pending[0].units);
+  const floor = await documentReplacementStorageFloor(tx, input.actorId, profile.id);
   if (!Number.isSafeInteger(floor) || floor < 0) throw conflict();
   const units = Math.ceil(file.size / 1000000), ownerKey = `user:${input.actorId}`;
   await tx.$executeRaw(Prisma.sql`INSERT INTO icc."TerraqoUsageBucket" (id,"ownerKey",period,metric,used)
@@ -64,7 +64,14 @@ export async function reserveDocumentReplacementInTransaction(tx: Prisma.Transac
   return { kind: "reserved" as const, attempt: rows[0] };
 }
 
-async function lockAttempt(tx: Prisma.TransactionClient, actorId: string, id: string) {
+export async function documentReplacementStorageFloor(tx: Prisma.TransactionClient, actorId: string, profileId: string) {
+  const pending = await tx.$queryRaw<{ units: bigint }[]>(Prisma.sql`SELECT COALESCE(sum("reservedUnits"),0)::bigint AS units FROM icc."TerraqoDocumentReplacementAttempt" WHERE "professionalProfileId"=${profileId} AND state IN ('RESERVED','CLEANUP_PENDING')`);
+  const floor = await personalRetainedStorageUnits(tx, actorId) + Number(pending[0].units);
+  if (!Number.isSafeInteger(floor) || floor < 0) throw conflict();
+  return floor;
+}
+
+export async function lockDocumentReplacementAttempt(tx: Prisma.TransactionClient, actorId: string, id: string) {
   const profiles = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT id FROM icc."TerraqoProfessionalProfile" WHERE "userId"=${actorId} FOR UPDATE`);
   if (!profiles[0]) throw new DocumentLifecycleError("Intento no disponible.", 404);
   const attempts = await tx.$queryRaw<Attempt[]>(Prisma.sql`SELECT * FROM icc."TerraqoDocumentReplacementAttempt" WHERE id=${id} AND "professionalProfileId"=${profiles[0].id} AND "actorId"=${actorId} FOR UPDATE`);
@@ -74,7 +81,7 @@ async function lockAttempt(tx: Prisma.TransactionClient, actorId: string, id: st
 
 /** Invoke only after the store confirms this attempt's bytes. No store I/O here. */
 export async function commitDocumentReplacementInTransaction(tx: Prisma.TransactionClient, actorId: string, id: string) {
-  const row = await lockAttempt(tx, actorId, id);
+  const row = await lockDocumentReplacementAttempt(tx, actorId, id);
   if (row.state !== "RESERVED" && row.state !== "COMMITTED") throw conflict();
   const result = await replaceProfessionalDocumentInTransaction(tx, { actorId, documentId: row.documentId,
     operationKey: row.operationKey, expectedVersion: row.expectedVersion, file: row });
@@ -91,11 +98,12 @@ export async function commitDocumentReplacementInTransaction(tx: Prisma.Transact
 /** Commit this fence before deleting anything. On an uncertain commit, the exact
  * live reference wins. A pending attempt cannot subsequently be finalized.
  */
-export async function fenceDocumentReplacementCleanupInTransaction(tx: Prisma.TransactionClient, actorId: string, id: string) {
-  const row = await lockAttempt(tx, actorId, id);
+export async function fenceDocumentReplacementCleanupInTransaction(tx: Prisma.TransactionClient, actorId: string, id: string, now = new Date()) {
+  const row = await lockDocumentReplacementAttempt(tx, actorId, id);
   const live = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT id FROM icc."TerraqoProfessionalDocument" WHERE "storageKey"=${row.storageKey}`);
   if (live.length || row.state === "COMMITTED") return "retained" as const;
-  if (row.state === "CLEANED") return "cleaned" as const;
-  await tx.$executeRaw(Prisma.sql`UPDATE icc."TerraqoDocumentReplacementAttempt" SET state='CLEANUP_PENDING' WHERE id=${row.id}`);
+  if (row.state === "CLEANED" && row.nextAttemptAt && row.nextAttemptAt > now) return "cleaned" as const;
+  if (row.state === "CLEANUP_PENDING") return "pending" as const;
+  await tx.$executeRaw(Prisma.sql`UPDATE icc."TerraqoDocumentReplacementAttempt" SET state='CLEANUP_PENDING',"nextAttemptAt"=NULL WHERE id=${row.id}`);
   return "pending" as const;
 }

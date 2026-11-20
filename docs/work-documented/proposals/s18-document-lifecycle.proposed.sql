@@ -49,9 +49,12 @@ CREATE TABLE icc."TerraqoDocumentReplacementAttempt" (
   "reservedUnits" INTEGER NOT NULL CHECK ("reservedUnits" >= 0),
   state TEXT NOT NULL DEFAULT 'RESERVED' CHECK (state IN ('RESERVED','COMMITTED','CLEANUP_PENDING','CLEANED')),
   "resultDocumentId" TEXT REFERENCES icc."TerraqoProfessionalDocument"(id) ON DELETE RESTRICT,
+  "cleanupAttempts" INTEGER NOT NULL DEFAULT 0 CHECK ("cleanupAttempts" BETWEEN 0 AND 1000),
+  "nextAttemptAt" TIMESTAMP(3),
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CHECK ((state IN ('COMMITTED','CLEANED') AND "reservedUnits"=0) OR
-    (state IN ('RESERVED','CLEANUP_PENDING') AND "reservedUnits"=ceil(size::numeric/1000000))),
+    (state='RESERVED' AND "reservedUnits"=ceil(size::numeric/1000000)) OR
+    (state='CLEANUP_PENDING' AND "reservedUnits" IN (0,ceil(size::numeric/1000000)))),
   CHECK ((state='COMMITTED' AND "resultDocumentId" IS NOT NULL) OR (state<>'COMMITTED' AND "resultDocumentId" IS NULL))
 );
 CREATE INDEX "DocumentReplacementAttempt_owner_state" ON icc."TerraqoDocumentReplacementAttempt" ("professionalProfileId",state);
@@ -70,13 +73,16 @@ BEGIN
     ) THEN RAISE EXCEPTION 'Invalid attempt owner or initial state' USING ERRCODE='23514'; END IF;
     RETURN NEW;
   END IF;
-  IF (to_jsonb(NEW)-ARRAY['state','reservedUnits','resultDocumentId']) IS DISTINCT FROM
-     (to_jsonb(OLD)-ARRAY['state','reservedUnits','resultDocumentId']) THEN
+  IF (to_jsonb(NEW)-ARRAY['state','reservedUnits','resultDocumentId','cleanupAttempts','nextAttemptAt']) IS DISTINCT FROM
+     (to_jsonb(OLD)-ARRAY['state','reservedUnits','resultDocumentId','cleanupAttempts','nextAttemptAt']) THEN
     RAISE EXCEPTION 'Upload intent is immutable' USING ERRCODE='23514';
   END IF;
   IF (OLD.state='RESERVED' AND NEW.state NOT IN ('RESERVED','COMMITTED','CLEANUP_PENDING')) OR
      (OLD.state='CLEANUP_PENDING' AND NEW.state NOT IN ('CLEANUP_PENDING','CLEANED')) OR
-     (OLD.state IN ('COMMITTED','CLEANED') AND NEW IS DISTINCT FROM OLD) THEN
+     (OLD.state='CLEANED' AND (NEW.state NOT IN ('CLEANED','CLEANUP_PENDING') OR NEW."reservedUnits"<>0)) OR
+     (OLD.state='COMMITTED' AND NEW IS DISTINCT FROM OLD) OR
+     (OLD.state='CLEANUP_PENDING' AND NEW.state='CLEANUP_PENDING' AND NEW."reservedUnits"<>OLD."reservedUnits") OR
+     (OLD.state='RESERVED' AND NEW.state='CLEANUP_PENDING' AND NEW."reservedUnits"<>OLD."reservedUnits") THEN
     RAISE EXCEPTION 'Invalid upload state transition' USING ERRCODE='23514';
   END IF;
   IF NEW.state='COMMITTED' AND NOT EXISTS (
