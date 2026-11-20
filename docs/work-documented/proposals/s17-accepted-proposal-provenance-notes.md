@@ -126,3 +126,156 @@ Required future disposable-PostgreSQL rehearsal (separate authorization):
 
 No remote calls, database application, migrations, Prisma generation, deploys or commits
 were performed. Main worktree/staging candidate was not modified or independently tested.
+
+## Authorized bounded loopback rehearsal — 2026-11-20 (incomplete)
+
+The statements above describe the previous draft-only subtask. The parent explicitly
+authorized a **fresh disposable loopback PostgreSQL cluster** for this follow-up at
+HEAD `612a4225ad8c9cd25745a66428c25d9e41ca4efd`. The draft SQL header's earlier
+no-rehearsal statement is historical scope, not a permanent restriction. No remote
+database, runtime/application source, migration directory, shared client generation,
+dependency installation, push or commit was authorized or performed here.
+
+Added `scripts/test-s17-provenance-local.mjs`. Reproduce from this worktree:
+
+```powershell
+node --check scripts/test-s17-provenance-local.mjs
+node scripts/test-s17-provenance-local.mjs --confirm=local-s17-only
+```
+
+Defaults use the existing sibling `../icc-topografia-s22-evaluator/node_modules`
+and `C:/Program Files/PostgreSQL/18/bin`. Explicit local tool overrides are available:
+
+```powershell
+node scripts/test-s17-provenance-local.mjs --confirm=local-s17-only --dependencies="C:/Users/Binv/Documents/New project/icc-topografia-s22-evaluator" --pg-bin="C:/Program Files/PostgreSQL/18/bin"
+```
+
+The installed `pg` package metadata and connection-parameter implementation were
+inspected first: `pg 8.20.0`. Prisma CLI is `6.19.3`, Node is `v24.15.0`, and the
+actual server reported `PostgreSQL 18.4 on x86_64-windows, compiled by
+msvc-19.44.35226, 64-bit`. No Prisma client is imported by the harness.
+
+The baseline is fetched with `git show
+f0b34c58c54bd92a9af09d66dc9e199cf43354af:prisma/schema.prisma`, not the modified
+worktree schema. It lacks `acceptedProposalId`. The existing CLI runs
+`migrate diff --from-empty --to-schema-datamodel <temporary-baseline.prisma>
+--script` with a sanitized environment and temporary working directory. It only
+produces baseline SQL; it does not use a datasource, migration directory or client
+generator. `pg` then installs that baseline into the newly initialized cluster.
+
+Each attempt uses `mkdtemp`, a dynamically selected IPv4 loopback port, UTF8,
+SCRAM and an ephemeral random password. No inherited app URL is accepted. Before
+schema application, a real connection verifies database/role, server address/port,
+`listen_addresses`, data directory and both client/server encodings. The proposed
+DDL is executed within its BEGIN/ROLLBACK boundary, with fixtures/tests interposed;
+no proposed DDL or fixture transaction is committed. Fixture mutations use synthetic
+IDs, parameterized values and reserved `.invalid` email addresses. Expected denials
+use savepoints to keep the containing transaction usable.
+
+Input and final harness SHA256:
+
+| Artifact | SHA256 |
+| --- | --- |
+| Baseline schema UTF8 text | `c58ad990421aaaf86e6b07c1a268ed991ff8d88d9a551678da9fe1a0234a1d05` |
+| Unmodified proposed SQL | `3a0352368d496ad59a1e9a3064da4c3d3badd6543aaf4a3c694e3b12ef273326` |
+| Final harness | `70d53cac6103bbc9606aba689af7d0497751852d90ed9560a4a81e56a10ade6a` |
+
+### Actual attempts and correction budget
+
+Four executions, with **three harness correction cycles**, were made. The cap is
+exhausted; no fourth correction was made. No functional SQL correction was needed
+by the cases that reached execution.
+
+1. Initial attempt failed server startup. Fix 1 removed the empty Unix-socket option
+   from the Windows `pg_ctl -o` argument, matching the working S16 startup pattern.
+2. Server started, but address verification expected `127.0.0.1` while PostgreSQL's
+   `inet::text` returned `127.0.0.1/32`. Fix 2 used `host(inet_server_addr())`.
+3. Baseline installed and all 157 tables were empty. Synthetic `User` insertion
+   failed `23502`: raw SQL must supply Prisma's client-managed `updatedAt`. Fix 3
+   supplied that value, improved safe diagnostics, and accepted either restrictive
+   guard for a pinned proposal deletion. The observed proposal deletion denial was
+   `23514` from the acceptance guard during cascading deletion.
+4. The final attempt reached the certified-revision DELETE test. PostgreSQL rejected
+   deletion with **`23001` (`restrict_violation`)**, while this test expected `23503`.
+   The harness stopped with exit **1**. This is an overly narrow test expectation;
+   deletion was not permitted. The earlier note's SQLSTATE list is therefore not
+   exhaustive: include `23001` for observed RESTRICT behavior on this server.
+
+Final failure evidence:
+
+```text
+PASS baseline lacks provenance; 157 tables empty; loopback/data-directory/UTF8 verified
+PASS all 7 functions / 6 triggers installed; pre-DDL legacy NULL preserved
+...
+PASS duplicate certificate rejected [23505]
+PASS own cluster stopped; postmaster absent; guarded resolved directory removed
+FAIL S17 local rehearsal
+phase: revision with certificate cannot be deleted
+revision with certificate cannot be deleted: expected 23503, received 23001
+```
+
+All four attempts confirmed their own temporary directory was removed; running
+servers were stopped first. The final behavior transaction executed `ROLLBACK` in
+`finally`. Recursive cleanup checks realpath, exact temporary parent, unique prefix,
+non-symlink directory and absent `postmaster.pid` before removal. Passwords were
+never logged. `node --check` and `git diff --check` passed.
+
+### Proven by actual PostgreSQL execution
+
+- Baseline contains 157 empty tables and no provenance column before rehearsal.
+  Seven functions and six triggers install successfully; all six trigger functions
+  execute in reached cases. Adding the column preserves a pre-DDL legacy row with NULL.
+- Repeating the one-shot DDL in the same transaction fails `42701` without masking drift.
+- Same-collaboration accepted proposal with both correct parties binds successfully,
+  including two revisions sharing one proposal. Cross-collaboration, absent proposal,
+  missing party, incorrect workspace/professional/decision actor and nonaccepted proposal
+  bindings fail `23514`.
+- NULL-to-ID, ID-to-NULL and ID-to-other-ID fail. Pinned revision payload, ID, parent,
+  revision number, creation identity/time and save receipt mutations fail. No-op and
+  status/submit/decision field updates succeed. This tests the SQL allowlist, **not**
+  a domain state machine or caller authorization.
+- Pinned proposal content, identity, acceptance decision evidence and receipts cannot
+  change; status-only transitions succeed. Acceptance mutation/deletion and moves into
+  or out of the pinned proposal fail; duplicate party fails `23505`.
+- Closure identity/reparenting and collaboration workspace/professional/conversation
+  changes fail. Current revision, version, current accepted scope and lifecycle changes
+  remain allowed as designed.
+- Certificate insertion rejects nonaccepted revisions, missing revisions, mismatched
+  parent/proposal/revision/content fields, wrong issuer and nonprivate default. Exact
+  UTF8 source copy succeeds privately. Certificate mutation/reassignment fails; exact
+  no-op succeeds; duplicate certificate fails `23505`. Deleting its revision is also
+  rejected, with `23001` rather than the test's expected `23503`.
+
+### Not yet verified / next bounded continuation
+
+The harness is deliberately reported **failing**, not as a completed gate. The next
+authorized correction should update the restrictive-delete expectations for the
+actual PostgreSQL SQLSTATE, then rerun from a fresh cluster. Review both revision and
+closure DELETE assertions; do not loosen provenance guard assertions indiscriminately.
+
+Because the final execution stopped at the revision DELETE assertion, these existing
+harness sections were **not reached**: closure DELETE rejection, full legacy NULL
+certificate compatibility, real-reference ordered cleanup, protection after deleting
+only one of two bindings, independent post-rollback row/catalog readback, READ COMMITTED
+guard rejection, and failure injection after certificate insertion. They are code,
+not evidence. The wrong-isolation requirement remains an explicit blocker.
+
+The independent reader is intentionally scheduled after rollback. It can check zero
+rows and restoration of the baseline catalog, but cannot prove a committed ordered
+cleanup under installed guards: both guards and fixtures are rolled back. No separate
+session can exercise this uncommitted DDL's SSI behavior. Cross-session race orders,
+`40001`/`40P01` full retries with stable operation keys, application authorization,
+service-level replay/idempotency, and retained-data operational rollback remain pending.
+
+This rehearsal cannot authorize deploying a new Prisma client before the remote column
+exists. Implicit scalar reads can select `acceptedProposalId` even with the writer flag
+off; preserve the ordering in the parent's `s17-writer-integration-gate.md`.
+
+Exact files changed by this follow-up:
+
+- Added `scripts/test-s17-provenance-local.mjs`.
+- Appended this section to `docs/work-documented/proposals/s17-accepted-proposal-provenance-notes.md`.
+
+`s17-accepted-proposal-provenance.proposed.sql` and `prisma/schema.prisma` are unchanged.
+The parent's new `docs/work-documented/proposals/s17-writer-integration-gate.md` was
+read but not modified. No main runtime/source files were changed. No commit was made.
