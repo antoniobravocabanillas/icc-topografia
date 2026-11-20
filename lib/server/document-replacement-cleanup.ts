@@ -1,5 +1,6 @@
 import "server-only";
 import { Prisma, type PrismaClient } from "@prisma/client";
+import { performance } from "node:perf_hooks";
 import { documentReplacementStorageFloor, fenceDocumentReplacementCleanupInTransaction, lockDocumentReplacementAttempt } from "./document-replacement-attempt";
 
 type Store = { delete(key: string): Promise<unknown> };
@@ -53,4 +54,30 @@ export async function recoverDocumentReplacementAttempt(database: Pick<PrismaCli
     // Lost SQL acknowledgements are resolved from durable state on retry.
     return "retry" as const;
   }
+}
+
+/** Dormant dispatcher; wire to authenticated internal scheduling only after the
+ * migration and global quota-floor gates. Returns aggregate counts, no private keys.
+ */
+export async function dispatchDocumentReplacementCleanup(database: Pick<PrismaClient, "$transaction" | "$queryRaw" | "$executeRaw">, store: Store, now = new Date()) {
+  const deadline = performance.now() + 50000;
+  const rows = await database.$queryRaw<{ id: string; actorId: string }[]>(Prisma.sql`
+    SELECT id,"actorId" FROM icc."TerraqoDocumentReplacementAttempt"
+    WHERE (state='RESERVED' AND "createdAt"<=${new Date(now.getTime() - 10 * 60 * 1000)})
+      OR (state IN ('CLEANUP_PENDING','CLEANED') AND ("nextAttemptAt" IS NULL OR "nextAttemptAt"<=${now}))
+    ORDER BY COALESCE("nextAttemptAt","createdAt"),id LIMIT 5`);
+  const counts = { completed: 0, retained: 0, retry: 0, blocked: 0, skipped: 0, cleaned: 0, pending: 0, deferred: 0 };
+  for (const row of rows) {
+    // Admission bound for two 5s-lock/15s-execution transactions, not cancellation.
+    if (deadline - performance.now() < 40000) { counts.deferred++; continue; }
+    const result = await recoverDocumentReplacementAttempt(database, row.actorId, row.id, store, now);
+    counts[result]++;
+    if (result === "blocked" || result === "retained") {
+      // Avoid monopolizing subsequent batches; never change owner/state/charge.
+      await database.$executeRaw(Prisma.sql`UPDATE icc."TerraqoDocumentReplacementAttempt"
+        SET "nextAttemptAt"=${new Date(now.getTime() + watchInterval)}
+        WHERE id=${row.id} AND "actorId"=${row.actorId} AND state='CLEANUP_PENDING'`);
+    }
+  }
+  return counts;
 }

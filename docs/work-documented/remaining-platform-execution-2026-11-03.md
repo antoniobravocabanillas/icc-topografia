@@ -1,5 +1,9 @@
 # Remaining platform execution — 3 November 2026
 
+## 20 de noviembre — S18: carga integrada y despachador de limpieza internos
+
+Orquestador conecta validación/hash, reserva, escritura y confirmación; despachador acotado recupera intentos pendientes/abandonados y revisita tombstones. PostgreSQL + archivos locales reales PASS, incluidos recibo sin recobro, respuesta SQL perdida, timeout y escritura tardía sin confirmación posterior. TypeScript/ESLint PASS. Sin endpoint/scheduler activado ni despliegue. Próximo: esquema y pisos globales de cuota, barreras de lectura/importación, compatibilidad de Office/borrado de cuenta y API/UI antes de staging. Detalle actualizado en `proposals/s18-document-lifecycle.md`.
+
 ## 20 de noviembre — S18: recuperación de archivos y devolución única de capacidad
 
 Recuperación implementada con marca de limpieza confirmada antes de borrar, protección de archivo vigente, timeout/backoff y devolución de capacidad una sola vez. Tombstones sin cargo conservan vigilancia para escrituras tardías. PostgreSQL y archivos locales reales PASS, incluidas carreras, rollback después de borrar y cuota inconsistente. TypeScript/ESLint PASS. Falta conectar escritura/despachador y pisos globales de cuota, además de lectores/UI/staging; no hay limpieza automática ejecutándose ni cambios remotos. Ver `proposals/s18-document-lifecycle.md`.
