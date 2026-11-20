@@ -121,7 +121,9 @@ export async function verifyDisclosureJourney(input: { origin: string; collabora
     s.company.request.post(origin + `${base}/${race.id}/decision?view=workspace`, { headers: { Origin: origin, "Idempotency-Key": randomUUID() }, data: { action: "REVOKE", expectedDigest: race.digest } }),
   ]);
   assert.ok([200, 409].includes(outcomes[0].status())); assert.equal(outcomes[1].status(), 200); await read(race);
-  const expiresAt = new Date(Date.now() + 12000);
+  // Hosted cold starts and two independent consent transactions must finish before
+  // expiry; still wait for the real deadline and assert denial afterwards.
+  const expiresAt = new Date(Date.now() + (new URL(origin).hostname === "terraqo-platform-staging.netlify.app" ? 90_000 : 12_000));
   const short = await create({ destination: "INVITED", fields: ["scope"], recipientEmail: recipient.email, expiresAt: expiresAt.toISOString() });
   await decide(short, "company", "APPROVE"); await decide(short, "professional", "APPROVE"); await read(short, s.other, 200);
   await new Promise(r => setTimeout(r, Math.max(0, expiresAt.getTime() - Date.now() + 100)));

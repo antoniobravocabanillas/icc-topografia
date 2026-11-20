@@ -1,6 +1,6 @@
 # S17 provenance staging candidate
 
-Latest local continuation: see [disclosure preparation](s17-disclosure-preparation.md). Authenticated local viewport rerun passed; full-page bar crossing was not reproduced in native viewport views. Canonical immutable certificate-field disclosure preparation and tests added, but no consent persistence/API/sharing exists yet. No further deployment or hosted migration. Next block: local transactional disclosure schema/service and dual-consent matrix.
+Latest continuation: [disclosure release gate](s17-disclosure-release-gate.md) supersedes the preparation-only checkpoint. Migration50 is applied and the authorized code is served in staging. Separate hosted real-login disclosure matrix PASS and independently verified DB/blob/pilot cleanup; mobile/desktop inspected. Combined Netlify runner emitted no terminal gate receipt, which remains an explicit tooling limitation rather than a passing receipt. Next: S18 PDF acceptance inventory. Production unchanged.
 
 ## 20 November 2026 — authorized S17 staging migration and hosted controls PASS
 

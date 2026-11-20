@@ -1,5 +1,13 @@
 # Remaining platform execution — 3 November 2026
 
+## 20 de noviembre — Migración50 aplicada y candidato de consentimiento servido en staging
+
+Autorización específica recibida y ejecutada: proyecto `mghdpciewbsowjrjwmwk`, ledger50 sin migraciones incompletas; backup fresco restaurado y 158 tablas conservadas. Runtime servido `a187f7c9ebb8ddc7af3a3af71109dcd98bbd3b65`, árbol idéntico al candidato autorizado `70efdb3`, deploy `6b0071c2c0bc5284f750dc3e`. Solo staging; producción intacta. Este checkpoint sustituye las indicaciones históricas de migración50 no aplicada.
+
+El build de Netlify terminó sin recibo terminal del plugin de pruebas; ese recibo NO se marca PASS. La matriz separada de consentimiento contra el mismo runtime terminó exit0: doble autorización UI, campos exactos, destinatario verificado, vencimiento real, revocación, membresía vigente, idempotencia/concurrencia, CSRF/límite de cuerpo e inmutabilidad SQL. Capturas autenticadas móvil/escritorio inspeccionadas. Limpieza independiente del run `be3a5877-e7fa-4208-b44f-6685893d7726` PASS: cero fixtures, cuatro blobs ausentes, piloto exacto retirado, invitación previa conservada. Gate sintético apagado; candidato servido confirmado. TypeScript/ESLint/diff-check PASS. Ver `proposals/s17-disclosure-release-gate.md` para evidencias y límites.
+
+Siguiente bloque: revisar criterios S18 del PDF y el inventario restante de lanzamiento. El reporte automático del gate combinado sigue como pendiente de herramientas de release; no confundir la matriz alojada separada con un recibo inexistente del plugin. Producción sigue sin cambios.
+
 ## 20 de noviembre — Compartir constancia S17: controles locales PASS; staging pendiente
 
 Este checkpoint sustituye el pendiente de implementacion de compartir constancias de las entradas historicas. Persistencia separada, seleccion exacta, autorizacion explicita de empresa y profesional, acceso publico/invitado, vencimiento y revocacion estan implementados localmente. Migracion50 propuesta `20261120000200_certificate_disclosure_consent`, NO aplicada remotamente. No confundir autorizacion anterior de migracion49 con esta nueva.
