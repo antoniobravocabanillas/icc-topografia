@@ -47,15 +47,38 @@ function run(stage, { utils }) {
   if (result.status !== 0) {
     const fail = stage === "verify" ? utils.build.failPlugin : utils.build.failBuild;
     fail(`Staging ${stage} failed; production release remains blocked. ${JSON.stringify({ locations, codes, attentionSteps: attentionSteps.slice(-12) })}`);
+    return false;
   } else if (s22 && stage === "prepare" && process.env.S24_STAGING_DIAGNOSTIC_TARGET && process.env.S24_STAGING_DIAGNOSTIC_TARGET !== "off") {
     utils.build.cancelBuild("S24 staging diagnostic completed; the existing deploy remains active.");
+    return false;
   } else if (stage === "verify" && utils.status?.show) {
     utils.status.show({ title: "Staging gate verified", summary: `PASS ${process.env.S16_COLLABORATION_GATE === "synthetic-only" ? "S16/S17 controls (fixture-media cleanup and final review required)" : process.env.S15_STAGING_CONVERSATION_GATE === "conversation" ? "S15 journey (operator media cleanup required)" : process.env.S14_STAGING_EVALUATION_GATE === "evaluation" ? "S14 evaluation" : process.env.S13_STAGING_DISCOVERY_GATE === "discovery" ? "S13 discovery" : process.env.S12_STAGING_NEED_GATE === "need" ? "S12 need" : process.env.S11_STAGING_RECORD_GATE === "record" ? "S11 record" : process.env.S10_STAGING_ARCHIVE_GATE === "archive" ? "S10 archive" : process.env.S09_STAGING_VISITOR_GATE === "visitor" ? "S09 visitor" : process.env.S08_STAGING_REVIEW_GATE === "review" ? "S08 review" : process.env.S07_STAGING_ENDORSEMENT_GATE === "request" ? "S07 endorsement" : process.env.S06_STAGING_VISIBILITY_GATE === "visibility" ? "S06 visibility" : process.env.PLATFORM_STAGING_CLOUD_PHASE}; commit=${process.env.COMMIT_REF}; deploy=${process.env.DEPLOY_ID}` });
+  }
+  return true;
+}
+
+function prepare(context) {
+  const diagnostic = process.env.S17_HOSTED_DIAGNOSTIC_TARGET;
+  const enabled = diagnostic && diagnostic !== "off";
+  if (enabled && (diagnostic !== "ab8b64f23d5262c28eab417771124bff8ac35190/6b002b7657e67f04e799cbec" ||
+      process.env.SITE_ID !== stagingSite || process.env.NETLIFY !== "true" ||
+      process.env.CONTEXT !== "production" || process.env.BRANCH !== "codex/s17-staging-7302dba" ||
+      process.env.PLATFORM_STAGING_CLOUD_PHASE !== "workspace-administration" ||
+      ["S24_STAGING_DIAGNOSTIC_TARGET", "S24_STAGING_RECOVER_INTERRUPTED"].some(key =>
+        process.env[key] !== undefined && process.env[key] !== "off") || !context.netlifyConfig?.build)) {
+    context.utils.build.failBuild("S17 hosted diagnostic rejected: isolated staging target and normal preflight required.");
+    return;
+  }
+  // Keep the ordinary commit/destination/ledger preflight. Only a successful
+  // preflight may replace this build's command; no persistent site config changes.
+  if (run("prepare", context) === true && enabled) {
+    context.netlifyConfig.build.command = "node --import tsx scripts/run-s17-hosted-diagnostic.ts";
+    console.log("S17 diagnostic build command selected; PASS intentionally exits 42 before publication.");
   }
 }
 
 module.exports = {
-  onPreBuild: (context) => run("prepare", context),
+  onPreBuild: prepare,
   // Post-deploy verification of the isolated site. This does not approve or
   // prevent a production deploy; the separate release gate consumes its result.
   onSuccess: (context) => run("verify", context),
