@@ -1,5 +1,13 @@
 # S17 — Certificate disclosure release gate
 
+## Authorized staging execution — 20 November
+
+User explicitly authorized migration50 and candidate `70efdb368489d97e55fd475f5968def8003f4f91` for staging. Migration50 is now applied, not merely proposed. Project identity and engine 17.11 were checked live; independent readback confirms ledger50, unfinished0, two invoker functions/three enabled triggers, restricted ACLs, exact preexisting grantor memberships with SET=false, one invitation retained, and empty new disclosure/event tables. Supabase security advisors returned no findings.
+
+Fresh backup: `output/s24-backup-1795190969633`, SHA256 `28a1866417f42575367beb181cc99164d66eb72af87d86476196867c550d5837`. Restored to an owned local PostgreSQL18 cluster; 158 complete row multisets preserved, late permission failure rolled back all DDL/ledger/role changes, duplicate application rejected, restricted runtime read verified. Cluster stopped and removed. Evidence: `output/s17-disclosure/restore-evidence.json`. Migration checksum `90670355b1b93f2ec850ac28e55d4a346f9c0ce160df43aaefe6a90cbc1aed3d`; atomic operator artifact SHA256 `e16bdcc8358afc5b21157932e5ac345777caa9089733832c3013ec73056b05e5`.
+
+Release checkout: `icc-topografia-s17-disclosure-staging`, isolated clone, branch `codex/s22-evaluator-local`. Release commit `a187f7c9ebb8ddc7af3a3af71109dcd98bbd3b65` has exactly the tree of authorized `70efdb3` and adds the prior remote branch tip `c5598dc` as a second parent. This preserves remote history with a normal fast-forward push; no force push or runtime code change. Only the staging site's configured branch was updated. Deploy `6b0071c2c0bc5284f750dc3e` requested with disclosure flag enabled, mail disabled and synthetic pilot `s13-need-a187f7c9ebb8ddc7`. Blob run `52019a95-23c1-4607-a9a0-e26988915cb1` must be cleaned after the hosted gate. Hosted validation pending at this checkpoint. Production is excluded.
+
 ## Scope
 
 Separate certificate sharing, not worklog publication: immutable selected fields and audience, explicit professional and company approvals of the same digest, public or identity-bound invited access, expiry and permanent revocation. The original certificate remains private. Attachments keep their independent authorization. No automatic mail, CV listing, payments or production operations.
