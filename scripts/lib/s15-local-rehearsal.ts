@@ -118,4 +118,3 @@ rehearse().catch(error => {
     expected: typeof diagnostic.expected === "number" ? diagnostic.expected : undefined });
   process.exitCode = 1;
 });
-
