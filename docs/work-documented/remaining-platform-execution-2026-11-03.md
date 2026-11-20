@@ -1,5 +1,11 @@
 # Remaining platform execution — 3 November 2026
 
+## 19 de noviembre — S13 validada en staging
+
+Netlify confirmó el plan Personal activo y completó el deploy `6affc4f04e7f96dd4744b7a5` del candidato `0eb38802d3ee08dfd88f45ba0c35737bb906496e`. El plugin registró `PASS S13 discovery`. El recorrido autenticado tardó 4m 24.7s y verificó filtros, agrupación por trabajo, selección del permiso exacto, imágenes y descargas byte a byte, y retirada del resultado y resumen derivado al revocar la fuente. Se comprobaron anchos de 1440, 375 y 320 px.
+
+La ejecución `1292b55c-d5b5-41e0-9242-264e2aed562b` confirmó la limpieza mediante conexión independiente. Se retiró el piloto temporal y se verificó la ausencia de los cuatro blobs de ensayo. El marcador servido coincide con el candidato y deploy indicados. El bloqueo por cuota está resuelto. La siguiente pantalla es S14, evaluación y analizador.
+
 ## 15 de noviembre — S13, descubrimiento de experiencia relacionada
 
 El candidato `6aab5e234f3e3e3d4aaafcfa9921fcb362db0e9c` pasó TypeScript, ESLint y los contratos de descubrimiento, análisis y permisos. Chromium local con dos sesiones autenticadas y PostgreSQL ejercitó filtros y agrupación por trabajo, fechas de Lima, disponibilidad publicada, vistas previas autorizadas y guardado de la versión y el permiso exactos en la evaluación. Tras revocar la selección, dejaron de mostrarse el resultado y el resumen derivado. El reintento de guardado recibió 409. Se probaron anchos de 1440, 375 y 320 px.
