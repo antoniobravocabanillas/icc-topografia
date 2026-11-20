@@ -1,5 +1,19 @@
 # S17 provenance staging candidate
 
+## 20 November 2026 — authorized S17 staging migration and hosted controls PASS
+
+Supersedes earlier pending-authorization/deployment checkpoints. User explicitly authorized migration `20261120000100_closure_accepted_proposal_provenance` and staging-only deployment. Applied after backup/restore rehearsal; independent Supabase readback: 49 completed migrations, zero unfinished, zero test workspaces, one existing invitation preserved. Production unchanged.
+
+Served functional candidate `ab8b64f23d5262c28eab417771124bff8ac35190` (7302dba plus staging branch allowlist), deploy `6b002b7657e67f04e799cbec`. Isolated checkout: `icc-topografia-s17-staging`, branch `codex/s17-staging-7302dba`. Initial hosted gate timed out; its database fixtures and four media objects were removed and independently verified.
+
+Independent diagnostic `4004fb8a7f2410068ef884d5f7eade1ddc672bbf`, deploy `6b0033308ff8c0ddd1c7ff39`, ran the unchanged authenticated journey against the served candidate. Run `24f6fcf1-4268-464e-9552-f350132e805f`: controlsPassed=true, correction/resubmission/history/exact private certificate, cancellation/replay and anonymous/other-tenant isolation passed. Cleanup independent readback passed. Diagnostic intentionally exits 42 AFTER PASS to prevent publication; Netlify's failed diagnostic build is expected and does not replace the served runtime. Do not publish diagnostic commit.
+
+Evidence in isolated staging checkout: `output/s17-diagnostic-full.json`, `output/s17-diagnostic-pass.json`, `output/s17-hosted-visuals/`. Two exported PNGs passed size/signature/SHA256 checks and were visually inspected (375px private certificate, 1440px company reference). These full-page captures show navigation/branding overlays crossing content; verify in normal viewport/scroll before attributing this to live layout, and correct confirmed overlap. No global UX approval: uxPass=false and phaseComplete=false.
+
+Four media objects from run `305a9556-65d7-4afb-b7f7-544eb7ffc859` removed; strong readback all absent. Diagnostic flags disabled, both owned pilot IDs removed, other pilots preserved, served candidate configuration restored without deployment.
+
+Next: verify/correct responsive overlays, then implement separately typed certificate disclosure with exact immutable scope and dual authorization; existing worklog publication is not certificate sharing. S17 remains open; do not advance S18 as if complete. Further schema changes require their own authorization.
+
 Runtime candidate: `7302dba68937028289eb0615e4cd5d659eb1c556`, branch `codex/s17-closure-provenance`.
 
 Destination: Terraqo Platform Staging, Netlify site `6b8c43fb-6083-450a-9b85-46a820fb6358`, Supabase project `mghdpciewbsowjrjwmwk`. Production is excluded. User explicitly authorized this migration and staging validation on 20 November 2026.
