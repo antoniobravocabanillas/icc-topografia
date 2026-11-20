@@ -1,5 +1,15 @@
 # Remaining platform execution — 3 November 2026
 
+## 19 de noviembre — S14, evaluación privada validada en staging
+
+Netlify registró `PASS S14 evaluation` para `e04a9c0c50ac35115e2dab8c86506b08621eee33`, deploy `6affca50b1a951c8ff948a23`. El marcador servido coincide. El recorrido alojado duró 4m 34.5s. Se guardaron criterios, notas y preguntas editables desde Chromium autenticado, se comprobó persistencia, reintentos idempotentes y conflictos 409. Los lectores anónimos, el profesional y otra empresa fueron rechazados en las operaciones privadas.
+
+La pantalla sigue la composición navy en dos columnas del PDF. El visor abre en la página la versión exacta mediante una lectura con permisos vigentes y campos limitados al alcance original. La prueba usó una selección con solo título y otro acceso más amplio en paralelo. Revocar la selección devolvió 410, ocultó la fuente, el criterio y el resumen derivados, y mantuvo disponible la toma de notas manual. Se comprobaron anchos de 1440, 375 y 320 px. TypeScript, ESLint, los contratos existentes y la revisión visual local pasaron.
+
+La ejecución `45523fa3-68cb-41bf-abaa-20f0430df227` confirmó limpieza mediante conexión independiente. Se retiró el piloto temporal y se confirmó la ausencia de los cuatro blobs de ensayo.
+
+**Alcance pendiente del analizador.** Staging mantiene `TERRAQO_EVIDENCE_ANALYSIS_V1=false` y proveedor `off`. Se validó el recorrido manual y el rechazo 404 del análisis deshabilitado. Los estados de procesando, error, insuficiencia y revocación, así como la apertura de citas, se ejercitaron en la interfaz local con respuestas sintéticas. La generación real con proveedor externo y el fallo real 503 de un proveedor habilitado siguen pendientes. S15 es la siguiente pantalla del plan; conservar este pendiente de S14 en el cierre global.
+
 ## 19 de noviembre — S13 validada en staging
 
 Netlify confirmó el plan Personal activo y completó el deploy `6affc4f04e7f96dd4744b7a5` del candidato `0eb38802d3ee08dfd88f45ba0c35737bb906496e`. El plugin registró `PASS S13 discovery`. El recorrido autenticado tardó 4m 24.7s y verificó filtros, agrupación por trabajo, selección del permiso exacto, imágenes y descargas byte a byte, y retirada del resultado y resumen derivado al revocar la fuente. Se comprobaron anchos de 1440, 375 y 320 px.
