@@ -2,7 +2,15 @@
 
 Runtime candidate: `7302dba68937028289eb0615e4cd5d659eb1c556`, branch `codex/s17-closure-provenance`.
 
-Destination: Terraqo Platform Staging, Netlify site `6b8c43fb-6083-450a-9b85-46a820fb6358`, Supabase project `mghdpciewbsowjrjwmwk`. Production is excluded. New migration authorization is pending; this document is not authorization.
+Destination: Terraqo Platform Staging, Netlify site `6b8c43fb-6083-450a-9b85-46a820fb6358`, Supabase project `mghdpciewbsowjrjwmwk`. Production is excluded. User explicitly authorized this migration and staging validation on 20 November 2026.
+
+## Authorized execution checkpoint
+
+Migration applied successfully through the project-bound Supabase connector. Ledger 48 to 49, zero unfinished rows, independent read-only catalog/permission checks passed; seven invoker functions, six enabled guards, nullable column, RESTRICT FK/index and one existing invitation retained. Security advisors returned no findings. Artifact SHA256 `3580a413f2c7c961afbcc493c6100069b3e213ecd5f4295b0882172f7c92a137`; migration source checksum `56427a907bb22ec6b4637eccaa43c8eb629b5274d95b79cf102cd4eec73197f9`.
+
+Fresh backup `output/s24-backup-1795172755601`, SHA256 `68f5156145fd42834e4e4c1c69928b1b572b4819c1041ce37793ef43c1cb08c5`, restored and migrated locally before remote execution: all 158 tables/59 existing rows preserved, late-error rollback and duplicate rejection verified. Two existing postgres-to-migrator grantor memberships preserved exactly, including inherited access; SET remains false. This backup had zero legacy closure revisions; their behavior is covered by earlier synthetic invariant/service tests, not by this backup. Local engine 18.4; hosted engine 17.11 independently verified after application.
+
+Hosted candidate `ab8b64f23d5262c28eab417771124bff8ac35190` adds only the isolated staging branch to the runner allowlist on top of functional candidate 7302dba. Branch `codex/s17-staging-7302dba`; deploy `6b002b7657e67f04e799cbec`. Hosted gate pending at this checkpoint. Local operator wrappers preserve the existing fixed site/repository checks with this branch; only the staging site branch was changed. Synthetic blob run `39493d3a-830a-4eaa-8fb2-aaa2cb414716` requires cleanup after the hosted gate. No production changes.
 
 ## Promotion order
 
