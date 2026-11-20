@@ -1,5 +1,9 @@
 # Remaining platform execution — 3 November 2026
 
+## 20 de noviembre — S18: rutas autenticadas y acciones documentales en línea
+
+Retiro/reemplazo conectados a adaptadores HTTP, apagados por defecto mediante TERRAQO_DOCUMENT_LIFECYCLE_V1. Pruebas de sesión/origen/cuerpo real/campos duplicados PASS. Interfaz de documentos complementarios incorpora confirmación sin modal, reintento idempotente, conflicto y retiro inmediato; revisión local desktop/móvil detectó y corrigió desbordamiento. TypeScript/ESLint/detector PASS. No activar ni desplegar aún: faltan Office/CV, retención, programación de limpieza, migración y aceptación alojada. Detalles y límites de la evidencia en proposals/s18-document-lifecycle.md.
+
 ## 20 de noviembre — S18: retiro efectivo en descargas e importación
 
 Descargas web/nativas e importación de CV bloquean documentos retirados, incluida publicación tardía del extractor. Eliminación antigua protege linaje e intentos conservados. PostgreSQL real, rutas/servicios con dobles controlados, regresión nativa, TypeScript y ESLint PASS. Sin cambios remotos. Próximo: Office/retención, API/UI y programación de limpieza, preparación de migración y aceptación autenticada en staging. No desplegar este candidato contra el esquema anterior. Detalle: `proposals/s18-document-lifecycle.md`.

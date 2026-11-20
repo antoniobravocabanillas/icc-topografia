@@ -1,5 +1,6 @@
 "use client";
 
+import { DocumentLifecycleActions } from "./document-lifecycle-actions";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useRef, useState } from "react";
@@ -16,9 +17,13 @@ type ProfessionalDocument = {
   reviewStatus: "SUBMITTED" | "VERIFIED" | "REJECTED";
   reviewNote: string | null;
   uploadedAt: Date | string;
+  withdrawnAt?: Date | string | null;
+  lifecycleVersion?: number;
+  replacesDocumentId?: string | null;
 };
 
 type ProfessionalDocumentUploaderProps = {
+  lifecycleEnabled?: boolean;
   identityStatus: "PENDING_DOCUMENTS" | "UNDER_REVIEW" | "VERIFIED" | "REJECTED";
   identityNote: string | null;
   documents: ProfessionalDocument[];
@@ -43,7 +48,7 @@ const identityCopy = {
   }
 } as const;
 
-export function ProfessionalDocumentUploader({ identityStatus, identityNote, documents }: ProfessionalDocumentUploaderProps) {
+export function ProfessionalDocumentUploader({ identityStatus, identityNote, documents, lifecycleEnabled = false }: ProfessionalDocumentUploaderProps) {
   const router = useRouter();
   const cvFormRef = useRef<HTMLFormElement>(null);
   const identityFormRef = useRef<HTMLFormElement>(null);
@@ -51,7 +56,10 @@ export function ProfessionalDocumentUploader({ identityStatus, identityNote, doc
   const [busy, setBusy] = useState<"cv" | "identity" | "document" | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [preview, setPreview] = useState<ProfessionalDocument | null>(null);
-  const latestCv = documents.find((document) => document.type === "CV");
+  const [retired, setRetired] = useState<string[]>([]);
+  const isWithdrawn = (document: ProfessionalDocument) => Boolean(document.withdrawnAt) || retired.includes(document.id);
+  const isSuperseded = (document: ProfessionalDocument) => documents.some(item => item.replacesDocumentId === document.id);
+  const latestCv = documents.find((document) => document.type === "CV" && !isWithdrawn(document));
   const statusCopy = identityCopy[identityStatus];
 
   async function upload(form: HTMLFormElement, purpose: "cv" | "identity" | "document") {
@@ -95,8 +103,8 @@ export function ProfessionalDocumentUploader({ identityStatus, identityNote, doc
   const privateDocuments = documents.filter((document) => !["CV", "DNI_FRONT", "DNI_BACK"].includes(document.type));
 
   return (
-    <div id="documentos-datos" className="grid scroll-mt-24 gap-6 xl:grid-cols-2">
-      <Card>
+    <div id="documentos-datos" className="grid min-w-0 grid-cols-1 scroll-mt-24 gap-6 xl:grid-cols-2">
+      <Card className="min-w-0">
         <CardHeader>
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -117,10 +125,10 @@ export function ProfessionalDocumentUploader({ identityStatus, identityNote, doc
               <Button asChild variant="outline" className="w-full"><Link href="/portal/experiencias/importar"><FileText className="mr-2 h-4 w-4" /> Leer datos y completar mi perfil</Link></Button>
             </div>
           ) : null}
-          <form ref={cvFormRef} className="grid gap-3" onSubmit={(event) => { event.preventDefault(); void upload(event.currentTarget, "cv"); }}>
-            <label className="grid gap-2 text-sm font-semibold">
+          <form ref={cvFormRef} className="grid min-w-0 gap-3" onSubmit={(event) => { event.preventDefault(); void upload(event.currentTarget, "cv"); }}>
+            <label className="grid min-w-0 gap-2 text-sm font-semibold">
               PDF, DOC o DOCX (maximo 10 MB)
-              <input name="cvFile" type="file" accept=".pdf,.doc,.docx" required className="rounded-md border bg-background p-3 font-normal" />
+              <input name="cvFile" type="file" accept=".pdf,.doc,.docx" required className="w-full min-w-0 rounded-md border bg-background p-3 font-normal" />
             </label>
             <Button type="submit" disabled={busy !== null}>
               {busy === "cv" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
@@ -150,15 +158,15 @@ export function ProfessionalDocumentUploader({ identityStatus, identityNote, doc
           </div>
           {identityNote ? <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Observacion: {identityNote}</p> : null}
           {identityStatus !== "VERIFIED" ? (
-            <form ref={identityFormRef} className="grid gap-3" onSubmit={(event) => { event.preventDefault(); void upload(event.currentTarget, "identity"); }}>
+            <form ref={identityFormRef} className="grid min-w-0 gap-3" onSubmit={(event) => { event.preventDefault(); void upload(event.currentTarget, "identity"); }}>
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="grid gap-2 text-sm font-semibold">
+                <label className="grid min-w-0 gap-2 text-sm font-semibold">
                   DNI por delante
-                  <input name="dniFront" type="file" accept="image/jpeg,image/png,image/webp,.pdf" required className="rounded-md border bg-background p-3 font-normal" />
+                  <input name="dniFront" type="file" accept="image/jpeg,image/png,image/webp,.pdf" required className="w-full min-w-0 rounded-md border bg-background p-3 font-normal" />
                 </label>
-                <label className="grid gap-2 text-sm font-semibold">
+                <label className="grid min-w-0 gap-2 text-sm font-semibold">
                   DNI por detras
-                  <input name="dniBack" type="file" accept="image/jpeg,image/png,image/webp,.pdf" required className="rounded-md border bg-background p-3 font-normal" />
+                  <input name="dniBack" type="file" accept="image/jpeg,image/png,image/webp,.pdf" required className="w-full min-w-0 rounded-md border bg-background p-3 font-normal" />
                 </label>
               </div>
               <Button type="submit" variant="outline" disabled={busy !== null}>
@@ -170,23 +178,23 @@ export function ProfessionalDocumentUploader({ identityStatus, identityNote, doc
         </CardContent>
       </Card>
 
-      <Card className="xl:col-span-2">
+      <Card className="min-w-0 xl:col-span-2">
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><FileBadge2 className="h-5 w-5 text-primary" /> Documentos y datos profesionales</CardTitle>
           <CardDescription className="mt-2 max-w-3xl">Organiza antecedentes penales, antecedentes policiales, Certiadulto y SCTR. Tu expediente pertenece a tu perfil personal y permanece privado; no necesitas estar vinculado a una empresa.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
-          <form ref={privateFormRef} className="grid content-start gap-3 rounded-lg border bg-muted/20 p-4" onSubmit={(event) => { event.preventDefault(); void upload(event.currentTarget, "document"); }}>
-            <label className="grid gap-2 text-sm font-semibold">Categoria
-              <select name="documentType" required className="h-11 rounded-md border bg-background px-3 font-normal">
+          <form ref={privateFormRef} className="grid min-w-0 content-start gap-3 rounded-lg border bg-muted/20 p-4" onSubmit={(event) => { event.preventDefault(); void upload(event.currentTarget, "document"); }}>
+            <label className="grid min-w-0 gap-2 text-sm font-semibold">Categoria
+              <select name="documentType" required className="h-11 w-full min-w-0 rounded-md border bg-background px-3 font-normal">
                 <option value="CRIMINAL_RECORD">Antecedentes penales</option>
                 <option value="CERTIFICATE">Antecedentes policiales</option>
                 <option value="PROFESSIONAL_LICENSE">Certiadulto</option>
                 <option value="MEDICAL_EXAM">SCTR</option>
               </select>
             </label>
-            <label className="grid gap-2 text-sm font-semibold">Archivo para expediente
-              <input name="documentFile" type="file" accept="image/jpeg,image/png,image/webp,.pdf" required className="rounded-md border bg-background p-3 font-normal" />
+            <label className="grid min-w-0 gap-2 text-sm font-semibold">Archivo para expediente
+              <input name="documentFile" type="file" accept="image/jpeg,image/png,image/webp,.pdf" required className="w-full min-w-0 rounded-md border bg-background p-3 font-normal" />
             </label>
             <p className="text-xs leading-5 text-muted-foreground">PDF, JPG, PNG o WEBP, maximo 10 MB. No ingreses numeros de cuenta en texto libre; utiliza una constancia emitida por tu entidad bancaria.</p>
             <Button type="submit" disabled={busy !== null}>{busy === "document" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}Agregar al expediente</Button>
@@ -195,12 +203,14 @@ export function ProfessionalDocumentUploader({ identityStatus, identityNote, doc
           <div className="min-w-0">
             <div className="grid gap-3 sm:grid-cols-2">
               {privateDocuments.map((document) => (
-                <article key={document.id} className="flex min-h-28 flex-col justify-between rounded-lg border bg-background p-4">
+                <article key={document.id} className="flex min-w-0 min-h-28 flex-col justify-between rounded-lg border bg-background p-4">
                   <div><p className="text-xs font-bold uppercase text-primary">{labels[document.type]}</p><p className="mt-2 truncate text-sm font-semibold">{document.fileName}</p><p className="mt-1 text-xs text-muted-foreground">{document.reviewStatus === "VERIFIED" ? "Verificado" : document.reviewStatus === "REJECTED" ? "Requiere correccion" : "Pendiente de revision"}</p></div>
-                  <div className="mt-4 flex flex-wrap gap-3">
+                  {!isWithdrawn(document) ? <div className="mt-4 flex flex-wrap gap-3">
                     <button type="button" onClick={() => setPreview(document)} className="inline-flex items-center gap-2 text-sm font-bold text-primary"><Eye className="h-4 w-4" /> Ver dentro del portal</button>
                     <a href={`/api/terraqo/professional-documents/${document.id}`} className="inline-flex items-center gap-2 text-sm font-bold text-primary"><Download className="h-4 w-4" /> Descargar</a>
-                  </div>
+                  </div> : <p className="mt-4 text-sm text-muted-foreground">Retirado · Historial conservado</p>}
+                  {isSuperseded(document) ? <p className="mt-3 text-sm text-muted-foreground">Versión anterior · Historial conservado</p> : null}
+                  {lifecycleEnabled && !isWithdrawn(document) && !isSuperseded(document) && document.lifecycleVersion ? <DocumentLifecycleActions key={`${document.id}:${document.lifecycleVersion}`} id={document.id} version={document.lifecycleVersion} onWithdrawn={() => setRetired(items => [...items, document.id])} /> : null}
                 </article>
               ))}
             </div>

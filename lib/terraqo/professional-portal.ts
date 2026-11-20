@@ -30,7 +30,7 @@ export async function requireProfessionalPortal() {
       },
       documents: {
         orderBy: { uploadedAt: "desc" },
-        select: { id: true, type: true, fileName: true, contentType: true, size: true, reviewStatus: true, reviewNote: true, uploadedAt: true }
+        select: { id: true, type: true, fileName: true, contentType: true, size: true, reviewStatus: true, reviewNote: true, uploadedAt: true, withdrawnAt: true, lifecycleVersion: true, replacesDocumentId: true }
       },
       worklogs: {
         where: { deletedAt: null },

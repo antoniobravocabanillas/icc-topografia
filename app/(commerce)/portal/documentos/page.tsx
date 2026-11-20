@@ -16,7 +16,7 @@ export default async function DocumentsPage() {
         title="Tu carpeta profesional privada."
         description="Carga CV, identidad, certificados, antecedentes, examenes medicos y documentos operativos. Puedes previsualizar y descargar tus archivos desde el portal."
       />
-      <ProfessionalDocumentUploader documents={profile.documents} identityStatus={profile.identityVerificationStatus} identityNote={profile.identityVerificationNote} />
+      <ProfessionalDocumentUploader lifecycleEnabled={process.env.TERRAQO_DOCUMENT_LIFECYCLE_V1 === "true"} documents={profile.documents} identityStatus={profile.identityVerificationStatus} identityNote={profile.identityVerificationNote} />
     </div>
   );
 }
