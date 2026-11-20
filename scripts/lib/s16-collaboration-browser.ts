@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { chromium, expect as baseExpect, type BrowserContext, type Page, type Locator } from "@playwright/test";
 import { sharingSession } from "@/scripts/lib/s06-sharing-browser";
+import { captureViewportEvidence } from "./viewport-evidence";
 import { seedConversation, seedCancellation, sharingSnapshot, cleanS16, ownedIds,
   type S16Fixture, type OwnedIds } from "./s16-collaboration-fixture";
 
@@ -81,6 +82,9 @@ async function captures(pages: [Page, Page], dir: string, state: string) {
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
       "Horizontal overflow in " + state + ": " + width);
     await page.screenshot({ path: resolve(dir, `${state}-${index === 0 ? "company" : "professional"}-${width}.png`), fullPage: true });
+    if ((state === "private-certificate" && index === 1) || (state === "protected-reference" && index === 0)) {
+      await captureViewportEvidence(page, resolve(dir, `${state}-${index === 0 ? "company" : "professional"}-${width}-viewport`));
+    }
   }
 }
 

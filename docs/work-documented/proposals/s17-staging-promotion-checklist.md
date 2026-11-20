@@ -1,5 +1,7 @@
 # S17 provenance staging candidate
 
+Latest local continuation: see [disclosure preparation](s17-disclosure-preparation.md). Authenticated local viewport rerun passed; full-page bar crossing was not reproduced in native viewport views. Canonical immutable certificate-field disclosure preparation and tests added, but no consent persistence/API/sharing exists yet. No further deployment or hosted migration. Next block: local transactional disclosure schema/service and dual-consent matrix.
+
 ## 20 November 2026 — authorized S17 staging migration and hosted controls PASS
 
 Supersedes earlier pending-authorization/deployment checkpoints. User explicitly authorized migration `20261120000100_closure_accepted_proposal_provenance` and staging-only deployment. Applied after backup/restore rehearsal; independent Supabase readback: 49 completed migrations, zero unfinished, zero test workspaces, one existing invitation preserved. Production unchanged.
