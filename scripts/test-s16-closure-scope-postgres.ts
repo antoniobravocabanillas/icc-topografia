@@ -23,12 +23,16 @@ async function main() {
   };
   // Hold the real parent row, observe each service waiting on a PostgreSQL lock,
   // then release in queue order. This proves contention rather than relying on sleeps.
-  const contend = async (id: string, actions: (() => Promise<unknown>)[]) => {
+  const contend = async (id: string, actions: (() => Promise<unknown>)[],
+    latency?: { label: string; whileHeld: () => Promise<void> }) => {
     let release!: () => void, acquired!: () => void;
+    let blockerPid = 0;
     const held = new Promise<void>(resolve => { acquired = resolve; });
     const unblock = new Promise<void>(resolve => { release = resolve; });
     const gate = observer.$transaction(async tx => {
       await tx.$queryRaw(Prisma.sql`SELECT id FROM icc."TerraqoCollaboration" WHERE id=${id} FOR UPDATE`);
+      const [backend] = await tx.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+      blockerPid = backend.pid;
       acquired();
       await unblock;
     }, { timeout: 15_000 });
@@ -42,11 +46,21 @@ async function main() {
         for (;;) {
           const [row] = await prisma.$queryRaw<{ waiting: bigint }[]>`SELECT count(*) AS waiting FROM pg_stat_activity
             WHERE datname=current_database() AND pid<>pg_backend_pid() AND wait_event_type='Lock'
+            AND (${latency === undefined} OR ${blockerPid} = ANY(pg_blocking_pids(pid)))
             AND query LIKE '%TerraqoCollaboration%' AND query LIKE '%FOR UPDATE%'`;
           if (Number(row.waiting) >= outcomes.length) break;
           assert.ok(Date.now() < deadline, "Service did not queue on parent collaboration lock");
           await new Promise(resolve => setTimeout(resolve, 10));
         }
+      }
+      if (latency) {
+        // Start the delay only after PostgreSQL confirms the service transaction
+        // is waiting on this exact parent lock; setup time cannot satisfy it.
+        const started = performance.now();
+        while (performance.now() - started < 5_500)
+          await new Promise(resolve => setTimeout(resolve, Math.ceil(5_500 - (performance.now() - started))));
+        await latency.whileHeld();
+        console.log(`PASS S16 latency ${latency.label}: parent lock held ${Math.floor(performance.now() - started)}ms after observed service wait; no partial state`);
       }
     } catch (error) { failure = error; }
     finally { release(); await gate; }
@@ -93,6 +107,48 @@ async function main() {
       [{ role: "s16_projection_test", database: "s16_projection_test" }]);
     await prisma.user.createMany({ data: [owner, professional, outsider].map(id => ({ id, email: `${id}@s16-scope.invalid` })) });
     await prisma.terraqoWorkspace.create({ data: { id: workspaceId, name: "S16 scope synthetic", slug: workspaceId } });
+    await prisma.terraqoWorkspaceMember.create({ data: { workspaceId, userId: owner, role: "OWNER" } });
+
+    const slow = await seed();
+    const beforeSave = await state(slow.collaboration.id);
+    const slowSaveInput = { ...slow.draftInput, operationKey: randomUUID(), payload: {
+      ...slow.draftInput.payload, contribution: "Draft saved after real parent lock latency", expectedVersion: 1,
+    } };
+    const [saved] = await contend(slow.collaboration.id, [() => saveClosureDraft(slowSaveInput)], {
+      label: "save", whileHeld: async () => { assert.deepEqual(await state(slow.collaboration.id), beforeSave); },
+    });
+    assert.equal(saved.status, "fulfilled", saved.status === "rejected" ? String(saved.reason) : undefined);
+    const afterSave = await state(slow.collaboration.id);
+    assert.equal(afterSave.version, beforeSave.version + 1);
+    assert.equal(afterSave.closure?.version, 2);
+    assert.deepEqual(afterSave.closure?.revisions.map(revision => revision.status), ["SUPERSEDED", "DRAFT"]);
+    assert.equal(afterSave.closure?.revisions[1].operationKey, slowSaveInput.operationKey);
+    if (saved.status === "fulfilled") assert.deepEqual(await saveClosureDraft(slowSaveInput), saved.value);
+    assert.deepEqual(await state(slow.collaboration.id), afterSave, "Same-key save replay creates no revision or version increment");
+    await assert.rejects(saveClosureDraft({ ...slowSaveInput, userId: outsider }), { status: 404 });
+    await assert.rejects(saveClosureDraft({ ...slowSaveInput, payload: { ...slowSaveInput.payload, contribution: "Changed replay" } }), { status: 409 });
+    assert.deepEqual(await state(slow.collaboration.id), afterSave, "Unauthorized/conflicting saves leave no partial state");
+
+    const slowSubmitInput = { ...slow.submitInput, payload: { expectedRevisionNo: 2 } };
+    await assert.rejects(submitClosure({ ...slowSubmitInput, userId: outsider }), { status: 404 });
+    assert.deepEqual(await state(slow.collaboration.id), afterSave, "Unauthorized submit cannot mutate a draft");
+    const [submitted] = await contend(slow.collaboration.id, [() => submitClosure(slowSubmitInput)], {
+      label: "submit", whileHeld: async () => { assert.deepEqual(await state(slow.collaboration.id), afterSave); },
+    });
+    assert.equal(submitted.status, "fulfilled", submitted.status === "rejected" ? String(submitted.reason) : undefined);
+    const afterSubmit = await state(slow.collaboration.id);
+    assert.equal(afterSubmit.status, "CLOSURE_PROPOSED");
+    assert.equal(afterSubmit.version, afterSave.version + 1);
+    assert.equal(afterSubmit.closure?.version, 2);
+    assert.equal(afterSubmit.closure?.revisions.length, 2);
+    assert.equal(afterSubmit.closure?.revisions[1].status, "SUBMITTED");
+    assert.equal(afterSubmit.closure?.revisions[1].submitOperationKey, slowSubmitInput.operationKey);
+    assert.equal(afterSubmit.closure?.certificate, null);
+    if (submitted.status === "fulfilled") assert.deepEqual(await submitClosure(slowSubmitInput), submitted.value);
+    await assert.rejects(submitClosure({ ...slowSubmitInput, userId: outsider }), { status: 404 });
+    await assert.rejects(submitClosure({ ...slowSubmitInput, payload: { expectedRevisionNo: 1 } }), { status: 409 });
+    assert.deepEqual(await state(slow.collaboration.id), afterSubmit, "Submit replay and rejected writes create no duplicates or partial state");
+    console.log("PASS S16 latency: save and submit succeed beyond default 5s; exact replay preserves revisions/versions; unauthorized and conflicting payloads fail closed");
 
     const sentFirst = await seed();
     const firstRace = await contend(sentFirst.collaboration.id, [
@@ -189,7 +245,9 @@ async function main() {
       });
       const counts = await observer.$transaction([observer.user.count(), observer.terraqoCollaboration.count(),
         observer.terraqoCollaborationProposal.count(), observer.terraqoCollaborationAcceptance.count(),
-        observer.terraqoClosureRevision.count(), observer.terraqoCollaborationCertificate.count(), observer.terraqoConversationContext.count()]);
+        observer.terraqoClosureRevision.count(), observer.terraqoCollaborationCertificate.count(), observer.terraqoConversationContext.count(),
+        observer.terraqoCollaborationClosure.count(), observer.terraqoClosureReference.count(), observer.terraqoWorkspaceMember.count(),
+        observer.terraqoWorkspace.count(), observer.terraqoConversation.count()]);
       assert.ok(counts.every(count => count === 0));
       console.log("PASS S16 scope fixture cleanup: independent client zero rows");
     } finally { await Promise.all([prisma.$disconnect(), observer.$disconnect()]); }

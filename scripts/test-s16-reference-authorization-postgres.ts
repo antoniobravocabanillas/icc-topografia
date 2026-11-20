@@ -29,6 +29,7 @@ async function main() {
       [{ role: "s16_projection_test", database: "s16_projection_test" }]);
     await prisma.user.createMany({ data: actors.map(id => ({ id, email: `${id}@s16-reference.invalid` })) });
     await prisma.terraqoWorkspace.createMany({ data: [workspaceId, otherWorkspaceId].map(id => ({ id, name: "Synthetic S16", slug: id })) });
+    await prisma.terraqoWorkspaceMember.createMany({ data: [workspaceId, otherWorkspaceId].map(id => ({ workspaceId: id, userId: owner, role: "OWNER" })) });
     // Identity privacy is independent of the public CV evidence permission.
     const profile = await prisma.terraqoProfessionalProfile.create({ data: {
       userId: professional, liveCvEnabled: true, liveCvVisibility: "PUBLIC", visibility: "PRIVATE",
