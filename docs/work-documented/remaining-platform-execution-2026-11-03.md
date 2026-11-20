@@ -1,5 +1,9 @@
 # Remaining platform execution — 3 November 2026
 
+## 20 de noviembre — S18: listado de accesos, corrección local validada
+
+Referencia S18 del PDF revisada visualmente (página física19) y contrastada con sus reglas. Corregido listado existente: permiso explícito, estados legibles, vencimiento con hora de Perú y retirada de acciones al caducar sin recargar. Chromium1440/375/320 y regresión de confirmación/cancelación/revocación PASS; TypeScript/ESLint PASS, capturas inspeccionadas. Sin despliegue ni cambios de DB. No equivale a pantalla S18 completa ni gate alojado. Siguiente: consolidar navegación de accesos, auditar Documentos privados y Plan/autorización empresarial, luego aceptación autenticada staging. Detalle: `s18-access-documents-plan.md`.
+
 ## 20 de noviembre — Migración50 aplicada y candidato de consentimiento servido en staging
 
 Autorización específica recibida y ejecutada: proyecto `mghdpciewbsowjrjwmwk`, ledger50 sin migraciones incompletas; backup fresco restaurado y 158 tablas conservadas. Runtime servido `a187f7c9ebb8ddc7af3a3af71109dcd98bbd3b65`, árbol idéntico al candidato autorizado `70efdb3`, deploy `6b0071c2c0bc5284f750dc3e`. Solo staging; producción intacta. Este checkpoint sustituye las indicaciones históricas de migración50 no aplicada.
