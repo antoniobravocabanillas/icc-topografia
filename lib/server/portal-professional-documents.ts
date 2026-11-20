@@ -15,16 +15,20 @@ export async function listProfessionalDocuments(token: WorkspacePortalToken, cur
     where: professionalDocumentScope(token), orderBy: { id: "asc" }, take: 31,
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     select: { id: true, type: true, fileName: true, contentType: true, size: true,
-      reviewStatus: true, uploadedAt: true, reviewedAt: true, reviewNote: true, _count: { select: { cvImports: true } } },
+      reviewStatus: true, uploadedAt: true, reviewedAt: true, reviewNote: true,
+      withdrawnAt: true, replacesDocumentId: true, replacedByDocument: { select: { id: true } },
+      _count: { select: { cvImports: true, replacementAttempts: true, resultingAttempts: true } } },
   });
   return { schemaVersion: 1, workspaceSlug: token.workspaceSlug, resource: "professionalDocuments",
     canCreate: false, nextCursor: rows.length > 30 ? rows[29].id : null,
     records: rows.slice(0, 30).map(row => ({
       id: row.id, title: row.fileName, subtitle: "Expediente privado", status: row.reviewStatus,
       updatedAt: (row.reviewedAt || row.uploadedAt).toISOString(), editable: false,
-      canDelete: row.reviewStatus === "REJECTED" && !["DNI_FRONT", "DNI_BACK"].includes(row.type) && row._count.cvImports === 0,
+      canDelete: row.reviewStatus === "REJECTED" && !["DNI_FRONT", "DNI_BACK"].includes(row.type) && row._count.cvImports === 0
+        && !row.withdrawnAt && !row.replacesDocumentId && !row.replacedByDocument
+        && row._count.replacementAttempts === 0 && row._count.resultingAttempts === 0,
       fields: { kind: "professionalDocument", fileName: row.fileName, contentType: row.contentType,
-        size: String(row.size), type: row.type, superseded: String(row.type === "CV" && row.reviewStatus === "REJECTED" && row.reviewNote === "Documento reemplazado por una carga posterior."), uploadedAt: row.uploadedAt.toISOString(),
+        size: String(row.size), type: row.type, withdrawn: String(Boolean(row.withdrawnAt)), superseded: String(row.type === "CV" && row.reviewStatus === "REJECTED" && row.reviewNote === "Documento reemplazado por una carga posterior."), uploadedAt: row.uploadedAt.toISOString(),
         reviewedAt: row.reviewedAt?.toISOString() || "" } as Record<string, string>,
     })),
   };
@@ -44,8 +48,13 @@ export async function removeProfessionalDocument(token: WorkspacePortalToken, id
       AND ("workspaceId"=${token.workspaceId} OR "workspaceId" IS NULL) FOR UPDATE`);
     const document = await tx.terraqoProfessionalDocument.findFirst({ where: { id, ...professionalDocumentScope(token) },
       select: { id: true, storageKey: true, size: true, type: true, reviewStatus: true,
-        uploadedAt: true, reviewedAt: true, _count: { select: { cvImports: true } } } });
+        uploadedAt: true, reviewedAt: true, withdrawnAt: true, replacesDocumentId: true,
+        replacedByDocument: { select: { id: true } },
+        _count: { select: { cvImports: true, replacementAttempts: true, resultingAttempts: true } } } });
     if (!document) throw new PortalResourceError("Documento no disponible.", 404);
+    if (document.withdrawnAt || document.replacesDocumentId || document.replacedByDocument
+      || document._count.replacementAttempts || document._count.resultingAttempts)
+      throw new PortalResourceError("El documento forma parte de un historial conservado y no se puede eliminar.", 409);
     if (document.reviewStatus !== "REJECTED" || ["DNI_FRONT", "DNI_BACK"].includes(document.type) || document._count.cvImports)
       throw new PortalResourceError("Los documentos verificados, en revisión, de identidad o importados se conservan.", 409);
     if ((document.reviewedAt || document.uploadedAt).getTime() !== Date.parse(version))

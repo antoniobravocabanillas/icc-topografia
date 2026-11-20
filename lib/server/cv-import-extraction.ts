@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { lockAvailableProfessionalDocument } from "./professional-document-availability";
 import { Prisma, TerraqoCvImportItemType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getProfessionalDocumentStore } from "@/lib/server/media";
@@ -89,12 +90,16 @@ export async function processCvImportJob(importId: string) {
   try {
     const record = await prisma.terraqoCvImport.findFirst({ where: { id: importId, processingToken: token, status: "PROCESSING" }, include: { document: true } });
     if (!record) return { claimed: false as const };
-    const stored = await getProfessionalDocumentStore().getWithMetadata(record.document.storageKey, { type: "arrayBuffer" });
+    const stored = await prisma.$transaction(async tx => {
+      if (!await lockAvailableProfessionalDocument(tx, record.professionalProfileId, record.documentId)) throw new CvImportError("DOCUMENT_WITHDRAWN", "El documento ya no está disponible.", 409);
+      return getProfessionalDocumentStore().getWithMetadata(record.document.storageKey, { type: "arrayBuffer" });
+    }, { maxWait: 5000, timeout: 15000 });
     if (!stored) throw new CvImportError("CV_FILE_MISSING", "El archivo del CV ya no está disponible.", 404);
 
     const extraction = await callDocumentIntelligence({ data: stored.data, fileName: record.document.fileName, contentType: record.document.contentType });
     const matches = await detectMatches(record.professionalProfileId, extraction);
     await prisma.$transaction(async (tx) => {
+      if (!await lockAvailableProfessionalDocument(tx, record.professionalProfileId, record.documentId)) throw new CvImportError("DOCUMENT_WITHDRAWN", "El documento ya no está disponible.", 409);
       const completed = await tx.terraqoCvImport.updateMany({
         where: { id: record.id, processingToken: token, status: "PROCESSING" },
         data: { status: "READY_FOR_REVIEW", completedAt: new Date(), heartbeatAt: new Date(), processingToken: null },

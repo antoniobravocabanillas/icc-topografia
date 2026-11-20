@@ -11,6 +11,7 @@ async function main() {
     module: prisma.terraqoWorkspaceModule.findUnique, billing: prisma.terraqoBillingAccount.findUnique };
   const date = new Date("2026-10-01T00:00:00Z");
   let state = "REJECTED", type = "CV", imports = 0, present = true, deletes = 0, refunds = 0, audits = 0;
+  let retained = false;
   let cleanupState = "PENDING", enabled = true;
   const tx = {
     $queryRaw: async (query: Prisma.Sql) => { assert.ok(query.values.includes("owner") || query.values.includes("profile")); return [{ id: "profile" }]; },
@@ -21,7 +22,7 @@ async function main() {
     terraqoProfessionalDocument: {
       findFirst: async (args: { where: unknown }) => {
         assert.deepEqual(args.where, { id: "document", professionalProfile: { userId: "owner" }, OR: [{ workspaceId: "workspace" }, { workspaceId: null }] });
-        return present ? { id: "document", storageKey: "private-key", size: 100, type, reviewStatus: state, uploadedAt: date, reviewedAt: null, _count: { cvImports: imports } } : null;
+        return present ? { id: "document", storageKey: "private-key", size: 100, type, reviewStatus: state, uploadedAt: date, reviewedAt: null, withdrawnAt: retained ? date : null, _count: { cvImports: imports, replacementAttempts: 0, resultingAttempts: 0 } } : null;
       },
       delete: async () => { deletes++; present = false; }, aggregate: async () => ({ _sum: { size: 1_200_000 } }),
     },
@@ -48,7 +49,7 @@ async function main() {
     assert.deepEqual(args.where, { professionalProfile: { userId: "owner" }, OR: [{ workspaceId: "workspace" }, { workspaceId: null }] });
     assert.equal(args.take, 31); assert.ok(!JSON.stringify(args.select).includes("storageKey"));
     return Array.from({length: 31}, (_, i) => ({id: `doc-${i}`, type: i === 2 ? "DNI_FRONT" : "CV", fileName: "private.pdf", contentType: "application/pdf", size: 100,
-      reviewStatus: i === 1 ? "VERIFIED" : "REJECTED", reviewNote: i === 4 ? "Documento reemplazado por una carga posterior." : "Private reviewer note", uploadedAt: date, reviewedAt: null, _count: {cvImports: i === 3 ? 1 : 0}}));
+      reviewStatus: i === 1 ? "VERIFIED" : "REJECTED", reviewNote: i === 4 ? "Documento reemplazado por una carga posterior." : "Private reviewer note", uploadedAt: date, reviewedAt: null, withdrawnAt: i === 5 ? date : null, replacesDocumentId: i === 6 ? "predecessor" : null, replacedByDocument: i === 7 ? {id: "successor"} : null, _count: {cvImports: i === 3 ? 1 : 0, replacementAttempts: i === 8 ? 1 : 0, resultingAttempts: i === 9 ? 1 : 0}}));
   }) as unknown as typeof original.docs;
   const fails = (status: number) => (error: unknown) => error instanceof PortalResourceError && error.status === status;
   const store = {delete: async (key: string) => { assert.equal(key, "private-key"); }};
@@ -59,7 +60,7 @@ async function main() {
     assert.equal(page.records[4].fields.superseded, "true");
     assert.ok(!JSON.stringify(page).includes("Private reviewer note"));
     assert.ok(!JSON.stringify(page).includes("reviewNote"));
-    for (const index of [1, 2, 3]) assert.equal(page.records[index].canDelete, false);
+    for (const index of [1, 2, 3, 5, 6, 7, 8, 9]) assert.equal(page.records[index].canDelete, false);
     await assert.rejects(authorizeResource({...token, role: "ADMIN"}, "professionalDocuments"), fails(403));
     enabled = false; await assert.rejects(authorizeResource(token, "professionalDocuments"), fails(403)); enabled = true;
     for (const [nextState, nextType, nextImports] of [["VERIFIED", "CV", 0], ["SUBMITTED", "CV", 0], ["REJECTED", "DNI_FRONT", 0], ["REJECTED", "CV", 1]] as const) {
@@ -68,6 +69,9 @@ async function main() {
     }
     state = "REJECTED"; type = "CV"; imports = 0;
     await assert.rejects(removeProfessionalDocument(token, "document", "2026-10-02T00:00:00Z", store), fails(409));
+    retained = true;
+    await assert.rejects(removeProfessionalDocument(token, "document", date.toISOString(), store), fails(409));
+    retained = false;
     assert.equal(deletes, 0); assert.equal(refunds, 0);
     assert.deepEqual(await removeProfessionalDocument(token, "document", date.toISOString(), store), {deleted: true, storageCleanupPending: false});
     assert.equal(deletes, 1); assert.equal(audits, 1); assert.equal(refunds, 1); assert.equal(cleanupState, "COMPLETE");

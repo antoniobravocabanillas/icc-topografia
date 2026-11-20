@@ -1,4 +1,5 @@
 import "server-only";
+import { lockAvailableProfessionalDocument } from "./professional-document-availability";
 
 import { createHash } from "node:crypto";
 import { Prisma, TerraqoCvImportItemType } from "@prisma/client";
@@ -71,24 +72,31 @@ export async function queueCvImport(userId: string, documentId: string, consentF
   const profile = await ownerProfile(userId);
   const document = await prisma.terraqoProfessionalDocument.findFirst({ where: { id: documentId, professionalProfileId: profile.id, type: "CV" } });
   if (!document) throw new CvImportError("CV_NOT_FOUND", "El CV no existe o no pertenece a tu perfil.", 404);
-  const stored = await getProfessionalDocumentStore().getWithMetadata(document.storageKey, { type: "arrayBuffer" });
+  const stored = await prisma.$transaction(async tx => {
+    if (!await lockAvailableProfessionalDocument(tx, profile.id, documentId)) throw new CvImportError("DOCUMENT_WITHDRAWN", "El documento ya no está disponible.", 409);
+    return getProfessionalDocumentStore().getWithMetadata(document.storageKey, { type: "arrayBuffer" });
+  }, { maxWait: 5000, timeout: 15000 });
   if (!stored) throw new CvImportError("CV_FILE_MISSING", "El archivo del CV ya no está disponible.", 404);
   const fileHash = createHash("sha256").update(Buffer.from(stored.data)).digest("hex");
-  const existing = await prisma.terraqoCvImport.findUnique({
-    where: { professionalProfileId_fileHash_parserVersion: { professionalProfileId: profile.id, fileHash, parserVersion: PARSER_VERSION } },
-    include: { items: { orderBy: [{ type: "asc" }, { position: "asc" }] } },
-  });
-  if (existing && existing.status !== "FAILED" && existing.status !== "PROCESSING") {
-    return { record: serializeCvImport(existing), shouldDispatch: false };
-  }
-  if (existing?.status === "PROCESSING") {
-    return { record: serializeCvImport(existing), shouldDispatch: true };
-  }
+  return prisma.$transaction(async tx => {
+    if (!await lockAvailableProfessionalDocument(tx, profile.id, documentId)) throw new CvImportError("DOCUMENT_WITHDRAWN", "El documento ya no está disponible.", 409);
+    const existing = await tx.terraqoCvImport.findUnique({
+      where: { professionalProfileId_fileHash_parserVersion: { professionalProfileId: profile.id, fileHash, parserVersion: PARSER_VERSION } },
+      include: { items: { orderBy: [{ type: "asc" }, { position: "asc" }] } },
+    });
+    if (existing && !await lockAvailableProfessionalDocument(tx, profile.id, existing.documentId)) throw new CvImportError("DOCUMENT_WITHDRAWN", "La importación anterior usa un documento retirado.", 409);
+    if (existing && existing.status !== "FAILED" && existing.status !== "PROCESSING") {
+      return { record: serializeCvImport(existing), shouldDispatch: false };
+    }
+    if (existing?.status === "PROCESSING") {
+      return { record: serializeCvImport(existing), shouldDispatch: true };
+    }
 
-  const cvImport = existing
-    ? await prisma.terraqoCvImport.update({ where: { id: existing.id }, data: { status: "PROCESSING", consentForTraining, errorCode: null, errorMessage: null, processingToken: null, heartbeatAt: null, startedAt: new Date(), completedAt: null } })
-    : await prisma.terraqoCvImport.create({ data: { professionalProfileId: profile.id, documentId, fileHash, parserVersion: PARSER_VERSION, extractor: "docling+ollama", consentForTraining } });
-  return { record: serializeCvImport({ ...cvImport, items: [] }), shouldDispatch: true };
+    const cvImport = existing
+      ? await tx.terraqoCvImport.update({ where: { id: existing.id }, data: { status: "PROCESSING", consentForTraining, errorCode: null, errorMessage: null, processingToken: null, heartbeatAt: null, startedAt: new Date(), completedAt: null } })
+      : await tx.terraqoCvImport.create({ data: { professionalProfileId: profile.id, documentId, fileHash, parserVersion: PARSER_VERSION, extractor: "docling+ollama", consentForTraining } });
+    return { record: serializeCvImport({ ...cvImport, items: [] }), shouldDispatch: true };
+  }, { maxWait: 5000, timeout: 15000 });
 }
 
 export async function dispatchCvImport(importId: string) {
@@ -121,7 +129,7 @@ export async function failCvImportDispatch(importId: string, error: unknown) {
 
 export async function getCvImport(userId: string, importId: string) {
   const profile = await ownerProfile(userId);
-  const record = await prisma.terraqoCvImport.findFirst({ where: { id: importId, professionalProfileId: profile.id }, include: { items: { orderBy: [{ type: "asc" }, { position: "asc" }] } } });
+  const record = await prisma.terraqoCvImport.findFirst({ where: { id: importId, professionalProfileId: profile.id, document: { withdrawnAt: null } }, include: { items: { orderBy: [{ type: "asc" }, { position: "asc" }] } } });
   if (!record) throw new CvImportError("IMPORT_NOT_FOUND", "Importación no encontrada.", 404);
   return serializeCvImport(record);
 }
@@ -134,6 +142,7 @@ export async function reviewCvImport(userId: string, importId: string, input: { 
   if (input.items.some((item) => !owned.has(item.id))) throw new CvImportError("ITEM_NOT_FOUND", "Uno de los elementos no pertenece a esta importación.", 403);
 
   await prisma.$transaction(async (tx) => {
+    if (!await lockAvailableProfessionalDocument(tx, profile.id, record.documentId)) throw new CvImportError("DOCUMENT_WITHDRAWN", "El documento ya no está disponible.", 409);
     if (typeof input.consentForTraining === "boolean") {
       await tx.terraqoCvImport.update({ where: { id: record.id }, data: { consentForTraining: input.consentForTraining } });
       await tx.terraqoCvImportCorrection.updateMany({
@@ -180,6 +189,7 @@ export async function applyCvImport(userId: string, importId: string) {
   let applied: { created: number; merged: number };
   try {
     applied = await prisma.$transaction(async (tx) => {
+      if (!await lockAvailableProfessionalDocument(tx, profile.id, record.documentId)) throw new CvImportError("DOCUMENT_WITHDRAWN", "El documento ya no está disponible.", 409);
       let created = 0;
       let merged = 0;
       for (const item of accepted) {

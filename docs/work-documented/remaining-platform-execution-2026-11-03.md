@@ -1,5 +1,9 @@
 # Remaining platform execution — 3 November 2026
 
+## 20 de noviembre — S18: retiro efectivo en descargas e importación
+
+Descargas web/nativas e importación de CV bloquean documentos retirados, incluida publicación tardía del extractor. Eliminación antigua protege linaje e intentos conservados. PostgreSQL real, rutas/servicios con dobles controlados, regresión nativa, TypeScript y ESLint PASS. Sin cambios remotos. Próximo: Office/retención, API/UI y programación de limpieza, preparación de migración y aceptación autenticada en staging. No desplegar este candidato contra el esquema anterior. Detalle: `proposals/s18-document-lifecycle.md`.
+
 ## 20 de noviembre — S18: esquema Prisma y cuota compartida alineados localmente
 
 Esquema Prisma modela ciclo documental/intentos; diff estructural completo contra PostgreSQL pre-S18 + SQL propuesto vacío. Piso de cuota compartido incluye reservas de reemplazo sin doble cómputo, con regresiones de limpieza/documentos/evidencias y suite PostgreSQL PASS. TypeScript/ESLint/Prisma validate/generate PASS. **Candidato incompatible con DB sin esta migración: no desplegar aún.** SQL sigue fuera de migraciones activas y no se aplicó remotamente. Próximo: barreras en descargas/importación/aplicación, compatibilidad Office/borrado de cuenta, API/UI y promoción aprobada de staging. Detalle: `proposals/s18-document-lifecycle.md`.

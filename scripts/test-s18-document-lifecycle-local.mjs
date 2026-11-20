@@ -141,6 +141,28 @@ async function main() {
     await insert(c, 'service-cv', null, 'profile', 'CV');
     await c.query(`UPDATE icc."TerraqoProfessionalProfile" SET "cvUrl"='/api/terraqo/professional-documents/service-cv' WHERE id='profile'`);
     const command = { actorId: 'owner', documentId: 'service-cv', expectedVersion: 1, operationKey: 'service-operation-0001' };
+    const { lockAvailableProfessionalDocument } = await tsImport('../lib/server/professional-document-availability.ts', import.meta.url);
+    await insert(c, 'availability-cv', null, 'profile', 'CV');
+    await a.query('BEGIN');
+    assert.equal(await lockAvailableProfessionalDocument(transport(a), 'missing-profile', 'availability-cv'), false);
+    assert.equal(await lockAvailableProfessionalDocument(transport(a), 'profile', 'missing-document'), false);
+    assert.equal(await lockAvailableProfessionalDocument(transport(a), 'profile', 'availability-cv'), true);
+    const withdrawal = call(b, { ...command, documentId: 'availability-cv' });
+    // Observe PostgreSQL's actual lock wait rather than assuming scheduler timing.
+    let blocked = false;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const state = await c.query('SELECT cardinality(pg_blocking_pids($1)) > 0 AS blocked', [b.processID]);
+      if (state.rows[0].blocked) { blocked = true; break; }
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    assert.equal(blocked, true, 'withdrawal waits until the protected reader completes');
+    await a.query('COMMIT');
+    await withdrawal;
+    await a.query('BEGIN');
+    assert.equal(await lockAvailableProfessionalDocument(transport(a), 'profile', 'availability-cv'), false,
+      'a later download or extraction publication must reject the withdrawn source');
+    await a.query('COMMIT');
+    console.log('PASS availability barrier: real reader/withdrawal lock ordering, missing scope and post-withdrawal denial');
     await assert.rejects(call(a, { ...command, actorId: 'other' }), error => error.status === 404);
     await assert.rejects(call(a, { ...command, expectedVersion: 2 }), error => error.status === 409);
     await assert.rejects(call(a, { ...command, documentId: 'identity' }), error => error.status === 409);
@@ -382,7 +404,7 @@ async function main() {
     await assert.rejects(access(keys.get(slowRow.storageKey)), { code: 'ENOENT' });
     console.log('PASS orchestrator/dispatcher: actual PDF bytes, validation before charge/write, receipt without rewrite/recharge, lost SQL reply preserves live blob, uncertain write fenced then reclaimed, fresh reservation excluded');
     console.log('PASS abandoned reservation reclaimed; timed-out uploader has no late SQL commit and its late bytes are swept without second refund');
-    console.log('PENDING migration promotion, Office replacement validation, reader/import barriers, UI and hosted acceptance; no scheduler activated');
+    console.log('PENDING migration promotion, Office replacement validation, retention policy, API/UI and hosted acceptance; no scheduler activated');
   } finally {
     await Promise.allSettled(sessions.map(c => c.end()));
     if (started) await pg('pg_ctl', ['-D', data, '-m', 'fast', '-w', 'stop']);

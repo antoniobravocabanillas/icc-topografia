@@ -1,6 +1,7 @@
 import { authorizeResource, PortalResourceError } from "@/lib/server/portal-resources";
 import { professionalDocumentScope, removeProfessionalDocument } from "@/lib/server/portal-professional-documents";
 import { prisma } from "@/lib/prisma";
+import { lockAvailableProfessionalDocument } from "@/lib/server/professional-document-availability";
 import { fail, handleApiError, ok } from "@/lib/server/api";
 import { getProfessionalDocumentStore } from "@/lib/server/media";
 import { getWorkspacePortalToken } from "@/lib/server/workspace-portal-session";
@@ -17,41 +18,44 @@ export async function GET(request: Request, { params }: RouteContext) {
     if (!token) return fail("La sesion no es valida o ha vencido.", 401);
 
     if (token.role === "PROFESSIONAL") await authorizeResource(token, "professionalDocuments");
-    const document = await prisma.terraqoProfessionalDocument.findFirst({
-      where: token.role === "PROFESSIONAL" ? { id, ...professionalDocumentScope(token) } : { id, workspaceId: token.workspaceId },
-      include: { professionalProfile: { select: { userId: true } } },
-    });
-    if (!document) return fail("Documento no encontrado.", 404);
+    return await prisma.$transaction(async tx => {
+      const document = await tx.terraqoProfessionalDocument.findFirst({
+        where: token.role === "PROFESSIONAL" ? { id, ...professionalDocumentScope(token) } : { id, workspaceId: token.workspaceId },
+        include: { professionalProfile: { select: { userId: true } } },
+      });
+      if (!document) return fail("Documento no encontrado.", 404);
 
-    const isOwner = document.professionalProfile.userId === token.sub;
-    const reviewerMembership = !isOwner
-      ? await prisma.terraqoWorkspaceMember.findFirst({
-          where: {
-            workspaceId: token.workspaceId,
-            userId: token.sub,
-            active: true,
-            role: { in: ["OWNER", "ADMIN", "MANAGER"] },
-          },
-          select: { id: true },
-        })
-      : null;
-    if (!isOwner && !reviewerMembership) return fail("No tienes permiso para ver este documento.", 403);
+      const isOwner = document.professionalProfile.userId === token.sub;
+      const reviewerMembership = !isOwner
+        ? await tx.terraqoWorkspaceMember.findFirst({
+            where: {
+              workspaceId: token.workspaceId,
+              userId: token.sub,
+              active: true,
+              role: { in: ["OWNER", "ADMIN", "MANAGER"] },
+            },
+            select: { id: true },
+          })
+        : null;
+      if (!isOwner && !reviewerMembership) return fail("No tienes permiso para ver este documento.", 403);
+      if (!await lockAvailableProfessionalDocument(tx, document.professionalProfileId, id)) return fail("Documento no disponible.", 404);
 
-    const entry = await getProfessionalDocumentStore().getWithMetadata(document.storageKey, { type: "arrayBuffer" });
-    if (!entry) return fail("El archivo ya no esta disponible.", 404);
+      const entry = await getProfessionalDocumentStore().getWithMetadata(document.storageKey, { type: "arrayBuffer" });
+      if (!entry) return fail("El archivo ya no esta disponible.", 404);
 
-    const safeName = document.fileName.replace(/[\r\n"]/g, "-");
-    const inline = new URL(request.url).searchParams.get("inline") === "1";
-    return new Response(entry.data, {
-      headers: {
-        "Content-Type": document.contentType,
-        "Content-Disposition": `${inline ? "inline" : "attachment"}; filename="${safeName}"`,
-        "Cache-Control": "private, no-store, max-age=0",
-        "X-Content-Type-Options": "nosniff",
-        "Content-Security-Policy": "sandbox",
-        ETag: entry.etag || "",
-      },
-    });
+      const safeName = document.fileName.replace(/[\r\n"]/g, "-");
+      const inline = new URL(request.url).searchParams.get("inline") === "1";
+      return new Response(entry.data, {
+        headers: {
+          "Content-Type": document.contentType,
+          "Content-Disposition": `${inline ? "inline" : "attachment"}; filename="${safeName}"`,
+          "Cache-Control": "private, no-store, max-age=0",
+          "X-Content-Type-Options": "nosniff",
+          "Content-Security-Policy": "sandbox",
+          ETag: entry.etag || "",
+        },
+      });
+    }, { maxWait: 5000, timeout: 15000 });
   } catch (error) {
     if (error instanceof PortalResourceError) return fail(error.message, error.status);
     return handleApiError(error);
