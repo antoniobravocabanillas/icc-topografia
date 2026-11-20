@@ -41,3 +41,15 @@ Real PostgreSQL 18 disposable-loopback test applies baseline DDL generated from 
 Open integration requirements: replacement command with expected version, authenticated endpoint/CSRF, guarded readers and extraction/apply workers, Prisma schema alignment, UI/native eligibility, and hosted acceptance. The SQL retention guard intentionally rejects generic deletion of linked/withdrawn history; reconcile account-erasure/retention workflows before promoting it. Do not deploy only this SQL or expose the withdrawal core while existing readers still ignore its state. No remote migration or deployment performed.
 
 Final non-incremental TypeScript, focused ESLint and diff-check PASS. No visual check required for this unconnected backend-only block; no hosted or full S18 completion claim.
+
+## Replacement transaction checkpoint
+
+`replaceProfessionalDocumentInTransaction` now accepts a server-prepared file descriptor, locks owner profile and exact predecessor, validates lifecycle version, preserves type/workspace and requires current PROFESSIONAL membership for company-scoped files. Identity remains in its dedicated workflow. Content signature/size and storage reservation must be validated by the upload orchestrator before calling this core; HTTP callers must never supply trusted storageKey/hash directly.
+
+Proposed SQL now includes immutable replacementOperationKey/fingerprint, a complete-tuple constraint and a unique operation per profile. Fingerprint binds predecessor, expected version, content SHA256, name, MIME and size; excludes attempt-specific allocated blob key. Concurrent exact retries return one successor. Reusing a key with changed content or another predecessor conflicts. Retrying after withdrawal returns the committed ID without resurrecting it or moving the CV pointer. A later fresh operation cannot branch an already replaced document.
+
+Old review status/note remain unchanged; successor begins SUBMITTED. Exact current CV pointer moves only if it still references the predecessor. Retiring an old version affects that exact document, not a later successor. New row contains retained storage metadata; no quota release or blob deletion occurs in the transaction core.
+
+Expanded real PostgreSQL suite PASS: rollback/no partial successor, concurrent exact replay, conflicting hash/key/predecessor, foreign-owner/storage-key denial, protected identity, stale version, verified review preserved, successor pending, fingerprint immutability, no replay resurrection, current CV compare-and-set, mixed replacement/withdrawal race, company scope and membership revocation (including replay). Temporary cluster removed after validation. TypeScript non-incremental and focused ESLint PASS.
+
+Next executable integration: upload reservation/compensation for rejected and replayed attempts, read/derivation barriers, Prisma schema alignment and account-erasure compatibility, then authenticated endpoints/UI and approved staging migration. Neither transaction core is reachable from live routes. SQL remains a rollback-wrapped proposal outside migrations; no remote database or production deployment changed.

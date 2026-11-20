@@ -59,7 +59,8 @@ async function main() {
     await c.query(`INSERT INTO icc."User" (id,email,"updatedAt") VALUES ('owner','owner@s18.invalid',now()),('other','other@s18.invalid',now());
       INSERT INTO icc."TerraqoProfessionalProfile" (id,"userId","updatedAt") VALUES ('profile','owner',now()),('other-profile','other',now());`);
     const insert = (client, id, predecessor = null, profile = 'profile', type = 'CERTIFICATE') => client.query(`INSERT INTO icc."TerraqoProfessionalDocument"
-      (id,"professionalProfileId",type,"storageKey","fileName","contentType",size,"replacesDocumentId") VALUES ($1,$2,$3,$1,'synthetic.pdf','application/pdf',10,$4)`, [id, profile, type, predecessor]);
+      (id,"professionalProfileId",type,"storageKey","fileName","contentType",size,"replacesDocumentId","replacementOperationKey","replacementFingerprint")
+      VALUES ($1,$2,$3,$1,'synthetic.pdf','application/pdf',10,$4,$5,$6)`, [id, profile, type, predecessor, predecessor ? `synthetic-operation-${id}` : null, predecessor ? 'a'.repeat(64) : null]);
     // Seed legacy row before additive DDL; no history is inferred.
     await c.query(`INSERT INTO icc."TerraqoProfessionalDocument" (id,"professionalProfileId",type,"storageKey","fileName","contentType",size) VALUES ('legacy','profile','CERTIFICATE','legacy','legacy.pdf','application/pdf',10)`);
     await c.query('BEGIN'); await c.query(ddl); await c.query('COMMIT');
@@ -97,13 +98,13 @@ async function main() {
     const queued = insert(b, 'held-new', 'held').then(() => null, error => error.code);
     await a.query('COMMIT'); assert.equal(await queued, '23514');
     console.log('PASS independent-session replacement and withdrawal races; withdrawal wins against pending replacement');
-    const { withdrawProfessionalDocumentInTransaction: withdrawService } = await tsImport('../lib/server/professional-document-lifecycle.ts', import.meta.url);
+    const { withdrawProfessionalDocumentInTransaction: withdrawService, replaceProfessionalDocumentInTransaction: replaceService } = await tsImport('../lib/server/professional-document-lifecycle.ts', import.meta.url);
     // Execute the production transaction core against real PostgreSQL. Only the
     // Prisma transport is adapted; locks, predicates and writes are not mocked.
-    const call = async (client, input, rollback = false) => {
+    const call = async (client, input, rollback = false, service = withdrawService) => {
       await client.query('BEGIN');
       try {
-        const result = await withdrawService({
+        const result = await service({
           $queryRaw: async sql => (await client.query(sql.text, sql.values)).rows,
           $executeRaw: async sql => (await client.query(sql.text, sql.values)).rowCount,
         }, input);
@@ -129,7 +130,59 @@ async function main() {
     assert.equal((await c.query(`SELECT "cvUrl" FROM icc."TerraqoProfessionalProfile" WHERE id='profile'`)).rows[0].cvUrl, '/api/terraqo/professional-documents/current-other');
     assert.deepEqual((await c.query(`SELECT size,"reviewStatus","storageKey" FROM icc."TerraqoProfessionalDocument" WHERE id='service-cv'`)).rows[0], { size: 10, reviewStatus: 'SUBMITTED', storageKey: 'service-cv' });
     console.log('PASS transaction core: owner isolation, stale conflict, identity protected, rollback, concurrent exact replay, stable audit, CV pointer compare-and-set, retained file/review');
-    console.log('PENDING replacement service, readers/import workers, UI and hosted acceptance; not wired to live routes');
+    await insert(c, 'replace-cv', null, 'profile', 'CV');
+    await c.query(`UPDATE icc."TerraqoProfessionalDocument" SET "reviewStatus"='VERIFIED',"reviewNote"='Historical review' WHERE id='replace-cv';
+      UPDATE icc."TerraqoProfessionalProfile" SET "cvUrl"='/api/terraqo/professional-documents/replace-cv' WHERE id='profile'`);
+    const replacement = { actorId: 'owner', documentId: 'replace-cv', expectedVersion: 1, operationKey: 'replacement-operation-001',
+      file: { storageKey: 'professional-documents/profile/cv/prepared-a.pdf', fileName: 'updated.pdf', contentType: 'application/pdf', size: 12, contentSha256: 'b'.repeat(64) } };
+    const replace = (client, input, rollback = false) => call(client, input, rollback, replaceService);
+    await assert.rejects(replace(a, { ...replacement, actorId: 'other' }), error => error.status === 404);
+    await assert.rejects(replace(a, { ...replacement, expectedVersion: 2 }), error => error.status === 409);
+    await assert.rejects(replace(a, { ...replacement, documentId: 'identity' }), error => error.status === 409);
+    await assert.rejects(replace(a, { ...replacement, file: { ...replacement.file, storageKey: 'professional-documents/other/cv/file.pdf' } }), error => error.status === 422);
+    await replace(a, replacement, true);
+    assert.equal((await c.query(`SELECT count(*)::int AS n FROM icc."TerraqoProfessionalDocument" WHERE "replacesDocumentId"='replace-cv'`)).rows[0].n, 0);
+    const versions = await Promise.all([replace(a, replacement), replace(b, { ...replacement, file: { ...replacement.file, storageKey: 'professional-documents/profile/cv/prepared-b.pdf' } })]);
+    assert.deepEqual(versions.map(r => r.replayed).sort(), [false, true]); assert.equal(versions[0].id, versions[1].id);
+    assert.equal((await c.query(`SELECT "cvUrl" FROM icc."TerraqoProfessionalProfile" WHERE id='profile'`)).rows[0].cvUrl, `/api/terraqo/professional-documents/${versions[0].id}`);
+    await assert.rejects(replace(a, { ...replacement, file: { ...replacement.file, contentSha256: 'c'.repeat(64) } }), error => error.status === 409);
+    await assert.rejects(replace(a, { ...replacement, operationKey: 'different-operation-003' }), error => error.status === 409);
+    assert.deepEqual((await c.query(`SELECT "reviewStatus","reviewNote" FROM icc."TerraqoProfessionalDocument" WHERE id='replace-cv'`)).rows[0], { reviewStatus: 'VERIFIED', reviewNote: 'Historical review' });
+    const versionRow = (await c.query(`SELECT "reviewStatus",size,"replacesDocumentId" FROM icc."TerraqoProfessionalDocument" WHERE id=$1`, [versions[0].id])).rows[0];
+    assert.deepEqual(versionRow, { reviewStatus: 'SUBMITTED', size: 12, replacesDocumentId: 'replace-cv' });
+    await fails(c.query(`UPDATE icc."TerraqoProfessionalDocument" SET "replacementFingerprint"=$1 WHERE id=$2`, ['d'.repeat(64), versions[0].id]), '23514');
+    await insert(c, 'another-cv', null, 'profile', 'CV');
+    await assert.rejects(replace(a, { ...replacement, documentId: 'another-cv' }), error => error.status === 409);
+    await call(a, { ...command, documentId: versions[0].id });
+    assert.equal((await replace(a, replacement)).id, versions[0].id);
+    assert.equal((await c.query(`SELECT "withdrawnAt" IS NOT NULL AS retired FROM icc."TerraqoProfessionalDocument" WHERE id=$1`, [versions[0].id])).rows[0].retired, true);
+    await insert(c, 'different-pointer', null, 'profile', 'CV');
+    await c.query(`UPDATE icc."TerraqoProfessionalProfile" SET "cvUrl"='/api/terraqo/professional-documents/another-cv' WHERE id='profile'`);
+    await replace(a, { ...replacement, documentId: 'different-pointer', operationKey: 'pointer-operation-004', file: { ...replacement.file, storageKey: 'professional-documents/profile/cv/pointer.pdf' } });
+    assert.equal((await c.query(`SELECT "cvUrl" FROM icc."TerraqoProfessionalProfile" WHERE id='profile'`)).rows[0].cvUrl, '/api/terraqo/professional-documents/another-cv');
+    await insert(c, 'replace-versus-withdraw', null, 'profile', 'CV');
+    const mixed = await Promise.allSettled([
+      replace(a, { ...replacement, documentId: 'replace-versus-withdraw', operationKey: 'mixed-operation-0001', file: { ...replacement.file, storageKey: 'professional-documents/profile/cv/mixed.pdf' } }),
+      call(b, { ...command, documentId: 'replace-versus-withdraw' }),
+    ]);
+    assert.equal(mixed[1].status, 'fulfilled');
+    if (mixed[0].status === 'rejected') assert.equal(mixed[0].reason.status, 409);
+    assert.equal((await c.query(`SELECT "withdrawnAt" IS NOT NULL AS retired FROM icc."TerraqoProfessionalDocument" WHERE id='replace-versus-withdraw'`)).rows[0].retired, true);
+    // Retiring an old version affects that exact document, never a later version.
+    if (mixed[0].status === 'fulfilled') assert.equal((await c.query(`SELECT "withdrawnAt" FROM icc."TerraqoProfessionalDocument" WHERE id=$1`, [mixed[0].value.id])).rows[0].withdrawnAt, null);
+    await c.query(`INSERT INTO icc."TerraqoWorkspace" (id,slug,name,"ownerUserId","updatedAt") VALUES ('company','s18-company','Synthetic company','other',now());
+      INSERT INTO icc."TerraqoWorkspaceMember" (id,"workspaceId","userId",role,active,"updatedAt") VALUES ('member','company','owner','PROFESSIONAL',false,now());
+      INSERT INTO icc."TerraqoProfessionalDocument" (id,"professionalProfileId","workspaceId",type,"storageKey","fileName","contentType",size)
+      VALUES ('company-document','profile','company','CERTIFICATE','company-doc','synthetic.pdf','application/pdf',10)`);
+    const companyReplacement = { ...replacement, documentId: 'company-document', operationKey: 'company-operation-0001', file: { ...replacement.file, storageKey: 'professional-documents/profile/certificate/company.pdf' } };
+    await assert.rejects(replace(a, companyReplacement), error => error.status === 404);
+    await c.query(`UPDATE icc."TerraqoWorkspaceMember" SET active=true WHERE id='member'`);
+    const companyVersion = await replace(a, companyReplacement);
+    assert.equal((await c.query(`SELECT "workspaceId",type FROM icc."TerraqoProfessionalDocument" WHERE id=$1`, [companyVersion.id])).rows[0].workspaceId, 'company');
+    await c.query(`UPDATE icc."TerraqoWorkspaceMember" SET active=false WHERE id='member'`);
+    await assert.rejects(replace(a, companyReplacement), error => error.status === 404);
+    console.log('PASS replacement core: owner/key validation, rollback, concurrent exact replay, changed payload/key conflict, stable lineage, preserved verified review, new pending review, no replay resurrection, pointer preservation, mixed race and current company membership');
+    console.log('PENDING upload orchestration/compensation, readers/import workers, UI and hosted acceptance; not wired to live routes');
   } finally {
     await Promise.allSettled(sessions.map(c => c.end()));
     if (started) await pg('pg_ctl', ['-D', data, '-m', 'fast', '-w', 'stop']);

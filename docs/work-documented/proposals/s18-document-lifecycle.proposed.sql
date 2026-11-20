@@ -6,6 +6,8 @@ ALTER TABLE icc."TerraqoProfessionalDocument"
   ADD COLUMN "withdrawnByUserId" TEXT,
   ADD COLUMN "withdrawOperationKey" TEXT,
   ADD COLUMN "replacesDocumentId" TEXT,
+  ADD COLUMN "replacementOperationKey" TEXT,
+  ADD COLUMN "replacementFingerprint" TEXT,
   ADD COLUMN "lifecycleVersion" INTEGER NOT NULL DEFAULT 1,
   ADD CONSTRAINT "ProfessionalDocument_withdrawal_complete" CHECK (
     ("withdrawnAt" IS NULL AND "withdrawnByUserId" IS NULL AND "withdrawOperationKey" IS NULL)
@@ -13,12 +15,21 @@ ALTER TABLE icc."TerraqoProfessionalDocument"
         "withdrawOperationKey" IS NOT NULL AND length("withdrawOperationKey") BETWEEN 16 AND 128)
   ),
   ADD CONSTRAINT "ProfessionalDocument_lifecycle_positive" CHECK ("lifecycleVersion" > 0),
+  ADD CONSTRAINT "ProfessionalDocument_replacement_complete" CHECK (
+    ("replacesDocumentId" IS NULL AND "replacementOperationKey" IS NULL AND "replacementFingerprint" IS NULL)
+    OR ("replacesDocumentId" IS NOT NULL AND "replacementOperationKey" IS NOT NULL
+      AND length("replacementOperationKey") BETWEEN 16 AND 128 AND "replacementFingerprint" IS NOT NULL
+      AND "replacementFingerprint" ~ '^[a-f0-9]{64}$')
+  ),
   ADD CONSTRAINT "ProfessionalDocument_predecessor_not_self" CHECK ("replacesDocumentId" IS DISTINCT FROM id),
   ADD CONSTRAINT "ProfessionalDocument_predecessor_fk" FOREIGN KEY ("replacesDocumentId")
     REFERENCES icc."TerraqoProfessionalDocument"(id) ON DELETE RESTRICT ON UPDATE RESTRICT;
 
 CREATE UNIQUE INDEX "ProfessionalDocument_single_successor"
   ON icc."TerraqoProfessionalDocument" ("replacesDocumentId") WHERE "replacesDocumentId" IS NOT NULL;
+CREATE UNIQUE INDEX "ProfessionalDocument_replacement_operation"
+  ON icc."TerraqoProfessionalDocument" ("professionalProfileId", "replacementOperationKey")
+  WHERE "replacementOperationKey" IS NOT NULL;
 
 -- Actor is retained as historical attribution, not an ON DELETE SET NULL FK:
 -- deleting an account must not produce a partially populated withdrawal record.
@@ -49,6 +60,8 @@ BEGIN
   END IF;
 
   IF NEW."replacesDocumentId" IS DISTINCT FROM OLD."replacesDocumentId"
+    OR NEW."replacementOperationKey" IS DISTINCT FROM OLD."replacementOperationKey"
+    OR NEW."replacementFingerprint" IS DISTINCT FROM OLD."replacementFingerprint"
     OR NEW."professionalProfileId" <> OLD."professionalProfileId"
     OR NEW."workspaceId" IS DISTINCT FROM OLD."workspaceId" OR NEW.type <> OLD.type
     OR NEW."storageKey" <> OLD."storageKey" THEN

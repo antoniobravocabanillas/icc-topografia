@@ -1,5 +1,9 @@
 # Remaining platform execution — 3 November 2026
 
+## 20 de noviembre — S18: reemplazo documental transaccional validado
+
+Núcleo de reemplazo con versión esperada, huella de contenido e idempotencia implementado; conserva revisión anterior y crea sucesor pendiente. PostgreSQL local real PASS: carreras/reintentos, contenido cambiado, propietario ajeno, membresía empresarial vigente/revocada, rollback, retiro concurrente y puntero CV condicional. TypeScript/ESLint PASS. SQL propuesto ampliado fuera de migraciones; sin rutas activas, cambios remotos ni despliegue. Próximo: integrar reserva/compensación de cargas y barreras de lectura/importación antes de API/UI y staging. Detalle: `proposals/s18-document-lifecycle.md`.
+
 ## 20 de noviembre — S18: retiro transaccional y linaje ensayados en PostgreSQL local
 
 SQL propuesto fuera de migraciones activas y núcleo transaccional de retiro implementados. PostgreSQL desechable real PASS: compatibilidad de filas antiguas, sucesor único, aislamiento de propietario, carreras de reemplazo/retiro, reintento exacto, conflicto de versión, rollback y limpieza condicional de cvUrl. Se conserva revisión y almacenamiento; clúster y carpeta temporal eliminados tras comprobación. No hay endpoint conectado, migración remota ni despliegue. Próximo: comando de reemplazo, barreras de descarga/importación, compatibilidad de borrado de cuenta y UI antes del gate S18 alojado. Detalle: `proposals/s18-document-lifecycle.md`.
