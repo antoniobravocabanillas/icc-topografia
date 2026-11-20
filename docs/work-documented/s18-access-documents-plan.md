@@ -40,3 +40,13 @@ No migration or deployment executed for this inventory candidate. Next: document
 Fixture limitation: server shutdown logs exposed a missing preloaded `satoshi-black.woff2` asset (regular/medium/bold were supplied). Functional browser assertions passed, but do not treat these screenshots as final hosted typography approval. Recheck with the complete font set during staging visual acceptance. The isolated owner test initially used unsupported top-level await and direct Prisma mock casts; moved it into async main and made the deliberate mock boundary explicit.
 
 Final local checks after those fixes: `tsc --noEmit --incremental false`, focused ESLint, owner-query contract and inventory Chromium suite PASS. Temporary fixture fonts/generated next-env removed; owned Next process stopped. Existing access-expiry and revocation browser suites also passed during this bounded change. Hosted acceptance remains pending.
+
+## Document lifecycle dependency — bounded uploads
+
+Further audit corrects the earlier broad statement about deletion: the personal web route has GET only, but `portal-professional-documents.ts` already supports guarded native deletion of rejected non-identity documents without imports, including audit, version checks, deferred cleanup and quota retention. Preserve it; it is not general withdrawal/version history.
+
+Web multipart previously parsed without an aggregate byte limit. Both transports now use `readBoundedRequestBytes`: actual-byte cap, deadline and cancellation before multipart parsing, including absent/false Content-Length. Web allows two 10 MiB files plus bounded envelope; native retains its existing cap. Per-file validation is unchanged. Invalid multipart returns 400; timeout returns 408.
+
+Synthetic streaming tests and existing identity, native CV, native identity, native document deletion and cleanup suites PASS. DB/storage are mocked in these suites; no remote state touched. Initial standalone runs needed the repository's server-only preload for Next navigation dependencies; this was a harness correction, not a product bypass. Lifecycle contract and required real-DB concurrency matrix are documented in `proposals/s18-document-lifecycle.md`; fields are proposed only, not added or migrated. No UI change in this prerequisite and no new visual acceptance claim.
+
+Final TypeScript (non-incremental), focused ESLint and diff-check PASS after correcting a HeadersInit union in the test. Run the streaming test with `node --require ./scripts/portal-route-test-preload.cjs --import tsx scripts/test-professional-upload-body.ts`.

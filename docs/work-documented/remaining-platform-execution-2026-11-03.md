@@ -1,5 +1,9 @@
 # Remaining platform execution — 3 November 2026
 
+## 20 de noviembre — S18: protección de carga y contrato documental
+
+Web y Android ahora limitan los bytes reales antes de interpretar multipart; se conserva el límite individual y se rechaza tamaño total excedido, formato inválido o timeout. Pruebas sintéticas de stream y regresiones de identidad/CV/eliminación/limpieza PASS. Auditoría ampliada encontró eliminación nativa ya existente y protegida; falta retiro/versionado en web, no hay que duplicar ni debilitar esa eliminación. Contrato en `proposals/s18-document-lifecycle.md`, sin campos ni migración aplicada. Siguiente: implementar ciclo de vida y matriz transaccional aislada; aceptación S18 staging sigue pendiente. Sin despliegue ni datos remotos modificados.
+
 ## 20 de noviembre — S18: pantalla consolidada de accesos implementada localmente
 
 Nueva ruta `/portal/accesos`, búsqueda por selección/destinatario, permisos y vencimientos, revocación inline y recuperación explícita de conflictos. Navegación integrada con Documentos y Mi plan. Prueba Chromium de búsqueda, vacío, cancelación, conflicto y continuidad de versión PASS; contrato de consulta del propietario con DB simulada PASS. Capturas escritorio/móvil inspeccionadas. No es aceptación autenticada alojada ni cierre de S18.

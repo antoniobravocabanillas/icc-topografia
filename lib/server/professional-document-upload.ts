@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { BoundedRequestBodyError, readBoundedRequestBytes } from "./bounded-request-body";
 import { reservePrivateUploadFiles, compensatePrivateUploadFiles } from "./native-professional-upload-compensation";
 import { recoverProfessionalDocumentCleanup } from "./professional-document-cleanup";
 import { BillingError } from "@/lib/terraqo/billing/provider";
@@ -59,23 +60,16 @@ function validateFile(file: File, type: DocumentType) {
 }
 
 class IdentityUploadConflict extends Error {}
-class NativeUploadTooLarge extends Error {}
 const nativeBodyLimit = 4 * 1024 * 1024 + 65536;
+// Web identity submission contains two files; allow bounded multipart overhead.
+const webBodyLimit = 2 * MAX_PROFESSIONAL_DOCUMENT_SIZE + 65536;
 async function uploadFormData(request:Request, native:boolean) {
-  if (!native) return request.formData();
-  // Content-Length is client-controlled. Bound actual bytes before parsing any
-  // multipart field, including duplicate or unexpected parts rejected later.
-  const reader=request.body?.getReader();
-  if(!reader)return new FormData();
-  const chunks:Uint8Array[]=[];let total=0;
+  const bytes = await readBoundedRequestBytes(request, native ? nativeBodyLimit : webBodyLimit);
   try {
-    while(true){const {done,value}=await reader.read();if(done)break;total+=value.length;
-      if(total>nativeBodyLimit){await reader.cancel().catch(()=>undefined);throw new NativeUploadTooLarge();}
-      chunks.push(value);
-    }
-  }finally{reader.releaseLock();}
-  const bytes=new Uint8Array(total);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
-  return new Request(request.url,{method:request.method,headers:request.headers,body:bytes.buffer}).formData();
+    return await new Request(request.url,{method:request.method,headers:request.headers,body:bytes.buffer as ArrayBuffer}).formData();
+  } catch {
+    throw new BoundedRequestBodyError("INVALID_BODY", 400);
+  }
 }
 const identityUploadAllowed=(status:string)=>["PENDING_DOCUMENTS","REJECTED"].includes(status);
 
@@ -84,8 +78,6 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
   const native = request.headers.get("x-terraqo-native-upload") === "1";
   try {
     if (native && !requestedWorkspaceId) return fail("Selecciona una empresa antes de cargar desde Android.", 422);
-    const contentLength = Number(request.headers.get("content-length") || 0);
-    if (native && contentLength > nativeBodyLimit) return fail("El archivo supera el límite móvil de 4 MB.", 413);
     const formData = await uploadFormData(request,native);
     const purpose = String(formData.get("purpose") || "");
     if (native && !["document", "cv", "identity"].includes(purpose)) return fail("Esta carga móvil requiere una categoría documental.", 422);
@@ -265,7 +257,12 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
       throw error;
     }
   } catch (error) {
-    if(error instanceof NativeUploadTooLarge)return fail("La carga supera el límite móvil de 4 MB.",413);
+    if (error instanceof BoundedRequestBodyError) {
+      const message = error.code === "BODY_TOO_LARGE"
+        ? native ? "La carga supera el límite móvil de 4 MB." : "La carga supera el límite total de 20 MB. Cada archivo admite hasta 10 MB."
+        : error.code === "BODY_TIMEOUT" ? "La carga tardó demasiado. Vuelve a intentarlo." : "El formato de la carga no es válido.";
+      return fail(message, error.status);
+    }
     if(error instanceof IdentityUploadConflict)return fail(error.message,409);
     if (native && !(error instanceof BillingError)) {
       // Never log filenames, storage keys, file contents or personal profile data.
