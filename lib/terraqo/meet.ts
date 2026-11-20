@@ -8,7 +8,7 @@ export class TerraqoMeetError extends Error {
   }
 }
 
-const allowedReturnPaths = new Set(["/portal/mensajes", "/admin/terraqo/mensajes"]);
+const allowedReturnPaths = new Set(["/portal/mensajes", "/admin/mensajes", "/admin/terraqo/mensajes"]);
 
 export function safeMeetReturnPath(path?: string | null) {
   return path && allowedReturnPaths.has(path) ? path : "/portal/mensajes";

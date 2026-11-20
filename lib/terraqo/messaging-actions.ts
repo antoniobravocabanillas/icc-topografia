@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 import { auth } from "@/auth";
 import { sendMessage, startConversation } from "@/lib/terraqo/messaging";
 
-const allowedPaths = new Set(["/portal/mensajes", "/admin/terraqo/mensajes"]);
+const allowedPaths = new Set(["/portal/mensajes", "/admin/mensajes", "/admin/terraqo/mensajes"]);
 
 function safePath(path: string) {
   return allowedPaths.has(path) ? path : "/portal/mensajes";

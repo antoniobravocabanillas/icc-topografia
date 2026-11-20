@@ -59,6 +59,7 @@ export async function GET() {
                 conversationId: true,
                 sender: { select: { name: true, email: true } },
                 attachmentItems: { select: { kind: true }, take: 1 },
+                conversation: { select: { contexts: { select: { id: true }, take: 1 } } },
               },
               orderBy: { createdAt: "desc" },
             })
@@ -87,7 +88,7 @@ export async function GET() {
           channel: "message" as const,
           title: latestMessage.sender.name || latestMessage.sender.email,
           body:
-            latestMessage.body ||
+            latestMessage.conversation.contexts.length ? "Tienes un nuevo mensaje en una conversación profesional." : latestMessage.body ||
             (latestMessage.attachmentItems[0]?.kind === "AUDIO"
               ? "Envió un mensaje de voz"
               : "Compartió un archivo"),

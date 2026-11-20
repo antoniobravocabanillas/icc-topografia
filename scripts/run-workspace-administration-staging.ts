@@ -85,6 +85,14 @@ async function main() {
     };
     step = "served-candidate";
     await assertServed();
+    if (process.env.S15_STAGING_CONVERSATION_GATE === "conversation") {
+      step = "s15-conversation";
+      const { verifyS15Conversation } = await import("./verify-s15-conversation");
+      await verifyS15Conversation(origin);
+      await assertServed();
+      console.log("PASS S15 staging: contextual conversation journey verified.");
+      return;
+    }
     if (process.env.S14_STAGING_EVALUATION_GATE === "evaluation") {
       step = "s14-evaluation";
       const { verifyS14Evaluation } = await import("./verify-s14-evaluation");

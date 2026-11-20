@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/server/authz";
 import { fail, handleApiError, ok } from "@/lib/server/api";
+import { BoundedRequestBodyError, readBoundedJson } from "@/lib/server/bounded-request-body";
 import {
   getConversationHub,
   sendMessage,
@@ -33,13 +34,15 @@ export async function POST(request: Request) {
   const { response, session } = await requireUser();
   if (response) return response;
   try {
-    const body = await request.json();
+    const parsed = await readBoundedJson(request, 32_768);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return fail("Solicitud no válida.", 400);
+    const body = parsed as Record<string, unknown>;
     if (body.action === "start")
       return ok(
         await startConversation({
           actorUserId: session.user.id,
           recipientUserId: String(body.recipientUserId || ""),
-          workspaceId: body.workspaceId || undefined,
+          workspaceId: typeof body.workspaceId === "string" ? body.workspaceId : undefined,
         }),
       );
     if (body.action === "send")
@@ -53,6 +56,7 @@ export async function POST(request: Request) {
       );
     return fail("Accion no valida.", 400);
   } catch (error) {
+    if (error instanceof BoundedRequestBodyError) return fail("Solicitud no válida o demasiado grande.", error.status);
     if (error instanceof TerraqoMessagingError)
       return fail(error.message, error.status);
     return handleApiError(error);

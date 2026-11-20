@@ -1,63 +1,6 @@
-import { ConversationHub } from "@/components/terraqo/conversation-hub";
-import { ConversationRequestsPanel } from "@/components/terraqo/conversation-requests-panel";
-import { CollaborationPanel } from "@/components/terraqo/collaboration-panel";
-import { ClosurePanel } from "@/components/terraqo/closure-panel";
-import type { Role } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
-import { requireAdminPage } from "@/lib/server/admin-page-auth";
-import { getConversationHub } from "@/lib/terraqo/messaging";
-import { getWorkspaceForUser } from "@/lib/terraqo/workspace-access";
-import { requireWorkspaceModule } from "@/lib/terraqo/workspace-scope";
-
+import { redirect } from "next/navigation";
 export const dynamic = "force-dynamic";
-
-export default async function WorkspaceMessagesPage({ searchParams }: { searchParams: Promise<{ conversation?: string }> }) {
-  const session = await requireAdminPage(["ADMIN", "SUPER_ADMIN"]);
-  const params = await searchParams;
-  const workspace = await getWorkspaceForUser(session.user.id, session.user.role as Role);
-  await requireWorkspaceModule("PROFESSIONAL_MESSAGING", workspace?.id);
-  const [data, projects] = await Promise.all([
-    getConversationHub(session.user.id, params.conversation, workspace?.id),
-    workspace ? prisma.project.findMany({
-      where: { terraqoWorkspaceId: workspace.id, deletedAt: null },
-      select: { id: true, title: true, terraqoWorkspaceId: true },
-      orderBy: { updatedAt: "desc" }
-    }) : []
-  ]);
-  const collaborationConversations = data.conversations
-    .filter((conversation) => conversation.contexts.length > 0)
-    .map((conversation) => {
-      const professional = conversation.participants.find(
-        (participant) => participant.userId !== session.user.id,
-      )?.user;
-      return {
-        id: conversation.id,
-        label: conversation.contexts.map((context) => context.labelSnapshot).join(" · "),
-        professionalName: professional?.name || professional?.email || "Profesional",
-      };
-    });
-
-  return (
-    <div className="space-y-6">
-      <header>
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Red Terraqo</p>
-        <h1 className="mt-2 font-display text-3xl font-bold">Mensajeria del workspace</h1>
-        <p className="mt-2 text-muted-foreground">Conecta al equipo de {workspace?.name || "la empresa"} con profesionales autorizados sin mezclar conversaciones de otros clientes.</p>
-      </header>
-      {process.env.TERRAQO_CONTEXTUAL_MESSAGING_V1 === "true" ? (
-        <ConversationRequestsPanel basePath="/admin/terraqo/mensajes" />
-      ) : null}
-      {process.env.TERRAQO_COLLABORATION_V1 === "true" ? (
-        <CollaborationPanel
-          mode="workspace"
-          basePath="/admin/terraqo/mensajes"
-          conversations={collaborationConversations}
-        />
-      ) : null}
-      {process.env.TERRAQO_CLOSURE_V1 === "true" ? (
-        <ClosurePanel mode="workspace" />
-      ) : null}
-      <ConversationHub data={data} currentUserId={session.user.id} basePath="/admin/terraqo/mensajes" compactIntro projects={projects} />
-    </div>
-  );
+export default async function LegacyMessagesPage({ searchParams }: { searchParams: Promise<{ conversation?: string }> }) {
+  const { conversation } = await searchParams;
+  redirect("/admin/mensajes" + (conversation ? "?conversation=" + encodeURIComponent(conversation) : ""));
 }

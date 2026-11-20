@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Ban, Check, Clock3, MessageSquareText, ShieldAlert, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -45,13 +45,15 @@ const statusLabel: Record<ConversationRequest["status"], string> = {
 export function ConversationRequestsPanel({
   basePath,
 }: {
-  basePath: "/portal/mensajes" | "/admin/terraqo/mensajes";
+  basePath: "/portal/mensajes" | "/admin/mensajes" | "/admin/terraqo/mensajes";
 }) {
   const [requests, setRequests] = useState<ConversationRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [workingId, setWorkingId] = useState("");
   const [reasonById, setReasonById] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
+  const decisionRef = useRef(false);
+  const [result, setResult] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -82,14 +84,17 @@ export function ConversationRequestsPanel({
     request: ConversationRequest,
     action: "ACCEPT" | "REJECT" | "BLOCK" | "REPORT",
   ) {
+    if (decisionRef.current) return;
     const reason = reasonById[request.id]?.trim() || "";
     if ((action === "BLOCK" || action === "REPORT") && !reason) {
       setError("Indica el motivo antes de bloquear o reportar.");
       document.getElementById(`conversation-request-reason-${request.id}`)?.focus();
       return;
     }
+    decisionRef.current = true;
     setWorkingId(request.id);
     setError("");
+    setResult("");
     try {
       const response = await fetch(
         `/api/v1/conversation-requests/${encodeURIComponent(request.id)}/decision`,
@@ -106,10 +111,14 @@ export function ConversationRequestsPanel({
       const payload = (await response.json().catch(() => ({}))) as ApiEnvelope<unknown>;
       if (!response.ok)
         setError(apiErrorMessage(payload, "No se pudo resolver la solicitud."));
-      else await load();
+      else {
+        setResult(action === "REPORT" ? "Reporte enviado para revisión." : action === "ACCEPT" ? "Solicitud aceptada. La evidencia conserva sus permisos." : action === "BLOCK" ? "Solicitud bloqueada." : "Solicitud rechazada.");
+        await load();
+      }
     } catch {
       setError("La decisión no se envió por un problema de conexión. Puedes reintentarlo sin perder el motivo.");
     } finally {
+      decisionRef.current = false;
       setWorkingId("");
     }
   }
@@ -120,15 +129,12 @@ export function ConversationRequestsPanel({
 
   return (
     <section aria-busy={loading || Boolean(workingId)} className="overflow-hidden rounded-[1.4rem] border border-slate-200 bg-white shadow-[0_16px_50px_-38px_rgba(15,23,42,0.55)]">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b bg-[linear-gradient(120deg,#f8fbff_0%,#eef8f6_100%)] px-5 py-4">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b bg-[#132d46] px-5 py-4 text-white">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#0b6f68]">
-            Acceso controlado
-          </p>
-          <h2 className="mt-1 font-display text-lg font-bold text-slate-950">
+          <h2 className="font-display text-lg font-bold">
             Solicitudes de conversación
           </h2>
-          <p className="mt-1 text-xs text-slate-600">
+          <p className="mt-1 text-xs leading-5 text-slate-200">
             Aceptar una conversación no comparte evidencias ni abre el expediente.
           </p>
         </div>
@@ -143,7 +149,7 @@ export function ConversationRequestsPanel({
         {loading ? (
           <p role="status" aria-live="polite" className="px-5 py-6 text-sm text-slate-500">Cargando solicitudes…</p>
         ) : (
-          requests.slice(0, 12).map((request) => {
+          requests.map((request) => {
             const incoming = request.direction === "INCOMING";
             const counterpart = incoming ? request.requester : request.recipient;
             const pendingIncoming = incoming && request.status === "PENDING";
@@ -198,7 +204,7 @@ export function ConversationRequestsPanel({
                         <div className="flex flex-wrap gap-2">
                           <Button
                             size="sm"
-                            disabled={workingId === request.id}
+                            disabled={Boolean(workingId)}
                             onClick={() => void decide(request, "ACCEPT")}
                           >
                             <Check className="h-4 w-4" /> Aceptar
@@ -206,7 +212,7 @@ export function ConversationRequestsPanel({
                           <Button
                             size="sm"
                             variant="outline"
-                            disabled={workingId === request.id}
+                            disabled={Boolean(workingId)}
                             onClick={() => void decide(request, "REJECT")}
                           >
                             <X className="h-4 w-4" /> Rechazar
@@ -214,7 +220,7 @@ export function ConversationRequestsPanel({
                           <Button
                             size="sm"
                             variant="outline"
-                            disabled={workingId === request.id}
+                            disabled={Boolean(workingId)}
                             onClick={() => void decide(request, "BLOCK")}
                           >
                             <Ban className="h-4 w-4" /> Bloquear
@@ -222,7 +228,7 @@ export function ConversationRequestsPanel({
                           <Button
                             size="sm"
                             variant="ghost"
-                            disabled={workingId === request.id}
+                            disabled={Boolean(workingId)}
                             onClick={() => void decide(request, "REPORT")}
                           >
                             <ShieldAlert className="h-4 w-4" /> Reportar
@@ -231,7 +237,7 @@ export function ConversationRequestsPanel({
                       </div>
                     ) : request.status === "ACCEPTED" && request.conversationId ? (
                       <Button asChild size="sm" variant="outline" className="mt-3">
-                        <Link href={`${basePath}?conversation=${request.conversationId}`}>
+                        <Link href={`${basePath}?conversation=${encodeURIComponent(request.conversationId)}`}>
                           <MessageSquareText className="h-4 w-4" /> Abrir conversación
                         </Link>
                       </Button>
@@ -243,11 +249,13 @@ export function ConversationRequestsPanel({
           })
         )}
       </div>
+      {result ? <p role="status" aria-live="polite" className="border-t bg-slate-50 px-5 py-3 text-sm text-[#132d46]">{result}</p> : null}
       {error ? (
         <p role="alert" className="border-t bg-red-50 px-5 py-3 text-xs font-semibold text-red-700">
           {error}
         </p>
       ) : null}
+      {error && !loading ? <Button variant="outline" className="m-4" disabled={Boolean(workingId)} onClick={() => void load()}>Recargar solicitudes</Button> : null}
     </section>
   );
 }

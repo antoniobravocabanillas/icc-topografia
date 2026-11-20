@@ -45,6 +45,7 @@ import {
 import { useAdaptivePolling } from "@/components/terraqo/use-adaptive-polling";
 import { CONVERSATION_POLLING_POLICY } from "@/lib/terraqo/adaptive-polling";
 import styles from "./conversation-hub.module.css";
+import { useMessageDraft } from "./message-draft";
 
 type Conversation = ConversationHubData["conversations"][number];
 type Message = Conversation["messages"][number];
@@ -57,7 +58,7 @@ const MESSAGE_REFRESH_EVENTS = ["terraqo:messages-changed"] as const;
 type ConversationHubProps = {
   data: ConversationHubData;
   currentUserId: string;
-  basePath: "/portal/mensajes" | "/admin/terraqo/mensajes";
+  basePath: "/portal/mensajes" | "/admin/mensajes" | "/admin/terraqo/mensajes";
   compactIntro?: boolean;
   projects?: Array<{
     id: string;
@@ -149,7 +150,7 @@ export function ConversationHub(props: ConversationHubProps) {
   // Never carry an attachment or pending recording to a different recipient.
   return (
     <ConversationWorkspace
-      key={props.data.selected?.id || "inbox"}
+      key={`${props.currentUserId}:${props.data.selected?.id || "inbox"}`}
       {...props}
     />
   );
@@ -169,7 +170,11 @@ function ConversationWorkspace({
   const [detailTab, setDetailTab] = useState<DetailTab>("chat");
   const [newMessageOpen, setNewMessageOpen] = useState(false);
   const [recipientQuery, setRecipientQuery] = useState("");
-  const [body, setBody] = useState("");
+  const draft = useMessageDraft(currentUserId, selected?.id);
+  const { body, setBody } = draft;
+  const [sent, setSent] = useState(false);
+  const [accessRequest, setAccessRequest] = useState(false);
+  const [proposalAvailable, setProposalAvailable] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [audioUrl, setAudioUrl] = useState("");
   const [durationMs, setDurationMs] = useState(0);
@@ -183,7 +188,6 @@ function ConversationWorkspace({
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
   const sendingRef = useRef(false);
-  const operationKeyRef = useRef("");
   const mountedRef = useRef(true);
   const acquiringRef = useRef(false);
   const streamRef = useRef<MediaStream | null>(null);
@@ -207,6 +211,7 @@ function ConversationWorkspace({
     const payload = await response.json();
     if (!payload?.data) return false;
     const nextHub = payload.data as ConversationHubData;
+    if (selected?.id && nextHub.selected?.id !== selected.id) return false;
     const nextRevision = hubRevision(nextHub);
     const changed = pollRevisionRef.current !== nextRevision;
     pollRevisionRef.current = nextRevision;
@@ -224,16 +229,8 @@ function ConversationWorkspace({
     pollRevisionRef.current = hubRevision(data);
   }, [data]);
   useEffect(() => {
-    if (!selected?.id) return;
-    setBody(window.localStorage.getItem(`terraqo:message-draft:${selected.id}`) || "");
-    operationKeyRef.current = "";
-  }, [selected?.id]);
-  useEffect(() => {
-    if (!selected?.id) return;
-    const key = `terraqo:message-draft:${selected.id}`;
-    if (body) window.localStorage.setItem(key, body);
-    else window.localStorage.removeItem(key);
-  }, [body, selected?.id]);
+    setProposalAvailable(Boolean(document.getElementById("collaboration-proposal-form")));
+  }, []);
   useAdaptivePolling(pollHub, {
     policy: CONVERSATION_POLLING_POLICY,
     refreshEvents: MESSAGE_REFRESH_EVENTS,
@@ -275,6 +272,12 @@ function ConversationWorkspace({
 
   function selectFile(next: File | null) {
     if (!next) return;
+    if (next.name.length > 200) {
+      setError("El nombre del archivo supera los 200 caracteres. Renómbralo y vuelve a seleccionarlo.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (imageInputRef.current) imageInputRef.current.value = "";
+      return;
+    }
     if (next.size > 20 * 1024 * 1024) {
       setError("El archivo supera los 20 MB. Selecciona uno más pequeño.");
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -387,14 +390,15 @@ function ConversationWorkspace({
   async function send(event?: FormEvent, textOverride?: string): Promise<boolean> {
     event?.preventDefault();
     const messageBody = textOverride ?? body;
-    if (!selected || sendingRef.current || recording || (!messageBody.trim() && !file))
+    if (!selected || !draft.ready || sendingRef.current || recording || (!messageBody.trim() && !file))
       return false;
     sendingRef.current = true;
     setSending(true);
     setError("");
-    const operationKey = operationKeyRef.current || crypto.randomUUID();
-    operationKeyRef.current = operationKey;
+    setSent(false);
     try {
+      const pending = await draft.prepare(messageBody, file, durationMs);
+      const operationKey = pending.operationKey;
       const response = file
         ? await fetch("/api/terraqo/messages/attachments", {
             method: "POST",
@@ -404,7 +408,7 @@ function ConversationWorkspace({
               form.set("body", messageBody);
               form.set("file", file);
               form.set("operationKey", operationKey);
-              if (durationMs) form.set("durationMs", String(durationMs));
+              if (pending.attachment?.durationMs) form.set("durationMs", String(pending.attachment.durationMs));
               return form;
             })(),
           })
@@ -419,14 +423,21 @@ function ConversationWorkspace({
             }),
           });
       const payload = await response.json();
-      if (!response.ok)
+      if (!response.ok) {
+        // These statuses are validation failures before commit in the existing
+        // messaging routes. Uncertain/network/5xx outcomes retain their key.
+        if ([400, 413].includes(response.status) && payload?.error)
+          draft.reject(operationKey);
         throw new Error(
           payload?.error?.message || "No pudimos enviar el mensaje.",
         );
-      setBody("");
-      operationKeyRef.current = "";
+      }
+      if (!draft.complete(operationKey))
+        setError("Mensaje enviado. No pudimos limpiar el borrador local; su identificador se conserva para evitar duplicados.");
+      setSent(true);
       clearAttachment();
-      await refreshHub();
+      // The POST has succeeded. A failed history refresh is not a failed send.
+      await refreshHub().catch(() => setError("Mensaje enviado. No pudimos actualizar el historial; vuelve a abrir la conversación."));
       window.dispatchEvent(new CustomEvent("terraqo:message-sent"));
       return true;
     } catch (cause) {
@@ -553,7 +564,7 @@ function ConversationWorkspace({
         </header>
       ) : null}
 
-      <div data-contact-open={contactOpen} className={styles.workspace}>
+      <div data-contact-open={contactOpen} data-contextual={Boolean(selected?.contexts.length)} className={styles.workspace}>
         <aside
           className={`${selected && showConversation ? "max-lg:hidden" : ""} flex min-h-0 min-w-0 flex-col border-r bg-white`}
         >
@@ -762,36 +773,37 @@ function ConversationWorkspace({
 
               {detailTab === "chat" ? (
                 <>
+                    {selected.contexts.length ? (
+                      <aside className={styles.context}>
+                        <div className="flex items-center gap-2">
+                          <BadgeCheck className="h-4 w-4 shrink-0" aria-hidden />
+                          <p className="min-w-0 truncate text-xs font-semibold" title={selected.contexts.map(context => context.labelSnapshot).join(" · ")}>
+                            {selected.contexts.some(context => context.protected) ? "Contexto protegido" : selected.contexts.map(context => context.labelSnapshot).join(" · ")}
+                          </p>
+                        </div>
+                        <p className="mt-1 text-xs leading-5 text-slate-600">Las evidencias requieren acceso aparte.</p>
+                        <div className={styles.contextActions}>
+                          {selected.contexts.some(context => context.protected) ? (
+                            <button type="button" className={styles.contextAction} aria-label="Solicitar acceso al titular" disabled={!draft.ready || sending || Boolean(draft.pending)} onClick={() => {
+                              setAccessRequest(true);
+                              if (!body.trim()) setBody("Quisiera solicitar acceso a la evidencia de esta conversación. ¿Puedes compartir una selección autorizada e indicar su vigencia?");
+                              composerRef.current?.focus();
+                            }}>Solicitar acceso</button>
+                          ) : null}
+                          {proposalAvailable ? <a href="#collaboration-proposal-form" className={styles.contextAction}>Proponer colaboración</a> : null}
+                        </div>
+                        <details className={styles.contextDetails}>
+                          <summary>Permisos y acuerdos</summary>
+                          <p>Solicitar acceso prepara un mensaje editable; no lo envía ni cambia permisos. El titular decide qué compartir y su vigencia.</p>
+                          <p>Proponer colaboración abre S21. Revisa el destinatario y el alcance: un mensaje no constituye un acuerdo y la propuesta requiere aceptación explícita.</p>
+                        </details>
+                      </aside>
+                    ) : null}
                   <div
                     ref={messagesRef}
                     aria-label="Historial de mensajes"
-                    className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-6 sm:px-6"
+                    className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-6"
                   >
-                    <div className="text-center">
-                      <span className="rounded-full bg-white px-3 py-1 text-[10px] font-semibold text-slate-500 shadow-sm">
-                        Conversación privada
-                      </span>
-                    </div>
-                    {selected.contexts.length ? (
-                      <aside className="mx-auto w-full max-w-2xl rounded-2xl border border-[#0b6f68]/15 bg-[#edf8f6] px-4 py-3 text-left">
-                        <div className="flex items-start gap-3">
-                          <BadgeCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#0b6f68]" />
-                          <div>
-                            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#0b6f68]">
-                              Contexto de la conversación
-                            </p>
-                            <p className="mt-1 text-sm font-semibold text-slate-800">
-                              {selected.contexts
-                                .map((context) => context.labelSnapshot)
-                                .join(" · ")}
-                            </p>
-                            <p className="mt-1 text-xs leading-5 text-slate-600">
-                              Esta referencia no concede acceso a expedientes, evidencias ni documentos protegidos.
-                            </p>
-                          </div>
-                        </div>
-                      </aside>
-                    ) : null}
                     {selected.messages.map((message) => (
                       <MessageBubble
                         key={message.id}
@@ -820,6 +832,12 @@ function ConversationWorkspace({
                     onSubmit={send}
                     className="border-t bg-white p-3 sm:p-4"
                   >
+                    {draft.pending ? (
+                      <p role="status" className={styles.pending}>
+                        Envío pendiente de confirmar. Reintenta el mismo mensaje; se conserva su identificador para evitar duplicados.
+                        {draft.pending.attachment ? ` Selecciona nuevamente «${draft.pending.attachment.name}» sin modificarlo.` : ""}
+                      </p>
+                    ) : null}
                     {file ? (
                       <div className="mb-3 flex items-center gap-3 rounded-2xl border bg-slate-50 p-3">
                         {audioUrl ? (
@@ -863,9 +881,9 @@ function ConversationWorkspace({
                         name="message"
                         data-ai-writing="manual"
                         aria-label="Escribe un mensaje"
-                        disabled={sending}
+                        disabled={sending || !draft.ready || Boolean(draft.pending)}
                         value={body}
-                        onChange={(event) => setBody(event.target.value)}
+                        onChange={(event) => { setSent(false); setBody(event.target.value); }}
                         onKeyDown={handleComposerKey}
                         rows={2}
                         maxLength={4000}
@@ -915,11 +933,11 @@ function ConversationWorkspace({
                             <ImageIcon className="h-5 w-5" />
                           </button>
                           <ComposerEmojiPicker
-                            disabled={sending}
+                            disabled={sending || Boolean(draft.pending)}
                             onSelect={insertEmoji}
                           />
                           <WritingAssistantTrigger
-                            disabled={sending || recording}
+                            disabled={sending || recording || Boolean(draft.pending)}
                             field={composerRef}
                             onUseAndSend={(text) => send(undefined, text)}
                           />
@@ -927,7 +945,7 @@ function ConversationWorkspace({
                             type="button"
                             onClick={toggleRecording}
                             className={`${composerToolClass} ${recording ? "bg-rose-50 text-rose-700" : ""}`}
-                            disabled={sending}
+                            disabled={sending || Boolean(draft.pending)}
                             aria-label={
                               recording ? "Detener grabación" : "Grabar audio"
                             }
@@ -952,18 +970,22 @@ function ConversationWorkspace({
                         </div>
                         <button
                           disabled={
-                            sending || recording || (!body.trim() && !file)
+                            sending || !draft.ready || recording || (!body.trim() && !file) || Boolean(draft.pending?.attachment && !file)
                           }
-                          className="ml-auto inline-flex h-11 items-center gap-2 rounded-xl bg-[#0b6f68] px-4 text-sm font-bold text-white disabled:opacity-45"
+                          className="ml-auto inline-flex h-11 w-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#0b6f68] text-sm font-bold text-white disabled:opacity-45 sm:w-auto sm:px-4"
                         >
                           <Send className="h-4 w-4" />
-                          {sending ? "Enviando…" : "Enviar"}
+                          <span className="sr-only sm:not-sr-only">{sending ? "Enviando…" : draft.pending ? "Reintentar envío" : "Enviar"}</span>
                         </button>
                       </div>
                     </div>
                     <p className="mt-2 text-xs text-slate-500">
                       Enter para enviar · Shift + Enter para nueva línea ·
                       máximo 20 MB
+                    </p>
+                    <p role="status" aria-live="polite" className="mt-2 text-xs text-slate-600">
+                      {sending ? "Enviando mensaje…" : sent ? "Mensaje enviado." : draft.storageError || (draft.pending ? "Operación pendiente guardada en este dispositivo." : body && draft.ready ? "Borrador guardado en este dispositivo." : "")}
+                      {accessRequest && !sent ? " Revisa la solicitud de acceso antes de enviarla." : ""}
                     </p>
                     {error ? (
                       <p

@@ -1,4 +1,5 @@
 .workspace {
+  --conversation-navy: #132d46;
   display: grid;
   height: clamp(520px, calc(100dvh - 210px), 960px);
   min-width: 0;
@@ -34,6 +35,85 @@
 .composer textarea {
   caret-color: #0b6f68;
 }
+.context {
+  flex-shrink: 0;
+  width: calc(100% - 24px);
+  max-width: 42rem;
+  margin-inline: auto;
+  margin-block: 8px 0;
+  border: 1px solid #ccd9e3;
+  border-radius: 12px;
+  background: #edf3f8;
+  padding: 8px 12px;
+  text-align: left;
+}
+.contextAction {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  justify-content: center;
+  padding: 6px 8px;
+  border: 1px solid #aabfce;
+  border-radius: 8px;
+  color: #132d46;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.4;
+}
+.contextActions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+.contextDetails { margin-top: 0; max-height: 150px; overflow-y: auto; font-size: 11px; line-height: 1.6; }
+.contextDetails summary { cursor: pointer; min-height: 44px; padding-block: 12px; }
+.contextDetails p { margin-top: 8px; }
+.contextAction:hover { background: #dce7ef; }
+.contextAction:disabled { opacity: .5; }
+.pending {
+  margin-bottom: 12px;
+  border-radius: 8px;
+  background: #fff4d9;
+  padding: 12px;
+  color: #69461a;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.workspace :is(button, a, input, textarea):focus-visible {
+  outline-color: #315f9f;
+}
+.workspace > section > header {
+  background: #132d46;
+  color: #fff;
+}
+.workspace > section > header :is(p, span) { color: #d5e3ed; }
+.workspace > section > header button { border-color: #7891a5; }
+.workspace > section > header button:hover { background: #25435e; }
+.workspace[data-contextual="true"] {
+  background: #071522;
+  color: #e6eef5;
+  border-color: #294057;
+  scrollbar-color: #425d75 transparent;
+}
+.workspace[data-contextual="true"] :is(aside, section, header, form, nav, .composer, .context, [class~="bg-white"], [class~="bg-slate-50"], [class~="bg-[#f7f9fb]"]) {
+  background-color: #091b2c;
+  border-color: #294057;
+}
+.workspace[data-contextual="true"] :is(input, textarea) {
+  color: #e6eef5;
+  background-color: #0b2135;
+  border-color: #425d75;
+}
+.workspace[data-contextual="true"] :is(input, textarea)::placeholder { color: #a6b9ca; }
+.workspace[data-contextual="true"] :is([class*="text-slate-"], [class*="text-[#0b6f68]"], [class*="text-[#315f9f]"]) { color: #b9cbdb; }
+.workspace[data-contextual="true"] :is([aria-current="page"], [class~="bg-[#e0f2ef]"]) {
+  background: #173450;
+  color: #eef5fa;
+}
+.workspace[data-contextual="true"] [aria-pressed="true"],
+.workspace[data-contextual="true"] button[type="submit"],
+.workspace[data-contextual="true"] button[class*="bg-[#0b6f68]"] { background: #315f9f; color: #fff; }
+.workspace[data-contextual="true"] .contextAction { color: #cae2ff; border-color: #547697; }
+.workspace[data-contextual="true"] .contextAction:hover { background: #173450; }
+.workspace[data-contextual="true"] :is(button, a):focus-visible { outline-color: #8dbbf2; }
 @media (min-width: 1024px) {
   .workspace {
     grid-template-columns: 280px minmax(0, 1fr);

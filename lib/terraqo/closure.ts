@@ -14,6 +14,29 @@ type ClosureDraft = z.infer<typeof terraqoClosureDraftSchema>;
 type ClosureSubmit = z.infer<typeof terraqoClosureSubmitSchema>;
 type ClosureDecision = z.infer<typeof terraqoClosureDecisionSchema>;
 
+function assertDraftFollowsAcceptedScope(
+  collaboration: {
+    acceptedRevisionNo: number | null;
+    acceptedAt: Date | null;
+    proposals: { revisionNo: number; decidedAt: Date | null }[];
+  },
+  createdAt: Date,
+) {
+  const proposal = collaboration.proposals[0];
+  // No proposal snapshot exists on a closure revision. This is a conservative
+  // ordering check, not an invented binding. Unknown/tied legacy dates fail closed.
+  // New acceptance and draft dates use the DB clock while holding the same parent lock.
+  // Historical application-clock skew cannot be reconstructed without a stored
+  // proposal binding; timestamps alone cannot prove which scope an old draft used.
+  if (!proposal || proposal.revisionNo !== collaboration.acceptedRevisionNo ||
+      !proposal.decidedAt || !collaboration.acceptedAt ||
+      proposal.decidedAt.getTime() !== collaboration.acceptedAt.getTime() ||
+      createdAt.getTime() <= collaboration.acceptedAt.getTime())
+    throw new TerraqoMessagingError(
+      "Guarda una nueva revisión del cierre después de la última aceptación del alcance.", 409,
+    );
+}
+
 export function closureOperationFingerprint(payload: unknown) {
   return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
 }
@@ -76,6 +99,9 @@ export async function saveClosureDraft(input: {
 }) {
   const operationFingerprint = closureOperationFingerprint(input.payload);
   const closureId = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw(
+      Prisma.sql`SELECT id FROM icc."TerraqoCollaboration" WHERE id=${input.collaborationId} AND "workspaceId"=${input.workspaceId} FOR UPDATE`,
+    );
     const replay = await tx.terraqoClosureRevision.findUnique({
       where: {
         createdById_operationKey: {
@@ -111,9 +137,6 @@ export async function saveClosureDraft(input: {
       return replay.closureId;
     }
 
-    await tx.$queryRaw(
-      Prisma.sql`SELECT id FROM icc."TerraqoCollaboration" WHERE id=${input.collaborationId} FOR UPDATE`,
-    );
     const collaboration = await tx.terraqoCollaboration.findFirst({
       where: {
         id: input.collaborationId,
@@ -181,6 +204,7 @@ export async function saveClosureDraft(input: {
       data: { collaborationId: collaboration.id },
     });
     const revisionNo = closure ? closure.version + 1 : 1;
+    const [clock] = await tx.$queryRaw<{ now: Date }[]>`SELECT clock_timestamp() AS now`;
     const revision = await tx.terraqoClosureRevision.create({
       data: {
         closureId: targetClosure.id,
@@ -192,6 +216,7 @@ export async function saveClosureDraft(input: {
         createdById: input.userId,
         operationKey: input.operationKey,
         operationFingerprint,
+        createdAt: clock.now,
         references: {
           create: authorizedRevisions.map((source) => ({
             worklogRevisionId: source.id,
@@ -240,13 +265,19 @@ export async function submitClosure(input: {
 }) {
   const submitFingerprint = closureOperationFingerprint(input.payload);
   const closureId = await prisma.$transaction(async (tx) => {
+    // Lock order across save/submit/decision/scope mutation: collaboration, revision.
+    await tx.$queryRaw(
+      Prisma.sql`SELECT id FROM icc."TerraqoCollaboration" WHERE id=${input.collaborationId} AND "workspaceId"=${input.workspaceId} FOR UPDATE`,
+    );
     const closure = await tx.terraqoCollaborationClosure.findFirst({
       where: {
         collaborationId: input.collaborationId,
         collaboration: { workspaceId: input.workspaceId },
       },
       include: {
-        collaboration: { select: { professionalUserId: true } },
+        collaboration: { include: {
+          proposals: { where: { status: "ACCEPTED" }, orderBy: { revisionNo: "desc" }, take: 1 },
+        } },
         currentRevision: true,
       },
     });
@@ -271,6 +302,9 @@ export async function submitClosure(input: {
         "El cierre cambió o ya no es un borrador enviable.",
         409,
       );
+    if (!["ACCEPTED", "IN_PROGRESS", "CHANGES_REQUESTED"].includes(closure.collaboration.status))
+      throw new TerraqoMessagingError("La colaboración no admite enviar este cierre.", 409);
+    assertDraftFollowsAcceptedScope(closure.collaboration, revision.createdAt);
     await assertReferencesStillAuthorized(
       tx,
       revision.id,
@@ -307,6 +341,13 @@ export async function decideClosure(input: {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       return await prisma.$transaction(async (tx) => {
+    // Resolve and lock the authorized parent without reading any proposal first.
+    await tx.$queryRaw(
+      Prisma.sql`SELECT c.id FROM icc."TerraqoCollaboration" c
+        JOIN icc."TerraqoCollaborationClosure" cl ON cl."collaborationId"=c.id
+        WHERE cl.id=${input.closureId} AND c."professionalUserId"=${input.userId}
+        FOR UPDATE OF c`,
+    );
     const closure = await tx.terraqoCollaborationClosure.findFirst({
       where: {
         id: input.closureId,
@@ -342,13 +383,23 @@ export async function decideClosure(input: {
         revision.decisionOperationKey === input.operationKey &&
         revision.decisionFingerprint === decisionFingerprint
       )
-        return closure;
+        return tx.terraqoCollaborationClosure.findUniqueOrThrow({
+          where: { id: closure.id },
+          include: { currentRevision: true, certificate: true },
+        });
       throw new TerraqoMessagingError("El cierre ya fue resuelto o sustituido.", 409);
     }
     if (revision.revisionNo !== input.payload.expectedRevisionNo)
       throw new TerraqoMessagingError("Existe una revisión de cierre más reciente.", 409);
 
     const state = closureDecisionState(input.payload.action);
+    if (closure.collaboration.status === "CLOSED" || closure.collaboration.status === "CANCELLED")
+      throw new TerraqoMessagingError("La colaboración cerrada o cancelada no admite decisiones nuevas.", 409);
+    if (state.emitsCertificate) {
+      if (closure.collaboration.status !== "CLOSURE_PROPOSED")
+        throw new TerraqoMessagingError("La colaboración no tiene un cierre vigente en revisión.", 409);
+      assertDraftFollowsAcceptedScope(closure.collaboration, revision.createdAt);
+    }
     const now = new Date();
     await tx.terraqoClosureRevision.update({
       where: { id: revision.id },

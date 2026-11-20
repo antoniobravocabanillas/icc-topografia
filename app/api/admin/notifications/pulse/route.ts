@@ -4,6 +4,7 @@ import { handleApiError } from "@/lib/server/api";
 import { requireUser } from "@/lib/server/authz";
 import type { Role } from "@prisma/client";
 import { getWorkspaceForUser } from "@/lib/terraqo/workspace-access";
+import { accessibleConversation } from "@/lib/terraqo/messaging";
 
 const adminRoles = new Set(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"]);
 
@@ -44,12 +45,13 @@ export async function GET() {
         deletedAt: null,
         senderId: { not: session.user.id },
         conversation: {
+          ...accessibleConversation(session.user.id),
           workspaceId: terraqoWorkspaceId,
           archivedAt: null,
           participants: { some: { userId: session.user.id, leftAt: null, mutedAt: null } }
         }
       },
-      include: { sender: { select: { name: true, email: true } } },
+      include: { sender: { select: { name: true, email: true } }, conversation: { select: { contexts: { select: { id: true }, take: 1 } } } },
       orderBy: { createdAt: "desc" }
     });
 
@@ -89,8 +91,8 @@ export async function GET() {
             id: `professional:${latestProfessionalMessage.id}`,
             type: "professional",
             title: "Nuevo mensaje profesional",
-            body: `${latestProfessionalMessage.sender.name || latestProfessionalMessage.sender.email}: ${latestProfessionalMessage.body || "Compartió un archivo"}`,
-            href: `/admin/terraqo/mensajes?conversation=${latestProfessionalMessage.conversationId}`,
+            body: latestProfessionalMessage.conversation.contexts.length ? "Tienes un nuevo mensaje en una conversación profesional." : `${latestProfessionalMessage.sender.name || latestProfessionalMessage.sender.email}: ${latestProfessionalMessage.body || "Compartió un archivo"}`,
+            href: `/admin/mensajes?conversation=${latestProfessionalMessage.conversationId}`,
             createdAt: latestProfessionalMessage.createdAt
           }
         : null

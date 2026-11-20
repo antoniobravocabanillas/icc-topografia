@@ -1,3 +1,4 @@
+import { DiscoveryNeedsError } from "@/lib/terraqo/discovery-needs";
 import { created, fail, handleApiError, ok, parseJson } from "@/lib/server/api";
 import { requireUser } from "@/lib/server/authz";
 import { requireDiscoveryWorkspaceActor } from "@/lib/server/discovery-needs-auth";
@@ -14,7 +15,7 @@ export async function GET() {
   try {
     return ok(await listConversationRequests(session.user.id));
   } catch (error) {
-    if (error instanceof TerraqoMessagingError) return fail(error.message, error.status);
+    if (error instanceof TerraqoMessagingError || error instanceof DiscoveryNeedsError) return fail(error.message, error.status);
     return handleApiError(error);
   }
 }
@@ -29,7 +30,7 @@ export async function POST(request: Request) {
     await requireWorkspacePilotFeature(session.user.id, workspace.id, "employer_needs");
     return created(await createConversationRequest({ userId: session.user.id, workspaceId: workspace.id, operationKey: operationKey!, payload }));
   } catch (error) {
-    if (error instanceof TerraqoMessagingError) return fail(error.message, error.status);
+    if (error instanceof TerraqoMessagingError || error instanceof DiscoveryNeedsError) return fail(error.message, error.status);
     return handleApiError(error);
   }
 }

@@ -8,39 +8,36 @@ import type {
   terraqoCollaborationRevisionSchema,
 } from "@/lib/validations/terraqo";
 import { TerraqoMessagingError } from "@/lib/terraqo/messaging";
+import {
+  closureProjectionInclude,
+  projectClosure,
+  type ClosureAudience,
+} from "@/lib/terraqo/closure-projection";
 
 type CollaborationCreate = z.infer<typeof terraqoCollaborationCreateSchema>;
 type CollaborationRevision = z.infer<typeof terraqoCollaborationRevisionSchema>;
 type CollaborationDecision = z.infer<typeof terraqoCollaborationDecisionSchema>;
 
+// Every scope mutation serializes on the parent before reading closure/proposal state.
+const closureReviewGuard = {
+  select: { revisions: { where: { status: "SUBMITTED" as const }, take: 1, select: { id: true } } },
+};
+
+function assertScopeCanChange(collaboration: {
+  status: string;
+  closure: { revisions: { id: string }[] } | null;
+}) {
+  if (collaboration.status === "CLOSURE_PROPOSED" || collaboration.closure?.revisions.length)
+    throw new TerraqoMessagingError("Resuelve el cierre enviado antes de modificar el alcance.", 409);
+  if (collaboration.status === "CLOSED" || collaboration.status === "CANCELLED")
+    throw new TerraqoMessagingError("La colaboración cerrada o cancelada no admite cambios de alcance.", 409);
+}
+
 const collaborationInclude = {
   workspace: { select: { id: true, name: true } },
   professional: { select: { id: true, name: true, image: true } },
   conversation: { select: { id: true } },
-  closure: {
-    include: {
-      currentRevision: {
-        include: {
-          references: {
-            include: {
-              worklogRevision: { select: { id: true, title: true, contentHash: true } },
-            },
-          },
-        },
-      },
-      revisions: {
-        orderBy: { revisionNo: "desc" as const },
-        select: {
-          id: true,
-          revisionNo: true,
-          status: true,
-          decisionComment: true,
-          createdAt: true,
-        },
-      },
-      certificate: true,
-    },
-  },
+  closure: { include: closureProjectionInclude },
   proposals: {
     orderBy: { revisionNo: "desc" as const },
     include: {
@@ -79,21 +76,32 @@ function proposalFields(payload: CollaborationCreate | CollaborationRevision) {
   };
 }
 
-async function getCollaboration(id: string) {
+type CollaborationSource = Prisma.TerraqoCollaborationGetPayload<{
+  include: typeof collaborationInclude;
+}>;
+
+function projectCollaboration(collaboration: CollaborationSource, audience: ClosureAudience) {
+  return {
+    ...collaboration,
+    closure: projectClosure(collaboration.closure, audience, collaboration.professionalUserId),
+  };
+}
+
+async function getCollaboration(id: string, audience: ClosureAudience) {
   const collaboration = await prisma.terraqoCollaboration.findUnique({
     where: { id },
     include: collaborationInclude,
   });
   if (!collaboration)
     throw new TerraqoMessagingError("Colaboración no disponible.", 404);
-  return collaboration;
+  return projectCollaboration(collaboration, audience);
 }
 
 export async function listCollaborations(input: {
   userId: string;
   workspaceId?: string;
 }) {
-  return prisma.terraqoCollaboration.findMany({
+  const collaborations = await prisma.terraqoCollaboration.findMany({
     where: input.workspaceId
       ? { workspaceId: input.workspaceId }
       : { professionalUserId: input.userId },
@@ -101,6 +109,9 @@ export async function listCollaborations(input: {
     orderBy: { updatedAt: "desc" },
     take: 100,
   });
+  return collaborations.map((collaboration) => projectCollaboration(
+    collaboration, input.workspaceId ? "workspace" : "professional",
+  ));
 }
 
 export async function createCollaboration(input: {
@@ -203,7 +214,7 @@ export async function createCollaboration(input: {
       });
       return collaboration.id;
     }, { isolationLevel: "Serializable" });
-    return getCollaboration(collaborationId);
+    return getCollaboration(collaborationId, "workspace");
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -219,7 +230,7 @@ export async function createCollaboration(input: {
         select: { collaborationId: true, operationFingerprint: true },
       });
       if (replay?.operationFingerprint === operationFingerprint)
-        return getCollaboration(replay.collaborationId);
+        return getCollaboration(replay.collaborationId, "workspace");
     }
     throw error;
   }
@@ -234,6 +245,9 @@ export async function reviseCollaboration(input: {
 }) {
   const operationFingerprint = collaborationOperationFingerprint(input.payload);
   const collaborationId = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw(
+      Prisma.sql`SELECT id FROM icc."TerraqoCollaboration" WHERE id=${input.collaborationId} AND "workspaceId"=${input.workspaceId} FOR UPDATE`,
+    );
     const replay = await tx.terraqoCollaborationProposal.findUnique({
       where: {
         createdById_operationKey: {
@@ -241,12 +255,13 @@ export async function reviseCollaboration(input: {
           operationKey: input.operationKey,
         },
       },
-      select: { collaborationId: true, operationFingerprint: true },
+      select: { collaborationId: true, operationFingerprint: true, collaboration: { select: { workspaceId: true } } },
     });
     if (replay) {
       if (
         replay.operationFingerprint !== operationFingerprint ||
-        replay.collaborationId !== input.collaborationId
+        replay.collaborationId !== input.collaborationId ||
+        replay.collaboration.workspaceId !== input.workspaceId
       )
         throw new TerraqoMessagingError(
           "La clave de reintento ya fue usada con otra revisión.",
@@ -255,12 +270,10 @@ export async function reviseCollaboration(input: {
       return replay.collaborationId;
     }
 
-    await tx.$queryRaw(
-      Prisma.sql`SELECT id FROM icc."TerraqoCollaboration" WHERE id=${input.collaborationId} FOR UPDATE`,
-    );
     const collaboration = await tx.terraqoCollaboration.findFirst({
       where: { id: input.collaborationId, workspaceId: input.workspaceId },
       include: {
+        closure: closureReviewGuard,
         proposals: {
           orderBy: { revisionNo: "desc" },
           take: 1,
@@ -270,11 +283,7 @@ export async function reviseCollaboration(input: {
     });
     if (!collaboration)
       throw new TerraqoMessagingError("Colaboración no disponible.", 404);
-    if (collaboration.status === "CLOSED" || collaboration.status === "CANCELLED")
-      throw new TerraqoMessagingError(
-        "La colaboración cerrada o cancelada no admite nuevas propuestas.",
-        409,
-      );
+    assertScopeCanChange(collaboration);
     if (collaboration.version !== input.payload.expectedVersion)
       throw new TerraqoMessagingError(
         "La colaboración cambió en otra sesión.",
@@ -309,7 +318,7 @@ export async function reviseCollaboration(input: {
     });
     return collaboration.id;
   }, { isolationLevel: "Serializable" });
-  return getCollaboration(collaborationId);
+  return getCollaboration(collaborationId, "workspace");
 }
 
 export async function decideCollaborationProposal(input: {
@@ -321,7 +330,7 @@ export async function decideCollaborationProposal(input: {
   const decisionFingerprint = collaborationOperationFingerprint(input.payload);
   const collaborationId = await prisma.$transaction(async (tx) => {
     await tx.$queryRaw(
-      Prisma.sql`SELECT id FROM icc."TerraqoCollaboration" WHERE id=${input.collaborationId} FOR UPDATE`,
+      Prisma.sql`SELECT id FROM icc."TerraqoCollaboration" WHERE id=${input.collaborationId} AND "professionalUserId"=${input.userId} FOR UPDATE`,
     );
     const collaboration = await tx.terraqoCollaboration.findFirst({
       where: {
@@ -329,6 +338,7 @@ export async function decideCollaborationProposal(input: {
         professionalUserId: input.userId,
       },
       include: {
+        closure: closureReviewGuard,
         proposals: {
           orderBy: { revisionNo: "desc" },
           take: 1,
@@ -357,13 +367,18 @@ export async function decideCollaborationProposal(input: {
         409,
       );
 
-    const now = new Date();
+    // A matching replay above is read-only and must still work during/after review.
+    assertScopeCanChange(collaboration);
+
+    const [clock] = await tx.$queryRaw<{ now: Date }[]>`SELECT clock_timestamp() AS now`;
+    const now = clock.now;
     if (input.payload.action === "ACCEPT") {
       await tx.terraqoCollaborationAcceptance.create({
         data: {
           proposalId: proposal.id,
           party: "PROFESSIONAL",
           actorId: input.userId,
+          acceptedAt: now,
         },
       });
       await tx.terraqoCollaborationProposal.update({
@@ -426,5 +441,5 @@ export async function decideCollaborationProposal(input: {
     }
     return collaboration.id;
   }, { isolationLevel: "Serializable" });
-  return getCollaboration(collaborationId);
+  return getCollaboration(collaborationId, "professional");
 }

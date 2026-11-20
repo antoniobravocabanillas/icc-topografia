@@ -2,6 +2,9 @@ import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { reserveStorage } from "@/lib/terraqo/billing/storage-quota";
+import { BoundedRequestBodyError, readBoundedRequestBytes } from "./bounded-request-body";
+import { assertMultipartPartLimits } from "./bounded-multipart";
+import { validatePrivateProfessionalFile } from "./professional-file-validation";
 import {
   ALLOWED_MESSAGE_ATTACHMENT_TYPES,
   createMessageAttachmentKey,
@@ -14,7 +17,23 @@ export async function uploadMessageAttachment(
   request: Request,
   userId: string,
 ) {
-  const form = await request.formData();
+  // Bound the actual stream before multipart parsing allocates files/fields.
+  let form: FormData;
+  try {
+    const contentType = request.headers.get("content-type") || "";
+    const bytes = await readBoundedRequestBytes(request, MAX_MESSAGE_ATTACHMENT_SIZE + 65_536, 30_000);
+    assertMultipartPartLimits(bytes, contentType, 5);
+    form = await new Request(request.url, { method: "POST", headers: { "content-type": contentType }, body: bytes }).formData();
+    const names = [...form.keys()];
+    if (new Set(names).size !== names.length || names.some(name => !["conversationId", "body", "durationMs", "file", "operationKey"].includes(name)))
+      throw new Error("Invalid multipart fields");
+    for (const [name, value] of form.entries()) {
+      if (name !== "file" && (typeof value !== "string" || value.length > (name === "body" ? 4000 : 200)))
+        throw new Error("Invalid multipart field");
+    }
+  } catch (error) {
+    throw new TerraqoMessagingError("El formulario adjunto no es válido o supera el límite permitido.", error instanceof BoundedRequestBodyError ? error.status : 400);
+  }
   const conversationId = String(form.get("conversationId") || "");
   const body = String(form.get("body") || "")
     .trim()
@@ -28,6 +47,8 @@ export async function uploadMessageAttachment(
     throw new TerraqoMessagingError("Selecciona un archivo válido.");
   if (!file.size || file.size > MAX_MESSAGE_ATTACHMENT_SIZE)
     throw new TerraqoMessagingError("El archivo debe pesar como máximo 20 MB.");
+  if (!file.name || file.name.length > 200 || /[\x00-\x1f\x7f/\\]/.test(file.name))
+    throw new TerraqoMessagingError("El nombre del archivo no es válido.");
   const contentType =
     file.type.split(";")[0]?.trim().toLowerCase() || "application/octet-stream";
   if (!ALLOWED_MESSAGE_ATTACHMENT_TYPES.has(contentType))
@@ -36,6 +57,10 @@ export async function uploadMessageAttachment(
     throw new TerraqoMessagingError("La solicitud no incluye una clave de reintento válida.", 400);
 
   await requireMessagingParticipant(prisma, userId, conversationId);
+  if (["application/pdf", "image/png", "image/jpeg", "image/webp"].includes(contentType)) {
+    const invalidFile = await validatePrivateProfessionalFile(file);
+    if (invalidFile) throw new TerraqoMessagingError(invalidFile);
+  }
   const bytes = await file.arrayBuffer();
   const fingerprint = createHash("sha256").update(JSON.stringify({
     conversationId,
@@ -133,6 +158,7 @@ export async function downloadMessageAttachment(
     where: {
       id: attachmentId,
       message: {
+        deletedAt: null,
         conversation: { ...accessibleConversation(userId), participants: { some: { userId, leftAt: null } } },
       },
     },

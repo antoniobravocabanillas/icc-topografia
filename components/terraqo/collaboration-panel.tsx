@@ -71,7 +71,7 @@ export function CollaborationPanel({
   conversations = [],
 }: {
   mode: "workspace" | "professional";
-  basePath: "/portal/mensajes" | "/admin/terraqo/mensajes";
+  basePath: "/portal/mensajes" | "/admin/mensajes" | "/admin/terraqo/mensajes";
   conversations?: ConversationOption[];
 }) {
   const [items, setItems] = useState<Collaboration[]>([]);
@@ -270,12 +270,13 @@ export function CollaborationPanel({
         {loading ? <p role="status" aria-live="polite" className="p-5 text-sm text-slate-500">Cargando propuestas…</p> : items.map((collaboration) => {
           const current = collaboration.proposals[0];
           if (!current) return null;
+          const accepted = collaboration.proposals.find((proposal) => proposal.revisionNo === collaboration.acceptedRevisionNo);
           const pendingProfessional = mode === "professional" && current.status === "PENDING";
           return (
             <article key={collaboration.id} className="p-5">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
                 <div className="flex min-w-0 flex-1 items-start gap-3">
-                  <UserAvatar name={mode === "workspace" ? collaboration.professional.name : collaboration.workspace.name} image={mode === "workspace" ? collaboration.professional.image : null} size="lg" />
+                  <div aria-hidden="true" className="shrink-0"><UserAvatar name={mode === "workspace" ? collaboration.professional.name : collaboration.workspace.name} image={mode === "workspace" ? collaboration.professional.image : null} size="lg" /></div>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-display text-lg font-bold text-slate-950">{current.roleTitle}</h3>
@@ -283,6 +284,11 @@ export function CollaborationPanel({
                     </div>
                     <p className="mt-1 text-xs font-semibold text-[#0b6f68]">{collaboration.workspace.name} · {collaboration.professional.name || "Profesional"}</p>
                     <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">{current.scope}</p>
+                    <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                      <div><dt className="text-xs text-slate-500">Propuesta por</dt><dd className="font-semibold text-slate-800">{current.createdBy.name || "Representante de la empresa"}</dd></div>
+                      <div><dt className="text-xs text-slate-500">Aceptación en nombre de la empresa</dt><dd className="font-semibold text-slate-800">{current.acceptances.filter((acceptance) => acceptance.party === "WORKSPACE").map((acceptance) => acceptance.actor.name || "Representante de la empresa").join(", ") || "Sin aceptación registrada"}</dd></div>
+                      <div className="sm:col-span-2"><dt className="text-xs text-slate-500">Condiciones de esta versión</dt><dd className="mt-1 whitespace-pre-wrap leading-6 text-slate-700">{current.conditions || "Sin condiciones adicionales."}</dd></div>
+                    </dl>
                     <div className="mt-3 rounded-xl bg-slate-50 p-3">
                       <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500">Entregables</p>
                       <ul className="mt-2 grid gap-1 text-sm text-slate-700 sm:grid-cols-2">{current.deliverables.map((item) => <li key={item} className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#0b6f68]" />{item}</li>)}</ul>
@@ -301,6 +307,21 @@ export function CollaborationPanel({
                 </div>
               </div>
 
+              {collaboration.acceptedRevisionNo != null ? (
+                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <h4 className="font-semibold text-slate-950">Alcance aceptado · v{collaboration.acceptedRevisionNo}</h4>
+                  {accepted ? <>
+                    <p className="mt-2 text-sm font-semibold text-slate-800">{accepted.roleTitle}</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{accepted.scope}</p>
+                    <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">Condiciones: {accepted.conditions || "Sin condiciones adicionales."}</p>
+                    <ul className="mt-2 list-inside list-disc text-sm text-slate-700">{accepted.deliverables.map((item) => <li key={item}>{item}</li>)}</ul>
+                    <p className="mt-2 text-xs text-slate-600">Propuesta por {accepted.createdBy.name || "Representante de la empresa"} · {accepted.startsOn ? `Inicio: ${dateValue(accepted.startsOn)}` : "Inicio por acordar"} · {accepted.endsOn ? `Fin: ${dateValue(accepted.endsOn)}` : "Fin por acordar"}</p>
+                    <ul className="mt-2 space-y-1 text-xs text-slate-600">{accepted.acceptances.map((acceptance) => <li key={acceptance.id}>{acceptance.party === "WORKSPACE" ? "Empresa" : "Profesional"}: {acceptance.actor.name || "Participante"} · Aceptación: {dateValue(acceptance.acceptedAt)}</li>)}</ul>
+                    {current.revisionNo !== accepted.revisionNo ? <p className="mt-3 text-xs font-semibold text-slate-700">La propuesta v{current.revisionNo} no sustituye este alcance hasta completar su aceptación.</p> : null}
+                  </> : <p role="status" className="mt-2 text-sm text-slate-700">La versión aceptada no está disponible. No se sustituye por una propuesta pendiente.</p>}
+                </div>
+              ) : null}
+
               {pendingProfessional ? (
                 <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50/60 p-4">
                   <label className="grid gap-2 text-sm font-semibold">Comentario para rechazo o cambios<Textarea value={commentById[collaboration.id] || ""} onChange={(event) => setCommentById((currentValue) => ({ ...currentValue, [collaboration.id]: event.target.value }))} maxLength={1200} className="min-h-20 bg-white" placeholder="Aclara qué debería corregirse." /></label>
@@ -309,7 +330,7 @@ export function CollaborationPanel({
                     <Button disabled={submitting} variant="outline" onClick={() => void decide(collaboration, "REQUEST_CHANGES")}><History className="h-4 w-4" />Pedir cambios</Button>
                     <Button disabled={submitting} variant="ghost" onClick={() => void decide(collaboration, "REJECT")}><X className="h-4 w-4" />Rechazar</Button>
                   </div>
-                  <p className="mt-3 text-xs text-blue-900/70">Aceptar no firma un contrato, no procesa pagos y no autoriza futuras modificaciones.</p>
+                  <p className="mt-3 text-xs text-blue-900">Aceptar no firma un contrato, no procesa pagos y no autoriza futuras modificaciones.</p>
                 </div>
               ) : null}
 

@@ -121,6 +121,10 @@ export function accessibleConversation(
         OR: [
           { workspace: { members: { some: ordinaryWorkspaceMembership(userId) } } },
           { participants: { some: { userId, leftAt: null, user: { role: "SUPER_ADMIN" } } } },
+          ...(module === "PROFESSIONAL_MESSAGING" ? [{
+            type: "COMPANY" as const,
+            requests: { some: { recipientId: userId, status: "ACCEPTED" as const, blockedAt: null } },
+          }] : []),
         ],
       },
     ],
@@ -178,7 +182,7 @@ export async function getConversationHub(
         where: {
           ...participantWhere,
           archivedAt: null,
-          ...conversationWorkspaceScope(allowedWorkspaceIds, workspaceId),
+          ...(workspaceId ? conversationWorkspaceScope(allowedWorkspaceIds, workspaceId) : accessibleConversation(userId)),
         },
         include: conversationInclude,
         orderBy: [{ lastMessageAt: "desc" }, { updatedAt: "desc" }],

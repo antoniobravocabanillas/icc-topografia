@@ -4,6 +4,7 @@ import type { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import type { terraqoConversationRequestCreateSchema, terraqoConversationRequestDecisionSchema } from "@/lib/validations/terraqo";
 import { TerraqoMessagingError } from "@/lib/terraqo/messaging";
+import { workspaceAdminMemberRoles } from "@/lib/terraqo/workspace-roles";
 
 type RequestCreate = z.infer<typeof terraqoConversationRequestCreateSchema>;
 type RequestDecision = z.infer<typeof terraqoConversationRequestDecisionSchema>;
@@ -68,6 +69,13 @@ export async function createConversationRequest(input: {
 }
 
 export async function listConversationRequests(userId: string) {
+  const actor = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+  const authorizedWorkspaces = await prisma.terraqoWorkspace.findMany({
+    where: { active: true, deletedAt: null,
+      ...(actor?.role === "SUPER_ADMIN" ? {} : { members: { some: { userId, active: true, role: { in: workspaceAdminMemberRoles } } } }) },
+    select: { id: true },
+  });
+  const authorizedIds = new Set(authorizedWorkspaces.map(workspace => workspace.id));
   const requests = await prisma.terraqoConversationRequest.findMany({
     where: { OR: [{ requesterId: userId }, { recipientId: userId }] },
     include: {
@@ -93,7 +101,7 @@ export async function listConversationRequests(userId: string) {
       conversationId: request.conversationId,
       createdAt: request.createdAt,
       respondedAt: request.respondedAt,
-      context: outgoing && request.dossier
+      context: outgoing && authorizedIds.has(request.workspaceId) && request.dossier
         ? { kind: "EVALUATION" as const, title: request.dossier.needRevision.title, revisionNo: request.dossier.needRevision.revisionNo }
         : { kind: "PROTECTED" as const, title: "Contexto profesional protegido", revisionNo: null },
     };

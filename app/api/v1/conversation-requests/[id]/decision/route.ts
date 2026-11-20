@@ -11,7 +11,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   try {
     const { id } = await context.params;
     const payload = await parseJson(request, terraqoConversationRequestDecisionSchema);
-    return ok(await decideConversationRequest({ userId: session.user.id, requestId: id, payload }));
+    const result = await decideConversationRequest({ userId: session.user.id, requestId: id, payload });
+    // Accepting a conversation must not expose the company's private dossier pointer.
+    return ok({ id: result.id, status: result.status, version: result.version,
+      conversationId: result.conversationId, respondedAt: result.respondedAt });
   } catch (error) {
     if (error instanceof TerraqoMessagingError) return fail(error.message, error.status);
     return handleApiError(error);
