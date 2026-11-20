@@ -2829,6 +2829,7 @@ model TerraqoCollaborationProposal {
   submittedAt          DateTime                           @default(now())
   decidedAt            DateTime?
   acceptances          TerraqoCollaborationAcceptance[]
+  closureRevisions     TerraqoClosureRevision[]           @relation("TerraqoClosureAcceptedProposal")
   createdAt            DateTime                           @default(now())
 
   @@unique([collaborationId, revisionNo])
@@ -2871,6 +2872,9 @@ model TerraqoClosureRevision {
   closureId            String
   closure              TerraqoCollaborationClosure      @relation("TerraqoClosureRevisions", fields: [closureId], references: [id], onDelete: Cascade)
   currentFor           TerraqoCollaborationClosure?     @relation("TerraqoCurrentClosureRevision")
+  // Null is legacy/old-writer provenance, never inferred from timestamps.
+  acceptedProposalId   String?
+  acceptedProposal     TerraqoCollaborationProposal?    @relation("TerraqoClosureAcceptedProposal", fields: [acceptedProposalId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   revisionNo           Int
   contribution         String
   deliverables         String[]                         @default([])
@@ -2897,6 +2901,7 @@ model TerraqoClosureRevision {
   @@unique([closureId, revisionNo])
   @@unique([createdById, operationKey])
   @@index([closureId, status, createdAt])
+  @@index([acceptedProposalId])
   @@schema("icc")
 }
 
