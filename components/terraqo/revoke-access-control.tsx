@@ -1,11 +1,11 @@
 "use client";
 import { useState } from "react";
 
-export function RevokeAccessControl({ label, subject, pending, onConfirm }: {
-  label: string; subject: string; pending: boolean; onConfirm: () => void;
+export function RevokeAccessControl({ label, subject, pending, onConfirm, tone = "light" }: {
+  label: string; subject: string; pending: boolean; onConfirm: () => void; tone?: "light" | "dark";
 }) {
   const [reviewing, setReviewing] = useState(false);
-  if (!reviewing) return <button type="button" disabled={pending} onClick={() => setReviewing(true)} className="min-h-11 rounded-lg border px-3 text-sm font-semibold text-red-700 disabled:opacity-45">{label}</button>;
+  if (!reviewing) return <button type="button" disabled={pending} onClick={() => setReviewing(true)} className={`min-h-11 rounded-lg border px-3 text-sm font-semibold disabled:opacity-45 ${tone === "dark" ? "border-red-400 text-red-300 hover:bg-red-950" : "text-red-700"}`}>{label}</button>;
   return <div className="w-full rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-950">
     <p className="break-words font-semibold">Revocar: {subject}</p>
     <p className="mt-1 leading-6">Se impedirán nuevas lecturas. Esto no recupera las copias que ya se hayan descargado.</p>

@@ -78,6 +78,18 @@ export async function listShareCollections(userId: string) {
   });
 }
 
+/** Owner-only access inventory; never loads revision contents or private media. */
+export async function listOwnedAccessCollections(userId: string) {
+  const profile = await ownedProfile(userId);
+  return prisma.terraqoShareCollection.findMany({
+    where: { professionalProfileId: profile.id, createdById: userId, lifecycle: { not: "ARCHIVED" } },
+    select: { id: true, title: true, version: true, grants: { ...collectionInclude.grants,
+      select: { ...collectionInclude.grants.select, subjectUser: { select: { name: true } } } },
+      publicProjection: { select: { slug: true, revokedAt: true } } },
+    orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+  });
+}
+
 export async function createShareCollection(input: {
   userId: string;
   operationKey: string;

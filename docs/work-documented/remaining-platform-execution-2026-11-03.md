@@ -1,5 +1,11 @@
 # Remaining platform execution — 3 November 2026
 
+## 20 de noviembre — S18: pantalla consolidada de accesos implementada localmente
+
+Nueva ruta `/portal/accesos`, búsqueda por selección/destinatario, permisos y vencimientos, revocación inline y recuperación explícita de conflictos. Navegación integrada con Documentos y Mi plan. Prueba Chromium de búsqueda, vacío, cancelación, conflicto y continuidad de versión PASS; contrato de consulta del propietario con DB simulada PASS. Capturas escritorio/móvil inspeccionadas. No es aceptación autenticada alojada ni cierre de S18.
+
+Auditoría encontró pendientes concretos: Documentos no tiene retiro ni linaje explícito de versiones; Plan empresarial autoriza al propietario actual, no a cualquier administrador. Siguiente bloque: ciclo de vida documental conservando revisión/importaciones/cuotas y permisos, después gate S18 en staging. No se aplicaron migraciones ni despliegues. Detalle y límites: `s18-access-documents-plan.md`.
+
 ## 20 de noviembre — S18: listado de accesos, corrección local validada
 
 Referencia S18 del PDF revisada visualmente (página física19) y contrastada con sus reglas. Corregido listado existente: permiso explícito, estados legibles, vencimiento con hora de Perú y retirada de acciones al caducar sin recargar. Chromium1440/375/320 y regresión de confirmación/cancelación/revocación PASS; TypeScript/ESLint PASS, capturas inspeccionadas. Sin despliegue ni cambios de DB. No equivale a pantalla S18 completa ni gate alojado. Siguiente: consolidar navegación de accesos, auditar Documentos privados y Plan/autorización empresarial, luego aceptación autenticada staging. Detalle: `s18-access-documents-plan.md`.

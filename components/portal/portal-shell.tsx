@@ -237,7 +237,8 @@ export function PortalShell({
         return [
           item,
           ...(scopedSharingEnabled
-            ? [{ href: "/portal/selecciones", label: "Selecciones", icon: Share2, group: "Trabajo" as const }]
+            ? [{ href: "/portal/selecciones", label: "Selecciones", icon: Share2, group: "Trabajo" as const },
+              { href: "/portal/accesos", label: "Accesos y permisos", icon: Share2, group: "Identidad" as const }]
             : []),
           ...(scopedEndorsementsEnabled
             ? [{ href: "/portal/respaldos", label: "Respaldos", icon: BadgeCheck, group: "Identidad" as const }]
