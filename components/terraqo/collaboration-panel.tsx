@@ -37,6 +37,9 @@ type Collaboration = {
   workspace: { id: string; name: string };
   professional: { id: string; name: string | null; image: string | null };
   proposals: Proposal[];
+  cancelledAt?: string | null;
+  cancellationReason?: string | null;
+  cancellationActor?: { id: string; name: string | null } | null;
 };
 
 type ConversationOption = {
@@ -87,6 +90,9 @@ export function CollaborationPanel({
   const [conditions, setConditions] = useState("");
   const [commentById, setCommentById] = useState<Record<string, string>>({});
   const operationKeys = useRef(new Map<string, string>());
+  const [cancelReason, setCancelReason] = useState<Record<string, string>>({});
+  const cancelPending = useRef(new Map<string, { operationKey: string; reason: string; expectedVersion: number }>());
+  const cancellationBusy = useRef(false);
 
   const load = useCallback(async () => {
     try {
@@ -222,6 +228,46 @@ export function CollaborationPanel({
     }
   }
 
+  async function cancel(collaboration: Collaboration) {
+    if (cancellationBusy.current || submitting) return;
+    const reason = cancelReason[collaboration.id]?.trim() || "";
+    if (!reason) {
+      setMessage({ kind: "error", text: "Indica el motivo de la cancelación." });
+      return;
+    }
+    const pending = cancelPending.current.get(collaboration.id) || {
+      operationKey: crypto.randomUUID(), reason, expectedVersion: collaboration.version,
+    };
+    cancelPending.current.set(collaboration.id, pending);
+    cancellationBusy.current = true;
+    setSubmitting(true);
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/v1/collaborations/${encodeURIComponent(collaboration.id)}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": pending.operationKey },
+        body: JSON.stringify({ reason: pending.reason, expectedVersion: pending.expectedVersion }),
+      });
+      const payload = await response.json().catch(() => ({})) as Envelope<Collaboration>;
+      if (!response.ok) {
+        if (response.status >= 400 && response.status < 500) cancelPending.current.delete(collaboration.id);
+        setMessage({ kind: "error", text: errorMessage(payload, "No se pudo confirmar la cancelación. Reintenta para comprobar el resultado.") });
+        return;
+      }
+      cancelPending.current.delete(collaboration.id);
+      setItems((current) => current.map((item) => item.id === collaboration.id ? {
+        ...item, status: "CANCELLED", cancellationReason: pending.reason,
+      } : item));
+      setMessage({ kind: "success", text: "Colaboración cancelada. El motivo y las versiones anteriores quedan en el historial." });
+      await load();
+    } catch {
+      setMessage({ kind: "error", text: "No se pudo confirmar el resultado. Reintenta la misma cancelación; el motivo se conserva." });
+    } finally {
+      cancellationBusy.current = false;
+      setSubmitting(false);
+    }
+  }
+
   if (!loading && mode === "professional" && !items.length && !message) return null;
 
   return (
@@ -322,7 +368,7 @@ export function CollaborationPanel({
                 </div>
               ) : null}
 
-              {pendingProfessional ? (
+              {pendingProfessional && collaboration.status !== "CANCELLED" ? (
                 <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50/60 p-4">
                   <label className="grid gap-2 text-sm font-semibold">Comentario para rechazo o cambios<Textarea value={commentById[collaboration.id] || ""} onChange={(event) => setCommentById((currentValue) => ({ ...currentValue, [collaboration.id]: event.target.value }))} maxLength={1200} className="min-h-20 bg-white" placeholder="Aclara qué debería corregirse." /></label>
                   <div className="mt-3 flex flex-wrap gap-2">
@@ -333,6 +379,9 @@ export function CollaborationPanel({
                   <p className="mt-3 text-xs text-blue-900">Aceptar no firma un contrato, no procesa pagos y no autoriza futuras modificaciones.</p>
                 </div>
               ) : null}
+
+              {collaboration.status === "CANCELLED" ? <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4"><h4 className="font-semibold">Colaboración cancelada</h4><p className="mt-2 whitespace-pre-wrap text-sm">{collaboration.cancellationReason || "Sin motivo registrado en esta versión histórica."}</p>{collaboration.cancelledAt ? <p className="mt-2 text-xs text-slate-500">Fecha: {new Intl.DateTimeFormat("es-PE", { dateStyle: "medium", timeZone: "America/Lima" }).format(new Date(collaboration.cancelledAt))}</p> : null}<p className="mt-2 text-xs text-slate-500">Responsable: {collaboration.cancellationActor?.name || "No registrado en el historial"}</p><p className="mt-2 text-xs text-slate-500">Las propuestas y decisiones anteriores se conservan.</p></div> : null}
+              {mode === "workspace" && ["PROPOSAL_PENDING", "ACCEPTED", "IN_PROGRESS", "CHANGES_REQUESTED"].includes(collaboration.status) ? <details className="mt-4 rounded-xl border border-slate-200 px-4 py-3"><summary className="cursor-pointer rounded text-sm font-semibold text-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-600">Cancelar colaboración</summary><form className="mt-3 space-y-3" onSubmit={(event) => { event.preventDefault(); void cancel(collaboration); }}><p className="text-sm text-slate-600">La cancelación conserva el historial y detiene nuevos cambios. No se permite mientras haya un cierre en revisión.</p><label className="grid gap-2 text-sm font-semibold">Motivo de cancelación<Textarea required maxLength={1200} disabled={submitting || cancelPending.current.has(collaboration.id)} value={cancelReason[collaboration.id] || ""} onChange={(event) => setCancelReason((current) => ({ ...current, [collaboration.id]: event.target.value }))} /></label><Button type="submit" disabled={submitting} variant="outline">{submitting ? "Registrando…" : cancelPending.current.has(collaboration.id) ? "Reintentar cancelación" : "Confirmar cancelación"}</Button></form></details> : null}
 
               {collaboration.proposals.length > 1 ? (
                 <details className="mt-4 rounded-xl border px-4 py-3">

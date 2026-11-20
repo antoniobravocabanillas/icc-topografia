@@ -80,17 +80,30 @@ export async function cleanMessageMedia(db: PrismaClient, f: ConversationFixture
   const rows = await db.terraqoMessageAttachment.findMany({ where: { message: { senderId: f.author,
     conversation: { workspaceId: f.workspace, createdById: f.owner } } }, select: { storageKey: true, message: { select: { conversationId: true } } } });
   const store = messageFixtureStore(local);
+  const pending: Array<{ storageKey: string; conversationId: string; uploadedBy: string; sha256: string }> = [];
   for (const row of rows) {
+    console.log(JSON.stringify({ gate: "s15", phase: "media-cleanup-ownership" }));
     assert.ok(row.storageKey.startsWith(`message-attachments/${row.message.conversationId}/`));
     assert.ok(row.storageKey.endsWith(`-s15-${f.run}.webp`));
+    console.log(JSON.stringify({ gate: "s15", phase: "media-cleanup-read" }));
     const entry = await store.read(row.storageKey);
     if (entry) {
+      console.log(JSON.stringify({ gate: "s15", phase: "media-cleanup-integrity" }));
       assert.equal(entry.metadata.uploadedBy, f.author);
       assert.equal(entry.metadata.conversationId, row.message.conversationId);
       assert.equal(createHash("sha256").update(Buffer.from(entry.data)).digest("hex"), f.plan.sha256);
+      if (!local) {
+        // Build credentials cannot mutate a site-wide store. Preserve a verified
+        // ownership receipt for the local operator; never inject a PAT into builds.
+        pending.push({ storageKey: row.storageKey, conversationId: row.message.conversationId,
+          uploadedBy: f.author, sha256: f.plan.sha256 });
+        continue;
+      }
+      console.log(JSON.stringify({ gate: "s15", phase: "media-cleanup-delete" }));
       await store.remove(row.storageKey);
     }
+    console.log(JSON.stringify({ gate: "s15", phase: "media-cleanup-readback" }));
     assert.equal(await store.read(row.storageKey), null);
   }
-  return rows.length;
+  return { state: pending.length ? "operator-required" as const : "absent" as const, run: f.run, objects: pending };
 }

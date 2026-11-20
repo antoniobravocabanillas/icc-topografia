@@ -38,6 +38,7 @@ async function exercise(origin: string, commit: string, phase: (value: string) =
     phase("seed");
     const f = await seedConversation(db, commit, blobRun), dossierIds: string[] = [], conversationIds: string[] = [];
     let result;
+    let mediaCleanup: Awaited<ReturnType<typeof cleanMessageMedia>> | undefined;
     try {
       const browser = await chromium.launch();
       try {
@@ -50,6 +51,7 @@ async function exercise(origin: string, commit: string, phase: (value: string) =
         result = await conversationJourney({ company, professional, publisher, other, anonymous }, db, f,
           origin, dossierIds, conversationIds, target === "local", phase);
       } catch (error) {
+        console.error(JSON.stringify({ gate: "s15", phase: "journey-failed", errorType: error instanceof Error ? error.name : "UnknownError" }));
         const dir = resolve("output/playwright/s15", f.run);
         await mkdir(dir, { recursive: true });
         let index = 0;
@@ -62,7 +64,16 @@ async function exercise(origin: string, commit: string, phase: (value: string) =
     } finally {
       phase("cleanup-" + f.run);
       // Always verify with an independent connection, including partial-journey failures.
-      try { await cleanMessageMedia(db, f, target === "local"); await cleanConversation(db, f); }
+      try {
+        mediaCleanup = await cleanMessageMedia(db, f, target === "local");
+        console.log(JSON.stringify({ gate: "s15", phase: mediaCleanup.state === "absent" ? "media-cleaned" : "media-operator-required",
+          mediaCleanup, commit, siteId, deployId: process.env.DEPLOY_ID }));
+        await cleanConversation(db, f);
+      } catch (error) {
+        console.error(JSON.stringify({ gate: "s15", phase: "cleanup-failed", errorType: error instanceof Error ? error.name : "UnknownError",
+          code: error && typeof error === "object" && "code" in error && typeof error.code === "string" && /^[A-Z0-9_]{1,40}$/.test(error.code) ? error.code : undefined }));
+        throw error;
+      }
       finally {
         const independent = new PrismaClient(options);
         try { await verifyConversationRemoved(independent, f, dossierIds, conversationIds); }
@@ -70,7 +81,7 @@ async function exercise(origin: string, commit: string, phase: (value: string) =
       }
       console.log("S15_CLEANUP_VERIFIED", f.run);
     }
-    return { run: f.run, workspace, blobRun, databaseCleanup: "independent-readback", ...result };
+    return { run: f.run, workspace, blobRun, databaseCleanup: "independent-readback", mediaCleanup, ...result };
   } finally { await db.$disconnect(); }
 }
 
@@ -92,6 +103,7 @@ export async function verifyS15Conversation(origin = staging) {
     const result = await exercise(origin, commit, step => {
       if (step.startsWith("cleanup-")) journeyPhase = phase;
       phase = step;
+      console.log(JSON.stringify({ gate: "s15", phase: step }));
     });
     phase = "final-candidate";
     await candidate();

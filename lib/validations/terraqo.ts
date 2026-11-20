@@ -390,6 +390,11 @@ export const terraqoCollaborationRevisionSchema = terraqoCollaborationProposalFi
   expectedVersion: z.number().int().positive(),
 }));
 
+export const terraqoCollaborationCancellationSchema = z.object({
+  expectedVersion: z.number().int().positive().max(2147483646),
+  reason: z.string().trim().min(1).max(1200),
+});
+
 export const terraqoCollaborationDecisionSchema = z.object({
   action: z.enum(["ACCEPT", "REJECT", "REQUEST_CHANGES"]),
   expectedRevisionNo: z.number().int().positive(),

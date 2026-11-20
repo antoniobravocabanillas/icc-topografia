@@ -29,6 +29,7 @@ function run(stage, { utils }) {
       const entry = JSON.parse(line);
       if (["s06", "s07", "s08", "s09", "s10", "s11", "s12", "s13", "s14", "s15"].includes(entry.gate) && /^[a-z0-9-]{1,60}$/.test(entry.phase || "")) {
         attentionSteps.push(entry.gate + ":" + entry.phase);
+        if (/^[a-z0-9-]{1,60}$/.test(entry.journeyPhase || "")) attentionSteps.push("journey:" + entry.journeyPhase);
         for (const key of ["actual", "expected"]) if (Number.isSafeInteger(entry[key])) attentionSteps.push(key + ":" + entry[key]);
       }
       for (const key of ["s22Step", "attentionStep", "authenticatedAttentionFailedAt", "attentionCleanup", "errorType", "code"]) {
@@ -40,11 +41,11 @@ function run(stage, { utils }) {
   const codes = [...new Set(diagnostics.match(/\b(?:ERR_ASSERTION|TimeoutError|P\d{4}|SOURCE_REVOKED|PROVIDER_UNAVAILABLE)\b/g) || [])].slice(0, 6);
   if (result.status !== 0) {
     const fail = stage === "verify" ? utils.build.failPlugin : utils.build.failBuild;
-    fail(`Staging ${stage} failed; production release remains blocked. ${JSON.stringify({ locations, codes, attentionSteps: attentionSteps.slice(0, 8) })}`);
+    fail(`Staging ${stage} failed; production release remains blocked. ${JSON.stringify({ locations, codes, attentionSteps: attentionSteps.slice(-12) })}`);
   } else if (s22 && stage === "prepare" && process.env.S24_STAGING_DIAGNOSTIC_TARGET && process.env.S24_STAGING_DIAGNOSTIC_TARGET !== "off") {
     utils.build.cancelBuild("S24 staging diagnostic completed; the existing deploy remains active.");
   } else if (stage === "verify" && utils.status?.show) {
-    utils.status.show({ title: "Staging gate verified", summary: `PASS ${process.env.S15_STAGING_CONVERSATION_GATE === "conversation" ? "S15 conversation" : process.env.S14_STAGING_EVALUATION_GATE === "evaluation" ? "S14 evaluation" : process.env.S13_STAGING_DISCOVERY_GATE === "discovery" ? "S13 discovery" : process.env.S12_STAGING_NEED_GATE === "need" ? "S12 need" : process.env.S11_STAGING_RECORD_GATE === "record" ? "S11 record" : process.env.S10_STAGING_ARCHIVE_GATE === "archive" ? "S10 archive" : process.env.S09_STAGING_VISITOR_GATE === "visitor" ? "S09 visitor" : process.env.S08_STAGING_REVIEW_GATE === "review" ? "S08 review" : process.env.S07_STAGING_ENDORSEMENT_GATE === "request" ? "S07 endorsement" : process.env.S06_STAGING_VISIBILITY_GATE === "visibility" ? "S06 visibility" : process.env.PLATFORM_STAGING_CLOUD_PHASE}; commit=${process.env.COMMIT_REF}; deploy=${process.env.DEPLOY_ID}` });
+    utils.status.show({ title: "Staging gate verified", summary: `PASS ${process.env.S15_STAGING_CONVERSATION_GATE === "conversation" ? "S15 journey (operator media cleanup required)" : process.env.S14_STAGING_EVALUATION_GATE === "evaluation" ? "S14 evaluation" : process.env.S13_STAGING_DISCOVERY_GATE === "discovery" ? "S13 discovery" : process.env.S12_STAGING_NEED_GATE === "need" ? "S12 need" : process.env.S11_STAGING_RECORD_GATE === "record" ? "S11 record" : process.env.S10_STAGING_ARCHIVE_GATE === "archive" ? "S10 archive" : process.env.S09_STAGING_VISITOR_GATE === "visitor" ? "S09 visitor" : process.env.S08_STAGING_REVIEW_GATE === "review" ? "S08 review" : process.env.S07_STAGING_ENDORSEMENT_GATE === "request" ? "S07 endorsement" : process.env.S06_STAGING_VISIBILITY_GATE === "visibility" ? "S06 visibility" : process.env.PLATFORM_STAGING_CLOUD_PHASE}; commit=${process.env.COMMIT_REF}; deploy=${process.env.DEPLOY_ID}` });
   }
 }
 

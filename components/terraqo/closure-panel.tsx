@@ -14,6 +14,8 @@ type ClosureRevision = {
   authorizedExcerpt: string | null;
   status: "DRAFT" | "SUBMITTED" | "CHANGES_REQUESTED" | "ACCEPTED" | "DECLINED" | "SUPERSEDED";
   decisionComment: string | null;
+  submittedAt?: string | null;
+  decidedAt?: string | null;
   references: Array<{ worklogRevisionId: string; worklogRevision: { title: string } }>;
 };
 
@@ -50,7 +52,7 @@ type Collaboration = {
     version: number;
     currentRevision: ClosureRevision | null;
     certificate: Certificate | null;
-    revisions: Array<Pick<ClosureRevision, "id" | "revisionNo" | "status" | "decisionComment">>;
+    revisions: ClosureRevision[];
   };
 };
 
@@ -58,6 +60,15 @@ function acceptedProposal(collaboration: Collaboration) {
   return collaboration.proposals.find(
     (proposal) => proposal.revisionNo === collaboration.acceptedRevisionNo,
   );
+}
+
+function closureDate(value: string | null | undefined) {
+  if (!value) return "Fecha no disponible";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "Fecha no disponible";
+  return new Intl.DateTimeFormat("es-PE", {
+    dateStyle: "medium", timeStyle: "short", timeZone: "America/Lima",
+  }).format(date);
 }
 
 type ClosureForm = { contribution: string; deliverables: string; result: string; excerpt: string };
@@ -336,10 +347,12 @@ export function ClosurePanel({ mode }: { mode: "workspace" | "professional" }) {
               <ul className="mt-3 grid gap-1 text-sm text-slate-700 sm:grid-cols-2">{revision.deliverables.map((item) => <li key={item} className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#0b6f68]" />{item}</li>)}</ul>
               {revision.references.length ? <div className="mt-3 text-sm text-slate-700"><p className="font-semibold">Referencias autorizadas de esta revisión</p><ul className="mt-1 list-inside list-disc">{revision.references.map((reference) => <li key={reference.worklogRevisionId}>{reference.worklogRevision.title}</li>)}</ul><p className="mt-1 text-xs text-slate-500">Se conservan al guardar; el acceso a archivos se autoriza por separado.</p></div> : null}
               {revision.decisionComment ? <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{revision.decisionComment}</p> : null}
+              {revision.authorizedExcerpt ? <div className="mt-3 rounded-xl border border-slate-200 p-3"><p className="text-xs font-semibold text-slate-500">Extracto de esta versión</p><p className="mt-1 whitespace-pre-wrap text-sm">{revision.authorizedExcerpt}</p><p className="mt-2 text-xs text-slate-500">Revisarlo o aceptar el cierre no publica este contenido.</p></div> : null}
+              {closure.revisions.some((item) => item.id !== revision.id) ? <div className="mt-4 border-t border-slate-200 pt-4"><h4 className="text-sm font-semibold">Historial del cierre</h4><div className="mt-2 divide-y divide-slate-200">{closure.revisions.filter((item) => item.id !== revision.id).map((item) => <details key={item.id} className="py-3"><summary className="cursor-pointer rounded text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-600">Versión {item.revisionNo} · {closureStatusLabel[item.status]}</summary><div className="mt-3 space-y-3 text-sm"><p className="text-xs text-slate-500">{item.submittedAt ? `Enviada ${closureDate(item.submittedAt)} · Hora de Perú` : "Borrador no enviado"}</p><div><p className="font-semibold">Contribución</p><p className="whitespace-pre-wrap">{item.contribution}</p></div><div><p className="font-semibold">Entregables</p><ul className="list-inside list-disc">{item.deliverables.map((deliverable, index) => <li key={index}>{deliverable}</li>)}</ul></div><div><p className="font-semibold">Resultado</p><p className="whitespace-pre-wrap">{item.result}</p></div>{item.decisionComment ? <p className="rounded-lg bg-slate-50 p-3">{item.decisionComment}</p> : null}{item.authorizedExcerpt ? <p className="whitespace-pre-wrap">{item.authorizedExcerpt}</p> : null}{item.references.length ? <div><p className="font-semibold">Referencias con acceso vigente</p><ul className="list-inside list-disc">{item.references.map((reference) => <li key={reference.worklogRevisionId}>{reference.worklogRevision.title}</li>)}</ul></div> : null}<p className="text-xs text-slate-500">Versión anterior de solo lectura. Los archivos conservan sus propios permisos.</p></div></details>)}</div></div> : null}
 
               {mode === "professional" && revision.status === "SUBMITTED" ? <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50/60 p-4"><label className="grid gap-2 text-sm font-semibold">Comentario para corrección o desacuerdo<Textarea value={commentById[closure.id] || ""} onChange={(event) => setCommentById((current) => ({ ...current, [closure.id]: event.target.value }))} className="min-h-20 bg-white" /></label><div className="mt-3 flex flex-wrap gap-2"><Button disabled={working || refreshRequired} onClick={() => void decide(collaboration, "ACCEPT")}><Check className="h-4 w-4" />Aceptar y emitir constancia</Button><Button disabled={working || refreshRequired} variant="outline" onClick={() => void decide(collaboration, "REQUEST_CHANGES")}><RotateCcw className="h-4 w-4" />Solicitar corrección</Button><Button disabled={working || refreshRequired} variant="ghost" onClick={() => void decide(collaboration, "DECLINE")}><X className="h-4 w-4" />No aceptar</Button></div></div> : null}
 
-              {closure.certificate ? <div className="mt-4 rounded-2xl border border-emerald-200 bg-[linear-gradient(135deg,#f2fbf7,#eef7ff)] p-4"><div className="flex items-center gap-2"><BadgeCheck className="h-5 w-5 text-emerald-700" /><h4 className="font-bold">Constancia de colaboración</h4></div><dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2"><div><dt className="text-xs text-slate-500">Partes</dt><dd className="font-semibold">{closure.certificate.workspaceName} · {closure.certificate.professionalName}</dd></div><div><dt className="text-xs text-slate-500">Versiones aceptadas</dt><dd className="font-semibold">Alcance v{closure.certificate.proposalRevisionNo} · Cierre v{closure.certificate.closureRevisionNo}</dd></div></dl><p className="mt-3 text-xs text-slate-600">Privada por defecto. Compartirla requerirá una acción posterior y contenido autorizado.</p></div> : null}
+              {closure.certificate ? <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4"><div className="flex items-center gap-2"><BadgeCheck className="h-5 w-5 text-emerald-700" /><h4 className="font-bold">Constancia de colaboración</h4></div><dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2"><div><dt className="text-xs text-slate-500">Partes</dt><dd className="font-semibold">{closure.certificate.workspaceName} · {closure.certificate.professionalName}</dd></div><div><dt className="text-xs text-slate-500">Versiones aceptadas</dt><dd className="font-semibold">Alcance v{closure.certificate.proposalRevisionNo} · Cierre v{closure.certificate.closureRevisionNo}</dd></div><div><dt className="text-xs text-slate-500">Emitida · Hora de Perú</dt><dd>{closureDate(closure.certificate.issuedAt)}</dd></div><div><dt className="text-xs text-slate-500">Rol acordado</dt><dd>{closure.certificate.roleTitle}</dd></div><div className="sm:col-span-2"><dt className="text-xs text-slate-500">Alcance de la constancia</dt><dd className="mt-1 whitespace-pre-wrap leading-6">{closure.certificate.scope}</dd></div></dl><p className="mt-3 text-xs text-slate-600">Privada por defecto. Compartirla requerirá una acción posterior y contenido autorizado. Esta constancia no concede acceso a los archivos referenciados.</p></div> : null}
             </article>
           );
         })}

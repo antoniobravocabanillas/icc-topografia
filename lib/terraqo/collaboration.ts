@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
-import type { z } from "zod";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import type {
   terraqoCollaborationCreateSchema,
@@ -8,6 +8,9 @@ import type {
   terraqoCollaborationRevisionSchema,
 } from "@/lib/validations/terraqo";
 import { TerraqoMessagingError } from "@/lib/terraqo/messaging";
+import { terraqoCollaborationCancellationSchema } from "@/lib/validations/terraqo";
+import { workspaceAdminMemberRoles } from "@/lib/terraqo/workspace-roles";
+import { isValidWorklogOperationKey } from "@/lib/terraqo/worklog-create-operation";
 import {
   closureProjectionInclude,
   projectClosure,
@@ -53,6 +56,133 @@ const collaborationInclude = {
 
 export function collaborationOperationFingerprint(payload: unknown) {
   return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+}
+
+const cancellationReceiptSchema = z.object({
+  schemaVersion: z.literal(1),
+  kind: z.literal("COLLABORATION_CANCELLED"),
+  workspaceId: z.string(),
+  operationKey: z.string(),
+  operationFingerprint: z.string(),
+  actor: z.object({ id: z.string(), name: z.string().nullable(), role: z.string(), workspaceRole: z.string().nullable() }),
+  previousStatus: z.string(),
+  previousVersion: z.number().int().positive(),
+  result: z.object({
+    id: z.string(), workspaceId: z.string(), status: z.literal("CANCELLED"),
+    version: z.number().int().positive(), cancelledAt: z.string().datetime(), cancellationReason: z.string(),
+  }),
+});
+
+function isCancellationWriteConflict(error: unknown) {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
+  return error.code === "P2002" || error.code === "P2034" ||
+    (error.code === "P2010" && ["40001", "40P01"].includes(String(error.meta?.code)));
+}
+
+export async function cancelCollaboration(input: {
+  userId: string;
+  workspaceId: string;
+  collaborationId: string;
+  operationKey: string;
+  payload: z.infer<typeof terraqoCollaborationCancellationSchema>;
+}) {
+  // Validate at the service boundary too: scripts must not bypass the HTTP contract.
+  const payload = terraqoCollaborationCancellationSchema.parse(input.payload);
+  const operationKey = input.operationKey?.trim().toLowerCase();
+  if (!isValidWorklogOperationKey(operationKey))
+    throw new TerraqoMessagingError("Clave de reintento inválida.", 400);
+  const receiptId = `collaboration-cancel:v1:${collaborationOperationFingerprint([
+    input.workspaceId, input.userId, operationKey,
+  ])}`;
+  const operationFingerprint = collaborationOperationFingerprint({
+    collaborationId: input.collaborationId, reason: payload.reason, expectedVersion: payload.expectedVersion,
+  });
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        // Match closure lock order. Never inspect terminal/review state before this lock.
+        const parents = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`
+          SELECT id FROM icc."TerraqoCollaboration"
+          WHERE id=${input.collaborationId} AND "workspaceId"=${input.workspaceId} FOR UPDATE`);
+
+        // Reauthorize every attempt, including replays. Shared row locks order this
+        // operation against concurrent role, membership and workspace revocation.
+        await tx.$queryRaw(Prisma.sql`SELECT id FROM icc."User" WHERE id=${input.userId} FOR SHARE`);
+        await tx.$queryRaw(Prisma.sql`SELECT id FROM icc."TerraqoWorkspace" WHERE id=${input.workspaceId} FOR SHARE`);
+        await tx.$queryRaw(Prisma.sql`SELECT id FROM icc."TerraqoWorkspaceMember"
+          WHERE "workspaceId"=${input.workspaceId} AND "userId"=${input.userId} FOR SHARE`);
+        const actor = await tx.user.findUnique({ where: { id: input.userId }, select: { id: true, name: true, role: true } });
+        const membership = await tx.terraqoWorkspaceMember.findUnique({
+          where: { workspaceId_userId: { workspaceId: input.workspaceId, userId: input.userId } },
+          select: { role: true, active: true },
+        });
+        const workspace = await tx.terraqoWorkspace.findFirst({
+          where: { id: input.workspaceId, active: true, deletedAt: null }, select: { id: true },
+        });
+        if (!actor || !workspace || (actor.role !== "SUPER_ADMIN" &&
+            (!membership?.active || !workspaceAdminMemberRoles.includes(membership.role))))
+          throw new TerraqoMessagingError("No tienes autorización para cancelar colaboraciones de este workspace.", 403);
+        if (!parents.length) throw new TerraqoMessagingError("Colaboración no disponible.", 404);
+
+        const replay = await tx.activityLog.findUnique({ where: { id: receiptId } });
+        if (replay) {
+          const parsed = cancellationReceiptSchema.safeParse(replay.metadata);
+          const receipt = parsed.success ? parsed.data : null;
+          if (!receipt || replay.terraqoWorkspaceId !== input.workspaceId || replay.action !== "STATUS_CHANGED" || replay.entityType !== "TerraqoCollaboration" ||
+              replay.entityId !== input.collaborationId || receipt.workspaceId !== input.workspaceId ||
+              receipt.actor.id !== input.userId || receipt.operationKey !== operationKey ||
+              receipt.operationFingerprint !== operationFingerprint || receipt.previousVersion !== payload.expectedVersion ||
+              receipt.result.id !== input.collaborationId || receipt.result.workspaceId !== input.workspaceId ||
+              receipt.result.version !== payload.expectedVersion + 1 || receipt.result.cancellationReason !== payload.reason)
+            throw new TerraqoMessagingError("La clave de reintento ya fue usada con otra cancelación.", 409);
+          // Return the committed receipt, never a fresh projection of mutable history.
+          return receipt.result;
+        }
+
+        const collaboration = await tx.terraqoCollaboration.findUniqueOrThrow({
+          where: { id: input.collaborationId },
+          include: { closure: { select: {
+            certificate: { select: { id: true } },
+            revisions: { where: { status: "SUBMITTED" }, take: 1, select: { id: true } },
+          } } },
+        });
+        assertScopeCanChange(collaboration);
+        if (collaboration.closure?.certificate)
+          throw new TerraqoMessagingError("Una colaboración certificada no admite cancelación.", 409);
+        if (collaboration.version !== payload.expectedVersion)
+          throw new TerraqoMessagingError("La colaboración cambió en otra sesión.", 409);
+
+        const [clock] = await tx.$queryRaw<{ now: Date }[]>`SELECT clock_timestamp() AS now`;
+        const result = {
+          id: collaboration.id, workspaceId: input.workspaceId, status: "CANCELLED" as const,
+          version: collaboration.version + 1, cancelledAt: clock.now.toISOString(), cancellationReason: payload.reason,
+        };
+        await tx.terraqoCollaboration.update({
+          where: { id: collaboration.id },
+          data: { status: "CANCELLED", version: { increment: 1 }, cancelledAt: clock.now, cancellationReason: payload.reason },
+        });
+        // The unique audit event IS the receipt. Audit failure rolls back the state
+        // change; no proposal, acceptance, closure or certificate is removed.
+        await tx.activityLog.create({ data: {
+          id: receiptId, terraqoWorkspaceId: input.workspaceId, actorId: actor.id, action: "STATUS_CHANGED", entityType: "TerraqoCollaboration",
+          entityId: collaboration.id, title: "Colaboración cancelada", body: payload.reason, createdAt: clock.now,
+          metadata: {
+            schemaVersion: 1, kind: "COLLABORATION_CANCELLED", workspaceId: input.workspaceId,
+            operationKey, operationFingerprint, actor: { ...actor, workspaceRole: membership?.active ? membership.role : null },
+            previousStatus: collaboration.status, previousVersion: collaboration.version, result,
+          },
+        } });
+        return result;
+      }, { isolationLevel: "Serializable", timeout: 45_000 });
+    } catch (error) {
+      if (!isCancellationWriteConflict(error)) throw error;
+      // Retry the entire transaction and its live authority checks, never an
+      // out-of-transaction receipt lookup after a serialization/unique abort.
+      if (attempt === 2) throw new TerraqoMessagingError("La colaboración cambió en otra sesión. Reintenta la operación.", 409);
+    }
+  }
+  throw new TerraqoMessagingError("No se pudo completar la cancelación.", 409);
 }
 
 export function proposalDecisionState(
@@ -109,9 +239,36 @@ export async function listCollaborations(input: {
     orderBy: { updatedAt: "desc" },
     take: 100,
   });
-  return collaborations.map((collaboration) => projectCollaboration(
-    collaboration, input.workspaceId ? "workspace" : "professional",
-  ));
+  // Only fetch events for collaborations already selected by the authorized GET
+  // workspace/professional scope. Never infer a historical actor from live users.
+  const cancelled = collaborations.filter(item => item.status === "CANCELLED");
+  const events = cancelled.length ? await prisma.activityLog.findMany({
+    where: { action: "STATUS_CHANGED", entityType: "TerraqoCollaboration",
+      entityId: { in: cancelled.map(item => item.id) },
+      terraqoWorkspaceId: { in: [...new Set(cancelled.map(item => item.workspaceId))] },
+      id: { startsWith: "collaboration-cancel:v1:" },
+    },
+    select: { id: true, entityId: true, terraqoWorkspaceId: true, metadata: true },
+  }) : [];
+  return collaborations.map((collaboration) => {
+    const actors = events.flatMap(event => {
+      if (event.entityId !== collaboration.id || event.terraqoWorkspaceId !== collaboration.workspaceId) return [];
+      const parsed = cancellationReceiptSchema.safeParse(event.metadata);
+      if (!parsed.success) return [];
+      const receipt = parsed.data;
+      if (receipt.workspaceId !== collaboration.workspaceId || receipt.result.id !== collaboration.id ||
+          receipt.result.workspaceId !== collaboration.workspaceId || receipt.result.version !== collaboration.version ||
+          receipt.result.cancelledAt !== collaboration.cancelledAt?.toISOString() ||
+          receipt.result.cancellationReason !== collaboration.cancellationReason ||
+          event.id !== `collaboration-cancel:v1:${collaborationOperationFingerprint([
+            receipt.workspaceId, receipt.actor.id, receipt.operationKey,
+          ])}`) return [];
+      return [{ id: receipt.actor.id, name: receipt.actor.name }];
+    });
+    return { ...projectCollaboration(collaboration, input.workspaceId ? "workspace" : "professional"),
+      cancellationActor: actors.length === 1 ? actors[0] : null,
+    };
+  });
 }
 
 export async function createCollaboration(input: {

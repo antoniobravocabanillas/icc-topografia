@@ -27,7 +27,7 @@ export async function cleanConversation(db: PrismaClient, f: ConversationFixture
     await tx.terraqoConversationRequest.deleteMany({ where: { workspaceId: f.workspace, requesterId: f.owner } });
     await tx.terraqoMessageOperation.deleteMany({ where: { actorId: { in: [f.owner, f.author, f.publisher, f.otherOwner] } } });
     await tx.terraqoConversation.deleteMany({ where: { workspaceId: f.workspace, createdById: f.owner } });
-  });
+  }, { timeout: 45_000 });
   await cleanEvaluation(db, f);
 }
 
