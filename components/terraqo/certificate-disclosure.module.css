@@ -1,0 +1,46 @@
+.panel { --disclosure-line: #29465d; color: #f4f7fc; color-scheme: dark; border-top: 1px solid var(--disclosure-line); padding-top: 32px; margin-top: 32px; min-width: 0; overflow-wrap: anywhere; display: flex; flex-direction: column; }
+.panel p { color: #b7cadd; max-width: 68ch; line-height: 1.65; }
+.panel h2 { font-size: 24px; margin: 0 0 12px; }
+.panel h3 { font-size: 18px; margin: 0 0 18px; }
+.panel h4 { font-size: 17px; margin: 0; }
+.editor { display: grid; gap: 24px; margin-top: 28px; }
+.panel fieldset { border: 0; padding: 0; min-width: 0; }
+.panel legend { font-weight: 650; margin-bottom: 14px; }
+.choices { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 4px 20px; margin-bottom: 24px; }
+.panel .choice { display: flex; align-items: center; gap: 12px; min-height: 44px; font-size: 14px; cursor: pointer; }
+.choice input { width: 18px; height: 18px; flex-shrink: 0; accent-color: #80b8ff; }
+.panel label:not(.choice) { display: grid; gap: 8px; font-size: 14px; font-weight: 600; }
+.panel select, .panel input:not([type=checkbox]) { width: 100%; min-width: 0; min-height: 44px; padding: 10px 12px; border: 1px solid #7297b9; border-radius: 6px; background: #091827; color: #f4f7fc; font: inherit; }
+.inputs { display: grid; gap: 18px; margin-top: 20px; }
+.preview { padding: 22px; border: 1px solid var(--disclosure-line); background: #10283a; min-width: 0; }
+.panel dl { display: grid; gap: 18px; margin: 0; }
+.panel dt { color: #b7cadd; font-size: 13px; margin-bottom: 5px; }
+.panel dd { margin: 0; white-space: pre-wrap; line-height: 1.65; }
+.panel ul { padding-left: 20px; }
+.panel button, .panel a { min-height: 44px; padding: 11px 16px; font: inherit; font-weight: 600; border-radius: 6px; cursor: pointer; }
+.panel button { background: #2764c3; border: 1px solid #7297b9; color: white; }
+.panel button:disabled { opacity: .55; cursor: not-allowed; }
+.panel button:hover:not(:disabled) { background: #3477da; }
+.panel :focus-visible { outline: 2px solid #8ac1ff; outline-offset: 3px; }
+.panel ::selection { background: #316fba; color: white; }
+.panel input { caret-color: #8ac1ff; }
+.panel a { display: inline-flex; align-items: center; color: #8ac1ff; text-underline-offset: 4px; }
+.panel a:hover { text-decoration: underline; }
+.editor > button { justify-self: start; }
+.history { margin-top: 32px; order: 1; }
+.newSelection { order: 2; border-top: 1px solid var(--disclosure-line); padding-top: 20px; margin-top: 24px; }
+.newSelection summary { cursor: pointer; min-height: 44px; padding-block: 10px; font-weight: 600; color: #8ac1ff; }
+.confirm { border: 1px solid #7297b9; padding: 18px; margin-top: 20px; }
+.item { border-top: 1px solid var(--disclosure-line); padding: 28px 0; }
+.item header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
+.status { font-size: 13px; color: #ffcf7d; }
+.status[data-state=ACTIVE] { color: #8ce3c1; }
+.status[data-state=REVOKED], .status[data-state=EXPIRED] { color: #b7cadd; }
+.approvals { display: flex; flex-wrap: wrap; gap: 10px 24px; margin: 22px 0; font-size: 14px; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+.panel .revoke { background: transparent; border-color: #7297b9; color: #f4f7fc; }
+.panel .note { font-size: 13px; margin-top: 18px; }
+.error, .notice { border: 1px solid #7297b9; padding: 16px; background: #142c41; margin-top: 18px; }
+.panel .error { color: #ffd1cf; border-color: #ed9b99; }
+.error button { margin-top: 12px; }
+@media(max-width:560px) { .choices { grid-template-columns: 1fr; } .preview { padding: 18px 14px; } .actions { display: grid; } .editor > button { justify-self: stretch; } }

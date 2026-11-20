@@ -1,5 +1,9 @@
 # S17 disclosure preparation — local, not published
 
+## Current continuation — supersedes the implementation-pending paragraphs below
+
+The separate persistence, transaction service, APIs and in-page dual-consent UI now exist locally with proposed migration50. The original snapshot helper is now called by that service; it remains neither a credential nor an authorization decision by itself. Current validation status and staging prerequisites are tracked in [s17-disclosure-release-gate.md](s17-disclosure-release-gate.md). A complete hosted sharing gate is still required; no migration50 authorization or application is implied by this implementation.
+
 ## 20 November continuation
 
 The local authenticated PostgreSQL/Next/Chromium journey passed with six provenance guards enabled: run `fecc2cf7-268f-4de6-a85a-5ccd325f7622`, based on `1dcfc13514a0340c0610ee84f2b2e41905d6c17a` plus the viewport-capture changes. Correction, exact resubmission, historical scope, private certificate, cancellation/replay and anonymous/tenant isolation all passed. Cleanup used independent readback; the local server and disposable database were stopped by the harness. No hosted mutation/deployment was performed in this continuation.

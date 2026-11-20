@@ -46,4 +46,4 @@ assert.ok(Object.isFrozen(all.snapshot) && Object.isFrozen(all.snapshot.projecte
   Object.isFrozen(all.snapshot.fields) && Object.isFrozen(all.snapshot.audience));
 assert.deepEqual(certificate.deliverables, ["Report"]);
 assert.equal(certificate.privateByDefault, true);
-console.log("PASS disclosure preparation: selected-field privacy, canonical digest, recipient/expiry binding, legacy denial and unchanged private certificate; no grant or publication implemented");
+console.log("PASS disclosure snapshot: selected-field privacy, canonical digest, recipient/expiry binding, legacy denial and unchanged private certificate; service authorization validated separately");

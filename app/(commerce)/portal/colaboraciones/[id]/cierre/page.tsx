@@ -14,5 +14,5 @@ export default async function ProfessionalClosurePage({ params }: {
   const collaborations = await listCollaborations({ userId: session.user.id, collaborationId: id });
   const collaboration = collaborations.find((item) => item.id === id);
   if (!collaboration || collaboration.professionalUserId !== session.user.id || collaboration.acceptedRevisionNo == null || !collaboration.closure) notFound();
-  return <ClosurePanel key={id} mode="professional" collaborationId={id} presentation="dedicated" />;
+  return <ClosurePanel key={id} mode="professional" collaborationId={id} presentation="dedicated" disclosureEnabled={process.env.TERRAQO_CERTIFICATE_DISCLOSURE_V1 === "true"} />;
 }

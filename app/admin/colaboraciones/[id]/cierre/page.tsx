@@ -23,5 +23,5 @@ export default async function WorkspaceClosurePage({ params }: {
   const collaborations = await listCollaborations({ userId: session.user.id, workspaceId: workspace.id, collaborationId: id });
   const collaboration = collaborations.find((item) => item.id === id);
   if (!collaboration || collaboration.acceptedRevisionNo == null) notFound();
-  return <ClosurePanel key={id} mode="workspace" collaborationId={id} presentation="dedicated" />;
+  return <ClosurePanel key={id} mode="workspace" collaborationId={id} presentation="dedicated" disclosureEnabled={process.env.TERRAQO_CERTIFICATE_DISCLOSURE_V1 === "true"} />;
 }

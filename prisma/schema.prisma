@@ -996,6 +996,9 @@ enum TerraqoFileCategory {
 }
 
 model User {
+  certificateDisclosuresCreated TerraqoCertificateDisclosure[] @relation("CertificateDisclosureCreator")
+  certificateDisclosuresReceived TerraqoCertificateDisclosure[] @relation("CertificateDisclosureRecipient")
+  certificateDisclosureEvents TerraqoCertificateDisclosureEvent[]
   workspaceEvaluators TerraqoWorkspaceEvaluator[]
   workspaceInvitationsCreated TerraqoWorkspaceInvitation[] @relation("WorkspaceInvitationCreator")
   requestedPublicationReviews         TerraqoPublicationReview[]        @relation("PublicationRequester")
@@ -2920,6 +2923,7 @@ model TerraqoClosureReference {
 }
 
 model TerraqoCollaborationCertificate {
+  disclosures        TerraqoCertificateDisclosure[]
   id                 String                      @id @default(cuid())
   closureId          String                      @unique
   closure            TerraqoCollaborationClosure @relation(fields: [closureId], references: [id], onDelete: Restrict)
@@ -2941,6 +2945,45 @@ model TerraqoCollaborationCertificate {
   issuedAt           DateTime                    @default(now())
 
   @@index([issuedById, issuedAt])
+  @@schema("icc")
+}
+
+model TerraqoCertificateDisclosure {
+  id String @id @default(cuid())
+  certificateId String
+  certificate TerraqoCollaborationCertificate @relation(fields: [certificateId], references: [id], onDelete: Restrict)
+  createdById String
+  createdBy User @relation("CertificateDisclosureCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  destination String
+  recipientUserId String?
+  recipient User? @relation("CertificateDisclosureRecipient", fields: [recipientUserId], references: [id], onDelete: Restrict)
+  recipientEmail String?
+  expiresAt DateTime?
+  snapshot Json
+  digest String
+  createdAt DateTime @default(now())
+  events TerraqoCertificateDisclosureEvent[]
+
+  @@index([certificateId, createdAt])
+  @@index([recipientUserId])
+  @@schema("icc")
+}
+
+model TerraqoCertificateDisclosureEvent {
+  id String @id @default(cuid())
+  disclosureId String
+  disclosure TerraqoCertificateDisclosure @relation(fields: [disclosureId], references: [id], onDelete: Restrict)
+  actorId String
+  actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  party String
+  action String
+  digest String
+  operationKey String
+  fingerprint String
+  createdAt DateTime @default(now())
+
+  @@unique([actorId, operationKey])
+  @@index([disclosureId, createdAt])
   @@schema("icc")
 }
 

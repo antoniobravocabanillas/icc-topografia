@@ -58,6 +58,10 @@ export async function cleanS16(db: PrismaClient, f: S16Fixture, ids: OwnedIds) {
     };
     await db.$transaction(async tx => {
       const closure = { collaboration };
+      if (process.env.TERRAQO_CERTIFICATE_DISCLOSURE_V1 === "true") {
+        await tx.terraqoCertificateDisclosureEvent.deleteMany({ where: { disclosure: { certificate: { closure } } } });
+        await tx.terraqoCertificateDisclosure.deleteMany({ where: { certificate: { closure } } });
+      }
       await tx.terraqoCollaborationCertificate.deleteMany({ where: { closure } });
       await tx.terraqoCollaborationClosure.updateMany({ where: closure, data: { currentRevisionId: null } });
       await tx.terraqoClosureReference.deleteMany({ where: { closureRevision: { closure } } });
@@ -92,6 +96,10 @@ export async function cleanS16(db: PrismaClient, f: S16Fixture, ids: OwnedIds) {
         { terraqoWorkspaceId: f.workspace, id: { startsWith: "collaboration-cancel:v1:" } }] } }),
     ]);
     assert.ok(counts.every(count => count === 0), "Independent S16 cleanup found remaining rows");
+    if (process.env.TERRAQO_CERTIFICATE_DISCLOSURE_V1 === "true") {
+      assert.equal(await independent.terraqoCertificateDisclosure.count({ where: { createdById: actors } }), 0);
+      assert.equal(await independent.terraqoCertificateDisclosureEvent.count({ where: { actorId: actors } }), 0);
+    }
   } catch (error) { failures.push(error); }
   finally { await independent.$disconnect(); }
   if (failures.length) throw new AggregateError(failures, "S16 cleanup incomplete; operator review required");

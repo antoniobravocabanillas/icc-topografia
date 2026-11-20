@@ -22,6 +22,8 @@ async function rehearse() {
   const s16Controls = process.argv.includes("--s16-controls");
   const s16Page = process.argv.includes("--s16-page-only");
   const s17Provenance = process.argv.includes("--s17-provenance");
+  const s17Disclosure = process.argv.includes("--s17-disclosure");
+  assert.ok(!s17Disclosure || s17Provenance, "Disclosure requires provenance guards and authenticated controls");
   assert.ok(!s17Provenance || s16Controls, "S17 provenance requires the authenticated S16 controls journey");
   assert.ok(!(s16Page && (s16Controls || process.argv.includes("--route-only"))), "Choose one local journey");
   assert.ok(!(s16Controls && process.argv.includes("--route-only")), "Choose one local journey");
@@ -58,6 +60,7 @@ async function rehearse() {
     S15_STAGING_CONVERSATION_GATE: "conversation", TERRAQO_CONTEXTUAL_MESSAGING_V1: "true", TERRAQO_COLLABORATION_V1: "true", TERRAQO_CLOSURE_V1: "true", TERRAQO_EVIDENCE_ANALYSIS_V1: "false", TERRAQO_EVIDENCE_ANALYSIS_PROVIDER: "off", TERRAQO_DISCOVERY_NEEDS_V1: "true", TERRAQO_NEED_SUGGESTIONS_PROVIDER: "local", TERRAQO_B5_PILOT_WORKSPACE_IDS: "s13-need-" + candidate.slice(0, 16) };
   for (const [key, value] of Object.entries(process.env))
     if (/^(path|systemroot|windir|temp|tmp|home|userprofile|appdata|localappdata|comspec|pathext|programfiles.*|programdata|playwright_browsers_path)$/i.test(key)) env[key] = value;
+  if (s17Disclosure) env.TERRAQO_CERTIFICATE_DISCLOSURE_V1 = "true";
   if (s16Controls) Object.assign(env, {
     S16_COLLABORATION_GATE: "synthetic-only", S16_ORIGIN: host,
     S16_EXCLUSIVE_FIXTURE_WORKSPACE: "s13-need-" + candidate.slice(0, 16),
@@ -77,7 +80,14 @@ async function rehearse() {
     assert.equal(boot.status, 0, "Loopback PostgreSQL failed to start");
     started = true;
     // Initialize only this newly created loopback cluster from the existing schema; no migration files or remote DB.
-    await exec(process.execPath, ["node_modules/prisma/build/index.js", "db", "push", "--skip-generate", "--schema", "prisma/schema.prisma"], { cwd: root, env, windowsHide: true });
+    let schema = "prisma/schema.prisma";
+    if (s17Disclosure) {
+      schema = path.join(local, "baseline.prisma");
+      const baseline = (await exec("git", ["show", "a025dc4:prisma/schema.prisma"], { cwd: root, env, windowsHide: true })).stdout;
+      assert.ok(!baseline.includes("model TerraqoCertificateDisclosure"));
+      await writeFile(schema, baseline);
+    }
+    await exec(process.execPath, ["node_modules/prisma/build/index.js", "db", "push", "--skip-generate", "--schema", schema], { cwd: root, env, windowsHide: true });
     if (provenanceGuards) {
       // psql receives only our generated loopback target and credentials, never inherited PG settings.
       const psql = (args: string[]) => exec(path.join(bin, "psql"), ["-X", "-h", "127.0.0.1", "-p", String(pgPort),
@@ -92,6 +102,11 @@ async function rehearse() {
       const active = await psql(["-At", "-c", "SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='icc' AND t.tgname LIKE 's17_%' AND t.tgenabled='O'"]);
       assert.equal(active.stdout.trim(), "6", "All six S17 guards must be active");
       console.log("S17_PROVENANCE guards=6 enabled=O identity=own-loopback proposal_sha256=3a0352368d496ad59a1e9a3064da4c3d3badd6543aaf4a3c694e3b12ef273326");
+      if (s17Disclosure) {
+        const migration = path.join(root, "prisma/migrations/20261120000200_certificate_disclosure_consent/migration.sql");
+        await psql(["-f", migration]);
+        console.log("S17_DISCLOSURE complete additive migration applied on identity-checked disposable loopback");
+      }
     }
     await mkdir(app);
     for (const name of ["app","lib","components","types","services","emails","auth.ts","middleware.ts","next.config.ts",

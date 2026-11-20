@@ -321,6 +321,11 @@ async function journey(s: Sessions, db: PrismaClient, f: S16Fixture, ids: OwnedI
   await captures(pages, artifactDir, "private-certificate");
   console.log(JSON.stringify({ gate: "s17-provenance", uiIntent: "expectedAcceptedProposalId",
     boundRevisions: 2, historicalScope: "database-dto-ui-verified", certificate: "bound-scope-private" }));
+  if (process.env.TERRAQO_CERTIFICATE_DISCLOSURE_V1 === "true") {
+    phase("s17-certificate-dual-consent");
+    const { verifyDisclosureJourney } = await import("./s17-disclosure-browser");
+    await verifyDisclosureJourney({ origin, collaborationId: id, db, f, sessions: s, pages, artifactDir });
+  }
 
   phase("synthetic-second-conversation-cancellation-history-replay");
   const cancellable = await seedCancellation(db, f, ids);
@@ -432,7 +437,7 @@ export async function runS16Journey(input: { origin: string; target: "local" | "
     } catch (error) {
       const failure = error as { name?: string; code?: string; stack?: string; actual?: unknown; expected?: unknown };
       console.error(JSON.stringify({ gate: "s16-s17-draft", failedPhase: phase, name: failure.name,
-        code: failure.code, errorType: failure.name, locations: failure.stack?.split("\n").filter(line => /\bat .*s16-/.test(line)).slice(0, 4),
+        code: failure.code, errorType: failure.name, locations: failure.stack?.split("\n").filter(line => /\bat .*s1[67]-/.test(line)).slice(0, 4),
         actual: typeof failure.actual === "number" ? failure.actual : undefined,
         expected: typeof failure.expected === "number" ? failure.expected : undefined }));
       failures.push(error);

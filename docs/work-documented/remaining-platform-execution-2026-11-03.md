@@ -1,5 +1,13 @@
 # Remaining platform execution — 3 November 2026
 
+## 20 de noviembre — Compartir constancia S17: controles locales PASS; staging pendiente
+
+Este checkpoint sustituye el pendiente de implementacion de compartir constancias de las entradas historicas. Persistencia separada, seleccion exacta, autorizacion explicita de empresa y profesional, acceso publico/invitado, vencimiento y revocacion estan implementados localmente. Migracion50 propuesta `20261120000200_certificate_disclosure_consent`, NO aplicada remotamente. No confundir autorizacion anterior de migracion49 con esta nueva.
+
+Recorrido real completo PASS `a55a25fd-72f0-4482-8944-6c347cae5848`, limpieza independiente verificada, TypeScript/ESLint focalizado/snapshot PASS. Corregida etiqueta accesible del selector de destino tras aislar timeout del navegador. Capturas reales escritorio/movil revisadas; sin overflow a 1440/375/320. No es aprobacion global del PDF ni cierre de fase alojada. Detalle y orden de promocion: `proposals/s17-disclosure-release-gate.md`.
+
+Siguiente: fijar candidato, autorizacion especifica migracion50 + staging, backup fresco/restauracion/artefacto con ACL y ledger49, aplicacion y despliegue exclusivamente staging, recorrido alojado y limpieza. Staging no fue modificado en esta continuacion; ultimo estado registrado en checklist: runtime `ab8b64f`, ledger49 (no reconsultado en este turno). No publicar el commit diagnostico `4004fb8`. Produccion intacta; S17 abierto, S18 no promovido.
+
 ## 20 de noviembre — S17 procedencia: implementacion y recorrido local completos
 
 Este checkpoint sustituye los bloqueos historicos de procedencia descritos debajo. En `codex/s17-closure-provenance`: vinculo inmutable revision-propuesta, comprobacion de ambas aceptaciones, DTO historico y editor que conserva texto/alcance ante conflicto hasta revision explicita. Compatibilidad legacy NULL sin backfill; constancias privadas por defecto.

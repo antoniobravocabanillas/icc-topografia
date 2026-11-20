@@ -2,9 +2,9 @@ import { createHash } from "node:crypto";
 import type { TerraqoCollaborationCertificate } from "@prisma/client";
 import { z } from "zod";
 
-export const certificateDisclosureFields = ["workspaceName", "professionalName", "roleTitle", "scope",
-  "contribution", "deliverables", "result", "authorizedExcerpt", "issuedAt"] as const;
-export type CertificateDisclosureField = typeof certificateDisclosureFields[number];
+import { certificateDisclosureFields, type CertificateDisclosureField } from "./certificate-disclosure-fields";
+export { certificateDisclosureFields } from "./certificate-disclosure-fields";
+export type { CertificateDisclosureField } from "./certificate-disclosure-fields";
 
 const identity = z.string().trim().min(1).max(128);
 const selection = z.array(z.enum(certificateDisclosureFields)).min(1).max(certificateDisclosureFields.length)
@@ -16,9 +16,9 @@ const requestSchema = z.discriminatedUnion("destination", [
 ]);
 
 /** Internal proposal preparation only. This digest is NOT an authorization token.
- * The future transactional service must load the certificate and its relation from
+ * The transactional service must load the certificate and its relation from
  * the database, record both parties' consent to this exact digest, and reauthorize
- * every read. No API currently exposes or publishes this snapshot. */
+ * every read. Public responses project selected fields, never this internal snapshot. */
 export function prepareCertificateDisclosureSnapshot(
   certificate: TerraqoCollaborationCertificate,
   binding: { closureRevisionId: string; acceptedProposalId: string | null;

@@ -8,6 +8,8 @@ import { Textarea } from "@/components/ui/textarea";
 import styles from "./closure-page.module.css";
 import { ClosureReferencePicker, closureReferenceKey, type ClosureReferenceSource } from "./closure-reference-picker";
 import { ClosureReferencePreview } from "./closure-reference-preview";
+import { CertificateDisclosurePanel } from "./certificate-disclosure-panel";
+import { certificateDisclosureFields } from "@/lib/terraqo/certificate-disclosure-fields";
 
 type AcceptedScope = { id: string; revisionNo: number; roleTitle: string; scope: string };
 
@@ -118,10 +120,11 @@ function ClosureSummary({ revision }: { revision: ClosureRevision }) {
   </dl>;
 }
 
-export function ClosurePanel({ mode, collaborationId, presentation = "embedded" }: {
+export function ClosurePanel({ mode, collaborationId, presentation = "embedded", disclosureEnabled = false }: {
   mode: "workspace" | "professional";
   collaborationId?: string;
   presentation?: "embedded" | "dedicated";
+  disclosureEnabled?: boolean;
 }) {
   const dedicated = presentation === "dedicated";
   const [items, setItems] = useState<Collaboration[]>([]);
@@ -393,6 +396,8 @@ export function ClosurePanel({ mode, collaborationId, presentation = "embedded" 
         <div><dt>Contribución</dt><dd>{closure.certificate.contribution}</dd></div><div><dt>Entregables</dt><dd>{closure.certificate.deliverables.join(" · ")}</dd></div><div><dt>Resultado</dt><dd>{closure.certificate.result || "No se registró un resultado adicional."}</dd></div>
         {closure.certificate.authorizedExcerpt ? <div><dt>Extracto autorizado</dt><dd>{closure.certificate.authorizedExcerpt}</dd></div> : null}</dl>
       <p className={styles.small}>Privada por defecto. Compartir requiere una acción posterior y contenido autorizado; no concede acceso a archivos internos.</p>
+      {disclosureEnabled && selected && <CertificateDisclosurePanel key={selected.id} collaborationId={selected.id} mode={mode}
+        certificate={Object.fromEntries(certificateDisclosureFields.map(field => [field, closure.certificate![field]]))} />}
     </section> : null;
 
     return <section data-testid="closure-panel" className={styles.page} aria-busy={loading || working} aria-label={mode === "workspace" ? "Preparar cierre" : "Revisar cierre"}>
