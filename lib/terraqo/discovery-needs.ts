@@ -1,4 +1,5 @@
 import { matchesDiscoveryFilters, type DiscoveryFilters } from "./discovery-filters";
+import { authorizedSourceProjection } from "./evidence-analysis";
 import { standalonePublicWorklogWhere } from "./public-cv";
 import { publicCvEvidenceHref } from "./public-cv-permalink";
 import { publicationReviewEnabled } from "./publication-review";
@@ -670,13 +671,35 @@ export async function evaluationSourceIsAccessible(
   const item = await tx.terraqoShareCollectionItem.findFirst({
     where: {
       revisionId: source.worklogRevisionId,
+      revision: { currentFor: { lifecycle: "PUBLISHED", deletedAt: null } },
       collection: {
-        grants: { some: { id: source.accessReferenceId ?? "", subjectUserId: actorId, lifecycle: "ACTIVE", expiresAt: { gt: new Date() }, scopes: { has: "VIEW_COLLECTION" } } },
+        lifecycle: { not: "ARCHIVED" },
+        grants: { some: { id: source.accessReferenceId ?? "", subjectUserId: actorId, lifecycle: "ACTIVE", revokedAt: null, expiresAt: { gt: new Date() }, scopes: { has: "VIEW_COLLECTION" } } },
       },
     },
     select: { allowedFields: true },
   });
   return item ? { allowedFields: constrainAllowedFields(item.allowedFields, source.accessSnapshot) } : null;
+}
+
+export async function readEvaluationSource(input: {
+  userId: string; workspaceId: string; dossierId: string; sourceId: string;
+}) {
+  return prisma.$transaction(async (tx) => {
+    await requireDossierAdministrator(tx, input);
+    const source = await tx.terraqoEvaluationSource.findFirst({
+      where: { id: input.sourceId, dossierId: input.dossierId,
+        dossier: { workspaceId: input.workspaceId, lifecycle: { not: "ARCHIVED" } } },
+      include: { worklogRevision: { select: { contentHash: true } } },
+    });
+    if (!source) throw new DiscoveryNeedsError("Fuente no disponible.", 404);
+    // The original exposure and its frozen field selection govern every read.
+    const projection = await authorizedSourceProjection(input.userId, {
+      ...source, evaluationSourceId: source.id, contentHash: source.worklogRevision.contentHash,
+    }, tx);
+    if (!projection) throw new DiscoveryNeedsError("La fuente perdió autorización.", 410);
+    return projection;
+  }, { isolationLevel: "RepeatableRead" });
 }
 
 export async function listEvaluationDossiers(input: { userId: string; workspaceId: string }) {

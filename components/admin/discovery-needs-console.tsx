@@ -1,6 +1,7 @@
 "use client";
 
 import { DiscoveryEvidenceExplorer, emptyDiscoveryFilters, type DiscoveryFilters, type EvidenceMatch } from "@/components/admin/discovery-evidence-explorer";
+import { DiscoveryEvaluationSource } from "@/components/admin/discovery-evaluation-source";
 import { DiscoveryNeedEditor, type EditableNeed } from "@/components/admin/discovery-need-editor";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Ban, BookOpenCheck, Bot, BriefcaseBusiness, Check, CircleAlert, FileSearch, LoaderCircle, MessageSquareText, Plus, RotateCcw, Sparkles, UserRoundSearch } from "lucide-react";
@@ -77,6 +78,8 @@ export function DiscoveryNeedsConsole({ contextualMessagingEnabled = false, evid
   const activeDiscovery = useRef<{ needId: string; filters: DiscoveryFilters } | null>(null);
   const refreshDiscovery = useRef<() => void>(() => {});
   const dossierSubmission = useRef(false);
+  const [openedSource, setOpenedSource] = useState<{ dossierId: string; sourceId: string; revisionId: string; nonce: number } | null>(null);
+  const [questionDrafts, setQuestionDrafts] = useState<Record<string, Array<{ id: string; text: string }>>>({});
   const [dossiers, setDossiers] = useState<EvaluationDossier[]>([]);
   const [selectedDossierId, setSelectedDossierId] = useState<string | null>(null);
   const [selectedRevisions, setSelectedRevisions] = useState<Record<string, string[]>>({});
@@ -113,6 +116,7 @@ export function DiscoveryNeedsConsole({ contextualMessagingEnabled = false, evid
     try {
       const data = await api<EvaluationDossier[]>("/api/v1/evaluation-dossiers", { cache: "no-store" });
       if (generation !== dossierGeneration.current) return;
+      setOpenedSource(current => current && data.some(dossier => dossier.id === current.dossierId && !dossier.revokedSourceCount && dossier.sources.some(source => source.id === current.sourceId && source.worklogRevision.id === current.revisionId)) ? current : null);
       setDossiers(data);
       setAnalysisJobs(current => Object.fromEntries(Object.entries(current).filter(([id]) => {
         const dossier = data.find(item => item.id === id);
@@ -134,6 +138,32 @@ export function DiscoveryNeedsConsole({ contextualMessagingEnabled = false, evid
 
   const selectedNeed = useMemo(() => needs.find((need) => need.id === selectedNeedId) ?? null, [needs, selectedNeedId]);
   const selectedDossier = useMemo(() => dossiers.find((dossier) => dossier.id === selectedDossierId) ?? null, [dossiers, selectedDossierId]);
+  const sourceUnavailable = useCallback(() => {
+    setOpenedSource(null);
+    setQuestionDrafts({});
+    analysisGeneration.current += 1;
+    analysisPollTimers.current.forEach(timer => window.clearTimeout(timer));
+    analysisPollTimers.current.clear();
+    setAnalysisJobs({});
+    setDossiers([]);
+    setMessage({ type: "error", text: "Fuente retirada o no disponible. Se ocultaron sus resultados. Revisa las fuentes vigentes; puedes continuar la evaluación manual." });
+    void loadDossiers();
+  }, [loadDossiers]);
+
+  function openSource(dossier: EvaluationDossier, sourceId: string, revisionId?: string) {
+    const source = dossier.sources.find(item => item.id === sourceId);
+    if (!source || (revisionId && source.worklogRevision.id !== revisionId)) { sourceUnavailable(); return; }
+    setOpenedSource({ dossierId: dossier.id, sourceId, revisionId: revisionId ?? source.worklogRevision.id, nonce: Date.now() });
+    window.requestAnimationFrame(() => { const viewer = document.getElementById("evaluation-source-viewer"); viewer?.scrollIntoView({ block: "nearest", behavior: "instant" }); viewer?.focus(); });
+  }
+
+  function prepareQuestions(dossier: EvaluationDossier) {
+    const missing = dossier.needRevision.requirements.filter(requirement => requirement.priority === "REQUIRED" && !dossier.assessments.some(item => item.requirementId === requirement.id && item.claimState !== "UNKNOWN" && item.sourceState === "ACTIVE"));
+    const drafts = missing.map(requirement => ({ id: requirement.id, text: `¿Puedes precisar tu participación y aportar evidencia sobre «${requirement.label}»?` }));
+    setQuestionDrafts(current => ({ ...current, [dossier.id]: drafts.length ? drafts : [{ id: "scope", text: "¿Qué alcance tuvo tu participación en los trabajos seleccionados y qué información falta confirmar?" }] }));
+    window.requestAnimationFrame(() => document.getElementById("evaluation-questions")?.scrollIntoView({ block: "nearest", behavior: "instant" }));
+  }
+
   async function retryInitialLoad() {
     setMessage(null);
     await Promise.all([loadNeeds(), loadDossiers()]);
@@ -158,6 +188,8 @@ export function DiscoveryNeedsConsole({ contextualMessagingEnabled = false, evid
     analysisGeneration.current += 1;
     analysisPollTimers.current.forEach(timer => window.clearTimeout(timer));
     analysisPollTimers.current.clear();
+    setOpenedSource(null);
+    setQuestionDrafts({});
     setDossiers([]);
     setAnalysisJobs({});
     setAnalysisPurposes({});
@@ -342,6 +374,8 @@ export function DiscoveryNeedsConsole({ contextualMessagingEnabled = false, evid
         }),
       });
       if (!question) form.reset();
+      const draftId = form.dataset.draftId;
+      if (draftId !== undefined) setQuestionDrafts(current => ({ ...current, [dossierId]: (current[dossierId] ?? []).filter(draft => draft.id !== draftId) }));
       setMessage({ type: "success", text: question ? "Pregunta actualizada como nueva versión." : "Pregunta preparada como borrador interno." });
       await loadDossiers();
     } catch (error) {
@@ -521,16 +555,25 @@ export function DiscoveryNeedsConsole({ contextualMessagingEnabled = false, evid
               <span className="rounded-full border bg-white px-3 py-1 text-xs font-bold text-slate-700">{dossiers.length} activos</span>
             </CardHeader>
             <CardContent className="pt-5">
-              {dossiers.length ? <div className="grid gap-3 md:grid-cols-2">{dossiers.map((dossier) => <button key={dossier.id} type="button" aria-pressed={dossier.id === selectedDossierId} onClick={() => setSelectedDossierId(dossier.id)} className={`min-h-24 rounded-xl border p-4 text-left transition motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${dossier.id === selectedDossierId ? "border-teal-600 bg-teal-50" : "hover:bg-slate-50"}`}><span className="flex items-start justify-between gap-3"><span><strong className="block">{dossier.professionalProfile.user.name || "Profesional Terraqo"}</strong><small className="mt-1 block text-muted-foreground">{dossier.needRevision.title} · v{dossier.needRevision.revisionNo}</small></span><AnalysisBadge status={dossier.effectiveAnalysisStatus} /></span></button>)}</div> : <Empty icon={<BookOpenCheck className="h-6 w-6" />} title="Sin expedientes" body="Selecciona evidencia de un profesional para crear una evaluación privada." />}
+              {dossiers.length ? <div className="grid gap-3 md:grid-cols-2">{dossiers.map((dossier) => <button key={dossier.id} type="button" aria-pressed={dossier.id === selectedDossierId} onClick={() => { setOpenedSource(null); setSelectedDossierId(dossier.id); }} className={`min-h-24 rounded-xl border p-4 text-left transition motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${dossier.id === selectedDossierId ? "border-teal-600 bg-teal-50" : "hover:bg-slate-50"}`}><span className="flex items-start justify-between gap-3"><span><strong className="block">{dossier.professionalProfile.user.name || "Profesional Terraqo"}</strong><small className="mt-1 block text-muted-foreground">{dossier.needRevision.title} · v{dossier.needRevision.revisionNo}</small></span><AnalysisBadge status={dossier.effectiveAnalysisStatus} /></span></button>)}</div> : <Empty icon={<BookOpenCheck className="h-6 w-6" />} title="Sin expedientes" body="Selecciona evidencia de un profesional para crear una evaluación privada." />}
             </CardContent>
           </Card>
 
-          {selectedDossier ? <Card key={`${selectedDossier.id}-${selectedDossier.revokedSourceCount}-${selectedDossier.sources.map(source => source.worklogRevision.id).join("-")}`} className="overflow-hidden">
-            <CardHeader className="border-b bg-[linear-gradient(115deg,#f8fafc,#ecfeff)]">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-teal-700">S14 · Evaluación privada</p><CardTitle className="mt-2">{selectedDossier.professionalProfile.user.name || "Profesional Terraqo"}</CardTitle><CardDescription>{selectedDossier.needRevision.title} · necesidad v{selectedDossier.needRevision.revisionNo}</CardDescription></div><AnalysisBadge status={selectedDossier.effectiveAnalysisStatus} /></div>
+          {selectedDossier ? <Card key={`${selectedDossier.id}-${selectedDossier.revokedSourceCount}-${selectedDossier.sources.map(source => source.worklogRevision.id).join("-")}`} role="region" aria-label="Evaluación privada" className="overflow-hidden border-slate-700 bg-[#061321] text-slate-100 selection:bg-blue-700 selection:text-white" style={{ colorScheme: "dark" }}>
+            <CardHeader className="border-b border-slate-700 bg-[#0b1d2e]">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><h2 className="text-lg font-semibold text-sky-300">Evaluación privada</h2><CardTitle className="mt-2">{selectedDossier.professionalProfile.user.name || "Profesional Terraqo"}</CardTitle><CardDescription className="text-slate-300">{selectedDossier.needRevision.title} · necesidad v{selectedDossier.needRevision.revisionNo}</CardDescription></div><AnalysisBadge status={selectedDossier.effectiveAnalysisStatus} /></div>
               {selectedDossier.revokedSourceCount ? <div role="status" className="mt-3 flex gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />{selectedDossier.revokedSourceCount} fuente(s) perdieron autorización. Se ocultaron y los criterios afectados quedaron marcados.</div> : null}
             </CardHeader>
-            <CardContent className="space-y-7 pt-6">
+            <CardContent className="space-y-7 p-4 sm:p-6">
+              <p className="max-w-[75ch] text-sm leading-6 text-slate-300">Fuentes, criterios y notas exclusivos de tu empresa. Esta revisión no es una verificación ni una decisión de contratación.</p>
+              <div className="grid items-start gap-5 lg:grid-cols-2">
+                <section id="evaluation-sources" aria-label="Fuentes autorizadas" className="min-w-0 scroll-mt-6 space-y-3">
+                  <h3 className="text-lg font-bold">Evidencias seleccionadas</h3><p className="text-sm text-slate-300">{selectedDossier.sources.length} {selectedDossier.sources.length === 1 ? "fuente autorizada" : "fuentes autorizadas"} · consulta la versión exacta.</p>
+                  {selectedDossier.sources.map(source => <button key={source.id} type="button" onClick={() => openSource(selectedDossier, source.id)} className="flex min-h-20 w-full flex-col gap-2 rounded-xl border border-[#36516b] bg-[#0b1d2e] p-4 text-left hover:bg-[#10263c] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"><strong className="break-words text-sm">{source.worklogRevision.title || "Evidencia autorizada"}</strong><span className="text-xs text-slate-400">{source.accessKind === "PUBLIC_CV" ? "CV público" : source.accessKind === "PUBLIC_SELECTION" ? "Selección pública" : "Acceso privado autorizado"}</span><span className="text-sm font-semibold text-sky-300">Abrir fuente y versión →</span></button>)}
+                  {!selectedDossier.sources.length ? <p role="status" className="text-sm text-amber-200">Sin fuentes autorizadas. Puedes anotar lo que falta confirmar y preparar preguntas manualmente.</p> : null}
+                  {openedSource?.dossierId === selectedDossier.id && selectedDossier.sources.some(source => source.id === openedSource.sourceId && source.worklogRevision.id === openedSource.revisionId) ? <DiscoveryEvaluationSource key={`${openedSource.dossierId}-${openedSource.sourceId}-${openedSource.nonce}`} {...openedSource} onClose={() => setOpenedSource(null)} onUnavailable={sourceUnavailable} /> : null}
+                </section>
+                <div className="min-w-0 space-y-4">
               {evidenceAnalysisEnabled ? <AnalysisPanel
                 dossier={selectedDossier}
                 job={analysisJobs[selectedDossier.id]}
@@ -540,27 +583,34 @@ export function DiscoveryNeedsConsole({ contextualMessagingEnabled = false, evid
                 onStart={() => void startAnalysis(selectedDossier)}
                 onCancel={(jobId) => void cancelAnalysis(selectedDossier.id, jobId)}
                 onRetry={(jobId) => void retryAnalysis(selectedDossier.id, jobId)}
-              /> : null}
+                onOpenSource={(sourceId, revisionId) => openSource(selectedDossier, sourceId, revisionId)}
+                onPrepareQuestions={() => prepareQuestions(selectedDossier)}
+              /> : <div className="rounded-xl border border-[#36516b] bg-[#0b1d2e] p-4"><h3 className="font-bold">Evaluación manual disponible</h3><p className="mt-2 text-sm leading-6 text-slate-300">Revisa las fuentes, registra criterios y prepara preguntas sin asistencia automática.</p></div>}
+              <Button type="button" variant="outline" className="min-h-11 border-[#36516b] bg-[#10263c] text-white hover:bg-[#193750]" disabled={!employerNeedsWritable || submitting} onClick={() => prepareQuestions(selectedDossier)}><MessageSquareText className="h-4 w-4" aria-hidden />Preparar preguntas</Button>
+              <p className="text-xs leading-5 text-slate-400">Crea borradores a partir de los criterios indispensables pendientes. Revisa y guarda cada pregunta; no se envía al profesional.</p>
+              <EvaluationStatus status={selectedDossier.effectiveAnalysisStatus} />
+              <section className="space-y-5">
+                <div id="evaluation-notes" className="scroll-mt-24 rounded-xl border border-[#36516b] p-4"><div className="flex items-center gap-2"><MessageSquareText className="h-5 w-5 text-sky-300" aria-hidden /><h3 className="font-bold">Notas internas</h3></div><p className="mt-1 text-xs text-slate-300">Solo visibles para el equipo de tu empresa.</p><form onSubmit={(event) => void addNote(event, selectedDossier.id)} className="mt-3 space-y-3"><label className="grid gap-2 text-sm font-semibold"><span>Observación del equipo</span><Textarea name="body" required minLength={2} disabled={!employerNeedsWritable} className="border-[#36516b] bg-[#0b1d2e] text-slate-100 placeholder:text-slate-400 focus-visible:ring-sky-300 min-h-24" placeholder="Contexto privado para la evaluación." /></label><Button type="submit" variant="outline" className="min-h-11 border-[#36516b] bg-[#10263c] text-white hover:bg-[#193750]" disabled={!employerNeedsWritable || submitting}>Agregar nota</Button></form><div className="mt-4 space-y-2">{selectedDossier.notes.map((note) => <article key={note.id} className="rounded-lg bg-[#10263c] p-3"><p className="text-sm leading-6">{note.body}</p><p className="mt-2 text-[11px] font-medium text-slate-400">{note.createdBy.name || "Equipo Terraqo"} · {new Date(note.createdAt).toLocaleString("es-PE")}</p></article>)}</div></div>
+                <div id="evaluation-questions" className="min-w-0 scroll-mt-6 rounded-xl border border-[#36516b] p-4"><div className="flex items-center gap-2"><FileSearch className="h-5 w-5 text-sky-300" aria-hidden /><h3 className="font-bold">Preguntas para confirmar</h3></div><p className="mt-1 text-xs text-slate-300">Borradores editables. Guardar no los envía.</p>{(questionDrafts[selectedDossier.id] ?? []).map((draft, index) => <form key={`${selectedDossier.id}-draft-${draft.id}`} data-draft-id={draft.id} onSubmit={event => void saveQuestion(event, selectedDossier.id)} className="mt-4 space-y-2 rounded-lg border border-sky-800 bg-[#10263c] p-3"><label className="grid gap-2 text-sm font-semibold">Borrador de pregunta {index + 1}<Textarea name="text" defaultValue={draft.text} required minLength={4} disabled={!employerNeedsWritable || submitting} className="border-[#36516b] bg-[#0b1d2e] text-slate-100 placeholder:text-slate-400 focus-visible:ring-sky-300 min-h-24" /></label><Button type="submit" disabled={!employerNeedsWritable || submitting}>Guardar borrador</Button></form>)}<form onSubmit={(event) => void saveQuestion(event, selectedDossier.id)} className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]"><label className="grid gap-2 text-sm font-semibold"><span>Pregunta interna</span><Input className="min-h-11 border-[#36516b] bg-[#0b1d2e] text-slate-100 placeholder:text-slate-400 focus-visible:ring-sky-300" name="text" required minLength={4} disabled={!employerNeedsWritable} placeholder="¿Qué alcance tuvo tu participación?" /></label><Button type="submit" size="icon" className="min-h-11 min-w-11 self-end" aria-label="Agregar pregunta" disabled={!employerNeedsWritable || submitting}><Plus className="h-4 w-4" aria-hidden /></Button></form><div className="mt-4 space-y-2">{selectedDossier.questions.map((question) => <form key={question.id} onSubmit={(event) => void saveQuestion(event, selectedDossier.id, question)} className="grid gap-2 rounded-lg bg-[#10263c] p-2 sm:grid-cols-[minmax(0,1fr)_auto]"><Input className="min-h-11 border-[#36516b] bg-[#0b1d2e] text-slate-100 placeholder:text-slate-400 focus-visible:ring-sky-300" name="text" defaultValue={question.text} disabled={!employerNeedsWritable} aria-label="Editar pregunta" /><Button type="submit" variant="outline" size="sm" className={darkButton} disabled={!employerNeedsWritable || submitting}>Guardar</Button></form>)}</div></div>
+              </section>
+                </div>
+              </div>
               <section aria-labelledby="evaluation-criteria-heading">
-                <div className="flex items-end justify-between gap-3"><div><h3 id="evaluation-criteria-heading" className="text-lg font-bold">Criterios de la necesidad</h3><p className="text-sm text-muted-foreground">Un estado describe la evidencia disponible; no califica a la persona.</p></div><span className="text-xs font-bold text-slate-500">{selectedDossier.assessments.length}/{selectedDossier.needRevision.requirements.length} revisados</span></div>
-                <div className="mt-4 space-y-3">{selectedDossier.needRevision.requirements.map((requirement) => {
+                <div className="flex flex-wrap items-end justify-between gap-3"><div><h3 id="evaluation-criteria-heading" className="text-lg font-bold">Criterios de la necesidad</h3><p className="text-sm text-slate-300">Un estado describe la evidencia disponible; no califica a la persona.</p></div><span className="text-xs font-bold text-slate-400">{selectedDossier.assessments.length}/{selectedDossier.needRevision.requirements.length} revisados</span></div>
+                <ClaimLegend /><div className="mt-4 space-y-3">{!selectedDossier.needRevision.requirements.length ? <p className="text-sm text-slate-300">Esta versión no contiene criterios. Puedes revisar las fuentes y registrar notas internas.</p> : null}{selectedDossier.needRevision.requirements.map((requirement) => {
                   const assessment = selectedDossier.assessments.find((item) => item.requirementId === requirement.id);
-                  return <form key={requirement.id} onSubmit={(event) => void saveAssessment(event, selectedDossier, requirement)} className="rounded-xl border p-4">
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"><div><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide">{requirement.priority === "REQUIRED" ? "Indispensable" : "Deseable"}</span><h4 className="mt-2 font-bold">{requirement.label}</h4>{assessment?.sourceState === "SOURCE_REVOKED" ? <p className="mt-1 text-xs font-semibold text-amber-700">Una fuente citada fue retirada; revisa el criterio.</p> : null}</div><select name="claimState" defaultValue={assessment?.claimState ?? "UNKNOWN"} disabled={!employerNeedsWritable} aria-label={`Estado de ${requirement.label}`} className="min-h-11 rounded-lg border bg-background px-3 text-sm font-semibold"><option value="UNKNOWN">Por confirmar</option><option value="DECLARED">Declarado</option><option value="DOCUMENTED">Documentado</option><option value="ENDORSED">Respaldado</option><option value="CONFIRMED">Confirmado con alcance</option></select></div>
-                    <label className="mt-3 grid gap-2 text-sm font-semibold"><span>Conclusión y sustento</span><Textarea name="rationale" defaultValue={assessment?.rationale ?? ""} disabled={!employerNeedsWritable} className="min-h-20" placeholder="Conclusión manual o información que falta confirmar." /></label>
-                    <fieldset disabled={!employerNeedsWritable} className="mt-3"><legend className="text-xs font-bold uppercase tracking-wide text-slate-500">Fuentes exactas</legend><div className="mt-2 grid gap-2 sm:grid-cols-2">{selectedDossier.sources.map((source) => <label key={source.id} className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border bg-slate-50 px-3 text-xs font-medium"><input type="checkbox" name="sourceIds" value={source.id} defaultChecked={assessment?.sourceIds.includes(source.id)} className="h-4 w-4 accent-teal-700" /><span className="line-clamp-2">{source.worklogRevision.title || "Evidencia autorizada"}</span></label>)}</div></fieldset>
-                    <div className="mt-3 flex justify-end"><Button type="submit" size="sm" disabled={!employerNeedsWritable || submitting}><Check className="h-4 w-4" aria-hidden />Guardar criterio</Button></div>
+                  return <form key={`${selectedDossier.id}-${requirement.id}-${assessment?.revisionNo ?? 0}-${assessment?.sourceState}`} onSubmit={(event) => void saveAssessment(event, selectedDossier, requirement)} className="rounded-xl border border-[#36516b] p-4">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"><div><span className="rounded-full bg-[#193750] px-2 py-1 text-[10px] font-bold uppercase tracking-wide">{requirement.priority === "REQUIRED" ? "Indispensable" : "Deseable"}</span><h4 className="mt-2 font-bold">{requirement.label}</h4>{assessment?.sourceState === "SOURCE_REVOKED" ? <p className="mt-1 text-xs font-semibold text-amber-200">Una fuente citada fue retirada; revisa el criterio.</p> : null}</div><select name="claimState" defaultValue={assessment?.claimState ?? "UNKNOWN"} disabled={!employerNeedsWritable} aria-label={`Estado de ${requirement.label}`} className="min-h-11 w-full min-w-0 rounded-lg border border-[#36516b] bg-[#0b1d2e] px-3 text-sm font-semibold lg:w-auto"><option value="UNKNOWN">Desconocido · por confirmar</option><option value="DECLARED">Declarado</option><option value="DOCUMENTED">Documentado</option><option value="ENDORSED">Respaldado</option><option value="CONFIRMED">Confirmado con alcance</option></select></div>
+                    <label className="mt-3 grid gap-2 text-sm font-semibold"><span>Conclusión y sustento</span><Textarea name="rationale" defaultValue={assessment?.sourceState === "SOURCE_REVOKED" ? "" : assessment?.rationale ?? ""} disabled={!employerNeedsWritable} className="border-[#36516b] bg-[#0b1d2e] text-slate-100 placeholder:text-slate-400 focus-visible:ring-sky-300 min-h-20" placeholder="Conclusión manual o información que falta confirmar." /></label>
+                    <fieldset disabled={!employerNeedsWritable} className="mt-3"><legend className="text-xs font-bold uppercase tracking-wide text-slate-400">Fuentes exactas</legend><div className="mt-2 grid gap-2 sm:grid-cols-2">{selectedDossier.sources.map((source) => <label key={source.id} className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-[#36516b] bg-[#10263c] px-3 text-xs font-medium"><input type="checkbox" name="sourceIds" value={source.id} defaultChecked={assessment?.sourceIds.includes(source.id)} className="h-4 w-4 accent-blue-500" /><span className="line-clamp-2">{source.worklogRevision.title || "Evidencia autorizada"}</span></label>)}</div></fieldset>
+                    <div className="mt-3 flex flex-wrap gap-2">{assessment?.sourceState === "ACTIVE" ? assessment.sourceIds.map(id => <button key={id} type="button" className="min-h-11 rounded-lg px-3 text-sm font-semibold text-sky-300 underline underline-offset-4 focus-visible:ring-2 focus-visible:ring-sky-300" onClick={() => openSource(selectedDossier, id)}>Ver sustento · {selectedDossier.sources.find(source => source.id === id)?.worklogRevision.title || "Fuente"}</button>) : null}</div><div className="mt-3 flex justify-end"><Button type="submit" size="sm" disabled={!employerNeedsWritable || submitting}><Check className="h-4 w-4" aria-hidden />Guardar criterio</Button></div>
                   </form>;
                 })}</div>
               </section>
 
-              <section className="grid gap-5 lg:grid-cols-2">
-                <div id="evaluation-notes" className="scroll-mt-24 rounded-xl border p-4"><div className="flex items-center gap-2"><MessageSquareText className="h-5 w-5 text-teal-700" aria-hidden /><h3 className="font-bold">Notas internas</h3></div><p className="mt-1 text-xs text-muted-foreground">Nunca se muestran al profesional ni salen en DTOs públicos.</p><form onSubmit={(event) => void addNote(event, selectedDossier.id)} className="mt-3 space-y-3"><label className="grid gap-2 text-sm font-semibold"><span>Observación del equipo</span><Textarea name="body" required minLength={2} disabled={!employerNeedsWritable} className="min-h-24" placeholder="Contexto privado para la evaluación." /></label><Button type="submit" variant="outline" disabled={!employerNeedsWritable || submitting}>Agregar nota</Button></form><div className="mt-4 space-y-2">{selectedDossier.notes.map((note) => <article key={note.id} className="rounded-lg bg-slate-50 p-3"><p className="text-sm leading-6">{note.body}</p><p className="mt-2 text-[11px] font-medium text-slate-500">{note.createdBy.name || "Equipo Terraqo"} · {new Date(note.createdAt).toLocaleString("es-PE")}</p></article>)}</div></div>
-                <div className="rounded-xl border p-4"><div className="flex items-center gap-2"><FileSearch className="h-5 w-5 text-teal-700" aria-hidden /><h3 className="font-bold">Preguntas para confirmar</h3></div><p className="mt-1 text-xs text-muted-foreground">Borradores editables. Guardar no los envía.</p><form onSubmit={(event) => void saveQuestion(event, selectedDossier.id)} className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]"><label className="grid gap-2 text-sm font-semibold"><span>Pregunta interna</span><Input name="text" required minLength={4} disabled={!employerNeedsWritable} placeholder="¿Qué alcance tuvo tu participación?" /></label><Button type="submit" size="icon" className="min-h-11 min-w-11 self-end" aria-label="Agregar pregunta" disabled={!employerNeedsWritable || submitting}><Plus className="h-4 w-4" aria-hidden /></Button></form><div className="mt-4 space-y-2">{selectedDossier.questions.map((question) => <form key={question.id} onSubmit={(event) => void saveQuestion(event, selectedDossier.id, question)} className="grid gap-2 rounded-lg bg-slate-50 p-2 sm:grid-cols-[minmax(0,1fr)_auto]"><Input name="text" defaultValue={question.text} disabled={!employerNeedsWritable} aria-label="Editar pregunta" /><Button type="submit" variant="outline" size="sm" disabled={!employerNeedsWritable || submitting}>Guardar</Button></form>)}</div></div>
-              </section>
 
-              <section id="evaluation-sources" className="scroll-mt-24"><h3 className="font-bold">Fuentes autorizadas</h3><div className="mt-3 grid gap-2 sm:grid-cols-2">{selectedDossier.sources.map((source) => <details key={source.id} className="rounded-xl border bg-slate-50 p-3"><summary className="cursor-pointer text-sm font-semibold">{source.worklogRevision.title || "Evidencia autorizada"}</summary><dl className="mt-3 grid gap-1 text-xs text-slate-600"><div><dt className="inline font-bold">Versión: </dt><dd className="inline">{source.worklogRevision.id}</dd></div><div><dt className="inline font-bold">Huella: </dt><dd className="inline break-all">{source.worklogRevision.contentHash}</dd></div><div><dt className="inline font-bold">Acceso: </dt><dd className="inline">{source.accessKind}</dd></div></dl></details>)}</div></section>
-              {contextualMessagingEnabled && employerNeedsWritable ? <section className="rounded-xl border border-teal-200 bg-teal-50/60 p-4"><h3 className="font-bold text-teal-950">Solicitar conversación</h3><p className="mt-1 text-sm text-teal-900/75">La referencia al expediente será neutral para el profesional y no concede acceso a fuentes, criterios ni notas.</p><form onSubmit={(event) => void requestConversation(event, selectedDossier.id)} className="mt-3 flex flex-col gap-3 sm:flex-row"><Input name="note" maxLength={1200} placeholder="Motivo breve de contacto (opcional)" /><Button type="submit" disabled={submitting}><MessageSquareText className="h-4 w-4" aria-hidden />Enviar solicitud</Button></form></section> : null}
+
+              {contextualMessagingEnabled && employerNeedsWritable ? <section className="rounded-xl border border-teal-200 bg-teal-50/60 p-4"><h3 className="font-bold text-teal-950">Solicitar conversación</h3><p className="mt-1 text-sm text-teal-900/75">La referencia al expediente será neutral para el profesional y no concede acceso a fuentes, criterios ni notas.</p><form onSubmit={(event) => void requestConversation(event, selectedDossier.id)} className="mt-3 flex flex-col gap-3 sm:flex-row"><Input className="min-h-11 border-[#36516b] bg-[#0b1d2e] text-slate-100 placeholder:text-slate-400 focus-visible:ring-sky-300" name="note" maxLength={1200} placeholder="Motivo breve de contacto (opcional)" /><Button type="submit" disabled={submitting}><MessageSquareText className="h-4 w-4" aria-hidden />Enviar solicitud</Button></form></section> : null}
             </CardContent>
           </Card> : null}
         </div>
@@ -569,44 +619,46 @@ export function DiscoveryNeedsConsole({ contextualMessagingEnabled = false, evid
   );
 }
 
-function AnalysisPanel({ dossier, job, purpose, busy, onPurposeChange, onStart, onCancel, onRetry }: {
-  dossier: EvaluationDossier;
-  job?: AnalysisJob;
-  purpose: AnalysisPurpose;
-  busy: boolean;
-  onPurposeChange: (purpose: AnalysisPurpose) => void;
-  onStart: () => void;
-  onCancel: (jobId: string) => void;
-  onRetry: (jobId: string) => void;
+const darkButton = "min-h-11 border-[#36516b] bg-[#10263c] text-white hover:bg-[#193750] focus-visible:ring-sky-300";
+
+function ClaimLegend() {
+  return <dl aria-label="Estados de la evidencia" className="mt-4 grid gap-3 border-y border-slate-700 py-4 text-xs leading-5 sm:grid-cols-2"><div><dt className="font-bold text-sky-300">Documentado</dt><dd className="text-slate-300">Consta en una fuente; requiere revisar su alcance.</dd></div><div><dt className="font-bold text-amber-200">Declarado</dt><dd className="text-slate-300">Lo indica el profesional; no implica validación independiente.</dd></div><div><dt className="font-bold text-emerald-300">Respaldado</dt><dd className="text-slate-300">Cuenta con respaldo explícito para el alcance citado.</dd></div><div><dt className="font-bold text-slate-200">Desconocido</dt><dd className="text-slate-300">No hay información suficiente; queda por confirmar.</dd></div></dl>;
+}
+
+function EvaluationStatus({ status }: { status: EvaluationDossier["effectiveAnalysisStatus"] }) {
+  const messages = {
+    NOT_REQUESTED: "Sin análisis automático. La revisión manual está disponible.",
+    PROCESSING: "Procesando fuentes. Puedes continuar con los criterios y notas manuales.",
+    READY: "Análisis disponible para revisión humana. Las propuestas no certifican capacidades.",
+    FAILED: "El análisis no pudo completarse. Puedes continuar manualmente y reintentar cuando esté disponible.",
+    INSUFFICIENT: "Evidencia insuficiente. Revisa qué falta confirmar y prepara preguntas; no se concluye aptitud.",
+    SOURCE_REVOKED: "Fuente retirada o sin autorización. Sus resultados derivados se han ocultado; revisa los criterios afectados.",
+  };
+  return <p role="status" className="rounded-lg border border-[#36516b] p-3 text-sm leading-6 text-slate-300">{messages[status]}</p>;
+}
+
+function AnalysisPanel({ dossier, job, purpose, busy, onPurposeChange, onStart, onCancel, onRetry, onOpenSource, onPrepareQuestions }: {
+  dossier: EvaluationDossier; job?: AnalysisJob; purpose: AnalysisPurpose; busy: boolean;
+  onPurposeChange: (purpose: AnalysisPurpose) => void; onStart: () => void; onCancel: (jobId: string) => void; onRetry: (jobId: string) => void;
+  onOpenSource: (sourceId: string, revisionId: string) => void; onPrepareQuestions: () => void;
 }) {
-  const sourceTitles = new Map(dossier.sources.map((source) => [source.id, source.worklogRevision.title || "Evidencia autorizada"]));
   const active = job && ["QUEUED", "PROCESSING", "RETRY_WAIT"].includes(job.status);
-  const kinds = {
-    EXPLICIT_DATA: "Dato explícito",
-    DECLARATION_SUMMARY: "Resumen de declaración",
-    PROPOSED_INTERPRETATION: "Interpretación propuesta",
-  } as const;
-  return <section aria-labelledby="analysis-heading" className="overflow-hidden rounded-2xl border border-cyan-200 bg-[linear-gradient(135deg,#f8fafc_0%,#ecfeff_100%)]">
-    <div className="flex flex-col gap-4 border-b border-cyan-100 p-4 sm:flex-row sm:items-start sm:justify-between">
-      <div className="flex gap-3">
-        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-slate-950 text-cyan-200"><Bot className="h-5 w-5" aria-hidden /></span>
-        <div><p className="text-[11px] font-bold uppercase tracking-[0.18em] text-cyan-800">T18 · Asistencia con evidencia</p><h3 id="analysis-heading" className="mt-1 text-lg font-bold">Propuesta analítica con citas</h3><p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">Solo procesa las revisiones visibles del expediente. No confirma capacidades, no envía mensajes y no reemplaza la evaluación humana.</p></div>
-      </div>
-      {job ? <JobStatus status={job.status} /> : null}
-    </div>
-    <div className="space-y-4 p-4">
-      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
-        <label className="grid gap-2 text-sm font-semibold"><span>Finalidad del análisis</span><select value={purpose} onChange={(event) => onPurposeChange(event.target.value as AnalysisPurpose)} disabled={Boolean(active) || busy} className="min-h-11 rounded-lg border bg-white px-3"><option value="EVIDENCE_SUMMARY">Resumir evidencia seleccionada</option><option value="REQUIREMENT_GAPS">Detectar información faltante</option><option value="QUESTION_DRAFTS">Proponer preguntas de confirmación</option></select></label>
-        <div className="flex items-end gap-2"><Button type="button" onClick={onStart} disabled={busy || Boolean(active) || dossier.sources.length === 0}><Sparkles className="h-4 w-4" aria-hidden />{job && ["READY", "INSUFFICIENT", "CANCELLED", "SOURCE_REVOKED"].includes(job.status) ? "Nuevo análisis" : "Analizar fuentes"}</Button>{active && job?.cancellable ? <Button type="button" variant="outline" onClick={() => onCancel(job.id)} disabled={busy}><Ban className="h-4 w-4" aria-hidden />Cancelar</Button> : null}{job?.retryable ? <Button type="button" variant="outline" onClick={() => onRetry(job.id)} disabled={busy}><RotateCcw className="h-4 w-4" aria-hidden />Reintentar</Button> : null}</div>
-      </div>
-      {active ? <div role="status" aria-live="polite" aria-atomic="true" className="flex items-center gap-3 rounded-xl border bg-white p-4 text-sm"><LoaderCircle className="h-5 w-5 animate-spin text-cyan-700 motion-reduce:animate-none" aria-hidden /><span><strong>Validando y analizando.</strong> Intento {job.attemptCount}/{job.maxAttempts}. Puedes continuar con la revisión manual.</span></div> : null}
-      {job?.claims.length ? <div className="space-y-3"><div><h4 className="font-bold">Hallazgos propuestos</h4><p className="text-xs text-muted-foreground">Cada tarjeta enlaza el fragmento exacto que la sustenta.</p></div>{job.claims.map((claim, index) => <article key={`${claim.text}-${index}`} className="rounded-xl border bg-white p-4"><div className="flex flex-wrap items-start justify-between gap-2"><p className="max-w-3xl text-sm font-semibold leading-6">{claim.text}</p><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-700">{kinds[claim.kind]}</span></div><div className="mt-3 flex flex-wrap gap-2">{claim.citations.map((citation) => <span key={`${citation.sourceId}-${citation.field}-${citation.excerpt}`} title={citation.excerpt} className="rounded-lg border border-cyan-100 bg-cyan-50 px-2.5 py-1.5 text-[11px] font-semibold text-cyan-950">{sourceTitles.get(citation.sourceId) || "Fuente autorizada"} · {citation.field}</span>)}</div></article>)}</div> : null}
-      {job?.missing.length ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><div className="flex gap-2"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden /><div><h4 className="font-bold text-amber-950">Información que no puede concluirse</h4><ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-amber-950/80">{job.missing.map((item) => <li key={item}>{item}</li>)}</ul></div></div></div> : null}
-      {job?.status === "FAILED" ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">El análisis falló de forma segura ({job.failureCode || "sin detalle"}). No se aplicó ningún resultado parcial.</div> : null}
-      {job?.status === "SOURCE_REVOKED" ? <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">Una fuente fue editada, retirada o perdió autorización. Los resultados anteriores quedaron ocultos.</div> : null}
-      {job?.status === "CANCELLED" ? <div role="status" className="rounded-xl border bg-white p-4 text-sm text-slate-700">Análisis cancelado. El expediente y la evaluación manual permanecen intactos.</div> : null}
-      {job && !active && (job.usage.inputTokens !== null || job.usage.latencyMs !== null) ? <p className="text-[11px] text-slate-500">Trazabilidad: {job.usage.inputTokens ?? "—"} tokens de entrada · {job.usage.outputTokens ?? "—"} de salida · {job.usage.latencyMs ?? "—"} ms{job.usage.estimatedCostMicros ? ` · ${job.usage.estimatedCostMicros} micro-unidades estimadas` : ""}</p> : null}
-      {job && !active ? <nav aria-label="Controles de revisión del análisis" className="flex flex-wrap gap-2 border-t border-cyan-100 pt-3 text-xs font-bold"><a href="#evaluation-criteria-heading" className="inline-flex min-h-11 items-center rounded-lg border bg-white px-3 py-2 text-slate-700 hover:border-cyan-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-700">Corregir en evaluación manual</a><a href="#evaluation-sources" className="inline-flex min-h-11 items-center rounded-lg border bg-white px-3 py-2 text-slate-700 hover:border-cyan-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-700">Volver a las fuentes</a><a href="#evaluation-notes" className="inline-flex min-h-11 items-center rounded-lg border bg-white px-3 py-2 text-slate-700 hover:border-cyan-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-700">Reportar observación interna</a></nav> : null}
+  const visible = job && job.status === "READY" && dossier.effectiveAnalysisStatus !== "SOURCE_REVOKED" && !dossier.revokedSourceCount;
+  const kinds = { EXPLICIT_DATA: "Documentado", DECLARATION_SUMMARY: "Declarado", PROPOSED_INTERPRETATION: "Interpretación por confirmar" } as const;
+  return <section aria-labelledby="analysis-heading" className="rounded-xl border border-[#36516b] bg-[#0b1d2e] p-4">
+    <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 id="analysis-heading" className="text-lg font-bold text-white">Analizador de evidencias</h3><p className="mt-2 text-sm leading-6 text-slate-300">Asistencia sobre {dossier.sources.length} {dossier.sources.length === 1 ? "fuente" : "fuentes"}. Revisa cada afirmación y su versión antes de usarla.</p></div>{job ? <JobStatus status={job.status} /> : null}</div>
+    <div className="mt-4 space-y-4">
+      <label className="grid gap-2 text-sm font-semibold">Finalidad del análisis<select value={purpose} onChange={event => onPurposeChange(event.target.value as AnalysisPurpose)} disabled={Boolean(active) || busy} className="min-h-11 w-full min-w-0 rounded-lg border border-[#36516b] bg-[#10263c] px-3 text-slate-100 focus-visible:ring-sky-300"><option value="EVIDENCE_SUMMARY">Resumir evidencia seleccionada</option><option value="REQUIREMENT_GAPS">Detectar información faltante</option><option value="QUESTION_DRAFTS">Proponer preguntas de confirmación</option></select></label>
+      <div className="flex flex-wrap gap-2"><Button type="button" className="min-h-11 bg-blue-600 text-white hover:bg-blue-500" onClick={onStart} disabled={busy || Boolean(active) || dossier.sources.length === 0}><Sparkles className="h-4 w-4" aria-hidden />{job && ["READY", "INSUFFICIENT", "CANCELLED", "SOURCE_REVOKED"].includes(job.status) ? "Nuevo análisis" : "Analizar fuentes"}</Button>{active && job?.cancellable ? <Button type="button" variant="outline" className={darkButton} onClick={() => onCancel(job.id)} disabled={busy}><Ban className="h-4 w-4" aria-hidden />Cancelar</Button> : null}{job?.retryable ? <Button type="button" variant="outline" className={darkButton} onClick={() => onRetry(job.id)} disabled={busy}><RotateCcw className="h-4 w-4" aria-hidden />Reintentar</Button> : null}</div>
+      {active ? <p role="status" className="flex items-center gap-2 text-sm leading-6 text-sky-200"><LoaderCircle className="h-5 w-5 shrink-0 animate-spin motion-reduce:animate-none" aria-hidden />Procesando fuentes. Puedes continuar la revisión manual.</p> : null}
+      {visible && job.claims.length ? <div className="space-y-3"><h4 className="font-bold">Hallazgos propuestos</h4>{job.claims.map((claim, index) => <article key={index} className="rounded-lg border border-[#36516b] p-3"><p className="text-xs font-bold text-sky-300">{kinds[claim.kind]}</p><p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6">{claim.text}</p><div className="mt-2 space-y-2">{claim.citations.map((citation, citationIndex) => <div key={citationIndex}><button type="button" className="min-h-11 max-w-full rounded text-left text-sm font-semibold text-sky-300 underline underline-offset-4 hover:text-sky-100 focus-visible:ring-2 focus-visible:ring-sky-300" onClick={() => onOpenSource(citation.sourceId, citation.revisionId)}>Abrir fuente · {dossier.sources.find(source => source.id === citation.sourceId)?.worklogRevision.title || "Evidencia citada"}<span className="mt-1 block break-all text-xs font-normal">Versión {citation.revisionId}</span></button><blockquote className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-slate-300">{citation.excerpt}</blockquote></div>)}</div></article>)}</div> : null}
+      {job && ["READY", "INSUFFICIENT"].includes(job.status) && job.missing.length ? <div className="rounded-lg border border-amber-700 p-3 text-amber-100"><h4 className="font-bold">Información por confirmar</h4><ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6">{job.missing.map(item => <li key={item}>{item}</li>)}</ul></div> : null}
+      {job?.status === "INSUFFICIENT" ? <p role="status" className="text-sm leading-6 text-amber-200">Evidencia insuficiente para una conclusión. Puedes revisar las fuentes y preparar preguntas.</p> : null}
+      {job?.status === "FAILED" ? <p role="alert" className="text-sm leading-6 text-red-200">El análisis no pudo completarse. No se aplicaron resultados parciales; continúa manualmente o reintenta.</p> : null}
+      {job?.status === "SOURCE_REVOKED" ? <p role="alert" className="text-sm leading-6 text-amber-200">Fuente retirada. Los resultados anteriores quedaron ocultos.</p> : null}
+      {job?.status === "CANCELLED" ? <p role="status" className="text-sm text-slate-300">Análisis cancelado. Puedes continuar manualmente.</p> : null}
+      {visible && job.purpose === "QUESTION_DRAFTS" ? <Button type="button" variant="outline" className={darkButton} onClick={onPrepareQuestions} disabled={busy}>Crear borradores editables</Button> : null}
+      <p className="text-xs leading-5 text-slate-400">No se infieren aptitud psicológica, rendimiento personal ni habilidades a partir de apariencia o frecuencia de publicación.</p>
     </div>
   </section>;
 }
