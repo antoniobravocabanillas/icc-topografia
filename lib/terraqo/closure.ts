@@ -21,6 +21,15 @@ type ClosureDraft = z.infer<typeof terraqoClosureDraftSchema>;
 type ClosureSubmit = z.infer<typeof terraqoClosureSubmitSchema>;
 type ClosureDecision = z.infer<typeof terraqoClosureDecisionSchema>;
 
+// Save/submit perform the same live authorization reads as acceptance. Keep a
+// bounded budget for hosted database latency without moving policy checks out
+// of the serializable transaction or retrying an ambiguous timeout blindly.
+const closureTransactionOptions = {
+  isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+  maxWait: 10_000,
+  timeout: 20_000,
+};
+
 function assertDraftFollowsAcceptedScope(
   collaboration: {
     acceptedRevisionNo: number | null;
@@ -241,7 +250,7 @@ export async function saveClosureDraft(input: {
       data: { status: "IN_PROGRESS", version: { increment: 1 } },
     });
     return targetClosure.id;
-  }, { isolationLevel: "Serializable" });
+  }, closureTransactionOptions);
 
   return readClosureResponse({
     id: closureId,
@@ -319,7 +328,7 @@ export async function submitClosure(input: {
       data: { status: "CLOSURE_PROPOSED", version: { increment: 1 } },
     });
     return closure.id;
-  }, { isolationLevel: "Serializable" });
+  }, closureTransactionOptions);
   return readClosureResponse({ id: closureId, collaborationId: input.collaborationId,
     collaboration: { workspaceId: input.workspaceId } }, "workspace");
 }
@@ -454,11 +463,7 @@ export async function decideClosure(input: {
       data: { status: state.collaborationStatus, version: { increment: 1 } },
     });
     return closure.id;
-      }, {
-        isolationLevel: "Serializable",
-        maxWait: 10_000,
-        timeout: 20_000,
-      });
+      }, closureTransactionOptions);
       return readClosureResponse({ id: closureId,
         collaboration: { professionalUserId: input.userId } }, "professional");
     } catch (error) {
