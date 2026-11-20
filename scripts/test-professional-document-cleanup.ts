@@ -14,6 +14,7 @@ async function main() {
     activityLog:{findUnique:async()=>({metadata}),update:async(args:{data:{metadata:Record<string,unknown>}})=>{metadata=args.data.metadata;}},
     terraqoExperienceEvidence:{aggregate:async()=>({_sum:{size:evidenceSize}})},
     terraqoEducationEvidence:{aggregate:async()=>({_sum:{size:0}})},
+    terraqoDocumentReplacementAttempt:{aggregate:async()=>({_sum:{reservedUnits:0}})},
     terraqoEducationEvidenceAttempt:{aggregate:async()=>({_sum:{reservedUnits:0}})},
     terraqoProfessionalDocument:{aggregate:async()=>({_sum:{size:1_200_000}})},
     terraqoWorklogMedia:{aggregate:async()=>({_sum:{size:0}})},terraqoMessageAttachment:{aggregate:async()=>({_sum:{size:0}})},

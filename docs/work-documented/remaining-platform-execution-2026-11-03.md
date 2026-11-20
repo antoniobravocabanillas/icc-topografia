@@ -1,5 +1,9 @@
 # Remaining platform execution — 3 November 2026
 
+## 20 de noviembre — S18: esquema Prisma y cuota compartida alineados localmente
+
+Esquema Prisma modela ciclo documental/intentos; diff estructural completo contra PostgreSQL pre-S18 + SQL propuesto vacío. Piso de cuota compartido incluye reservas de reemplazo sin doble cómputo, con regresiones de limpieza/documentos/evidencias y suite PostgreSQL PASS. TypeScript/ESLint/Prisma validate/generate PASS. **Candidato incompatible con DB sin esta migración: no desplegar aún.** SQL sigue fuera de migraciones activas y no se aplicó remotamente. Próximo: barreras en descargas/importación/aplicación, compatibilidad Office/borrado de cuenta, API/UI y promoción aprobada de staging. Detalle: `proposals/s18-document-lifecycle.md`.
+
 ## 20 de noviembre — S18: carga integrada y despachador de limpieza internos
 
 Orquestador conecta validación/hash, reserva, escritura y confirmación; despachador acotado recupera intentos pendientes/abandonados y revisita tombstones. PostgreSQL + archivos locales reales PASS, incluidos recibo sin recobro, respuesta SQL perdida, timeout y escritura tardía sin confirmación posterior. TypeScript/ESLint PASS. Sin endpoint/scheduler activado ni despliegue. Próximo: esquema y pisos globales de cuota, barreras de lectura/importación, compatibilidad de Office/borrado de cuenta y API/UI antes de staging. Detalle actualizado en `proposals/s18-document-lifecycle.md`.

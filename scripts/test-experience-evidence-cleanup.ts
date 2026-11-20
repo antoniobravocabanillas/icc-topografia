@@ -17,6 +17,7 @@ async function main(){
     terraqoExperienceEvidence:{count:async(args:unknown)=>{assert.deepEqual(args,{where:{storageKey:"experience-evidence/experience/random-fixture.pdf"}});return retained?1:0;},aggregate:async()=>({_sum:{size:2_000_000}})},
     terraqoProfessionalDocument:{aggregate:async()=>({_sum:{size:0}})},terraqoWorklogMedia:{aggregate:async()=>({_sum:{size:0}})},terraqoMessageAttachment:{aggregate:async()=>({_sum:{size:0}})},
     terraqoEducationEvidence:{aggregate:async()=>({_sum:{size:educationBytes}})},
+    terraqoDocumentReplacementAttempt:{aggregate:async()=>({_sum:{reservedUnits:0}})},
     terraqoEducationEvidenceAttempt:{aggregate:async()=>({_sum:{reservedUnits:educationReserve}})},
     terraqoUsageBucket:{updateMany:async(args:{where:{used:{gte:number}};data:unknown})=>{assert.equal(args.where.used.gte,Math.ceil((2_000_000+educationBytes)/1_000_000)+educationReserve+1);assert.deepEqual(args.data,{used:{decrement:1}});refunds++;return{count:1};}},
   } as unknown as Prisma.TransactionClient;

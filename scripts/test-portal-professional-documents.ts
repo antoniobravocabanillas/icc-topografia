@@ -16,6 +16,7 @@ async function main() {
     $queryRaw: async (query: Prisma.Sql) => { assert.ok(query.values.includes("owner") || query.values.includes("profile")); return [{ id: "profile" }]; },
     terraqoExperienceEvidence:{aggregate:async()=>({_sum:{size:0}})},
     terraqoEducationEvidence:{aggregate:async()=>({_sum:{size:0}})},
+    terraqoDocumentReplacementAttempt:{aggregate:async()=>({_sum:{reservedUnits:0}})},
     terraqoEducationEvidenceAttempt:{aggregate:async()=>({_sum:{reservedUnits:0}})},
     terraqoProfessionalDocument: {
       findFirst: async (args: { where: unknown }) => {

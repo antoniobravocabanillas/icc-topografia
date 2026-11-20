@@ -31,7 +31,8 @@ async function main() {
   let started = false;
   const sessions = [];
   try {
-    const schema = await readFile(path.join(root, 'prisma/schema.prisma'), 'utf8');
+    // Immutable pre-S18 schema; current Prisma now models the proposed columns.
+    const schema = (await exec('git', ['show', 'f1055b6:prisma/schema.prisma'], { cwd: root, env, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 })).stdout;
     await writeFile(path.join(local, 'schema.prisma'), schema);
     const baseline = (await exec(process.execPath, [require.resolve('prisma/build/index.js'), 'migrate', 'diff', '--from-empty', '--to-schema-datamodel', path.join(local, 'schema.prisma'), '--script'], { cwd: local, env, windowsHide: true, timeout: 60000, maxBuffer: 16 * 1024 * 1024 })).stdout;
     const proposal = (await readFile(path.join(root, 'docs/work-documented/proposals/s18-document-lifecycle.proposed.sql'), 'utf8')).replace(/^--.*$/gm, '').trim();
@@ -64,6 +65,12 @@ async function main() {
     // Seed legacy row before additive DDL; no history is inferred.
     await c.query(`INSERT INTO icc."TerraqoProfessionalDocument" (id,"professionalProfileId",type,"storageKey","fileName","contentType",size) VALUES ('legacy','profile','CERTIFICATE','legacy','legacy.pdf','application/pdf',10)`);
     await c.query('BEGIN'); await c.query(ddl); await c.query('COMMIT');
+    const parity = (await exec(process.execPath, [require.resolve('prisma/build/index.js'), 'migrate', 'diff',
+      '--from-url', `postgresql://s18_test:${secret}@127.0.0.1:${port}/postgres`,
+      '--to-schema-datamodel', path.join(root, 'prisma/schema.prisma'), '--script'],
+    { cwd: local, env, windowsHide: true, timeout: 60000, maxBuffer: 16 * 1024 * 1024 })).stdout;
+    assert.equal(parity.replace(/^--.*$/gm, '').trim(), '', 'Proposed SQL must match current Prisma structural schema');
+    console.log('PASS full Prisma structural parity against baseline plus proposed SQL (custom guards checked separately)');
     assert.deepEqual((await c.query(`SELECT "lifecycleVersion","withdrawnAt","replacesDocumentId" FROM icc."TerraqoProfessionalDocument" WHERE id='legacy'`)).rows[0], { lifecycleVersion: 1, withdrawnAt: null, replacesDocumentId: null });
     const fails = async (promise, code) => assert.rejects(promise, error => error.code === code);
     await fails(insert(c, 'cross-profile', 'legacy', 'other-profile'), '23514');
@@ -121,6 +128,7 @@ async function main() {
         terraqoExperienceEvidence: aggregate(`SELECT COALESCE(sum(e.size),0) AS total FROM icc."TerraqoExperienceEvidence" e JOIN icc."TerraqoProfessionalExperience" x ON x.id=e."experienceId" JOIN icc."TerraqoProfessionalProfile" p ON p.id=x."professionalProfileId" WHERE p."userId"=$1`),
         terraqoEducationEvidence: aggregate(`SELECT COALESCE(sum(e.size),0) AS total FROM icc."TerraqoEducationEvidence" e JOIN icc."TerraqoProfessionalEducation" x ON x.id=e."educationId" JOIN icc."TerraqoProfessionalProfile" p ON p.id=x."professionalProfileId" WHERE p."userId"=$1`),
         terraqoEducationEvidenceAttempt: aggregate(`SELECT COALESCE(sum(e."reservedUnits"),0) AS total FROM icc."TerraqoEducationEvidenceAttempt" e JOIN icc."TerraqoProfessionalEducation" x ON x.id=e."educationId" JOIN icc."TerraqoProfessionalProfile" p ON p.id=x."professionalProfileId" WHERE p."userId"=$1 AND e.state IN ('RESERVED','CLEANUP_PENDING','QUARANTINED')`, 'reservedUnits'),
+        terraqoDocumentReplacementAttempt: aggregate(`SELECT COALESCE(sum(a."reservedUnits"),0) AS total FROM icc."TerraqoDocumentReplacementAttempt" a JOIN icc."TerraqoProfessionalProfile" p ON p.id=a."professionalProfileId" WHERE p."userId"=$1 AND a.state IN ('RESERVED','CLEANUP_PENDING')`, 'reservedUnits'),
       };
     };
     const call = async (client, input, rollback = false, service = withdrawService) => {
@@ -211,12 +219,15 @@ async function main() {
     assert.equal((await c.query(`SELECT count(*)::int AS n FROM icc."TerraqoDocumentReplacementAttempt"`)).rows[0].n, 0);
     assert.equal((await c.query(`SELECT count(*)::int AS n FROM icc."TerraqoUsageBucket"`)).rows[0].n, 0);
     const reserved = await Promise.all([reserve(a, attemptInput), reserve(b, attemptInput)]);
+    const sharedUsage = await tsImport('../lib/terraqo/billing/personal-storage-usage.ts', import.meta.url);
+    assert.equal(await sharedUsage.personalRetainedStorageUnits(transport(c), 'owner'), 3, 'all callers count pending replacements exactly once');
     assert.ok(reserved.every(r => r.kind === 'reserved'));
     assert.notEqual(reserved[0].attempt.storageKey, reserved[1].attempt.storageKey);
     assert.equal((await c.query(`SELECT used FROM icc."TerraqoUsageBucket" WHERE "ownerKey"='user:owner'`)).rows[0].used, 3);
     const confirmed = await Promise.all([finalize(a, reserved[0].attempt.id), finalize(b, reserved[1].attempt.id)]);
     assert.deepEqual(confirmed.map(r => r.replayed).sort(), [false, true]);
     const pending = confirmed.find(r => r.cleanupAttemptId).cleanupAttemptId;
+    assert.equal(await sharedUsage.personalRetainedStorageUnits(transport(c), 'owner'), 2, 'committed attempt is counted only by retained document bytes');
     const committed = reserved.find(r => r.attempt.id !== pending).attempt.id;
     assert.equal(await fence(a, committed), 'retained');
     await fails(c.query(`UPDATE icc."TerraqoDocumentReplacementAttempt" SET "storageKey"='foreign-key' WHERE id=$1`, [pending]), '23514');
@@ -371,7 +382,7 @@ async function main() {
     await assert.rejects(access(keys.get(slowRow.storageKey)), { code: 'ENOENT' });
     console.log('PASS orchestrator/dispatcher: actual PDF bytes, validation before charge/write, receipt without rewrite/recharge, lost SQL reply preserves live blob, uncertain write fenced then reclaimed, fresh reservation excluded');
     console.log('PASS abandoned reservation reclaimed; timed-out uploader has no late SQL commit and its late bytes are swept without second refund');
-    console.log('PENDING shared floor/schema integration, Office replacement validation, reader/import barriers, UI and hosted acceptance; no scheduler activated');
+    console.log('PENDING migration promotion, Office replacement validation, reader/import barriers, UI and hosted acceptance; no scheduler activated');
   } finally {
     await Promise.allSettled(sessions.map(c => c.end()));
     if (started) await pg('pg_ctl', ['-D', data, '-m', 'fast', '-w', 'stop']);

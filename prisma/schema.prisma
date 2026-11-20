@@ -3319,6 +3319,7 @@ model TerraqoProfessionalProfile {
   socialLinks                TerraqoProfessionalSocialLink[]
   applications               TerraqoProjectApplication[]
   documents                  TerraqoProfessionalDocument[]
+  documentReplacementAttempts TerraqoDocumentReplacementAttempt[]
   cvImports                  TerraqoCvImport[]
   publicationOperations      TerraqoCvPublicationOperation[]
   worklogs                   TerraqoWorklogEntry[]
@@ -3389,9 +3390,49 @@ model TerraqoProfessionalDocument {
   reviewedByUserId      String?
   reviewNote            String?
   cvImports             TerraqoCvImport[]
+  withdrawnAt           DateTime?
+  withdrawnByUserId     String?
+  withdrawOperationKey String?
+  replacesDocumentId   String? @unique(map: "ProfessionalDocument_single_successor")
+  replacesDocument     TerraqoProfessionalDocument? @relation("DocumentVersions", fields: [replacesDocumentId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "ProfessionalDocument_predecessor_fk")
+  replacedByDocument   TerraqoProfessionalDocument? @relation("DocumentVersions")
+  replacementOperationKey String?
+  replacementFingerprint String?
+  lifecycleVersion      Int @default(1)
+  replacementAttempts   TerraqoDocumentReplacementAttempt[] @relation("ReplacementSource")
+  resultingAttempts     TerraqoDocumentReplacementAttempt[] @relation("ReplacementResult")
 
+  @@unique([professionalProfileId, replacementOperationKey], map: "ProfessionalDocument_replacement_operation")
   @@index([professionalProfileId, type, uploadedAt])
   @@index([workspaceId, reviewStatus])
+  @@schema("icc")
+}
+
+model TerraqoDocumentReplacementAttempt {
+  id String @id
+  professionalProfileId String
+  professionalProfile TerraqoProfessionalProfile @relation(fields: [professionalProfileId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "TerraqoDocumentReplacementAttempt_professionalProfileId_fkey")
+  documentId String
+  document TerraqoProfessionalDocument @relation("ReplacementSource", fields: [documentId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "TerraqoDocumentReplacementAttempt_documentId_fkey")
+  actorId String
+  operationKey String
+  fingerprint String
+  expectedVersion Int
+  storageKey String @unique(map: "TerraqoDocumentReplacementAttempt_storageKey_key")
+  fileName String
+  contentType String
+  contentSha256 String
+  size Int
+  reservedUnits Int
+  state String @default("RESERVED")
+  resultDocumentId String?
+  resultDocument TerraqoProfessionalDocument? @relation("ReplacementResult", fields: [resultDocumentId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "TerraqoDocumentReplacementAttempt_resultDocumentId_fkey")
+  cleanupAttempts Int @default(0)
+  nextAttemptAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([professionalProfileId, state], map: "DocumentReplacementAttempt_owner_state")
+  @@index([state, createdAt], map: "DocumentReplacementAttempt_due")
   @@schema("icc")
 }
 

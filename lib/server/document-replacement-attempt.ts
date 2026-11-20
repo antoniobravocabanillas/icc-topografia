@@ -65,8 +65,9 @@ export async function reserveDocumentReplacementInTransaction(tx: Prisma.Transac
 }
 
 export async function documentReplacementStorageFloor(tx: Prisma.TransactionClient, actorId: string, profileId: string) {
-  const pending = await tx.$queryRaw<{ units: bigint }[]>(Prisma.sql`SELECT COALESCE(sum("reservedUnits"),0)::bigint AS units FROM icc."TerraqoDocumentReplacementAttempt" WHERE "professionalProfileId"=${profileId} AND state IN ('RESERVED','CLEANUP_PENDING')`);
-  const floor = await personalRetainedStorageUnits(tx, actorId) + Number(pending[0].units);
+  const owner = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT id FROM icc."TerraqoProfessionalProfile" WHERE id=${profileId} AND "userId"=${actorId}`);
+  if (!owner[0]) throw conflict();
+  const floor = await personalRetainedStorageUnits(tx, actorId);
   if (!Number.isSafeInteger(floor) || floor < 0) throw conflict();
   return floor;
 }

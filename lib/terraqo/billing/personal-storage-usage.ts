@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 
 type StorageDatabase = Pick<Prisma.TransactionClient,
   "terraqoProfessionalDocument" | "terraqoWorklogMedia" | "terraqoMessageAttachment" | "terraqoExperienceEvidence" |
-  "terraqoEducationEvidence" | "terraqoEducationEvidenceAttempt">;
+  "terraqoEducationEvidence" | "terraqoEducationEvidenceAttempt" | "terraqoDocumentReplacementAttempt">;
 
 // Reservation baselines and cleanup floors must use the same ownership rules.
 // Evidence belongs to its experience/education profile owner, never an
@@ -25,15 +25,18 @@ export async function personalRetainedStorageBytes(db:StorageDatabase, userId:st
   return total;
 }
 export async function personalRetainedStorageUnits(db:StorageDatabase,userId:string){
-  const [bytes,attempts]=await Promise.all([
+  const [bytes,attempts,replacements]=await Promise.all([
     personalRetainedStorageBytes(db,userId),
     db.terraqoEducationEvidenceAttempt.aggregate({where:{education:{professionalProfile:{userId}},
       state:{in:["RESERVED","CLEANUP_PENDING","QUARANTINED"]}},_sum:{reservedUnits:true}}),
+    db.terraqoDocumentReplacementAttempt.aggregate({where:{professionalProfile:{userId},
+      state:{in:["RESERVED","CLEANUP_PENDING"]}},_sum:{reservedUnits:true}}),
   ]);
   // Reservations are already rounded units, never retained bytes. COMMITTED
   // is counted by its evidence row; zero-unit tombstones add no charge.
   const reserved=attempts._sum.reservedUnits ?? 0;
-  const floor=Math.ceil(bytes/1_000_000)+reserved;
-  if(!Number.isSafeInteger(reserved)||reserved<0||!Number.isSafeInteger(floor))throw new Error("Storage reserve total is invalid.");
+  const replacementUnits=replacements._sum.reservedUnits ?? 0;
+  const floor=Math.ceil(bytes/1_000_000)+reserved+replacementUnits;
+  if(!Number.isSafeInteger(reserved)||reserved<0||!Number.isSafeInteger(replacementUnits)||replacementUnits<0||!Number.isSafeInteger(floor))throw new Error("Storage reserve total is invalid.");
   return floor;
 }

@@ -26,10 +26,9 @@ ALTER TABLE icc."TerraqoProfessionalDocument"
     REFERENCES icc."TerraqoProfessionalDocument"(id) ON DELETE RESTRICT ON UPDATE RESTRICT;
 
 CREATE UNIQUE INDEX "ProfessionalDocument_single_successor"
-  ON icc."TerraqoProfessionalDocument" ("replacesDocumentId") WHERE "replacesDocumentId" IS NOT NULL;
+  ON icc."TerraqoProfessionalDocument" ("replacesDocumentId");
 CREATE UNIQUE INDEX "ProfessionalDocument_replacement_operation"
-  ON icc."TerraqoProfessionalDocument" ("professionalProfileId", "replacementOperationKey")
-  WHERE "replacementOperationKey" IS NOT NULL;
+  ON icc."TerraqoProfessionalDocument" ("professionalProfileId", "replacementOperationKey");
 
 -- Durable personal/workspace upload intent, atomic with its quota reservation.
 -- Cleanup fences are committed before storage deletion; no blind refunds.
