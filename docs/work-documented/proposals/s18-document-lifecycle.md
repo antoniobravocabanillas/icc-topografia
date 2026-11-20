@@ -1,6 +1,6 @@
 # S18 private document lifecycle — implementation contract
 
-Status: design checkpoint, not implemented or migrated. Existing S18 access screen is a separate local candidate. No remote DDL, payment, message or deployment is authorized by this document.
+Status: SQL substrate and withdrawal transaction core implemented and tested locally; not wired to routes or migrated remotely. Existing S18 access screen is a separate local candidate. No remote DDL, payment, message or deployment is authorized by this document.
 
 ## Existing paths that must remain compatible
 
@@ -29,3 +29,15 @@ Tests required before migration promotion: owner/other professional/other tenant
 ## Current bounded prerequisite
 
 Web and native multipart now use the existing bounded byte reader before parsing. Web ceiling permits two 10 MiB identity files plus 64 KiB envelope; native retains 4 MiB plus envelope. Per-file limits remain unchanged. Missing or understated Content-Length cannot bypass the actual-byte check. Malformed input returns 400 and timeout 408. No schema changes are needed for this prerequisite.
+
+## Local transaction checkpoint
+
+`s18-document-lifecycle.proposed.sql` is outside active Prisma migrations and ends in ROLLBACK. Adds withdrawal actor/time/operation key, lifecycleVersion and exact predecessor. Guards enforce complete withdrawal tuples, immutable identity/lineage, single successor, matching profile/type/workspace, no identity replacement/withdrawal, no restoration and retention of withdrawn/linked rows. No inferred legacy relationships. Withdrawal's immutable tuple is its atomic audit; no private personal document is written to the workspace-required ActivityLog.
+
+`lib/server/professional-document-lifecycle.ts` provides a transaction-only core, not an endpoint. Server actor -> locked owner profile -> locked owned document; validates version and operation key; exact replay returns the same result, stale or different intent conflicts. Clears only the exact active CV pointer. Does not delete files, release quota, rewrite review status or modify completed import history.
+
+Real PostgreSQL 18 disposable-loopback test applies baseline DDL generated from the full current Prisma schema plus proposed SQL. Uses independent sessions, production transaction core via a Prisma SQL-to-pg transport adapter (not mocked predicates), and no .env or remote connection. PASS: legacy preservation; incompatible lineage; single successor; immutable/retained history; invalid/identity transitions; no restoration; concurrent replacements and withdrawals; owner/outsider; stale version; transaction rollback; exact concurrent replay; stable audit timestamp; pointer compare-and-set; preserved storage metadata/review. Owned cluster stopped and resolved temporary directory removed. Reproduce: `node scripts/test-s18-document-lifecycle-local.mjs --confirm=local-s18-only`.
+
+Open integration requirements: replacement command with expected version, authenticated endpoint/CSRF, guarded readers and extraction/apply workers, Prisma schema alignment, UI/native eligibility, and hosted acceptance. The SQL retention guard intentionally rejects generic deletion of linked/withdrawn history; reconcile account-erasure/retention workflows before promoting it. Do not deploy only this SQL or expose the withdrawal core while existing readers still ignore its state. No remote migration or deployment performed.
+
+Final non-incremental TypeScript, focused ESLint and diff-check PASS. No visual check required for this unconnected backend-only block; no hosted or full S18 completion claim.

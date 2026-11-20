@@ -1,5 +1,9 @@
 # Remaining platform execution — 3 November 2026
 
+## 20 de noviembre — S18: retiro transaccional y linaje ensayados en PostgreSQL local
+
+SQL propuesto fuera de migraciones activas y núcleo transaccional de retiro implementados. PostgreSQL desechable real PASS: compatibilidad de filas antiguas, sucesor único, aislamiento de propietario, carreras de reemplazo/retiro, reintento exacto, conflicto de versión, rollback y limpieza condicional de cvUrl. Se conserva revisión y almacenamiento; clúster y carpeta temporal eliminados tras comprobación. No hay endpoint conectado, migración remota ni despliegue. Próximo: comando de reemplazo, barreras de descarga/importación, compatibilidad de borrado de cuenta y UI antes del gate S18 alojado. Detalle: `proposals/s18-document-lifecycle.md`.
+
 ## 20 de noviembre — S18: protección de carga y contrato documental
 
 Web y Android ahora limitan los bytes reales antes de interpretar multipart; se conserva el límite individual y se rechaza tamaño total excedido, formato inválido o timeout. Pruebas sintéticas de stream y regresiones de identidad/CV/eliminación/limpieza PASS. Auditoría ampliada encontró eliminación nativa ya existente y protegida; falta retiro/versionado en web, no hay que duplicar ni debilitar esa eliminación. Contrato en `proposals/s18-document-lifecycle.md`, sin campos ni migración aplicada. Siguiente: implementar ciclo de vida y matriz transaccional aislada; aceptación S18 staging sigue pendiente. Sin despliegue ni datos remotos modificados.
