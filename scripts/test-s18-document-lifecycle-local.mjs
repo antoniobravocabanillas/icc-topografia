@@ -65,6 +65,13 @@ async function main() {
     // Seed legacy row before additive DDL; no history is inferred.
     await c.query(`INSERT INTO icc."TerraqoProfessionalDocument" (id,"professionalProfileId",type,"storageKey","fileName","contentType",size) VALUES ('legacy','profile','CERTIFICATE','legacy','legacy.pdf','application/pdf',10)`);
     await c.query('BEGIN'); await c.query(ddl); await c.query('COMMIT');
+    const guards = await c.query(`SELECT proname,prosecdef,proconfig FROM pg_proc
+      WHERE pronamespace='icc'::regnamespace AND proname IN ('guard_document_replacement_attempt','guard_professional_document_lifecycle') ORDER BY proname`);
+    assert.equal(guards.rowCount, 2);
+    for (const guard of guards.rows) {
+      assert.equal(guard.prosecdef, false);
+      assert.deepEqual(guard.proconfig, ['search_path=pg_catalog, icc']);
+    }
     const parity = (await exec(process.execPath, [require.resolve('prisma/build/index.js'), 'migrate', 'diff',
       '--from-url', `postgresql://s18_test:${secret}@127.0.0.1:${port}/postgres`,
       '--to-schema-datamodel', path.join(root, 'prisma/schema.prisma'), '--script'],

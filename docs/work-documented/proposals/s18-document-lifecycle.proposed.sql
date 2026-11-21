@@ -59,7 +59,7 @@ CREATE TABLE icc."TerraqoDocumentReplacementAttempt" (
 CREATE INDEX "DocumentReplacementAttempt_owner_state" ON icc."TerraqoDocumentReplacementAttempt" ("professionalProfileId",state);
 CREATE INDEX "DocumentReplacementAttempt_due" ON icc."TerraqoDocumentReplacementAttempt" (state,"createdAt");
 
-CREATE FUNCTION icc.guard_document_replacement_attempt() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE FUNCTION icc.guard_document_replacement_attempt() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path = pg_catalog, icc AS $$
 BEGIN
   IF TG_OP='DELETE' THEN
     RAISE EXCEPTION 'Upload intent requires explicit retention handling' USING ERRCODE='23514';
@@ -98,7 +98,7 @@ CREATE TRIGGER "DocumentReplacementAttempt_guard" BEFORE INSERT OR UPDATE OR DEL
 
 -- Actor is retained as historical attribution, not an ON DELETE SET NULL FK:
 -- deleting an account must not produce a partially populated withdrawal record.
-CREATE FUNCTION icc.guard_professional_document_lifecycle() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE FUNCTION icc.guard_professional_document_lifecycle() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path = pg_catalog, icc AS $$
 DECLARE predecessor icc."TerraqoProfessionalDocument"%ROWTYPE;
 BEGIN
   IF TG_OP = 'DELETE' THEN
