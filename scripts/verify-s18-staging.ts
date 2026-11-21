@@ -14,6 +14,7 @@ import { migrationSourceChecksums } from "./lib/migration-source-checksums";
 import { assertWorkspaceAdministrationTestTarget, workspaceAdministrationStagingOrigin as origin,
   workspaceAdministrationStagingSite as siteId, workspaceAdministrationStagingProject as project } from "./lib/workspace-administration-test-target";
 import { createGenuineProfessionalDocxFixture } from "./test-professional-office-file-validation";
+import { exportS18Artifacts } from "./lib/s18-hosted-artifacts";
 
 /**
  * Operator only; importing this module has no effects. No dotenv, deploy, DDL,
@@ -548,6 +549,10 @@ export async function verifyS18Staging(stage: Stage = "run") {
         try { receipt.inventory = await inventory(db, ids); }
         catch { receipt.inventoryReadFailed = true; receipt.passed = false; }
         await persist();
+        if (env.S18_BLOB_AUTH === "netlify-build-context") {
+          try { await exportS18Artifacts(directory, candidate.run, candidate.deployId, candidate.commit); }
+          catch { receipt.passed = false; receipt.artifactExportFailed = true; await persist(); }
+        }
       }
     } finally { await browser?.close(); await db.$disconnect(); }
   }

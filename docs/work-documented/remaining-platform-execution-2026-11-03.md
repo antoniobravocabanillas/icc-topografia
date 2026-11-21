@@ -1,5 +1,11 @@
 # Remaining platform execution — 3 November 2026
 
+## 20 de noviembre — S18: migración51 aplicada solo en staging; build en corrección
+
+Aplicado el artefacto ensayado SHA256 `5c94f17f3b6f70a16392e09df9df9c334729dcb9b90f618c96809d670d388aea` a `mghdpciewbsowjrjwmwk` mediante conexión TLS verificada. Lectura independiente MCP:51 migraciones,0 incompletas, checksum correcto,2 triggers habilitados, SET del migrador deshabilitado, runtime sin DELETE sobre intentos y sin acceso público. Recibo `output/s18-lifecycle/apply-receipt.json`. Datos anteriores comparados dentro de la misma transacción y conservados; producción intacta.
+
+Clone aislado `icc-topografia-s18-staging`, rama `codex/s22-evaluator-local`. Primer candidato `f3d9a94`, árbol idéntico a `7b10cd4`, fallo de prepare en primera consulta Prisma (`database-authority`); no llegó a publicar. No se presupone su causa: cliente generado desde caché se elimina como variable generando antes del preflight, y diagnóstico clasifica errores sin exponer credenciales. Siguiente candidato `4574d1ab37bd61c9ae8f8b43559255628ac41c34`, árbol idéntico a `a0da0e8`, preparado para nuevo build. Verificación S18 alojada sigue pendiente; versión servida anterior `a187f7c` hasta confirmar lo contrario.
+
 ## 20 de noviembre — S18: aceptación integrada local PASS
 
 Recorrido real con Auth.js, Next, PostgreSQL y archivos aislados PASS en `output/playwright/s18-authenticated/terraqo-s18-authenticated-lbVssN`: CV inicial, versiones PDF/DOCX, retiro, historial, reintentos concurrentes sin recobro ni escritura duplicada; usuarios ajenos y origen externo rechazados. Accesos: proyección exacta autorizada, destinatario/ajeno/anónimo, vencimiento, cancelar sin mutar, revocación persistente y navegación. Plan: consulta de empresa solo para su propietario, sin cobro ni modificación de cuentas. Capturas1440/375/320 revisadas; entorno temporal eliminado sin desactivar las protecciones de historial. Esta evidencia es local y no cierra S18 alojado.
