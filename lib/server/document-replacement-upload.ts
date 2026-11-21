@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import type { PrismaClient } from "@prisma/client";
 import { validatePrivateProfessionalFile } from "./professional-file-validation";
+import { validateProfessionalCvFile } from "./professional-cv-file-validation";
 import { DocumentLifecycleError } from "./professional-document-lifecycle";
 import { reserveDocumentReplacementInTransaction, commitDocumentReplacementInTransaction, fenceDocumentReplacementCleanupInTransaction } from "./document-replacement-attempt";
 
@@ -13,9 +14,10 @@ export class ReplacementUploadUnconfirmed extends Error {
   constructor() { super("No se pudo confirmar la carga. Consulta el expediente antes de reintentar con la misma clave."); }
 }
 
-/** Internal service, no HTTP route yet. Caller must authenticate actor and bound
+/** Caller must authenticate actor and bound
  * the multipart before constructing File; database/store are server-owned ports.
- * New replacement accepts validated PDF/images. Legacy uploads are unchanged.
+ * CV accepts validated PDF/DOCX; supporting documents accept PDF/images.
+ * The locked transaction enforces the format against the actual document type.
  */
 export async function uploadDocumentReplacement(database: Pick<PrismaClient, "$transaction">, store: Store,
   input: { actorId: string; documentId: string; operationKey: string; expectedVersion: number; file: File }) {
@@ -23,7 +25,8 @@ export async function uploadDocumentReplacement(database: Pick<PrismaClient, "$t
   const requireTime = (ms: number) => { if (deadline - performance.now() < ms) throw new ReplacementUploadUnconfirmed(); };
   requireTime(35000);
   if (!(input.file instanceof File) || input.file.size < 1 || input.file.size > 10485760) throw new DocumentLifecycleError("El archivo debe pesar como máximo 10 MB.", 422);
-  const invalid = await validatePrivateProfessionalFile(input.file);
+  const invalid = input.file.type === "application/msword" || input.file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ? await validateProfessionalCvFile(input.file) : await validatePrivateProfessionalFile(input.file);
   if (invalid) throw new DocumentLifecycleError(invalid, 422);
   const bytes = await input.file.arrayBuffer();
   const file = { fileName: input.file.name, contentType: input.file.type, size: bytes.byteLength,

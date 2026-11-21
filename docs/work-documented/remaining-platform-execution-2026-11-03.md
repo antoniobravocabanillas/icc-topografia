@@ -1,5 +1,9 @@
 # Remaining platform execution — 3 November 2026
 
+## 20 de noviembre — S18: versiones de CV y DOCX validados localmente
+
+CV integrado al reemplazo/retiro con historial y concurrencia; validación DOCX acotada, PDF conservado, DOC nuevo no soportado explícitamente. Pruebas de formatos, servidor, PostgreSQL/archivos reales y Chromium1440/375/320 PASS; TypeScript/ESLint/detector PASS. Backup fresco de staging obtenido en lectura, ensayo de restauración en curso. No migración remota ni despliegue. Restan retención/purga, compatibilidad del cliente nativo al activar el flag, migración y aceptación alojada; no equivale a cierre S18. Detalle y restricciones: proposals/s18-document-lifecycle.md.
+
 ## 20 de noviembre — S18: limpieza programada autenticada preparada
 
 Cron acotado → worker background → API interna conectados al despachador existente, apagados por defecto con TERRAQO_DOCUMENT_LIFECYCLE_V1. Autenticación constante, secretos/destinos aislados, deadlines, contadores sin contenido privado. Pruebas de wrappers empaquetados, API, aislamiento de todos los jobs y regresión PostgreSQL PASS; TypeScript/ESLint PASS. No schedule remoto activado ni migración/despliegue. Continúan Office/CV, retención/purga y aceptación en staging antes de producción.

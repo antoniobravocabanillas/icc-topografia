@@ -4,8 +4,8 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
-export function DocumentLifecycleActions({ id, version, onWithdrawn }: {
-  id: string; version: number; onWithdrawn: () => void;
+export function DocumentLifecycleActions({ id, version, onWithdrawn, kind = "PRIVATE" }: {
+  id: string; version: number; onWithdrawn: () => void; kind?: "CV" | "PRIVATE";
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<"idle" | "withdraw" | "replace">("idle");
@@ -64,8 +64,8 @@ export function DocumentLifecycleActions({ id, version, onWithdrawn }: {
       if (file instanceof File && file.size) void submit(file);
     }}>
       <p className="text-sm leading-6">La nueva versión conserva el historial y comienza con una revisión pendiente.</p>
-      <label className="grid min-w-0 gap-2 text-sm font-medium">Archivo · PDF, JPG, PNG o WEBP · Hasta 10 MB
-        <input name="file" type="file" required accept=".pdf,.jpg,.jpeg,.png,.webp" disabled={busy || conflict}
+      <label className="grid min-w-0 gap-2 text-sm font-medium">Archivo · {kind === "CV" ? "PDF o DOCX" : "PDF, JPG, PNG o WEBP"} · Hasta 10 MB
+        <input name="file" type="file" required accept={kind === "CV" ? ".pdf,.docx" : ".pdf,.jpg,.jpeg,.png,.webp"} disabled={busy || conflict}
           onChange={() => { attempt.current = null; }} className="min-h-11 w-full min-w-0 rounded-md border bg-background p-2 text-sm" />
       </label>
       <div className="flex flex-wrap gap-2">

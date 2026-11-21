@@ -5,6 +5,8 @@ import { recoverProfessionalDocumentCleanup } from "./professional-document-clea
 import { BillingError } from "@/lib/terraqo/billing/provider";
 import { Prisma } from "@prisma/client";
 import { validatePrivateProfessionalFile } from "./professional-file-validation";
+import { validateProfessionalCvFile } from "./professional-cv-file-validation";
+import { DocumentLifecycleError } from "./professional-document-lifecycle";
 import { prisma } from "@/lib/prisma";
 import { reserveStorage } from "@/lib/terraqo/billing/storage-quota";
 import { fail, handleApiError, ok } from "@/lib/server/api";
@@ -97,6 +99,11 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
     // A professional owns a personal Terraqo profile. A company workspace is
     // only required when the upload originates from that company's portal.
     const workspaceId = requestedWorkspaceId || null;
+    const versionedCv = purpose === "cv" && process.env.TERRAQO_DOCUMENT_LIFECYCLE_V1 === "true";
+    const activeCvWhere = { professionalProfileId: profile.id, workspaceId, type: "CV" as const,
+      withdrawnAt: null, replacedByDocument: null };
+    if (versionedCv && await prisma.terraqoProfessionalDocument.findFirst({ where: activeCvWhere, select: { id: true } }))
+      return fail("Ya existe un CV vigente. Actualiza el expediente y utiliza Nueva versión para conservar su historial.", 409);
     if (workspaceId) {
       const membership = await prisma.terraqoWorkspaceMember.findFirst({
         where: { workspaceId, userId, active: true, role: "PROFESSIONAL" },
@@ -130,6 +137,10 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
       if (native && purpose === "cv" && item.file.type !== "application/pdf") return fail("El currículum móvil debe estar en PDF.", 422);
       const validationError = validateFile(item.file, item.type);
       if (validationError) return fail(validationError, 400);
+      if (versionedCv) {
+        const invalidCv = await validateProfessionalCvFile(item.file);
+        if (invalidCv) return fail(invalidCv, 422);
+      }
       if (native && purpose === "identity" && item.file.size > 2 * 1024 * 1024) return fail("Cada cara de identidad debe pesar como máximo 2 MB.", 413);
       if (native && item.file.size > 4 * 1024 * 1024) return fail("El archivo supera el límite móvil de 4 MB.", 413);
       if (purpose === "document" || purpose === "identity" || (native && purpose === "cv")) {
@@ -176,6 +187,8 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
         // Serialize replacements on the profile before rejecting pending copies
         // and moving its active CV pointer. Verified documents remain untouched.
         const currentProfile=await tx.$queryRaw<{id:string;identityVerificationStatus:string}[]>(Prisma.sql`SELECT id,"identityVerificationStatus" FROM icc."TerraqoProfessionalProfile" WHERE id=${profile.id} AND "userId"=${userId} FOR UPDATE`);
+        if (versionedCv && await tx.terraqoProfessionalDocument.findFirst({ where: activeCvWhere, select: { id: true } }))
+          throw new DocumentLifecycleError("Otro dispositivo ya registró un CV. Actualiza el expediente antes de continuar.", 409);
         if(purpose === "identity" && (!currentProfile[0] || !identityUploadAllowed(currentProfile[0].identityVerificationStatus) || await tx.terraqoProfessionalDocument.count({where:{professionalProfileId:profile.id,type:{in:["DNI_FRONT","DNI_BACK"]},reviewStatus:"VERIFIED"}}))) {
           throw new IdentityUploadConflict("Tu identidad cambió durante la carga. Actualiza el expediente y conserva los documentos actuales.");
         }
@@ -184,7 +197,7 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
             WHERE "workspaceId"=${workspaceId} AND "userId"=${userId} AND active=true AND role='PROFESSIONAL' FOR SHARE`);
           if (!current.length) throw new Error("Professional membership changed during upload.");
         }
-        if (purpose !== "document") {
+        if (purpose !== "document" && !versionedCv) {
           await tx.terraqoProfessionalDocument.updateMany({
             where: {
               professionalProfileId: profile.id,
@@ -257,6 +270,7 @@ export async function uploadProfessionalDocuments(request: Request, userId: stri
       throw error;
     }
   } catch (error) {
+    if (error instanceof DocumentLifecycleError) return fail(error.message, error.status);
     if (error instanceof BoundedRequestBodyError) {
       const message = error.code === "BODY_TOO_LARGE"
         ? native ? "La carga supera el límite móvil de 4 MB." : "La carga supera el límite total de 20 MB. Cada archivo admite hasta 10 MB."

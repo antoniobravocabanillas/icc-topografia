@@ -355,6 +355,21 @@ async function main() {
     const beforeReplayUnits = await used();
     assert.deepEqual(await uploadDocumentReplacement(database(a), uploadStore, uploadInput), { id: uploaded.id, replayed: true });
     assert.equal(writes, 1); assert.equal(await used(), beforeReplayUnits);
+    const officeFixtures = await tsImport('./test-professional-office-file-validation.ts', import.meta.url);
+    const docx = officeFixtures.createGenuineProfessionalDocxFixture();
+    await insert(c, 'docx-upload-source', null, 'profile', 'CV');
+    const docxInput = { ...uploadInput, documentId: 'docx-upload-source', operationKey: 'docx-upload-operation-01', file: docx };
+    const docxResult = await uploadDocumentReplacement(database(a), uploadStore, docxInput);
+    const docxRow = (await c.query(`SELECT "contentType","storageKey","reviewStatus" FROM icc."TerraqoProfessionalDocument" WHERE id=$1`, [docxResult.id])).rows[0];
+    assert.equal(docxRow.contentType, docx.type); assert.equal(docxRow.reviewStatus, 'SUBMITTED');
+    assert.deepEqual(await readFile(keys.get(docxRow.storageKey)), Buffer.from(await docx.arrayBuffer()));
+    const docxWrites = writes, docxUnits = await used();
+    assert.deepEqual(await uploadDocumentReplacement(database(a), uploadStore, docxInput), { id: docxResult.id, replayed: true });
+    assert.equal(writes, docxWrites); assert.equal(await used(), docxUnits);
+    await insert(c, 'docx-wrong-type');
+    await assert.rejects(uploadDocumentReplacement(database(a), uploadStore, { ...docxInput, documentId: 'docx-wrong-type', operationKey: 'docx-wrong-type-operation' }), error => error.status === 422);
+    assert.equal(writes, docxWrites); assert.equal(await used(), docxUnits);
+    console.log('PASS genuine DOCX replacement: exact stored bytes, pending successor, receipt without recharge, non-CV rejection before storage/quota');
     await insert(c, 'lost-reply-source', null, 'profile', 'CV');
     let txCalls = 0;
     const lostReplyDb = { $transaction: async callback => {
@@ -411,7 +426,7 @@ async function main() {
     await assert.rejects(access(keys.get(slowRow.storageKey)), { code: 'ENOENT' });
     console.log('PASS orchestrator/dispatcher: actual PDF bytes, validation before charge/write, receipt without rewrite/recharge, lost SQL reply preserves live blob, uncertain write fenced then reclaimed, fresh reservation excluded');
     console.log('PASS abandoned reservation reclaimed; timed-out uploader has no late SQL commit and its late bytes are swept without second refund');
-    console.log('PENDING migration promotion, Office replacement validation, retention policy, API/UI and hosted acceptance; no scheduler activated');
+    console.log('PENDING migration promotion, retention/purge policy and hosted acceptance; local adapters/UI/scheduler are not hosted evidence');
   } finally {
     await Promise.allSettled(sessions.map(c => c.end()));
     if (started) await pg('pg_ctl', ['-D', data, '-m', 'fast', '-w', 'stop']);

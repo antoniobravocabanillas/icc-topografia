@@ -59,7 +59,7 @@ export function ProfessionalDocumentUploader({ identityStatus, identityNote, doc
   const [retired, setRetired] = useState<string[]>([]);
   const isWithdrawn = (document: ProfessionalDocument) => Boolean(document.withdrawnAt) || retired.includes(document.id);
   const isSuperseded = (document: ProfessionalDocument) => documents.some(item => item.replacesDocumentId === document.id);
-  const latestCv = documents.find((document) => document.type === "CV" && !isWithdrawn(document));
+  const latestCv = documents.find((document) => document.type === "CV" && !isWithdrawn(document) && !isSuperseded(document));
   const statusCopy = identityCopy[identityStatus];
 
   async function upload(form: HTMLFormElement, purpose: "cv" | "identity" | "document") {
@@ -119,22 +119,31 @@ export function ProfessionalDocumentUploader({ identityStatus, identityNote, doc
             <div className="space-y-3">
               <div className="grid gap-2 rounded-md border bg-muted/35 p-3 text-sm font-semibold sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
                 <span className="truncate">{latestCv.fileName}</span>
-                <button type="button" onClick={() => setPreview(latestCv)} className="inline-flex items-center gap-1 text-primary"><Eye className="h-4 w-4" /> Previsualizar</button>
+                {latestCv.contentType === "application/pdf" ? <button type="button" onClick={() => setPreview(latestCv)} className="inline-flex items-center gap-1 text-primary"><Eye className="h-4 w-4" /> Previsualizar</button> : null}
                 <a href={`/api/terraqo/professional-documents/${latestCv.id}`} className="inline-flex items-center gap-1 text-primary"><Download className="h-4 w-4" /> Descargar</a>
               </div>
               <Button asChild variant="outline" className="w-full"><Link href="/portal/experiencias/importar"><FileText className="mr-2 h-4 w-4" /> Leer datos y completar mi perfil</Link></Button>
             </div>
           ) : null}
-          <form ref={cvFormRef} className="grid min-w-0 gap-3" onSubmit={(event) => { event.preventDefault(); void upload(event.currentTarget, "cv"); }}>
+          {lifecycleEnabled && latestCv?.lifecycleVersion ? <DocumentLifecycleActions key={`${latestCv.id}:${latestCv.lifecycleVersion}`} kind="CV" id={latestCv.id} version={latestCv.lifecycleVersion} onWithdrawn={() => setRetired(items => [...items, latestCv.id])} /> : <form ref={cvFormRef} className="grid min-w-0 gap-3" onSubmit={(event) => { event.preventDefault(); void upload(event.currentTarget, "cv"); }}>
             <label className="grid min-w-0 gap-2 text-sm font-semibold">
-              PDF, DOC o DOCX (maximo 10 MB)
-              <input name="cvFile" type="file" accept=".pdf,.doc,.docx" required className="w-full min-w-0 rounded-md border bg-background p-3 font-normal" />
+              {lifecycleEnabled ? "PDF o DOCX (máximo 10 MB)" : "PDF, DOC o DOCX (máximo 10 MB)"}
+              <input name="cvFile" type="file" accept={lifecycleEnabled ? ".pdf,.docx" : ".pdf,.doc,.docx"} required className="w-full min-w-0 rounded-md border bg-background p-3 font-normal" />
             </label>
             <Button type="submit" disabled={busy !== null}>
               {busy === "cv" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
               {latestCv ? "Reemplazar CV" : "Subir CV"}
             </Button>
-          </form>
+          </form>}
+          {lifecycleEnabled && documents.some(document => document.type === "CV" && document.id !== latestCv?.id) ? <details className="border-t pt-3">
+            <summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold">Versiones anteriores del CV</summary>
+            <ul className="divide-y">
+              {documents.filter(document => document.type === "CV" && document.id !== latestCv?.id).map(document => <li key={document.id} className="flex min-w-0 flex-wrap items-center justify-between gap-2 py-3 text-sm">
+                <span className="min-w-0 break-words">{document.fileName}</span>
+                {isWithdrawn(document) ? <span className="text-muted-foreground">Retirado · Historial conservado</span> : <a className="inline-flex min-h-11 items-center font-semibold text-primary underline underline-offset-4" href={`/api/terraqo/professional-documents/${document.id}`}>Descargar versión anterior</a>}
+              </li>)}
+            </ul>
+          </details> : null}
         </CardContent>
       </Card>
 
