@@ -97,6 +97,19 @@ async function main() {
     await fails(insert(c, 'after-withdrawal', 'new'), '23514');
     await fails(c.query(`DELETE FROM icc."TerraqoProfessionalDocument" WHERE id='new'`), '23514');
     assert.equal((await c.query(`SELECT "reviewStatus" FROM icc."TerraqoProfessionalDocument" WHERE id='new'`)).rows[0].reviewStatus, 'SUBMITTED');
+    // Existing onboarding compensation may remove only a fresh unlinked account.
+    // Retained history must instead reject the entire cascade, without partial loss.
+    await c.query(`INSERT INTO icc."User" (id,email,"updatedAt") VALUES ('failed-onboarding','failed-onboarding@s18.invalid',now());
+      INSERT INTO icc."TerraqoProfessionalProfile" (id,"userId","updatedAt") VALUES ('onboarding-profile','failed-onboarding',now());`);
+    await insert(c, 'onboarding-document', null, 'onboarding-profile', 'CV');
+    await c.query(`DELETE FROM icc."User" WHERE id='failed-onboarding'`);
+    assert.equal((await c.query(`SELECT count(*)::int AS n FROM icc."TerraqoProfessionalDocument" WHERE id='onboarding-document'`)).rows[0].n, 0);
+    const retainedBefore = (await c.query(`SELECT id,"lifecycleVersion","withdrawnAt" FROM icc."TerraqoProfessionalDocument" WHERE "professionalProfileId"='profile' ORDER BY id`)).rows;
+    await assert.rejects(c.query(`DELETE FROM icc."User" WHERE id='owner'`), error => ['23001', '23503', '23514'].includes(error.code));
+    assert.equal((await c.query(`SELECT count(*)::int AS n FROM icc."User" WHERE id='owner'`)).rows[0].n, 1);
+    assert.equal((await c.query(`SELECT count(*)::int AS n FROM icc."TerraqoProfessionalProfile" WHERE id='profile'`)).rows[0].n, 1);
+    assert.deepEqual((await c.query(`SELECT id,"lifecycleVersion","withdrawnAt" FROM icc."TerraqoProfessionalDocument" WHERE "professionalProfileId"='profile' ORDER BY id`)).rows, retainedBefore);
+    console.log('PASS account compatibility: fresh onboarding compensation remains allowed; retained account cascade rejected atomically without document/profile loss');
     console.log('PASS legacy preservation, ownership/type/identity lineage, one successor, immutable history, guarded deletion, withdrawal tuple/version, no restoration, review preserved');
 
     const a = await connect(), b = await connect();
