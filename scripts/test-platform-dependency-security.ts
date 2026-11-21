@@ -15,4 +15,11 @@ assert.equal(lock.packages["node_modules/effect"].version, "3.22.1");
 assert.equal(lock.packages["node_modules/prisma"].version, "6.19.3", "No unreviewed Prisma major upgrade");
 for (const name of ["next", "eslint-config-next", "@next/env", "@next/eslint-plugin-next"])
   assert.equal(lock.packages[`node_modules/${name}`].version, "15.5.29");
+assert.equal(lock.packages[""].devDependencies["@netlify/plugin-nextjs"], "5.16.8", "Pin the separate deployment adapter");
+assert.equal(lock.packages["node_modules/@netlify/plugin-nextjs"].version, "5.16.8");
+assert.equal(lock.packages[""].dependencies["@terraqo/webauthn-server"], "npm:@simplewebauthn/server@13.3.2");
+for (const [name, entry] of Object.entries(lock.packages) as [string, { version: string }][]) {
+  if (name.endsWith("node_modules/@simplewebauthn/server")) assert.fail("Unaliased optional WebAuthn peer must not reintroduce Server9");
+  if (name.endsWith("node_modules/@terraqo/webauthn-server")) assert.equal(entry.version, "13.3.2");
+}
 console.log("PASS dependency patch baseline and Effect valid/adversarial template controls; Next exploit closure relies on upstream patched release, not this version assertion alone.");
