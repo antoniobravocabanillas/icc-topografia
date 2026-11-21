@@ -46,6 +46,10 @@ const options = { maxRedirects: 0, timeout: 45_000 };
 const expect = baseExpect.configure({ timeout: 45_000 });
 const sha = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
+function assertPrivateNoStore(header: string | null) {
+  const directives = new Set((header || "").toLowerCase().split(",").map(value => value.trim()));
+  assert.ok(directives.has("private") && directives.has("no-store") && !directives.has("public"));
+}
 type Stage = "preflight" | "run";
 type Upload = { name: string; mimeType: string; buffer: Buffer };
 type Command = { expectedVersion: number; operationKey: string };
@@ -517,7 +521,7 @@ export async function verifyS18Staging(stage: Stage = "run") {
     const billingBefore = await billingSnapshot();
     for (const [context, workspaces] of [[ctx, [{ id: ids.workspace, name: "S18 synthetic " + candidate.run }]], [outsider.ctx, []]] as const) {
       const reply = await context.request.get("/api/terraqo/billing", options);
-      assert.equal(reply.status(), 200); assert.match(reply.headers()["cache-control"], /private, no-store/);
+      assert.equal(reply.status(), 200); assertPrivateNoStore(reply.headers()["cache-control"]);
       const data = await reply.json();
       assert.equal(data.mode, "test"); assert.equal(data.publicKey, null); assert.deepEqual(data.workspaces, workspaces);
     }
@@ -538,7 +542,8 @@ export async function verifyS18Staging(stage: Stage = "run") {
     receipt.phase = "complete"; receipt.passed = true;
   } catch (error) {
     receipt.passed = false;
-    receipt.error = { code: typeof (error as { code?: unknown }).code === "string" && /^[A-Z0-9_]{1,32}$/.test((error as { code: string }).code)
+    receipt.error = { location: error instanceof Error ? error.stack?.match(/verify-s18-staging\.ts:\d+:\d+/)?.[0] : undefined,
+      code: typeof (error as { code?: unknown }).code === "string" && /^[A-Z0-9_]{1,32}$/.test((error as { code: string }).code)
       ? (error as { code: string }).code : "GATE_REJECTED" };
     console.error(JSON.stringify({ gate: "s18-hosted", passed: false, phase: receipt.phase, ...receipt.error as object,
       seedBlocker: error instanceof Error && /^SEED_ACL_BLOCKED: [A-Za-z ]+/.test(error.message)
@@ -565,6 +570,9 @@ export async function verifyS18Staging(stage: Stage = "run") {
 
 /** Pure negative tests: no Prisma construction, network, filesystem writes or credentials. */
 export function selfTestS18Guard() {
+  for (const header of ["private, no-store", "private,no-store", "No-Store, PRIVATE"]) assertPrivateNoStore(header);
+  for (const header of [null, "private", "no-store", "public,private,no-store", "x-private,no-store"])
+    assert.throws(() => assertPrivateNoStore(header));
   const run = "11111111-1111-4111-8111-111111111111";
   const database = `postgresql://terraqo_staging_runtime:synthetic@db.${project}.supabase.co:5432/postgres?schema=icc&sslmode=verify-full`;
   const env: NodeJS.ProcessEnv = { NODE_ENV: "production", S18_STAGING_GATE: "synthetic-retained", S18_STAGING_RUN_ID: run,

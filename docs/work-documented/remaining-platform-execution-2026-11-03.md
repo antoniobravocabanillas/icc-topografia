@@ -1,5 +1,13 @@
 # Remaining platform execution — 3 November 2026
 
+## 20 de noviembre — S18 alojado: documentos/accesos PASS; consulta del plan requiere repetición
+
+Staging sirve `0669a883073a7b944fbd973b2e1bbc2fdf13a737`, deploy `6b00f0cef3a10fa523144210`, ledger51. Run `e3224c85-27dd-468a-9fd3-132a10df712b`: inicio real, documentos/versiones/retiro/concurrencia y accesos/revocación pasan; recibo global false en `read-only-plan`. Se conserva historial sintético privado:3 usuarios,3 documentos,2 reemplazos y1 retiro; sin purga ni datos reales modificados. Exportación privada del deploy completada;14 archivos descargados con hashes verificados en `output/s18-hosted-download/e3224c85-27dd-468a-9fd3-132a10df712b`. Capturas access320/withdrawn1440 inspeccionadas; legibles, sin overflow. Persisten sombras/inputs nativos heredados y badge del proveedor en staging; no declarar reconciliación visual global completa.
+
+Identificado defecto del verificador: regex literal con espacio `private, no-store`, mientras el encabezado alojado observado es `private,no-store`. Corregido a directivas separadas por coma, exigiendo private+no-store y rechazando public. Casos positivos/negativos y25 guards de entorno PASS; ESLint PASS. Esto no prueba aún que fuera el único fallo del plan: repetir recorrido completo con nuevo candidato y UUID. Se añade ubicación segura del fallo al recibo. Lector de artefactos normaliza método HTTP a mayúsculas y usa región del sitio aislado; no transmite token personal al build.
+
+S19 preparado desde página física20 del PDF en `s19-mobile-acceptance.md`; se respeta petición posterior de navegación sin modales. No se ha cerrado S18 ni comenzado implementación S19. Producción intacta.
+
 ## 20 de noviembre — S18: migración51 aplicada solo en staging; build en corrección
 
 Aplicado el artefacto ensayado SHA256 `5c94f17f3b6f70a16392e09df9df9c334729dcb9b90f618c96809d670d388aea` a `mghdpciewbsowjrjwmwk` mediante conexión TLS verificada. Lectura independiente MCP:51 migraciones,0 incompletas, checksum correcto,2 triggers habilitados, SET del migrador deshabilitado, runtime sin DELETE sobre intentos y sin acceso público. Recibo `output/s18-lifecycle/apply-receipt.json`. Datos anteriores comparados dentro de la misma transacción y conservados; producción intacta.

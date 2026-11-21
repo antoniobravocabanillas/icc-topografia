@@ -7,6 +7,7 @@ import path from 'node:path';
 import { getDeployStore } from '@netlify/blobs';
 
 // Operator-side read only. Personal API authority is never passed to a build.
+let phase = 'arguments';
 async function main() {
   const [deployId, run, commit, ...extra] = process.argv.slice(2);
   assert.equal(extra.length, 0);
@@ -20,21 +21,27 @@ async function main() {
   const { NetlifyAPI } = await import(pathToFileURL(require.resolve('@netlify/api')).href);
   const token = await getAPIToken();
   const api = new NetlifyAPI(token);
+  phase = 'deploy-identity';
   const deploy = await api.getDeploy({ deploy_id: deployId });
   assert.equal(deploy.site_id, siteId);
   assert.equal(deploy.commit_ref, commit);
   assert.equal(deploy.branch, 'codex/s22-evaluator-local');
-  const store = getDeployStore({ name: 's18-acceptance', deployID: deployId, siteID: siteId, token,
+  const site = await api.getSite({ site_id: siteId });
+  assert.equal(site.name, 'terraqo-platform-staging');
+  assert.equal(site.functions_region, 'us-east-1');
+  const store = getDeployStore({ name: 's18-acceptance', deployID: deployId, siteID: siteId, token, region: site.functions_region,
     fetch: (url, init) => {
-      assert.ok(['GET', 'HEAD'].includes(init?.method || 'GET'));
+      assert.ok(['GET', 'HEAD'].includes((init?.method || 'GET').toUpperCase()));
       return fetch(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(30000) });
     } });
+  phase = 'manifest';
   const manifest = await store.get(`${run}/manifest.json`, { type: 'json' });
   assert.ok(manifest, 'Missing manifest: export is incomplete');
   assert.equal(manifest.siteId, siteId); assert.equal(manifest.deployId, deployId);
   assert.equal(manifest.commit, commit); assert.equal(manifest.run, run);
   assert.ok(Array.isArray(manifest.files) && manifest.files.length >= 2 && manifest.files.length <= 20);
   const names = new Set(); let total = 0; const files = [];
+  phase = 'artifact-hashes';
   for (const file of manifest.files) {
     assert.match(file.name, /^(?:intent\.json|receipt\.json|(?:initial|replaced|withdrawn|access|plan)-(?:1440|375|320)\.png)$/);
     assert.ok(!names.has(file.name)); names.add(file.name);
@@ -49,6 +56,7 @@ async function main() {
   }
   assert.ok(names.has('receipt.json') && names.has('intent.json'));
   const directory = path.resolve('output/s18-hosted-download', run);
+  phase = 'local-save';
   await mkdir(path.dirname(directory), { recursive: true });
   await mkdir(directory); // Never overwrite evidence from another read.
   for (const file of files) await writeFile(path.join(directory, file.name), file.bytes, { flag: 'wx' });
@@ -57,4 +65,4 @@ async function main() {
   console.log(JSON.stringify({ directory, files: files.length, hashesVerified: true,
     passed: receipt.passed === true, phase: receipt.phase, deployId, commit, run }));
 }
-main().catch(error => { console.error('S18 evidence read failed', { code: error.code || 'READ_REJECTED' }); process.exitCode = 1; });
+main().catch(error => { console.error('S18 evidence read failed', { phase, code: error.code || 'READ_REJECTED' }); process.exitCode = 1; });
