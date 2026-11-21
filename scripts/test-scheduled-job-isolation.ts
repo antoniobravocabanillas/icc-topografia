@@ -54,6 +54,8 @@ assert.equal(
 
 const targets = resolveScheduledJobTargets(stageEnvironment);
 assert.deepEqual(targets, {
+  documentReplacementCleanupApi: `${stageOrigin}/api/internal/document-replacement-cleanup`,
+  documentReplacementCleanupWorker: `${stageOrigin}/.netlify/functions/document-replacement-cleanup-background`,
   educationCleanupApi: `${stageOrigin}/api/internal/education-evidence-cleanup`,
   educationCleanupWorker: `${stageOrigin}/.netlify/functions/education-evidence-cleanup-background`,
   professionalDocumentCleanupApi: `${stageOrigin}/api/internal/professional-document-cleanup`,
@@ -113,16 +115,19 @@ async function loadFunction(entryPoint: string, label: string) {
 }
 
 async function main() {
-  const [education, educationWorker, professional, billing, complaints] =
+  const [education, educationWorker, professional, billing, complaints, replacement, replacementWorker] =
     await Promise.all([
       loadFunction("netlify/functions/education-evidence-cleanup.mts", "education"),
       loadFunction("netlify/functions/education-evidence-cleanup-background.mts", "education-worker"),
       loadFunction("netlify/functions/professional-document-cleanup.mts", "professional"),
       loadFunction("netlify/functions/billing-reconcile.mts", "billing"),
       loadFunction("netlify/functions/complaints-mail.mts", "complaints"),
+      loadFunction("netlify/functions/document-replacement-cleanup.mts", "replacement"),
+      loadFunction("netlify/functions/document-replacement-cleanup-background.mts", "replacement-worker"),
     ]);
 
   const names = [
+    "TERRAQO_DOCUMENT_LIFECYCLE_V1",
     "URL",
     "NEXT_PUBLIC_SITE_URL",
     "NEXT_PUBLIC_API_URL",
@@ -141,6 +146,7 @@ async function main() {
   try {
     console.warn = (...values: unknown[]) => warnings.push(values);
     Object.assign(process.env, stageEnvironment);
+    process.env.TERRAQO_DOCUMENT_LIFECYCLE_V1 = "true";
     globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
       const target = String(url);
       calls.push(target);
@@ -151,7 +157,7 @@ async function main() {
         : documentSecret;
       assert.equal(new Headers(init?.headers).get("authorization"), `Bearer ${expectedSecret}`);
 
-      if (target.endsWith("education-evidence-cleanup-background")) {
+      if (target.endsWith("education-evidence-cleanup-background") || target.endsWith("document-replacement-cleanup-background")) {
         return new Response(null, { status: 202 });
       }
       if (target.endsWith("education-evidence-cleanup")) {
@@ -193,6 +199,8 @@ async function main() {
     assert.equal((await billing.default()).status, 200);
     assert.equal((await complaints.default()).status, 200);
 
+    assert.equal((await replacement.default()).status, 200);
+    await replacementWorker.default(new Request(targets.documentReplacementCleanupWorker, {method: "POST", headers: {authorization: `Bearer ${documentSecret}`}}));
     assert.deepEqual(new Set(calls), new Set(Object.values(targets)));
 
     calls.length = 0;
@@ -201,8 +209,9 @@ async function main() {
     assert.equal((await billing.default()).status, 503);
     assert.equal((await complaints.default()).status, 503);
     assert.equal((await education.default()).status, 503);
+    assert.equal((await replacement.default()).status, 503);
     assert.equal(calls.length, 0, "An isolated staging mismatch must fail before network I/O.");
-    assert.deepEqual(warnings.at(-1), [
+    assert.deepEqual(warnings.at(-2), [
       "Education cleanup invocation unavailable",
       { code: "SCHEDULED_STAGING_ORIGIN_MISMATCH" },
     ]);

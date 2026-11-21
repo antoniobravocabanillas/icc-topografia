@@ -1,5 +1,9 @@
 # Remaining platform execution — 3 November 2026
 
+## 20 de noviembre — S18: limpieza programada autenticada preparada
+
+Cron acotado → worker background → API interna conectados al despachador existente, apagados por defecto con TERRAQO_DOCUMENT_LIFECYCLE_V1. Autenticación constante, secretos/destinos aislados, deadlines, contadores sin contenido privado. Pruebas de wrappers empaquetados, API, aislamiento de todos los jobs y regresión PostgreSQL PASS; TypeScript/ESLint PASS. No schedule remoto activado ni migración/despliegue. Continúan Office/CV, retención/purga y aceptación en staging antes de producción.
+
 ## 20 de noviembre — S18: rutas autenticadas y acciones documentales en línea
 
 Retiro/reemplazo conectados a adaptadores HTTP, apagados por defecto mediante TERRAQO_DOCUMENT_LIFECYCLE_V1. Pruebas de sesión/origen/cuerpo real/campos duplicados PASS. Interfaz de documentos complementarios incorpora confirmación sin modal, reintento idempotente, conflicto y retiro inmediato; revisión local desktop/móvil detectó y corrigió desbordamiento. TypeScript/ESLint/detector PASS. No activar ni desplegar aún: faltan Office/CV, retención, programación de limpieza, migración y aceptación alojada. Detalles y límites de la evidencia en proposals/s18-document-lifecycle.md.

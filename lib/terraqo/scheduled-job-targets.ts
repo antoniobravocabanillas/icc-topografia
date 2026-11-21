@@ -10,6 +10,8 @@ type ScheduledJobEnvironment = {
 };
 
 export type ScheduledJobTargets = {
+  documentReplacementCleanupApi: string;
+  documentReplacementCleanupWorker: string;
   educationCleanupApi: string;
   educationCleanupWorker: string;
   professionalDocumentCleanupApi: string;
@@ -145,6 +147,8 @@ export function resolveScheduledJobTargets(
   }
 
   return {
+    documentReplacementCleanupApi: new URL("/api/internal/document-replacement-cleanup", apiOrigin).toString(),
+    documentReplacementCleanupWorker: new URL("/.netlify/functions/document-replacement-cleanup-background", siteOrigin).toString(),
     educationCleanupApi: new URL(
       "/api/internal/education-evidence-cleanup",
       apiOrigin,
