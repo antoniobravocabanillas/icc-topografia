@@ -28,7 +28,7 @@ function run(stage, { utils }) {
     try {
       const entry = JSON.parse(line);
       const phase = entry.phase || entry.failedPhase;
-      if (["s06", "s07", "s08", "s09", "s10", "s11", "s12", "s13", "s14", "s15", "s16-s17-draft"].includes(entry.gate) && /^[a-z0-9-]{1,60}$/.test(phase || "")) {
+      if (["s06", "s07", "s08", "s09", "s10", "s11", "s12", "s13", "s14", "s15", "s16-s17-draft", "s18-preflight", "s18-hosted"].includes(entry.gate) && /^[a-z0-9-]{1,60}$/.test(phase || "")) {
         attentionSteps.push(entry.gate + ":" + phase);
         if (/^[a-z0-9-]{1,60}$/.test(entry.journeyPhase || "")) attentionSteps.push("journey:" + entry.journeyPhase);
         for (const key of ["actual", "expected"]) if (Number.isSafeInteger(entry[key])) attentionSteps.push(key + ":" + entry[key]);
@@ -50,6 +50,14 @@ function run(stage, { utils }) {
   } else if (s22 && stage === "prepare" && process.env.S24_STAGING_DIAGNOSTIC_TARGET && process.env.S24_STAGING_DIAGNOSTIC_TARGET !== "off") {
     utils.build.cancelBuild("S24 staging diagnostic completed; the existing deploy remains active.");
   } else if (stage === "verify" && utils.status?.show) {
+    if (process.env.S18_STAGING_GATE === "preflight") {
+      utils.status.show({ title: "S18 staging preflight passed", summary: `Read-only readiness only; authenticated S18 acceptance remains pending. commit=${process.env.COMMIT_REF}; deploy=${process.env.DEPLOY_ID}` });
+      return;
+    }
+    if (process.env.S18_STAGING_GATE === "synthetic-retained") {
+      utils.status.show({ title: "S18 staging journey passed", summary: `S18 authenticated acceptance; private synthetic fixtures retained for audit. commit=${process.env.COMMIT_REF}; deploy=${process.env.DEPLOY_ID}` });
+      return;
+    }
     utils.status.show({ title: "Staging gate verified", summary: `PASS ${process.env.S16_COLLABORATION_GATE === "synthetic-only" ? "S16/S17 controls (fixture-media cleanup and final review required)" : process.env.S15_STAGING_CONVERSATION_GATE === "conversation" ? "S15 journey (operator media cleanup required)" : process.env.S14_STAGING_EVALUATION_GATE === "evaluation" ? "S14 evaluation" : process.env.S13_STAGING_DISCOVERY_GATE === "discovery" ? "S13 discovery" : process.env.S12_STAGING_NEED_GATE === "need" ? "S12 need" : process.env.S11_STAGING_RECORD_GATE === "record" ? "S11 record" : process.env.S10_STAGING_ARCHIVE_GATE === "archive" ? "S10 archive" : process.env.S09_STAGING_VISITOR_GATE === "visitor" ? "S09 visitor" : process.env.S08_STAGING_REVIEW_GATE === "review" ? "S08 review" : process.env.S07_STAGING_ENDORSEMENT_GATE === "request" ? "S07 endorsement" : process.env.S06_STAGING_VISIBILITY_GATE === "visibility" ? "S06 visibility" : process.env.PLATFORM_STAGING_CLOUD_PHASE}; commit=${process.env.COMMIT_REF}; deploy=${process.env.DEPLOY_ID}` });
   }
 }

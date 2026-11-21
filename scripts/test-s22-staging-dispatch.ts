@@ -4,18 +4,19 @@ import { runInNewContext } from "node:vm";
 import path from "node:path";
 
 const source = readFileSync("plugins/terraqo-staging-gate/index.cjs", "utf8");
-function invoke(site: string, phase: string, status = 0) {
+function invoke(site: string, phase: string, status = 0, s18 = "off") {
   const calls: string[][] = [], failures: string[] = [];
+  const summaries: { title: string; summary: string }[] = [];
   const pluginModule = { exports: {} as { onPreBuild: (context: unknown) => void; onSuccess: (context: unknown) => void } };
-  runInNewContext(source, { module: pluginModule, console: { log() {} }, process: { execPath: "node", cwd: () => process.cwd(), env: { SITE_ID: site, PLATFORM_STAGING_CLOUD_PHASE: phase } }, require: (name: string) => {
+  runInNewContext(source, { module: pluginModule, console: { log() {} }, process: { execPath: "node", cwd: () => process.cwd(), env: { SITE_ID: site, PLATFORM_STAGING_CLOUD_PHASE: phase, S18_STAGING_GATE: s18 } }, require: (name: string) => {
     if (name === "node:path") return path;
     if (name === "./production-environment.cjs") return { assertProductionEnvironment() {} };
     if (name === "node:child_process") return { spawnSync: (_exe: string, args: string[]) => { calls.push(args); return { status, stdout: "", stderr: "" }; } };
     throw new Error("Unexpected dependency");
   } });
-  const context = { utils: { build: { failBuild: (s: string) => failures.push(s), failPlugin: (s: string) => failures.push(s) } } };
+  const context = { utils: { build: { failBuild: (s: string) => failures.push(s), failPlugin: (s: string) => failures.push(s) }, status: { show: (value: { title: string; summary: string }) => summaries.push(value) } } };
   pluginModule.exports.onPreBuild(context); pluginModule.exports.onSuccess(context);
-  return { calls, failures };
+  return { calls, failures, summaries };
 }
 const site = "6b8c43fb-6083-450a-9b85-46a820fb6358";
 for (const [phase, runner] of [["workspace-administration", "run-workspace-administration-staging.ts"], ["customer-attention", "run-customer-attention-staging.ts"], ["s24", "run-platform-staging-cloud.ts"]]) {
@@ -27,4 +28,7 @@ for (const [phase, runner] of [["workspace-administration", "run-workspace-admin
 }
 assert.equal(invoke("production-site", "workspace-administration").calls.length, 0);
 assert.equal(invoke(site, "workspace-administration", 1).failures.length, 2);
+assert.match(invoke(site, "workspace-administration", 0, "preflight").summaries[0].summary, /acceptance remains pending/);
+assert.match(invoke(site, "workspace-administration", 0, "synthetic-retained").summaries[0].summary, /fixtures retained/);
+assert.equal(invoke(site, "workspace-administration", 1, "synthetic-retained").summaries.length, 0);
 console.log("PASS staging dispatch: S22 prepare/verify, attention/platform preservation, foreign site excluded, failures surfaced. No processes spawned.");
