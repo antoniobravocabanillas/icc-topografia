@@ -164,7 +164,8 @@ export function SignInForm({
   }
 
   return (
-    <form onSubmit={(event) => { event.preventDefault(); submit(new FormData(event.currentTarget)); }} className={embedded ? "tq-embedded-auth-form" : "relative overflow-hidden rounded-lg border bg-card p-6 text-foreground shadow-2xl md:p-8"}>
+    // Keep credentials out of navigation URLs even before hydration or without JavaScript.
+    <form method="post" onSubmit={(event) => { event.preventDefault(); submit(new FormData(event.currentTarget)); }} className={embedded ? "tq-embedded-auth-form" : "relative overflow-hidden rounded-lg border bg-card p-6 text-foreground shadow-2xl md:p-8"}>
       <div className="tq-auth-heading">
         <p>Bienvenido a Terraqo</p>
         <h1 data-access-heading tabIndex={-1}>{title === "Bienvenido de vuelta" ? "Inicia sesión" : title}</h1>

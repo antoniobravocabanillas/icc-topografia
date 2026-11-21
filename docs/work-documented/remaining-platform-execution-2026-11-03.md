@@ -1,5 +1,11 @@
 # Remaining platform execution — 3 November 2026
 
+## 20 de noviembre — S18: aceptación integrada local PASS
+
+Recorrido real con Auth.js, Next, PostgreSQL y archivos aislados PASS en `output/playwright/s18-authenticated/terraqo-s18-authenticated-lbVssN`: CV inicial, versiones PDF/DOCX, retiro, historial, reintentos concurrentes sin recobro ni escritura duplicada; usuarios ajenos y origen externo rechazados. Accesos: proyección exacta autorizada, destinatario/ajeno/anónimo, vencimiento, cancelar sin mutar, revocación persistente y navegación. Plan: consulta de empresa solo para su propietario, sin cobro ni modificación de cuentas. Capturas1440/375/320 revisadas; entorno temporal eliminado sin desactivar las protecciones de historial. Esta evidencia es local y no cierra S18 alojado.
+
+Empaquetado offline completo de Netlify exit0 con adaptador5.16.8, funciones y middleware (`output/s18-netlify-offline-Yu3xmQ/build.log`). Sus artefactos contienen direcciones locales de prueba: no son publicables. Siguiente: corrección defensiva del formulario de acceso sin JavaScript, aceptación S18 alojada con fixtures privados conservados y migración51/candidato de staging; producción sigue intacta.
+
 ## 20 de noviembre — S18: migración ensayada; aceptación integrada pendiente
 
 CV integrado al reemplazo/retiro con historial y concurrencia; DOCX acotado y PDF conservado. Pruebas de formatos, PostgreSQL/archivos reales y componentes Chromium PASS. Migración51 preparada: ensayo del SQL completo sobre copia de staging PASS,160 tablas previas conservadas, ledger50→51, reversión ante fallos, permisos restaurados y segunda aplicación rechazada. Staging remoto verificado aún en50; sin despliegue ni migración remota. Next15.5.29 y WebAuthn13.3.2 validados, build completo PASS; adaptador Netlify5.16.8 fijado. Próximo bloque: aceptación conjunta con inicio de sesión real, luego promoción a staging y recorridos alojados. El cliente nativo todavía necesita controles de reemplazo versionado; sus lecturas ya ocultan retirados y reconocen historial. La compensación de alta fallida se probó; una purga general de cuentas no se ha implementado ni se presume necesaria para este alcance. Detalle y restricciones: proposals/s18-document-lifecycle.md.
