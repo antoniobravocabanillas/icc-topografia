@@ -89,6 +89,13 @@ async function main() {
     };
     step = "served-candidate";
     await assertServed();
+    if (process.env.S18_STAGING_GATE !== undefined && process.env.S18_STAGING_GATE !== "off") {
+      step = "s18-retained-acceptance";
+      const { verifyS18Staging } = await import("./verify-s18-staging");
+      await verifyS18Staging(process.env.S18_STAGING_GATE === "preflight" ? "preflight" : "run");
+      await assertServed();
+      return;
+    }
     if (process.env.S16_COLLABORATION_GATE === "synthetic-only") {
       step = "s16-collaboration";
       const { verifyS16Collaboration } = await import("./verify-s16-collaboration");
