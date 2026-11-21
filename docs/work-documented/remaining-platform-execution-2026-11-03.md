@@ -1,8 +1,8 @@
 # Remaining platform execution — 3 November 2026
 
-## 20 de noviembre — S18: versiones de CV y DOCX validados localmente
+## 20 de noviembre — S18: migración ensayada; aceptación integrada pendiente
 
-CV integrado al reemplazo/retiro con historial y concurrencia; validación DOCX acotada, PDF conservado, DOC nuevo no soportado explícitamente. Pruebas de formatos, servidor, PostgreSQL/archivos reales y Chromium1440/375/320 PASS; TypeScript/ESLint/detector PASS. Backup fresco de staging obtenido en lectura, ensayo de restauración en curso. No migración remota ni despliegue. Restan retención/purga, compatibilidad del cliente nativo al activar el flag, migración y aceptación alojada; no equivale a cierre S18. Detalle y restricciones: proposals/s18-document-lifecycle.md.
+CV integrado al reemplazo/retiro con historial y concurrencia; DOCX acotado y PDF conservado. Pruebas de formatos, PostgreSQL/archivos reales y componentes Chromium PASS. Migración51 preparada: ensayo del SQL completo sobre copia de staging PASS,160 tablas previas conservadas, ledger50→51, reversión ante fallos, permisos restaurados y segunda aplicación rechazada. Staging remoto verificado aún en50; sin despliegue ni migración remota. Next15.5.29 y WebAuthn13.3.2 validados, build completo PASS; adaptador Netlify5.16.8 fijado. Próximo bloque: aceptación conjunta con inicio de sesión real, luego promoción a staging y recorridos alojados. El cliente nativo todavía necesita controles de reemplazo versionado; sus lecturas ya ocultan retirados y reconocen historial. La compensación de alta fallida se probó; una purga general de cuentas no se ha implementado ni se presume necesaria para este alcance. Detalle y restricciones: proposals/s18-document-lifecycle.md.
 
 ## 20 de noviembre — S18: limpieza programada autenticada preparada
 

@@ -1,6 +1,6 @@
 # S18 private document lifecycle — implementation contract
 
-Status: SQL substrate and withdrawal transaction core implemented and tested locally; not wired to routes or migrated remotely. Existing S18 access screen is a separate local candidate. No remote DDL, payment, message or deployment is authorized by this document.
+Current status: local document/CV routes, UI, storage recovery and scheduling are implemented behind the disabled lifecycle flag. Migration51 source and its exact staging operator SQL passed an owned local restore rehearsal; hosted staging remains at migration50. Full optimized Next build passed after the WebAuthn patch; the Netlify adapter is now pinned, with hosted packaging still pending. Combined real-login document/access/plan acceptance is being prepared. Latest checkpoints below supersede historical implementation status. This document itself authorizes no remote operation or payment.
 
 ## Existing paths that must remain compatible
 
