@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
-import type { AuthenticationResponseJSON, AuthenticatorTransportFuture, RegistrationResponseJSON } from "@simplewebauthn/types";
+// Isolate v13 from Auth.js's unused, optional v9-only WebAuthn provider.
+import type { AuthenticationResponseJSON, AuthenticatorTransportFuture, RegistrationResponseJSON } from "@terraqo/webauthn-server";
 import {
   generateAuthenticationOptions,
   generateRegistrationOptions,
   verifyAuthenticationResponse,
   verifyRegistrationResponse
-} from "@simplewebauthn/server";
+} from "@terraqo/webauthn-server";
 import type { Prisma, TerraqoAttendanceContext, TerraqoAttendanceType, TerraqoMemberRole, TerraqoWebAuthnPurpose } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { assertLegacyWorklogs } from "@/lib/server/native-worklog-legacy-guard";
@@ -197,18 +198,21 @@ export async function createPasskeyRegistrationOptions(input: {
   const options = await generateRegistrationOptions({
     rpName: membership.workspace.brandName || membership.workspace.name,
     rpID: input.context.rpId,
-    userID: user.id,
+    userID: new TextEncoder().encode(user.id),
     userName: user.email,
     userDisplayName: user.name || user.email,
     timeout: CHALLENGE_TTL_MS,
     attestationType: "none",
     excludeCredentials: existing.map((credential) => ({
-      id: Buffer.from(credential.credentialId, "base64url"),
+      id: credential.credentialId,
       type: "public-key" as const,
       transports: credential.transports as AuthenticatorTransportFuture[]
     })),
     authenticatorSelection: { residentKey: "preferred", userVerification: "required" }
   });
+  // Browser v9 UTF-8 encodes user.id itself; preserve its existing wire format
+  // until the browser client is upgraded together with this boundary.
+  options.user.id = user.id;
   const stored = await createChallenge({
     userId: input.userId,
     workspaceId: input.workspaceId,
@@ -238,7 +242,7 @@ export async function verifyPasskeyRegistration(input: {
     throw new FieldVerificationError("No pudimos verificar el metodo seguro del dispositivo.", 422);
   }
   const info = verification.registrationInfo;
-  const credentialId = Buffer.from(info.credentialID).toString("base64url");
+  const credentialId = info.credential.id;
   const registeredAt = new Date();
   await prisma.$transaction(async (tx) => {
     const registration = await persistWebAuthnRegistration(tx, {
@@ -248,8 +252,8 @@ export async function verifyPasskeyRegistration(input: {
       credential: {
         userId: input.userId,
         credentialId,
-        publicKey: Buffer.from(info.credentialPublicKey),
-        counter: BigInt(info.counter),
+        publicKey: Buffer.from(info.credential.publicKey),
+        counter: BigInt(info.credential.counter),
         transports: input.response.response.transports || [],
         rpId: challenge.rpId,
         deviceName: input.deviceName || "Dispositivo seguro",
@@ -281,7 +285,7 @@ async function createAuthenticationChallenge(input: {
     timeout: CHALLENGE_TTL_MS,
     userVerification: "required",
     allowCredentials: effectiveCredentials.map((credential) => ({
-      id: Buffer.from(credential.credentialId, "base64url"),
+      id: credential.credentialId,
       type: "public-key" as const,
       transports: credential.transports as AuthenticatorTransportFuture[]
     }))
@@ -315,9 +319,9 @@ async function verifyAuthentication(input: {
     expectedOrigin: challenge.expectedOrigin,
     expectedRPID: challenge.rpId,
     requireUserVerification: true,
-    authenticator: {
-      credentialID: Buffer.from(credential.credentialId, "base64url"),
-      credentialPublicKey: new Uint8Array(credential.publicKey),
+    credential: {
+      id: credential.credentialId,
+      publicKey: new Uint8Array(credential.publicKey),
       counter: Number(credential.counter),
       transports: credential.transports as AuthenticatorTransportFuture[]
     }
