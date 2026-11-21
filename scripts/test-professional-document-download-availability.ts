@@ -21,12 +21,18 @@ async function main() {
   } }) });
   const original = prisma.$transaction;
   const document = { id: "document", professionalProfileId: "profile", professionalProfile: { userId: "owner" },
-    workspaceId: "workspace", storageKey: "private", fileName: "private.pdf", contentType: "application/pdf" };
+    workspaceId: "workspace", storageKey: "private", fileName: "private.pdf", contentType: "application/pdf",
+    replacedByDocument: { id: "withdrawn-successor", withdrawnAt: new Date("2026-11-20T00:00:00Z") } };
   const tx = {
     terraqoProfessionalDocument: { findUnique: async () => document, findFirst: async () => document },
     terraqoWorkspaceMember: { findFirst: async () => null },
     $queryRaw: async (sql: Prisma.Sql) => {
       locks++;
+      if (sql.text.includes('"TerraqoProfessionalDocument"')) {
+        assert.ok(sql.text.includes('"withdrawnAt" IS NULL'));
+        assert.ok(sql.text.includes("FOR SHARE"));
+        assert.deepEqual(sql.values, ["document", "profile"]);
+      }
       return sql.text.includes('"TerraqoProfessionalProfile"') || available ? [{ id: "profile" }] : [];
     },
   } as unknown as Prisma.TransactionClient;
@@ -39,9 +45,11 @@ async function main() {
       const request = new Request("https://fixture.invalid/documents/document");
       actor = "owner"; available = true;
       const response = await route.GET(request, context);
-      assert.equal(response.status, 200);
+      assert.equal(response.status, 200, "retained predecessor remains privately downloadable when its successor is withdrawn");
       assert.equal(await response.text(), "synthetic private file");
       assert.ok(response.headers.get("cache-control")?.includes("no-store"));
+      assert.equal(response.headers.get("content-security-policy"), "sandbox");
+      assert.equal(response.headers.get("x-content-type-options"), "nosniff");
       const priorReads = reads;
       available = false;
       assert.equal((await route.GET(request, context)).status, 404);
@@ -53,7 +61,7 @@ async function main() {
       assert.equal(reads, priorReads);
     }
     assert.equal(reads, 2);
-    console.log("PASS personal/native download handlers: authorized bytes, no-store, withdrawn 404 without storage and outsider denied before locks");
+    console.log("PASS personal/native download handlers: private retained predecessor bytes, no-store/sandbox, withdrawn 404 without storage and outsider denied before locks (route/storage doubles)");
   } finally {
     prisma.$transaction = original;
     for (const [id, module] of saved) { if (module) require.cache[id] = module; else delete require.cache[id]; }

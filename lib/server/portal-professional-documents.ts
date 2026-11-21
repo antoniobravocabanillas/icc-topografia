@@ -12,7 +12,9 @@ export const professionalDocumentScope = (token: WorkspacePortalToken) => ({
 
 export async function listProfessionalDocuments(token: WorkspacePortalToken, cursor?: string) {
   const rows = await prisma.terraqoProfessionalDocument.findMany({
-    where: professionalDocumentScope(token), orderBy: { id: "asc" }, take: 31,
+    // Schema-v1 clients offer downloads for every listed document and do not
+    // understand withdrawal. Exclude these rows before applying pagination.
+    where: { ...professionalDocumentScope(token), withdrawnAt: null }, orderBy: { id: "asc" }, take: 31,
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     select: { id: true, type: true, fileName: true, contentType: true, size: true,
       reviewStatus: true, uploadedAt: true, reviewedAt: true, reviewNote: true,
@@ -28,7 +30,11 @@ export async function listProfessionalDocuments(token: WorkspacePortalToken, cur
         && !row.withdrawnAt && !row.replacesDocumentId && !row.replacedByDocument
         && row._count.replacementAttempts === 0 && row._count.resultingAttempts === 0,
       fields: { kind: "professionalDocument", fileName: row.fileName, contentType: row.contentType,
-        size: String(row.size), type: row.type, withdrawn: String(Boolean(row.withdrawnAt)), superseded: String(row.type === "CV" && row.reviewStatus === "REJECTED" && row.reviewNote === "Documento reemplazado por una carga posterior."), uploadedAt: row.uploadedAt.toISOString(),
+        size: String(row.size), type: row.type, withdrawn: String(Boolean(row.withdrawnAt)),
+        // Retained lineage wins regardless of review state or successor withdrawal.
+        // Preserve the legacy CV marker without inferring new stored relationships.
+        superseded: String(Boolean(row.replacedByDocument) || (row.type === "CV" && row.reviewStatus === "REJECTED" && row.reviewNote === "Documento reemplazado por una carga posterior.")),
+        uploadedAt: row.uploadedAt.toISOString(),
         reviewedAt: row.reviewedAt?.toISOString() || "" } as Record<string, string>,
     })),
   };

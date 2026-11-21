@@ -13,6 +13,16 @@ async function main() {
   let state = "REJECTED", type = "CV", imports = 0, present = true, deletes = 0, refunds = 0, audits = 0;
   let retained = false;
   let cleanupState = "PENDING", enabled = true;
+  const listedDocuments = Array.from({length: 34}, (_, i) => ({
+    id: `doc-${String(i).padStart(2, "0")}`, type: i === 2 ? "DNI_FRONT" : [11, 13, 15].includes(i) ? "OTHER" : "CV",
+    fileName: "private.pdf", contentType: "application/pdf", size: 100,
+    reviewStatus: [1, 5, 7, 12].includes(i) ? "VERIFIED" : [10, 30].includes(i) ? "SUBMITTED" : "REJECTED",
+    reviewNote: [4, 12, 13].includes(i) ? "Documento reemplazado por una carga posterior." : "Private reviewer note",
+    uploadedAt: date, reviewedAt: null, withdrawnAt: [5, 30, 31].includes(i) ? date : null,
+    replacesDocumentId: i === 6 ? "doc-07" : i === 14 ? "doc-10" : i === 15 ? "doc-11" : null,
+    replacedByDocument: i === 7 ? {id: "doc-06"} : i === 10 ? {id: "doc-14"} : i === 11 ? {id: "doc-15"} : null,
+    _count: {cvImports: i === 3 ? 1 : 0, replacementAttempts: i === 8 ? 1 : 0, resultingAttempts: i === 9 ? 1 : 0},
+  }));
   const tx = {
     $queryRaw: async (query: Prisma.Sql) => { assert.ok(query.values.includes("owner") || query.values.includes("profile")); return [{ id: "profile" }]; },
     terraqoExperienceEvidence:{aggregate:async()=>({_sum:{size:0}})},
@@ -46,21 +56,43 @@ async function main() {
   prisma.terraqoBillingAccount.findUnique = (async () => null) as unknown as typeof original.billing;
   prisma.terraqoWorkspaceModule.findUnique = (async () => ({active: enabled})) as unknown as typeof original.module;
   prisma.terraqoProfessionalDocument.findMany = (async (args: { where: unknown; take: number; cursor?: unknown; skip?: number; select: unknown }) => {
-    assert.deepEqual(args.where, { professionalProfile: { userId: "owner" }, OR: [{ workspaceId: "workspace" }, { workspaceId: null }] });
+    assert.deepEqual(args.where, { professionalProfile: { userId: "owner" }, OR: [{ workspaceId: "workspace" }, { workspaceId: null }], withdrawnAt: null });
     assert.equal(args.take, 31); assert.ok(!JSON.stringify(args.select).includes("storageKey"));
-    return Array.from({length: 31}, (_, i) => ({id: `doc-${i}`, type: i === 2 ? "DNI_FRONT" : "CV", fileName: "private.pdf", contentType: "application/pdf", size: 100,
-      reviewStatus: i === 1 ? "VERIFIED" : "REJECTED", reviewNote: i === 4 ? "Documento reemplazado por una carga posterior." : "Private reviewer note", uploadedAt: date, reviewedAt: null, withdrawnAt: i === 5 ? date : null, replacesDocumentId: i === 6 ? "predecessor" : null, replacedByDocument: i === 7 ? {id: "successor"} : null, _count: {cvImports: i === 3 ? 1 : 0, replacementAttempts: i === 8 ? 1 : 0, resultingAttempts: i === 9 ? 1 : 0}}));
+    assert.deepEqual((args.select as Record<string, unknown>).replacedByDocument, {select: {id: true}},
+      "lineage must include withdrawn successors to prevent predecessor resurrection");
+    const visible = listedDocuments.filter(row => !row.withdrawnAt);
+    const start = args.cursor ? visible.findIndex(row => row.id === (args.cursor as {id: string}).id) + (args.skip ?? 0) : 0;
+    return visible.slice(start, start + args.take);
   }) as unknown as typeof original.docs;
   const fails = (status: number) => (error: unknown) => error instanceof PortalResourceError && error.status === status;
   const store = {delete: async (key: string) => { assert.equal(key, "private-key"); }};
   try {
     const page = await listPortalResource(token, "professionalDocuments");
-    assert.equal(page.records.length, 30); assert.equal(page.nextCursor, "doc-29"); assert.equal(page.canCreate, false);
+    assert.equal(page.records.length, 30); assert.equal(page.nextCursor, "doc-32"); assert.equal(page.canCreate, false);
     assert.equal(page.records[0].canDelete, true);
     assert.equal(page.records[4].fields.superseded, "true");
     assert.ok(!JSON.stringify(page).includes("Private reviewer note"));
     assert.ok(!JSON.stringify(page).includes("reviewNote"));
-    for (const index of [1, 2, 3, 5, 6, 7, 8, 9]) assert.equal(page.records[index].canDelete, false);
+    assert.ok(!JSON.stringify(page).includes("replacedByDocument"));
+    assert.ok(!JSON.stringify(page).includes("replacesDocumentId"));
+    const record = (id: string) => page.records.find(row => row.id === id)!;
+    for (const index of [1, 2, 3, 6, 7, 8, 9, 10, 11]) assert.equal(record(`doc-${String(index).padStart(2, "0")}`).canDelete, false);
+    for (const index of [5, 30, 31]) assert.ok(!page.records.some(row => row.id === `doc-${String(index).padStart(2, "0")}`));
+    for (const id of ["doc-07", "doc-10", "doc-11"]) assert.equal(record(id).fields.superseded, "true");
+    assert.equal(record("doc-07").status, "VERIFIED", "lineage must not rewrite review state");
+    assert.equal(record("doc-10").status, "SUBMITTED");
+    for (const id of ["doc-00", "doc-06", "doc-12", "doc-13"]) assert.equal(record(id).fields.superseded, "false");
+    const nextPage = await listPortalResource(token, "professionalDocuments", page.nextCursor!);
+    assert.deepEqual(nextPage.records.map(row => row.id), ["doc-33"]); assert.equal(nextPage.nextCursor, null);
+    // The successor disappears on withdrawal, but its retained predecessor must
+    // remain history even though legacy clients only understand `superseded`.
+    listedDocuments[6].withdrawnAt = date;
+    const afterWithdrawal = await listPortalResource(token, "professionalDocuments");
+    assert.ok(!afterWithdrawal.records.some(row => row.id === "doc-06"));
+    assert.equal(afterWithdrawal.records.find(row => row.id === "doc-07")!.fields.superseded, "true");
+    for (const row of listedDocuments) row.withdrawnAt = date;
+    const withdrawnOnly = await listPortalResource(token, "professionalDocuments");
+    assert.deepEqual(withdrawnOnly.records, []); assert.equal(withdrawnOnly.nextCursor, null);
     await assert.rejects(authorizeResource({...token, role: "ADMIN"}, "professionalDocuments"), fails(403));
     enabled = false; await assert.rejects(authorizeResource(token, "professionalDocuments"), fails(403)); enabled = true;
     for (const [nextState, nextType, nextImports] of [["VERIFIED", "CV", 0], ["SUBMITTED", "CV", 0], ["REJECTED", "DNI_FRONT", 0], ["REJECTED", "CV", 1]] as const) {
@@ -79,7 +111,7 @@ async function main() {
     present = true; cleanupState = "PENDING";
     assert.deepEqual(await removeProfessionalDocument(token, "document", date.toISOString(), {delete: async () => {throw new Error("storage unavailable");}}), {deleted: true, storageCleanupPending: true});
     assert.equal(refunds, 1); assert.equal(cleanupState, "PENDING");
-    console.log("PASS professional documents: personal/workspace scope, bounded pages, hidden storage keys, protected states/imports/identity, versions, atomic audit, quota floor, pending physical cleanup and repeat guard.");
+    console.log("PASS professional documents: withdrawn rows excluded before pagination, lineage/legacy history without predecessor resurrection, private metadata, protected deletion, versions, atomic audit, quota floor and repeat guard (query/transaction doubles).");
   } finally {
     prisma.terraqoProfessionalDocument.findMany = original.docs; prisma.$transaction = original.transaction;
     prisma.terraqoWorkspaceModule.findUnique = original.module; prisma.terraqoBillingAccount.findUnique = original.billing;
