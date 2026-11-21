@@ -205,6 +205,12 @@ async function main() {
 main().catch(error => {
   // Assertions may contain tokens/URLs. Log only structural diagnostics.
   const location = typeof error?.stack === "string" ? error.stack.match(/(?:workspace-administration-test-target|run-workspace-administration-staging|verify-worklog-draft-conflict|verify-s22-evaluator-browser|verify-hosted-worklog-clips|verify-s14-evaluation|s14-[a-z-]+|verify-s13-discovery|s13-[a-z-]+|verify-s12-need|s12-[a-z-]+|verify-s11-record|s11-[a-z-]+|verify-s10-archive|s10-[a-z-]+|verify-s09-visitor|s09-[a-z-]+|verify-s08-review|s08-[a-z-]+|verify-s07-endorsement|s07-[a-z-]+|verify-s06-sharing|s06-[a-z-]+)\.ts:\d+:\d+/)?.[0] : undefined;
-  console.error(JSON.stringify({ s22Step: step, s22Failed: true, location, code: typeof error?.code === "string" && /^[A-Z0-9_]{1,32}$/.test(error.code) ? error.code : "GATE_REJECTED" }));
+  const code = error?.code ?? error?.errorCode;
+  const errorType = /^[A-Za-z][A-Za-z0-9]{0,59}$/.test(error?.name || "") ? error.name : "UnknownError";
+  const message = typeof error?.message === "string" ? error.message : "";
+  const reason = /certificate|TLS|SSL/i.test(message) ? "DATABASE_TLS" : /authentication|password/i.test(message) ? "DATABASE_AUTH" :
+    /[Qq]uery engine|[Ee]ngine.*not found|initialize.*client|prisma generate/i.test(message) ? "PRISMA_ENGINE" :
+    /connect|reach database|timeout|closed.*connection/i.test(message) ? "DATABASE_CONNECTION" : "GATE_REJECTED";
+  console.error(JSON.stringify({ s22Step: step, s22Failed: true, location, errorType, code: typeof code === "string" && /^[A-Z0-9_]{1,32}$/.test(code) ? code : reason }));
   process.exitCode = 1;
 });

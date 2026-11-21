@@ -10,7 +10,7 @@ const origin = 'https://terraqo-platform-staging.netlify.app';
 const branch = 'codex/s22-evaluator-local';
 async function main() {
   const [mode, candidate] = process.argv.slice(2);
-  assert.ok(['inspect', 'configure', 'trigger'].includes(mode));
+  assert.ok(['inspect', 'configure', 'configure-acceptance', 'trigger'].includes(mode));
   const require = createRequire(new URL('../node_modules/netlify-cli/package.json', import.meta.url));
   const { getAPIToken } = await import(pathToFileURL(require.resolve('@netlify/dev-utils')).href);
   const { NetlifyAPI } = await import(pathToFileURL(require.resolve('@netlify/api')).href);
@@ -39,17 +39,27 @@ async function main() {
   assert.equal(git(['rev-parse', 'HEAD']), candidate);
   assert.equal(git(['branch', '--show-current']), branch);
   assert.equal(git(['status', '--porcelain']), '');
-  const expected = { S18_STAGING_GATE: 'preflight', S18_STAGING_RETENTION: 'off',
+  const configuring = mode === 'configure' || mode === 'configure-acceptance';
+  const acceptance = mode === 'configure-acceptance' || (mode === 'trigger' && env.S18_STAGING_GATE === 'synthetic-retained');
+  const run = acceptance ? (configuring ? randomUUID() : env.S18_STAGING_RUN_ID) : undefined;
+  if (acceptance) assert.match(run || '', /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/);
+  const expected = { S18_STAGING_GATE: acceptance ? 'synthetic-retained' : 'preflight',
+    S18_STAGING_RETENTION: acceptance ? `mghdpciewbsowjrjwmwk:${run}:retain-private-fixtures` : 'off',
+    S18_BLOB_AUTH: acceptance ? 'netlify-build-context' : 'off',
     S22_STAGING_CANDIDATE_SHA: candidate, PLATFORM_STAGING_CLOUD_PHASE: 'workspace-administration',
     TERRAQO_DOCUMENT_LIFECYCLE_V1: 'true', TERRAQO_SCOPED_SHARING_V1: 'true', TERRAQO_WORKSPACE_EVALUATORS_V1: 'true',
     TERRAQO_TRANSACTIONAL_EMAIL_ENABLED: 'false', TERRAQO_STAGING_INVITATION_PROBE: 'false', CULQI_MODE: 'test',
     S24_STAGING_DIAGNOSTIC_TARGET: 'off', S24_STAGING_RECOVER_INTERRUPTED: 'off',
     ...Object.fromEntries(entries.filter(entry => /^S(?:0[6-9]|1[0-6])_.*GATE$/.test(entry.key)).map(entry => [entry.key, 'off'])) };
   await mkdir('output/s18-deploy', { recursive: true });
-  if (mode === 'configure') {
+  if (configuring) {
+    if (acceptance) {
+      assert.equal(site.published_deploy?.commit_ref, candidate, 'Serve and check this candidate before hosted acceptance');
+      assert.ok(!env.RESEND_API_KEY && !env.CULQI_PUBLIC_KEY && !env.CULQI_SECRET_KEY);
+    }
     await writeFile(`output/s18-deploy/before-${Date.now()}.json`, JSON.stringify({ siteId, candidate,
       previousDeploy: site.published_deploy?.id, values: Object.fromEntries(Object.keys(expected).map(key => [key, env[key] ?? null])) }, null, 2), { flag: 'wx' });
-    expected.S18_STAGING_RUN_ID = randomUUID();
+    expected.S18_STAGING_RUN_ID = run || randomUUID();
     for (const [key, value] of Object.entries(expected)) {
       if (entries.some(entry => entry.key === key)) await api.setEnvVarValue({ ...args, key, body: { context: 'production', value } });
       else await api.createEnvVars({ ...args, body: [{ key, scopes: ['builds', 'functions', 'post_processing', 'runtime'], values: [{ context: 'production', value }] }] });

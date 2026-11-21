@@ -16,6 +16,17 @@ function run(stage, { utils }) {
   const attention = process.env.PLATFORM_STAGING_CLOUD_PHASE === "customer-attention";
   const s22 = process.env.PLATFORM_STAGING_CLOUD_PHASE === "workspace-administration";
   const runner = s22 ? "scripts/run-workspace-administration-staging.ts" : attention ? "scripts/run-customer-attention-staging.ts" : "scripts/run-platform-staging-cloud.ts";
+  if (s22 && stage === "prepare") {
+    // Netlify can restore an older generated client from its dependency cache.
+    // Generate before importing the preflight, using no database/provider credentials.
+    const env = { NODE_ENV: "production", DATABASE_URL: "postgresql://unused:unused@127.0.0.1:1/postgres?schema=icc", DIRECT_URL: "postgresql://unused:unused@127.0.0.1:1/postgres?schema=icc" };
+    for (const [key, value] of Object.entries(process.env)) if (/^(PATH|HOME|TMPDIR|TEMP|TMP|SYSTEMROOT|WINDIR|USERPROFILE|LOCALAPPDATA)$/i.test(key)) env[key] = value;
+    const generation = spawnSync(process.execPath, [resolve("node_modules/prisma/build/index.js"), "generate"], {
+      cwd: process.cwd(), env, encoding: "utf8", timeout: 120000, shell: false,
+    });
+    if (generation.status !== 0) { utils.build.failBuild("Pinned Prisma client generation failed before staging preflight."); return; }
+    console.log("PASS generated Prisma client from current staging source before preflight.");
+  }
   const result = spawnSync(process.execPath, ["--import", "tsx", resolve(runner), stage], {
     cwd: process.cwd(), env: process.env, encoding: "utf8", timeout: 1_100_000, shell: false,
   });

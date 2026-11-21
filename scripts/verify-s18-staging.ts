@@ -69,7 +69,14 @@ export function assertS18HostedEnvironment(env: NodeJS.ProcessEnv, stage: Stage)
   assert.match(env.DEPLOY_ID || "", /^[a-f0-9]{24}$/);
   assert.match(env.S18_STAGING_RUN_ID || "", uuid);
   if (stage === "run") {
-    assert.ok(env.S18_BLOB_READ_TOKEN, "Explicit site blob readback credential required in acceptance child only");
+    if (env.S18_BLOB_AUTH === "netlify-build-context") {
+      // Netlify provisions this context for its plugin; no personal token is installed in the build.
+      assert.ok(env.NETLIFY_BLOBS_CONTEXT);
+      const context = JSON.parse(Buffer.from(env.NETLIFY_BLOBS_CONTEXT!, "base64").toString("utf8"));
+      assert.equal(context.siteID, siteId);
+      assert.ok(typeof context.token === "string" && context.token.length > 0);
+      assert.ok(!env.S18_BLOB_READ_TOKEN);
+    } else assert.ok(env.S18_BLOB_READ_TOKEN, "Explicit site blob readback credential required in acceptance child only");
     assert.equal(env.S18_STAGING_RETENTION, `${project}:${env.S18_STAGING_RUN_ID}:retain-private-fixtures`);
   }
   return { run: env.S18_STAGING_RUN_ID!, commit: env.COMMIT_REF!, deployId: env.DEPLOY_ID! };
@@ -311,7 +318,8 @@ export async function verifyS18Staging(stage: Stage = "run") {
       return reply;
     };
     // Separate read-only store capability; never expose set/delete/list to the journey.
-    const store = getStore({ name: "terraqo-professional-documents", siteID: siteId, token: env.S18_BLOB_READ_TOKEN!, consistency: "strong",
+    const store = getStore({ name: "terraqo-professional-documents",
+      ...(env.S18_BLOB_AUTH === "netlify-build-context" ? {} : { siteID: siteId, token: env.S18_BLOB_READ_TOKEN! }), consistency: "strong",
       fetch: (url, init) => {
         assert.ok(["GET", "HEAD"].includes((init?.method || "GET").toUpperCase()), "Blob mutation forbidden");
         return fetch(url, { ...init, redirect: "error", signal: AbortSignal.timeout(30_000) });
@@ -575,6 +583,11 @@ export function selfTestS18Guard() {
   }
   assertS18HostedEnvironment({ ...env, S18_STAGING_GATE: "preflight", S18_STAGING_RETENTION: undefined,
     S18_BLOB_READ_TOKEN: undefined, RESEND_API_KEY: "disabled-existing-app-key" }, "preflight");
+  const hosted = { ...env, S18_BLOB_AUTH: "netlify-build-context", S18_BLOB_READ_TOKEN: undefined,
+    NETLIFY_BLOBS_CONTEXT: Buffer.from(JSON.stringify({ siteID: siteId, token: "synthetic-context" })).toString("base64") };
+  assertS18HostedEnvironment(hosted, "run");
+  assert.throws(() => assertS18HostedEnvironment({ ...hosted, NETLIFY_BLOBS_CONTEXT: undefined }, "run"));
+  assert.throws(() => assertS18HostedEnvironment({ ...hosted, NETLIFY_BLOBS_CONTEXT: Buffer.from(JSON.stringify({ siteID: "other", token: "synthetic" })).toString("base64") }, "run"));
   assert.throws(() => assertS18HostedEnvironment({ ...env, S18_STAGING_GATE: "preflight" }, "run"));
   assert.throws(() => assertS18HostedEnvironment({ ...env, S18_STAGING_GATE: "preflight" }, "unexpected" as Stage));
   assert.deepEqual(idsFor(run), idsFor(run));

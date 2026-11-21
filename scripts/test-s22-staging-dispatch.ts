@@ -21,9 +21,11 @@ function invoke(site: string, phase: string, status = 0, s18 = "off") {
 const site = "6b8c43fb-6083-450a-9b85-46a820fb6358";
 for (const [phase, runner] of [["workspace-administration", "run-workspace-administration-staging.ts"], ["customer-attention", "run-customer-attention-staging.ts"], ["s24", "run-platform-staging-cloud.ts"]]) {
   const result = invoke(site, phase);
-  assert.equal(result.calls.length, 2);
-  assert.ok(result.calls.every(args => path.basename(args[2]) === runner));
-  assert.deepEqual(result.calls.map(args => args[3]), ["prepare", "verify"]);
+  const calls = phase === "workspace-administration" ? result.calls.slice(1) : result.calls;
+  assert.equal(result.calls.length, phase === "workspace-administration" ? 3 : 2);
+  if (phase === "workspace-administration") assert.equal(result.calls[0][1], "generate");
+  assert.ok(calls.every(args => path.basename(args[2]) === runner));
+  assert.deepEqual(calls.map(args => args[3]), ["prepare", "verify"]);
   assert.equal(result.failures.length, 0);
 }
 assert.equal(invoke("production-site", "workspace-administration").calls.length, 0);
