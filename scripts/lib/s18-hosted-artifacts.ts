@@ -31,7 +31,7 @@ export async function exportS18Artifacts(directory: string, run: string, deployI
   const store = getDeployStore({ name: "s18-acceptance", deployID: deployId,
     fetch: (url, init) => fetch(url, { ...init, signal: AbortSignal.timeout(30000), redirect: "error" }) });
   const manifest = { run, deployId, commit, siteId, files: files.map(({ name, bytes, sha256 }) => ({ name, size: bytes.length, sha256 })) };
-  for (const file of files) await store.set(`${run}/${file.name}`, new Uint8Array(file.bytes), { metadata: { sha256: file.sha256 } });
+  for (const file of files) await store.set(`${run}/${file.name}`, new Uint8Array(file.bytes).buffer, { metadata: { sha256: file.sha256 } });
   // Write last: a missing manifest means evidence export is incomplete, never acceptance PASS.
   await store.setJSON(`${run}/manifest.json`, manifest);
   console.log(JSON.stringify({ gate: "s18-hosted", phase: "evidence-exported", run, deployId, files: files.length, bytes: total }));

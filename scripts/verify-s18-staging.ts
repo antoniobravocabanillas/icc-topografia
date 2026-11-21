@@ -18,7 +18,8 @@ import { exportS18Artifacts } from "./lib/s18-hosted-artifacts";
 
 /**
  * Operator only; importing this module has no effects. No dotenv, deploy, DDL,
- * privilege escalation, mail, checkout, blob writes or fixture deletion here.
+ * privilege escalation, mail, checkout or fixture deletion here. Application
+ * blobs are read only; private deploy-specific evidence is exported after a run.
  *
  * Offline: node --conditions=react-server --import tsx scripts/verify-s18-staging.ts --self-test
  * Hosted read-only: same command with --preflight (or dispatch S18_STAGING_GATE=preflight).
@@ -28,8 +29,9 @@ import { exportS18Artifacts } from "./lib/s18-hosted-artifacts";
  * migration51, lifecycle+sharing flags, mail off and test billing. Preflight needs
  * no blob token and tolerates disabled provider credentials already held by the app.
  * Run ONLY in a separately authorized operator child with a sanitized environment:
- * no mail/payment keys, plus S18_BLOB_READ_TOKEN for this site's private readback.
- * Never provision that token in Netlify build/runtime environment configuration.
+ * no mail/payment keys. Hosted plugins use S18_BLOB_AUTH=netlify-build-context;
+ * separate local operators may use S18_BLOB_READ_TOKEN for private readback.
+ * Never provision a personal token in Netlify build/runtime configuration.
  *
  * Receipts live under output/s18-hosted/<run> and contain private synthetic IDs/keys,
  * never passwords/tokens. Retain/export that directory even on failure. A run ID is
