@@ -2,6 +2,8 @@
 
 **Disposition: blocked on production-specific operator, exact backup restoration, and compatibility rehearsal.** Source review is complete within the seven-file scope; it is not a production rehearsal or release approval. The parent's hosted S18 validation remains separate.
 
+Provider constraint verified during this continuation: Prisma's current [connection documentation](https://www.prisma.io/docs/postgres/database/connecting-to-your-database) says every generated credential has full database access and cannot be restricted to roles, schemas or tables; the [FAQ](https://www.prisma.io/docs/postgres/faq) says custom roles are unsupported. Pooled versus direct is a transport/session distinction, not least-privilege credential separation. The live readback reports `prisma_migration` for the app URL. Presence of an internal `prisma_application` catalog role is not proof of a supported login credential. Therefore the existing non-owner runtime gate cannot simply be ported from Supabase or satisfied by generating a second Prisma password. Do not silently weaken that gate or switch customer data to another provider. Complete independent application/staging work and the backup/restore evidence while preparing a concrete provider-compatible release decision.
+
 ## Evidence boundary
 
 - Reviewed local HEAD `85fc1899f5038fa769c48ee36a16b639cc56d441`, the seven SQL files below, and relevant guarded operator/restore references. No database connection, secret access, remote mutation, commit, or deployment was performed.
