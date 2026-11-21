@@ -213,6 +213,16 @@ async function session(browser: Browser, id?: string, password?: string, ui = fa
         page.waitForResponse(r => new URL(r.url()).origin === origin && new URL(r.url()).pathname === "/api/auth/callback/credentials" && r.request().method() === "POST"),
         form.getByRole("button", { name: "Iniciar sesión", exact: true }).click(),
       ]);
+      if (reply.status() !== 200) {
+        // Keep enough bounded transport evidence to distinguish rejected input,
+        // expired auth, provider timeouts and uncertain SQL. Never record bodies,
+        // multipart bytes, cookies, credentials or arbitrary error messages.
+        const requestId = reply.headers()["x-request-id"];
+        receipt.httpFailure = { path: target, method: "POST", status: reply.status(),
+          contentType: reply.headers()["content-type"]?.split(";")[0].slice(0, 80),
+          requestId: requestId && uuid.test(requestId) ? requestId : undefined };
+        await persist();
+      }
       assert.equal(reply.status(), 200);
       await page.waitForURL(origin + "/portal/documentos");
     } else if (id) {

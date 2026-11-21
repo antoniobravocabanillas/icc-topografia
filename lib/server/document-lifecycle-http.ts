@@ -1,4 +1,5 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "./authz";
@@ -21,15 +22,19 @@ const json = (body: unknown, status = 200) => Response.json(body, {
  */
 export async function documentLifecycleMutation(request: Request, documentId: string, action: "withdraw" | "replace") {
   if (process.env.TERRAQO_DOCUMENT_LIFECYCLE_V1 !== "true") return json({ error: "No disponible." }, 404);
+  const requestId = randomUUID();
+  let phase = "authorization";
   try {
     const auth = await requireUser();
     if (auth.response) return json({ error: "Inicia sesión para continuar." }, 401);
     if (!isSameOriginMutation(request)) return json({ error: "Origen no permitido." }, 403);
     if (!/^[a-zA-Z0-9_-]{1,100}$/.test(documentId)) return json({ error: "Documento no válido." }, 422);
     const mediaType = request.headers.get("content-type")?.split(";")[0].trim().toLowerCase();
+    phase = "parse";
     if (action === "withdraw") {
       if (mediaType !== "application/json") return json({ error: "Usa formato JSON." }, 415);
       const command = commandSchema.parse(await readBoundedJson(request, 2048));
+      phase = "withdrawal";
       const result = await prisma.$transaction(tx => withdrawProfessionalDocumentInTransaction(tx, {
         ...command, actorId: auth.session.user.id, documentId,
       }), { maxWait: 1000, timeout: 7000 });
@@ -50,6 +55,7 @@ export async function documentLifecycleMutation(request: Request, documentId: st
     if (typeof version !== "string" || !/^[1-9][0-9]{0,9}$/.test(version) || !(file instanceof File))
       return json({ error: "Selecciona un archivo y una versión válidos." }, 422);
     const command = commandSchema.parse({ expectedVersion: Number(version), operationKey: form.get("operationKey") });
+    phase = "replacement";
     const result = await uploadDocumentReplacement(prisma, getProfessionalDocumentStore(), {
       ...command, actorId: auth.session.user.id, documentId, file,
     });
@@ -59,6 +65,13 @@ export async function documentLifecycleMutation(request: Request, documentId: st
       return json({ error: error.message }, error.status);
     if (error instanceof BoundedRequestBodyError) return json({ error: "Solicitud inválida o demasiado grande." }, error.status);
     if (error instanceof z.ZodError) return json({ error: "Actualiza el expediente y revisa los datos enviados." }, 422);
-    return json({ error: "No se pudo confirmar la operación. Actualiza el expediente antes de reintentar." }, 500);
+    // Correlate unexpected infrastructure failures without recording identity,
+    // file names, request bodies, SQL messages or stack traces.
+    const rawCode = (error as { code?: unknown } | null)?.code;
+    const code = typeof rawCode === "string" && /^P\d{4}$/.test(rawCode) ? rawCode : "UNEXPECTED";
+    console.error(JSON.stringify({ event: "document-lifecycle-failure", requestId, action, phase, code }));
+    return Response.json({ error: "No se pudo confirmar la operación. Actualiza el expediente antes de reintentar.", requestId }, {
+      status: 500, headers: { "Cache-Control": "private, no-store", "x-request-id": requestId },
+    });
   }
 }

@@ -10,6 +10,7 @@ async function main() {
     require.cache[id] = { id, filename: id, loaded: true, exports } as NodeModule;
   };
   let authenticated = true, withdrawals = 0, replacements = 0;
+  let replacementFailure: Error | null = null;
   mock("../lib/server/authz.ts", { requireUser: async () => authenticated
     ? { session: { user: { id: "session-owner" } } } : { response: new Response(null, { status: 401 }) } });
   const realLifecycle = require("../lib/server/professional-document-lifecycle.ts");
@@ -21,6 +22,7 @@ async function main() {
   mock("../lib/server/document-replacement-upload.ts", {
     ReplacementUploadUnconfirmed: class extends Error {},
     uploadDocumentReplacement: async (_db: unknown, _store: unknown, input: Record<string, unknown>) => {
+      if (replacementFailure) throw replacementFailure;
       assert.equal(input.actorId, "session-owner"); assert.ok(input.file instanceof File);
       assert.equal(input.expectedVersion, 1); replacements++; return { id: "successor", replayed: false };
     },
@@ -68,6 +70,20 @@ async function main() {
     assert.equal(replacements, 0);
     assert.equal((await mutate(multipart(form()), "document", "replace")).status, 200);
     assert.equal(replacements, 1);
+    const originalError = console.error;
+    const diagnostics: string[] = [];
+    try {
+      console.error = (...args: unknown[]) => { diagnostics.push(args.join(" ")); };
+      replacementFailure = Object.assign(new Error("private SQL and filename must not escape"), { code: "P2028" });
+      const failed = await mutate(multipart(form()), "document", "replace");
+      assert.equal(failed.status, 500);
+      const body = await failed.json();
+      assert.match(body.requestId, /^[0-9a-f-]{36}$/);
+      assert.equal(failed.headers.get("x-request-id"), body.requestId);
+      assert.deepEqual(JSON.parse(diagnostics[0]), { event: "document-lifecycle-failure", requestId: body.requestId, action: "replace", phase: "replacement", code: "P2028" });
+      assert.ok(!JSON.stringify(body).includes("private SQL"));
+      assert.ok(!diagnostics.join("").includes("private SQL"));
+    } finally { console.error = originalError; replacementFailure = null; }
     console.log("PASS lifecycle HTTP: disabled gate, authentication, origin, strict commands, actual-byte limit, duplicate multipart fields and server-owned actor");
   } finally {
     prisma.$transaction = transaction;
