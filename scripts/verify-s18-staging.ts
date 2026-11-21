@@ -183,9 +183,11 @@ async function session(browser: Browser, id?: string, password?: string, ui = fa
   ctx.setDefaultTimeout(45_000);
   ctx.setDefaultNavigationTimeout(60_000);
   const blockedMutations: string[] = [];
+  const providerReads: string[] = [];
   // Defense in depth: external resources and any billing mutation are blocked.
   await ctx.route("**/*", route => {
     const request = route.request(), url = new URL(request.url());
+    if (url.hostname === "js.culqi.com" || url.hostname === "3ds.culqi.com") providerReads.push(url.hostname);
     if (url.origin !== origin || url.searchParams.has("password") ||
       (!['GET', 'HEAD'].includes(request.method()) && /billing|checkout|payment|culqi/i.test(url.pathname))) {
       if (!['GET', 'HEAD'].includes(request.method()) || url.searchParams.has("password")) blockedMutations.push("forbidden-request");
@@ -226,7 +228,7 @@ async function session(browser: Browser, id?: string, password?: string, ui = fa
     const user = (await reply.json())?.user;
     if (id) { assert.equal(user?.id, id); assert.equal(user.email, `${id}@example.invalid`); }
     else assert.ok(!user);
-    return { ctx, page, blockedMutations };
+    return { ctx, page, blockedMutations, providerReads };
   } catch (error) { await ctx.close(); throw error; }
 }
 
@@ -524,6 +526,8 @@ export async function verifyS18Staging(stage: Stage = "run") {
       assert.equal(reply.status(), 200); assertPrivateNoStore(reply.headers()["cache-control"]);
       const data = await reply.json();
       assert.equal(data.mode, "test"); assert.equal(data.publicKey, null); assert.deepEqual(data.workspaces, workspaces);
+      assert.equal(data.usage.storage.used, context === ctx ? 3 : 0);
+      assert.equal(data.usage.storage.unit, "MB");
     }
     assert.equal((await anonymous.ctx.request.get("/api/terraqo/billing", options)).status(), 401);
     const nav = page.getByRole("navigation", { name: "Privacidad y cuenta" });
@@ -531,7 +535,11 @@ export async function verifyS18Staging(stage: Stage = "run") {
     await nav.getByRole("link", { name: "Mi plan y uso" }).click();
     await expect(page.getByRole("heading", { name: "Tu membresía, bajo tu control." })).toBeVisible();
     await expect(page.getByRole("navigation", { name: "Privacidad y cuenta" }).getByRole("link", { name: "Mi plan y uso" })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("region", { name: "Tu plan y consumo" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Plan y facturación", exact: true })).toBeVisible();
+    await expect(page.getByRole("progressbar", { name: "Almacenamiento", exact: true })).toHaveAttribute("value", "3");
     await capture("plan");
+    for (const session of [owner, reader, outsider, anonymous]) assert.deepEqual(session.providerReads, [], "Unconfigured billing must not request bank SDKs");
     for (const session of [owner, reader, outsider, anonymous]) assert.deepEqual(session.blockedMutations, [], "No attempted checkout/external mutation");
     assert.deepEqual(await billingSnapshot(), billingBefore);
     assert.equal(await db.terraqoPublicProjection.count({ where: { collection: { createdById: ids.owner } } }), 0);

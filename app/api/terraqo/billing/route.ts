@@ -6,6 +6,7 @@ import { billingMode, BillingError, providerCredentials } from "@/lib/terraqo/bi
 import { checkoutSchema } from "@/lib/terraqo/billing/validation";
 import { checkout, cancelSubscription, reconcileAccount, abandonAuthentication } from "@/lib/terraqo/billing/service";
 import { boundedJson, billingRateLimit } from "@/lib/terraqo/billing/request-security";
+import { personalUsageSummary } from "@/lib/terraqo/billing/usage-summary";
 import { z } from "zod";
 export const dynamic="force-dynamic";
 const headers={"Cache-Control":"private, no-store"};
@@ -16,14 +17,15 @@ function errorResponse(error:unknown){
 export async function GET(){
   try{
     const user=await billingUser();const mode=billingMode();
-    const [accounts,workspaces,mappings]=await Promise.all([
+    const [accounts,workspaces,mappings,usage]=await Promise.all([
       prisma.terraqoBillingAccount.findMany({where:{userId:user.id,mode},include:{payments:{orderBy:{paidAt:"desc"},take:24}},orderBy:{updatedAt:"desc"}}),
       prisma.terraqoWorkspace.findMany({where:{ownerUserId:user.id,active:true,deletedAt:null,type:"CLIENT_COMPANY"},select:{id:true,name:true}}),
       prisma.terraqoBillingPlan.findMany({where:{mode,version:CATALOG_VERSION,enabled:true},select:{code:true,cycle:true}}),
+      personalUsageSummary(user.id),
     ]);
     const attempts=await prisma.terraqoBillingAttempt.findMany({where:{id:{in:accounts.flatMap(a=>a.currentAttemptId?[a.currentAttemptId]:[])}},select:{id:true,status:true}});
     let publicKey:string|null=null;try{publicKey=providerCredentials().publicKey;}catch{}
-    return NextResponse.json({plans:BILLING_PLANS,mode,publicKey,termsVersion:BILLING_TERMS_VERSION,email:mode==="test"?"review@culqi.com":user.email,emailVerified:Boolean(user.emailVerified),workspaces,mappings,accounts:accounts.map(a=>({id:a.id,workspaceId:a.workspaceId,planCode:a.planCode,cycle:a.cycle,status:a.status,paidThrough:a.paidThrough,cancelAtPeriodEnd:a.cancelAtPeriodEnd,pending:Boolean(a.currentAttemptId&&(!a.paidThrough||a.paidThrough<=new Date())),canAbandon:attempts.some(t=>t.id===a.currentAttemptId&&t.status==="NEEDS_3DS"),payments:a.payments.map(p=>({id:p.id,amountMinor:p.amountMinor,currency:p.currency,paidAt:p.paidAt,periodEnd:p.periodEnd,refundedMinor:p.refundedMinor}))}))},{headers});
+    return NextResponse.json({plans:BILLING_PLANS,mode,publicKey,termsVersion:BILLING_TERMS_VERSION,email:mode==="test"?"review@culqi.com":user.email,emailVerified:Boolean(user.emailVerified),workspaces,mappings,usage,accounts:accounts.map(a=>({id:a.id,workspaceId:a.workspaceId,planCode:a.planCode,cycle:a.cycle,status:a.status,paidThrough:a.paidThrough,cancelAtPeriodEnd:a.cancelAtPeriodEnd,pending:Boolean(a.currentAttemptId&&(!a.paidThrough||a.paidThrough<=new Date())),canAbandon:attempts.some(t=>t.id===a.currentAttemptId&&t.status==="NEEDS_3DS"),payments:a.payments.map(p=>({id:p.id,amountMinor:p.amountMinor,currency:p.currency,paidAt:p.paidAt,periodEnd:p.periodEnd,refundedMinor:p.refundedMinor}))}))},{headers});
   }catch(error){return errorResponse(error);}
 }
 export async function POST(request:Request){

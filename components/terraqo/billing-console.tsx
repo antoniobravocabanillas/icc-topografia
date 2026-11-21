@@ -13,6 +13,7 @@ import {
   type BillingCycle,
 } from "@/lib/terraqo/billing/catalog";
 import s from "./public-experience.module.css";
+import type { PersonalUsageSummary } from "@/lib/terraqo/billing/usage-summary";
 type Account = {
   id: string;
   workspaceId: string | null;
@@ -31,6 +32,7 @@ type Account = {
   }[];
 };
 type State = {
+  usage: PersonalUsageSummary;
   mode: "test" | "live";
   publicKey: string | null;
   termsVersion: string;
@@ -87,6 +89,7 @@ export function BillingConsole({
   initialCycle: BillingCycle;
 }) {
   const [data, setData] = useState<State | null>(null);
+  const [loading, setLoading] = useState(true);
   const [code, setCode] = useState(
     BILLING_PLANS.some((p) => p.code === initialPlan)
       ? initialPlan
@@ -113,6 +116,7 @@ export function BillingConsole({
       : !a.workspaceId,
   );
   const load = useCallback(async () => {
+    setLoading(true);
     try {
       const r = await fetch("/api/terraqo/billing", { cache: "no-store" });
       const body = await r.json();
@@ -125,7 +129,7 @@ export function BillingConsole({
         messages[e instanceof Error ? e.message : ""] ||
           "No se pudo cargar tu membresía.",
       );
-    }
+    } finally { setLoading(false); }
   }, []);
   useEffect(() => {
     void load();
@@ -335,7 +339,7 @@ export function BillingConsole({
     data.mappings.some((p) => p.code === code && p.cycle === cycle);
   return (
     <div className={s.experience} style={{ paddingTop: 32 }}>
-      <Script
+      {data?.publicKey && <><Script
         src="https://js.culqi.com/checkout-js"
         onReady={() => setScripts((x) => ({ ...x, checkout: true }))}
         onError={() =>
@@ -349,6 +353,7 @@ export function BillingConsole({
           setNotice("No se pudo cargar la autenticación bancaria.")
         }
       />
+      </>}
       <header className={s.intro} style={{padding:"24px 0 32px"}}>
         <p className={s.eyebrow}>Mi membresía</p>
         <h1 style={{fontSize:"clamp(28px,4vw,42px)"}}>Tu membresía, bajo tu control.</h1>
@@ -364,12 +369,31 @@ export function BillingConsole({
         </p>
       )}
       <p role="status" style={{ padding: "16px 0", lineHeight: 1.6 }}>
-        {notice}
+        {notice || (data && !data.publicKey ? messages.BILLING_NOT_CONFIGURED : "")}
       </p>
+      {data?.usage && <section aria-label="Tu plan y consumo" className="mb-10 rounded-2xl border border-slate-200 bg-white p-5 text-slate-900 sm:p-7">
+        <div className="mb-6 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-2xl font-semibold">Tu plan · {data.usage.plan.name}</h2>
+          <p className="text-sm text-slate-600">Consumo mensual · {data.usage.period} (UTC)</p>
+        </div>
+        <div className="grid gap-6 sm:grid-cols-3">
+          {([
+            { label: "Almacenamiento", ...data.usage.storage, unit: "MB", detail: "Incluye versiones conservadas y cargas reservadas." },
+            { label: "Acciones de IA", ...data.usage.ai, unit: "acciones", detail: "Acciones utilizadas durante este mes." },
+            { label: "Automatizaciones", ...data.usage.automation, unit: "ejecuciones", detail: "Ejecuciones utilizadas durante este mes." },
+          ]).map(metric => <div key={metric.label}>
+            <h3 className="font-medium">{metric.label}</h3>
+            <p className="mt-2 text-2xl font-semibold tabular-nums">{metric.used.toLocaleString("es-PE")} <span className="text-sm font-normal text-slate-600">/ {metric.limit.toLocaleString("es-PE")} {metric.unit}</span></p>
+            <progress aria-label={metric.label} max={Math.max(1, metric.limit)} value={Math.min(metric.used, Math.max(1, metric.limit))} className="my-3 h-2 w-full accent-blue-600" />
+            <p className="text-sm text-slate-600">{metric.detail}</p>
+            {metric.used > metric.limit && <p className="mt-2 text-sm font-medium text-amber-800">Superas el límite actual. Tu uso registrado se conserva.</p>}
+          </div>)}
+        </div>
+      </section>}
       <PortalPlanCatalog cycle={cycle} busy={busy} onCycle={(value)=>{setCycle(value);setConsent(false);}} onSelect={(value)=>{setCode(value);setConsent(false);}} />
       <div id="facturacion" className="scroll-mt-24" />
       {!data ? (
-        <button className={s.primary} onClick={() => void load()}>
+        loading ? <p role="status">Cargando tu membresía…</p> : <button className={s.primary} onClick={() => void load()}>
           Volver a cargar
         </button>
       ) : (

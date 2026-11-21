@@ -8,6 +8,8 @@ The user subsequently requested navigation without modals and unnecessary open/c
 
 Existing evidence to reuse, not mislabel as a new run: `scripts/lib/s10-archive-browser.ts` covers1440/375/320 widths, pagination, focused scroll return within4px, actual full detail routes, combined filters/date range with explicit apply, back navigation preserving state, empty/reset and confidential canary exclusion. `archiveReads` covers authorized lists, calendar counts, pagination and hidden-record denial. These assertions do not certify final visual fidelity, touch interaction, short landscape screens or a physical device.
 
+Source gap identified before implementation: `components/terraqo/public-cv-activity-explorer.tsx` archive card currently remains horizontal on small widths, gives its image only96px square and hides the explicit detail CTA below `sm` (around lines964–1021). The S19 reference instead stacks a recognizable wide image above title/state and a visible detail action. Existing no-overflow checks alone would miss this difference. Verify the actual rendering, then adjust the bounded mobile card without changing desktop policy, authorization or route/return behavior.
+
 Next executable block after S18 acceptance:
 
 1. Inspect current archive/card/calendar components against the rendered reference; retain the user's inline-navigation choice.

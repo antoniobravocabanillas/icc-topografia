@@ -36,6 +36,10 @@ export async function verifyS18AccessLocal(input: { db: PrismaClient; browser: B
   const reader = await sharingSession(browser, origin, recipientId, password);
   const outsider = await sharingSession(browser, origin, outsiderId, password);
   const anonymous = await sharingSession(browser, origin);
+  const providerReads: string[] = [];
+  writer.on("request", request => {
+    if (["js.culqi.com", "3ds.culqi.com"].includes(new URL(request.url()).hostname)) providerReads.push("provider-sdk");
+  });
   try {
     const title = "Selección autorizada " + run;
     const created = await writer.request.post(origin + "/api/v1/share-collections", {
@@ -112,17 +116,21 @@ export async function verifyS18AccessLocal(input: { db: PrismaClient; browser: B
       const data = await result.json();
       assert.equal(data.mode, "test");
       assert.equal(data.publicKey, null);
+      assert.equal(data.usage.storage.used, 0);
       assert.deepEqual(data.workspaces, expectedWorkspaces, "Tenant ADMIN does not imply company billing ownership");
     }
     assert.equal((await anonymous.request.get(origin + "/api/terraqo/billing")).status(), 401);
     await nav.getByRole("link", { name: "Mi plan y uso" }).click();
     await expect(page.getByRole("heading", { name: "Tu membresía, bajo tu control." })).toBeVisible();
     await expect(page.getByRole("navigation", { name: "Privacidad y cuenta" }).getByRole("link", { name: "Mi plan y uso" })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("region", { name: "Tu plan y consumo" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Plan y facturación", exact: true })).toBeVisible();
     for (const width of [1440, 375, 320]) {
       await page.setViewportSize({ width, height: 1000 });
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
       await page.screenshot({ path: path.join(artifactDir, `plan-${width}.png`), fullPage: true });
     }
+    assert.deepEqual(providerReads, [], "Unconfigured billing must not request bank SDKs");
     assert.equal(await db.terraqoBillingPayment.count(), billingBefore);
     assert.equal(await db.terraqoBillingAccount.count(), accountBefore);
     assert.equal(await db.terraqoWorklogEntry.count({ where: { id: worklog.id, authorId: ownerId } }), 1);
