@@ -36,12 +36,16 @@ async function main() {
     assert.deepEqual(identity, [{ role: "terraqo_staging_runtime", database: "postgres", exposed: false }]);
     // Read-only preflight in both stages: never apply migrations from a deploy hook.
     step = "migration-ledger";
-    for (const name of ["20261101000100_enterprise_publication_review", "20261102000100_selection_access_requests", "20261104000100_workspace_invitations", "20261104000200_customer_attention_followup", "20261104000300_workspace_evaluators"]) {
+    // S18 fields are selected by shared document readers even with its UI flag off.
+    // Reject an older database before building; hooks never apply this migration.
+    for (const name of ["20261101000100_enterprise_publication_review", "20261102000100_selection_access_requests", "20261104000100_workspace_invitations", "20261104000200_customer_attention_followup", "20261104000300_workspace_evaluators", "20261120000300_professional_document_lifecycle"]) {
       const rows = await db.$queryRaw<Array<{ checksum: string }>>`SELECT checksum FROM icc._prisma_migrations WHERE migration_name=${name} AND finished_at IS NOT NULL AND rolled_back_at IS NULL`;
       assert.equal(rows.length, 1);
       assert.ok(migrationSourceChecksums(await readFile(`prisma/migrations/${name}/migration.sql`)).has(rows[0].checksum));
     }
     await db.terraqoWorkspaceInvitation.findFirst({ select: { id: true } });
+    await db.terraqoProfessionalDocument.findFirst({ select: { id: true, lifecycleVersion: true, withdrawnAt: true, replacesDocumentId: true } });
+    await db.terraqoDocumentReplacementAttempt.findFirst({ select: { id: true } });
     const privileges = await db.$queryRaw<Array<{ permitted: boolean }>>`SELECT bool_and(has_table_privilege(current_user, 'icc."TerraqoWorkspaceInvitation"', privilege)) AS permitted FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE']) AS privilege`;
     assert.equal(privileges[0]?.permitted, true);
     if (stage === "prepare") {
